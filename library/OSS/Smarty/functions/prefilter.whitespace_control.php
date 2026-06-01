@@ -38,13 +38,14 @@
  * So \n\n in the template will lead to \n in the output
  *
  * @param string $string raw template source
- * @param Smarty_Internal_Template $template Template instance 
+ * @param \Smarty\Template $template Template instance
  * @return string raw template source after whitespace control was applied
  * @author Rodney Rehm
  */
-function smarty_prefilter_whitespace_control($string, Smarty_Internal_Template $template) {
-    $ldelim = $template->smarty->left_delimiter;
-    $rdelim = $template->smarty->right_delimiter;
+function smarty_prefilter_whitespace_control($string, \Smarty\Template $template) {
+    $smarty = $template->getSmarty();
+    $ldelim = $smarty->getLeftDelimiter();
+    $rdelim = $smarty->getRightDelimiter();
     $_ldelim = preg_quote($ldelim);
     $_rdelim = preg_quote($rdelim);
 

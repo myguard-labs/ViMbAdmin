@@ -23,7 +23,7 @@
         "php": ">=8.0.0",
         "doctrine/orm": "2.8.*",
         "shardj/zf1-future": "1.*",
-        "smarty/smarty": "~4.3.0"
+        "smarty/smarty": "^5.0"
     },
     "require-dev": {
         "opensolutions/minify": "1.*"
@@ -45,6 +45,9 @@
     "config": {
         "platform": {
             "php": "8.0"
+        },
+        "audit": {
+            "abandoned": "ignore"
         }
     }
 }

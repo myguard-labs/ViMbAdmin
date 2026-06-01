@@ -662,8 +662,8 @@ resources.smarty.cache     = APPLICATION_PATH "/../var/cache"
 resources.smarty.config    = APPLICATION_PATH "/configs/smarty"
 resources.smarty.plugins[] = APPLICATION_PATH "/../library/ViMbAdmin/Smarty/functions"
 resources.smarty.plugins[] = APPLICATION_PATH "/../library/OSS/Smarty/functions"
-resources.smarty.plugins[] = APPLICATION_PATH "/../vendor/smarty/smarty/libs/plugins"
-resources.smarty.plugins[] = APPLICATION_PATH "/../vendor/smarty/smarty/libs/sysplugins"
+; Smarty 5 ships its core plugins as namespaced classes via Composer; the
+; legacy libs/plugins and libs/sysplugins directories no longer exist.
 resources.smarty.debugging = 0
 
 

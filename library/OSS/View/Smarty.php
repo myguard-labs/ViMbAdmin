@@ -76,13 +76,29 @@ class OSS_View_Smarty extends Zend_View_Abstract
      */
     public function __construct( $tmplPath = null, $extraParams = array() )
     {
-        $this->_smarty = new Smarty();
+        $this->_smarty = new \Smarty\Smarty();
 
         if( null !== $tmplPath )
             $this->setScriptPath( $tmplPath );
 
+        // Smarty 5 removed the public template_dir / compile_dir / cache_dir /
+        // config_dir / plugins_dir properties in favour of setters. Map the
+        // legacy "magic property" assignments onto the new API.
         foreach( $extraParams as $key => $value )
-            $this->_smarty->$key = $value;
+        {
+            if( $value === null )
+                continue;
+
+            switch( $key )
+            {
+                case 'template_dir': $this->_smarty->setTemplateDir( $value ); break;
+                case 'compile_dir':  $this->_smarty->setCompileDir( $value );  break;
+                case 'cache_dir':    $this->_smarty->setCacheDir( $value );    break;
+                case 'config_dir':   $this->_smarty->setConfigDir( $value );   break;
+                case 'plugins_dir':  $this->_smarty->addPluginsDir( $value );  break;
+                default:             $this->_smarty->$key = $value;            break;
+            }
+        }
     }
 
 
@@ -96,19 +112,19 @@ class OSS_View_Smarty extends Zend_View_Abstract
         // see the comments in clearVars() for an explanation
         $this->_isBeingCloned = true;
 
-        $tpl_vars = $this->_smarty->tpl_vars;
-        $template_dir = $this->_smarty->template_dir;
-        $compile_dir = $this->_smarty->compile_dir;
-        $config_dir = $this->_smarty->config_dir;
-        $plugins_dir = $this->_smarty->plugins_dir;
+        $tpl_vars = $this->_smarty->getTemplateVars();
+        $template_dir = $this->_smarty->getTemplateDir();
+        $compile_dir = $this->_smarty->getCompileDir();
+        $config_dir = $this->_smarty->getConfigDir();
+        $plugins_dir = $this->_smarty->getPluginsDir();
 
         $this->__construct();
 
-        $this->_smarty->tpl_vars = $tpl_vars;
-        $this->_smarty->template_dir = $template_dir;
-        $this->_smarty->compile_dir = $compile_dir;
-        $this->_smarty->config_dir = $config_dir;
-        $this->_smarty->plugins_dir = $plugins_dir;
+        $this->_smarty->assign( $tpl_vars );
+        $this->_smarty->setTemplateDir( $template_dir );
+        $this->_smarty->setCompileDir( $compile_dir );
+        $this->_smarty->setConfigDir( $config_dir );
+        $this->_smarty->setPluginsDir( $plugins_dir );
     }
 
 
@@ -170,7 +186,7 @@ class OSS_View_Smarty extends Zend_View_Abstract
     {
         if( is_readable( $path ) )
         {
-            $this->_smarty->template_dir = $path;
+            $this->_smarty->setTemplateDir( $path );
             return;
         }
 
@@ -185,7 +201,7 @@ class OSS_View_Smarty extends Zend_View_Abstract
      */
     public function getScriptPaths()
     {
-        return $this->_smarty->template_dir;
+        return $this->_smarty->getTemplateDir();
     }
 
 
@@ -348,7 +364,7 @@ class OSS_View_Smarty extends Zend_View_Abstract
      */
     public function skinTemplateExists( $name )
     {
-        if( $this->_skin && is_readable( $this->_smarty->template_dir[0] . '/_skins/' . $this->_skin . '/' . $name ) )
+        if( $this->_skin && is_readable( $this->_smarty->getTemplateDir(0) . '/_skins/' . $this->_skin . '/' . $name ) )
             return true;
 
         return $this->templateExists( $name );
@@ -370,7 +386,7 @@ class OSS_View_Smarty extends Zend_View_Abstract
     {
         // if we're using a skin see if a skin file exists.
         // if so, use it, otherwise use the default skin files
-        if( $this->_skin && is_readable( $this->_smarty->template_dir[0] . '/_skins/' . $this->_skin . '/' . $name ) )
+        if( $this->_skin && is_readable( $this->_smarty->getTemplateDir(0) . '/_skins/' . $this->_skin . '/' . $name ) )
             return '_skins/' . $this->_skin . '/' . $name;
 
         return $name;
@@ -416,14 +432,14 @@ class OSS_View_Smarty extends Zend_View_Abstract
     {
 
         // does the skin exist?
-        if( is_readable( $this->_smarty->template_dir[0] . "/_skins/$s" ) )
+        if( is_readable( $this->_smarty->getTemplateDir(0) . "/_skins/$s" ) )
         {
             $this->_skin = $s;
             return true;
         }
 
         throw new Exception( "Specified skin directory does not exist or is not readable ("
-            . $this->_smarty->template_dir[0] . "/_skins/$s" . ")"
+            . $this->_smarty->getTemplateDir(0) . "/_skins/$s" . ")"
         );
     }
 

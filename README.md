@@ -99,7 +99,7 @@ stock upstream had **none** of the application-layer items below.
 
 ### Runtime (Snuffleupagus)
 
-- A **code-derived [`vimbadmin-strict.list`](snuffleupagus/vimbadmin-strict.list)**
+- A **code-derived [`vimbadmin-strict.list`](contrib/snuffleupagus/vimbadmin-strict.list)**
   ruleset: bans every dangerous function the app doesn't use, allow-scopes the
   `exec` it does, blocks RFI/LFI wrappers, eval/`base64_decode` webshell pipes,
   mail-header injection, env hijacking, world-writable chmod, writing
@@ -327,8 +327,8 @@ application/    ZF1 controllers, entities, views (Smarty)
 library/        OSS + ViMbAdmin framework, Doctrine, auth
 public/         web docroot (index.php front controller)
 bin/            CLI tools (doctrine2-cli.php, vimbtool.php, crons)
-contrib/        deploy configs: php-fpm pool, Angie vhost, mail-host crons, theming
-snuffleupagus/  vimbadmin-strict.list (validated SP ruleset)
+contrib/        deploy configs: php-fpm pool, Angie vhost, mail-host crons,
+                snuffleupagus/ (the validated SP ruleset), theming
 doctrine2/xml/  Doctrine XML mappings (the schema source of truth)
 ```
 

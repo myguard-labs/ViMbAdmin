@@ -114,5 +114,63 @@ code, pre {
 .alert-error   { border-left: 3px solid var(--vimb-danger); }
 .alert-info    { border-left: 3px solid var(--vimb-accent); }
 
+/* ---- page containers (kill the light panels) ---------------------- */
+html, body { background-color: var(--vimb-bg); }
+.page-content {
+    background-color: var(--vimb-surface);
+    box-shadow: none;
+    border: 1px solid var(--vimb-border);
+}
+.page-header {
+    background-color: var(--vimb-surface-2);
+    border-bottom-color: var(--vimb-border);
+}
+.page-header h1 { color: var(--vimb-text); }
+
+/* ---- DataTables controls (Show entries / Search / info / paging) -- */
+.dataTables_wrapper { color: var(--vimb-text); }
+.dataTables_length,
+.dataTables_filter,
+.dataTables_info,
+.dataTables_length label,
+.dataTables_filter label { color: var(--vimb-muted); }
+.dataTables_filter input,
+.dataTables_length select {
+    background: var(--vimb-surface-2);
+    color: var(--vimb-text);
+    border-color: var(--vimb-border);
+}
+.dataTables_paginate .paginate_button,
+.dataTables_paginate .paginate_button.previous,
+.dataTables_paginate .paginate_button.next {
+    color: var(--vimb-text) !important;
+}
+.dataTables_paginate .paginate_button.current,
+.dataTables_paginate .paginate_button:hover {
+    color: var(--vimb-accent) !important;
+}
+
+/* DataTables sort headers + bordered-table header row */
+table.dataTable thead th,
+table.dataTable thead td,
+.table thead th {
+    color: var(--vimb-text);
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border);
+}
+
+/* ---- glyphicon sprites (dark PNG -> invert so visible on dark) ----- */
+/* Bootstrap 2 ships a dark sprite; invert renders it light. icon-white
+   stays light (double-invert handled below). */
+[class^="icon-"],
+[class*=" icon-"] { filter: invert(1) brightness(1.6); }
+.btn [class^="icon-"],
+.btn [class*=" icon-"] { filter: invert(1) brightness(1.6); }
+/* elements that already use the white sprite shouldn't be re-inverted */
+.icon-white,
+.btn-primary [class^="icon-"],
+.btn-danger  [class^="icon-"],
+.navbar-inverse [class^="icon-"] { filter: none; }
+
 /* ---- footer ------------------------------------------------------- */
 footer, .footer { color: var(--vimb-muted); border-top-color: var(--vimb-border); }

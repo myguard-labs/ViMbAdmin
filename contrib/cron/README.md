@@ -174,7 +174,8 @@ check the mail host's log and the panel's audit log.
   separate, default-off feature handled inside the web delete flow — it would
   need the web host to see the maildirs, which the hardened Docker image
   deliberately doesn't. For disk cleanup, prefer the archive→delete path above.
-- If you reuse the **Docker image** as a sidecar instead of a bare checkout,
-  the CLI is at the same `/opt/vimbadmin/bin/vimbtool.php`, but you must mount
-  the maildirs + `/srv/archives` into it and the image needs `bzip2` (it's not
-  installed by default — the web image never archives).
+- The `eilandert/vimbadmin` **Docker image is archive-capable**: it ships the
+  full CLI plus `tar`/`bzip2`. Reuse it as a sidecar — run the same image with
+  the maildir tree (read-write) and `/srv/archives` bind-mounted, and call
+  `php /opt/vimbadmin/bin/vimbtool.php -a archive.cli-archive-pendings`. No
+  separate checkout needed; the CLI is at `/opt/vimbadmin/bin/vimbtool.php`.

@@ -8,71 +8,15 @@ measuring maildir sizes for the panel's quota column.
 The panel only flags work in the database; the mail host carries it out,
 because that's where the maildirs and `archive.path` actually live.
 
-There are **two ways** to drive the queue, pick one:
-
-| Script | Needs | What it does |
-|---|---|---|
-| `vimbadmin-archive-sql.sh` | **just `mariadb-client` + `tar`/`bzip2`** | Standalone worker — no PHP, no ViMbAdmin checkout. Talks to the DB directly. **Recommended for a Dovecot container.** |
-| `vimbadmin-archive.sh` + `vimbadmin-sizes.sh` | a full ViMbAdmin checkout + PHP CLI | Thin wrappers around the bundled `vimbtool.php` (the PHP queue consumer). |
-
-> **Do you need a whole ViMbAdmin checkout on the mail host to archive/delete?**
-> **No.** Use `vimbadmin-archive-sql.sh` — it only needs the MariaDB client and
-> `tar`/`bzip2`. Reach for the PHP scripts (and a checkout) only if you also
-> want **restore** (which re-creates DB rows — the SQL script deliberately
-> doesn't) or the **quota sizes** job, which is PHP-only.
-
-### Option A — standalone, no PHP (`vimbadmin-archive-sql.sh`)
-
-Wire-compatible with the panel: the "Archive" button writes a `PENDING_ARCHIVE`
-row and purges the mailbox; this script tars the maildir exactly the way the
-PHP worker does (so a later panel **restore** still finds the tarballs), writes
-the `*_file`/`*_size` columns, and flips the row to `ARCHIVED`. `delete`
-processes `PENDING_DELETE` rows (rm tarballs + drop row).
-
-```sh
-# deps only:
-sudo apt-get install --no-install-recommends -y mariadb-client tar bzip2 coreutils
-
-# a credentials file (chmod 600), so the password isn't on the command line:
-sudo install -d -m 0750 /etc/vimbadmin
-sudo tee /etc/vimbadmin/db.cnf >/dev/null <<'CNF'
-[client]
-host     = 127.0.0.1
-user     = vimbadmin
-password = the-db-password
-CNF
-sudo chmod 600 /etc/vimbadmin/db.cnf
-
-sudo install -m 0755 contrib/cron/vimbadmin-archive-sql.sh /usr/local/sbin/
-sudo install -d -o vmail -g vmail -m 0750 /srv/archives
-
-# test, then cron:
-sudo -u vmail DB_CNF=/etc/vimbadmin/db.cnf DB_NAME=vimbadmin \
-     ARCHIVE_PATH=/srv/archives /usr/local/sbin/vimbadmin-archive-sql.sh list
-```
-
-```cron
-# /etc/cron.d/vimbadmin  (DB-only worker)
-*/5 * * * * vmail DB_CNF=/etc/vimbadmin/db.cnf DB_NAME=vimbadmin ARCHIVE_PATH=/srv/archives /usr/local/sbin/vimbadmin-archive-sql.sh archive
-*/5 * * * * vmail DB_CNF=/etc/vimbadmin/db.cnf DB_NAME=vimbadmin ARCHIVE_PATH=/srv/archives /usr/local/sbin/vimbadmin-archive-sql.sh delete
-```
-
-`ARCHIVE_PATH` must match the panel's `application.ini` `archive.path`. Don't
-run this **and** the PHP archive cron against the same DB at once — pick one.
-
-### Option B — PHP wrappers (full checkout)
-
 | Script | Action(s) | Cron cadence |
 |---|---|---|
 | `vimbadmin-archive.sh` | `archive.cli-archive-pendings` / `restore` / `delete` | every 5 min |
 | `vimbadmin-sizes.sh` | `mailbox.cli-get-sizes` | nightly |
 | `crontab.example` | sample `/etc/cron.d/vimbadmin` | — |
 
-The rest of this document covers Option B.
-
 ---
 
-## What the scripts actually call
+## What the scripts actually call — and what PHP needs
 
 Both scripts are thin wrappers around the ViMbAdmin CLI:
 
@@ -80,12 +24,51 @@ Both scripts are thin wrappers around the ViMbAdmin CLI:
 php <VIMBADMIN_DIR>/bin/vimbtool.php -a <module.controller.action>
 ```
 
-`vimbtool.php` is the bundled CLI in the **`bin/`** directory of a ViMbAdmin
-checkout. The scripts find it via `$VIMBADMIN_DIR/bin/vimbtool.php`
-(default `VIMBADMIN_DIR=/opt/vimbadmin`); override with the `VIMBADMIN_DIR` or
-`VIMBTOOL` environment variable. It reads `application/configs/application.ini`
-relative to itself, so the checkout's config is what decides which database
-and which `archive.path` are used.
+`vimbtool.php` is **not** a self-contained script. It boots the whole ViMbAdmin
+application (Zend Framework + Doctrine ORM, the entity classes and their XML
+mappings, the config), then dispatches the CLI action. So you can't copy a
+single file — you need the parts of the tree the CLI loads at runtime:
+
+| Path | Why it's needed |
+|---|---|
+| `bin/vimbtool.php`, `bin/utils.inc` | the CLI entry point |
+| `vendor/` | Composer autoloader + Zend (zf1-future), Doctrine, Symfony, OSS framework |
+| `library/` | on the PHP `include_path` (OSS + ViMbAdmin classes) |
+| `application/` | `Bootstrap.php`, controllers, `Entities/`, `modules/`, and **`configs/application.ini`** (the DB + `archive.path` config) |
+| `doctrine2/xml/` | the Doctrine XML entity mappings (the schema the CLI maps against) |
+
+You do **not** need on the mail host: `public/` (the web docroot — no web
+server here), `tests/`, `data/`, `Vagrantfile`, the docs, `.git`, or `contrib/`
+(beyond the two cron scripts).
+
+It reads `application/configs/application.ini` relative to itself, so that
+config decides which database and which `archive.path` are used. The scripts
+locate the CLI via `$VIMBADMIN_DIR/bin/vimbtool.php` (default
+`VIMBADMIN_DIR=/opt/vimbadmin`); override with `VIMBADMIN_DIR` or `VIMBTOOL`.
+
+### Copying just those parts to the mail host
+
+Easiest is a full `git clone` + `composer install` (below). If you'd rather
+copy a built checkout from the web host instead of building one, copy exactly
+the paths above — e.g. with `rsync`:
+
+```sh
+# from the box that already has a working, composer-installed checkout:
+rsync -a --relative \
+    /opt/vimbadmin/./bin \
+    /opt/vimbadmin/./vendor \
+    /opt/vimbadmin/./library \
+    /opt/vimbadmin/./application \
+    /opt/vimbadmin/./doctrine2/xml \
+    mailhost:/opt/vimbadmin/
+
+# on the mail host, point its application.ini at the same DB + archive.path
+# (or rsync the web host's application.ini too, if the DB host is reachable
+#  from the mail host under the same name).
+```
+
+Everything else in the tree is dead weight on a mail host; skipping it keeps
+the copy small and the attack surface minimal.
 
 ---
 

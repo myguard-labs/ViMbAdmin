@@ -1,0 +1,70 @@
+{tmplinclude file="header.phtml"}
+
+<div class="page-content">
+
+    <div class="page-header">
+        <h1>Two-Factor Authentication</h1>
+    </div>
+
+{OSS_Message}
+
+<div class="row">
+    <div class="span8 offset2">
+
+{if isset( $backupCodes ) && $backupCodes}
+    {* Shown ONCE, right after enabling or regenerating. *}
+    <div class="alert alert-success">
+        <strong>Save these backup codes now.</strong> Each works once, if you
+        lose your authenticator. They will not be shown again.
+    </div>
+    <pre>{foreach $backupCodes as $bc}{$bc|escape}
+{/foreach}</pre>
+    <a class="btn btn-primary" href="{genUrl controller='admin' action='two-factor'}">Done</a>
+
+{elseif $enabled}
+    <p>Two-factor authentication is <strong style="color:#468847">enabled</strong>
+       on your account. Backup codes remaining: <strong>{$backupRemaining|escape}</strong>.</p>
+
+    <form method="post" action="{genUrl controller='admin' action='two-factor'}" class="form-inline">
+        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+        <input type="hidden" name="op" value="regen-backup" />
+        <input type="text" name="code" placeholder="Current 6-digit code" autocomplete="one-time-code" />
+        <button type="submit" class="btn">Regenerate backup codes</button>
+    </form>
+
+    <hr/>
+
+    <form method="post" action="{genUrl controller='admin' action='two-factor'}" class="form-inline">
+        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+        <input type="hidden" name="op" value="disable" />
+        <input type="text" name="code" placeholder="Current 6-digit or backup code" autocomplete="one-time-code" />
+        <button type="submit" class="btn btn-danger">Disable two-factor</button>
+    </form>
+
+{else}
+    <p>Protect your admin login with a time-based one-time password (TOTP).
+       Scan the QR code with an authenticator app (Aegis, Google Authenticator,
+       1Password, etc.), then enter the 6-digit code it shows to confirm.</p>
+
+    <p style="text-align:center;margin:1.5em 0;">
+        <img src="{$qrDataUri|escape}" alt="TOTP QR code" />
+    </p>
+
+    <p>Can't scan? Enter this secret manually:
+       <code>{$secret|escape}</code></p>
+
+    <form method="post" action="{genUrl controller='admin' action='two-factor'}" class="form-inline">
+        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+        <input type="hidden" name="op" value="enable" />
+        <input type="text" name="code" placeholder="6-digit code from app"
+               autocomplete="one-time-code" inputmode="numeric" autofocus="autofocus" />
+        <button type="submit" class="btn btn-primary">Enable two-factor</button>
+    </form>
+{/if}
+
+    </div>
+</div>
+
+</div>
+
+{tmplinclude file="footer.phtml"}

@@ -52,8 +52,24 @@ class AdminController extends ViMbAdmin_Controller_Action
      */
     public function preDispatch()
     {
-        if( $this->getRequest()->getActionName() != 'password' )
-            $this->authorise( true ); // must be a super admin
+        $action = $this->getRequest()->getActionName();
+
+        // CLI-only maintenance actions (vimbtool) self-guard via php_sapi_name
+        // and have no web identity, so skip the web authorisation entirely.
+        if( strpos( $action, 'cli-' ) === 0 )
+        {
+            if( php_sapi_name() != 'cli' )
+                $this->redirectAndEnsureDie( 'auth/login' );
+            return;
+        }
+
+        // `password` and `two-factor` are self-service: any logged-in admin
+        // manages their own. Everything else requires super-admin.
+        $selfService = [ 'password', 'two-factor' ];
+        if( !in_array( $action, $selfService, true ) )
+            $this->authorise( true );  // must be a super admin
+        else
+            $this->authorise( false ); // any authenticated admin
 
         if( $this->getTargetAdmin() )
             $this->view->targetAdmin = $this->getTargetAdmin();
@@ -398,5 +414,170 @@ class AdminController extends ViMbAdmin_Controller_Action
         $this->getD2EM()->flush();
         $this->addMessage( 'You have successfully removed the admin from domain '. $this->getDomain()->getDomain(), OSS_Message::SUCCESS );
         $this->redirect( 'admin/domains/aid/' . $this->getTargetAdmin()->getId() );
+    }
+
+
+    /**
+     * ViMbAdmin_TwoFactor helper bound to the app issuer + securitysalt.
+     *
+     * @return ViMbAdmin_TwoFactor
+     */
+    protected function _twoFactor()
+    {
+        $salt = isset( $this->_options['securitysalt'] ) ? $this->_options['securitysalt'] : '';
+        return new ViMbAdmin_TwoFactor( 'ViMbAdmin', $salt );
+    }
+
+
+    /**
+     * Self-service two-factor (TOTP) management for the logged-in admin.
+     *
+     *   GET                       -> show status; if disabled, show a QR for a
+     *                                freshly-generated (session-held) secret.
+     *   POST action=enable        -> verify a code against the pending secret,
+     *                                enable 2FA, show one-time backup codes.
+     *   POST action=disable       -> disable 2FA (requires a current code).
+     *   POST action=regen-backup  -> regenerate backup codes (requires a code).
+     */
+    public function twoFactorAction()
+    {
+        $admin = $this->getAdmin();          // the logged-in admin (self)
+        $tfa   = $this->_twoFactor();
+
+        $this->view->enabled         = $tfa->isEnabled( $admin );
+        $this->view->backupRemaining = $tfa->backupCodesRemaining( $admin );
+
+        if( $this->getRequest()->isPost() )
+        {
+            $this->_assertCsrf();   // session-token CSRF guard (see Controller/Action)
+
+            $op   = $this->getParam( 'op', '' );
+            $code = $this->getParam( 'code', '' );
+
+            // ---- enable -------------------------------------------------
+            if( $op == 'enable' && !$tfa->isEnabled( $admin ) )
+            {
+                $secret = $this->getSessionNamespace()->totp_enrol_secret;
+                if( $secret && $tfa->verifyCode( $secret, $code ) )
+                {
+                    $backup = $tfa->enable( $admin, $secret );
+                    $this->getD2EM()->flush();
+                    unset( $this->getSessionNamespace()->totp_enrol_secret );
+
+                    $this->getLogger()->info( sprintf( _( "%s enabled 2FA" ), $admin->getUsername() ) );
+                    $this->view->justEnabled = true;
+                    $this->view->backupCodes = $backup;   // shown ONCE
+                    $this->view->enabled     = true;
+                    return;
+                }
+                $this->addMessage( _( 'That code did not verify. Scan the QR and try again.' ), OSS_Message::ERROR );
+            }
+
+            // ---- disable ------------------------------------------------
+            elseif( $op == 'disable' && $tfa->isEnabled( $admin ) )
+            {
+                if( $tfa->verifyForAdmin( $admin, $code ) || $tfa->consumeBackupCode( $admin, $code ) )
+                {
+                    $tfa->disable( $admin );
+                    $this->getD2EM()->flush();
+                    $this->getLogger()->notice( sprintf( _( "%s disabled 2FA" ), $admin->getUsername() ) );
+                    $this->addMessage( _( 'Two-factor authentication has been disabled.' ), OSS_Message::SUCCESS );
+                    $this->redirect( 'admin/two-factor' );
+                }
+                $this->addMessage( _( 'A valid current code is required to disable 2FA.' ), OSS_Message::ERROR );
+            }
+
+            // ---- regenerate backup codes -------------------------------
+            elseif( $op == 'regen-backup' && $tfa->isEnabled( $admin ) )
+            {
+                if( $tfa->verifyForAdmin( $admin, $code ) )
+                {
+                    $this->view->backupCodes = $tfa->regenerateBackupCodes( $admin );
+                    $this->getD2EM()->flush();
+                    $this->getLogger()->info( sprintf( _( "%s regenerated 2FA backup codes" ), $admin->getUsername() ) );
+                    $this->view->enabled = true;
+                    return;
+                }
+                $this->addMessage( _( 'A valid current code is required to regenerate backup codes.' ), OSS_Message::ERROR );
+            }
+        }
+
+        // For the enrolment view: generate (and stash) a fresh secret + QR.
+        if( !$tfa->isEnabled( $admin ) )
+        {
+            $secret = $this->getSessionNamespace()->totp_enrol_secret;
+            if( !$secret )
+            {
+                $secret = $tfa->createSecret();
+                $this->getSessionNamespace()->totp_enrol_secret = $secret;
+            }
+            $this->view->secret      = $secret;
+            $this->view->qrDataUri   = $tfa->getQrDataUri( $admin->getUsername(), $secret );
+        }
+    }
+
+
+    /**
+     * CLI: reset / disable two-factor for an admin (lost-device escape hatch).
+     *
+     * Invoke via vimbtool:
+     *   ./bin/vimbtool.php -a admin.cli-reset-totp --username=admin@example.com
+     *   ./bin/vimbtool.php -a admin.cli-reset-totp --all
+     *
+     * Also honoured: application.ini [twofactor] force_disable (applied at the
+     * admin's next login). This CLI path is immediate.
+     */
+    public function cliResetTotpAction()
+    {
+        if( php_sapi_name() != 'cli' )
+        {
+            $this->getResponse()->setHttpResponseCode( 404 );
+            return;
+        }
+
+        $this->_helper->viewRenderer->setNoRender( true );
+
+        $tfa = $this->_twoFactor();
+        $em  = $this->getD2EM();
+
+        // vimbtool.php's getopt only knows -a/-v/-d, so parse our own flags
+        // straight from argv: --username=<email> | --all
+        $username = null;
+        $all      = false;
+        foreach( (array) ( $_SERVER['argv'] ?? [] ) as $arg )
+        {
+            if( strpos( $arg, '--username=' ) === 0 )
+                $username = substr( $arg, strlen( '--username=' ) );
+            elseif( $arg === '--all' )
+                $all = true;
+        }
+
+        if( !$username && !$all )
+        {
+            echo "Usage: vimbtool.php -a admin.cli-reset-totp --username=<email> | --all\n";
+            return;
+        }
+
+        $repo   = $em->getRepository( '\\Entities\\Admin' );
+        $admins = $all ? $repo->findAll() : $repo->findBy( [ 'username' => $username ] );
+
+        if( !$admins )
+        {
+            echo "No matching admin(s) found.\n";
+            return;
+        }
+
+        $n = 0;
+        foreach( $admins as $admin )
+        {
+            if( $tfa->isEnabled( $admin ) )
+            {
+                $tfa->disable( $admin );
+                echo "2FA reset for: " . $admin->getUsername() . "\n";
+                $n++;
+            }
+        }
+        $em->flush();
+        echo "Done. {$n} admin(s) had 2FA disabled.\n";
     }
 }

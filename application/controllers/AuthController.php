@@ -51,6 +51,154 @@ class AuthController extends ViMbAdmin_Controller_Action
     {
         if( $this->getD2EM()->getRepository( '\\Entities\\Admin' )->getCount() == 0 )
             $this->_redirect( 'auth/setup' );
+
+        // Brute-force gate: refuse locked-out sources, then count this POST as
+        // a pending attempt. A fully-successful login clears the counter (in
+        // _postLoginChecks / totpAction); anything else leaves it standing, so
+        // repeated failures accumulate toward the lockout threshold.
+        $bf = $this->_bruteForce();
+        $bf->assertNotLocked( $this->getRequest() );
+        if( $this->getRequest()->isPost() )
+            $bf->record( $this->getRequest()->getParam( 'username', '' ), $this->getRequest() );
+    }
+
+
+    /**
+     * Two-factor helper, configured with the app issuer + securitysalt.
+     *
+     * @return ViMbAdmin_TwoFactor
+     */
+    protected function _twoFactor()
+    {
+        $salt = isset( $this->_options['securitysalt'] ) ? $this->_options['securitysalt'] : '';
+        return new ViMbAdmin_TwoFactor( 'ViMbAdmin', $salt );
+    }
+
+
+    /**
+     * Brute-force protection helper (per username+IP attempt tracking with an
+     * IP allowlist from application.ini).
+     *
+     * @return ViMbAdmin_BruteForce
+     */
+    protected function _bruteForce()
+    {
+        $opts = isset( $this->_options['bruteforce'] ) ? $this->_options['bruteforce'] : [];
+        if( empty( $opts['statedir'] ) )
+            $opts['statedir'] = APPLICATION_PATH . '/../var/bruteforce';
+        return new ViMbAdmin_BruteForce( $this->getD2EM(), $opts );
+    }
+
+
+    /**
+     * Post-(password)-login hook: if the admin has 2FA enabled and has not yet
+     * cleared the second factor in this session, suspend the login and divert
+     * to the TOTP challenge. Also enforces the ini-driven 2FA reset/disable
+     * escape hatch (see application.ini [twofactor]).
+     *
+     * @see OSS_Controller_Trait_Auth::loginAction()
+     */
+    protected function _postLoginChecks( $auth, $user, &$message, $form = null )
+    {
+        $tfa = $this->_twoFactor();
+
+        // ---- ini escape hatch: force-disable / reset 2FA for an admin ----
+        // [twofactor] force_disable = "admin@example.com" (or "*" for all),
+        // applied lazily at that admin's next login.
+        $cfg = isset( $this->_options['twofactor'] ) ? $this->_options['twofactor'] : [];
+        if( !empty( $cfg['force_disable'] ) )
+        {
+            $fd = $cfg['force_disable'];
+            if( $fd === '*' || strcasecmp( $fd, $user->getUsername() ) === 0 )
+            {
+                if( $tfa->isEnabled( $user ) )
+                {
+                    $tfa->disable( $user );
+                    $this->getD2EM()->flush();
+                    $this->getLogger()->notice( sprintf( _( "2FA force-disabled via config for %s" ), $user->getUsername() ) );
+                }
+            }
+        }
+
+        // ---- 2FA gate ----------------------------------------------------
+        if( $tfa->isEnabled( $user ) && !$this->getSessionNamespace()->totp_verified )
+        {
+            // Suspend the login: drop the identity we were just granted and
+            // park the admin id for the TOTP challenge.
+            $this->getSessionNamespace()->totp_pending_admin_id = $user->getId();
+            $this->getSessionNamespace()->totp_pending_via      = $this->getSessionNamespace()->logged_in_via;
+            $auth->clearIdentity();
+
+            $this->_redirect( 'auth/totp' );   // Redirector exits
+        }
+
+        // Login fully succeeds here (no 2FA, or already verified): clear the
+        // brute-force counter for this source.
+        $this->_bruteForce()->clear( $user->getUsername(), $this->getRequest() );
+        $this->getD2EM()->flush();
+
+        return true;
+    }
+
+
+    /**
+     * Second-factor challenge. Reached only after a correct password when the
+     * admin has TOTP enabled. Accepts a 6-digit TOTP code or a one-time backup
+     * code; on success, completes the login.
+     */
+    public function totpAction()
+    {
+        if( $this->getIdentity() )
+            $this->redirectAndEnsureDie( '' );
+
+        $pendingId = $this->getSessionNamespace()->totp_pending_admin_id;
+        if( !$pendingId )
+            $this->redirectAndEnsureDie( 'auth/login' );
+
+        $admin = $this->getD2EM()->getRepository( '\\Entities\\Admin' )->find( $pendingId );
+        if( !$admin )
+        {
+            unset( $this->getSessionNamespace()->totp_pending_admin_id );
+            $this->redirectAndEnsureDie( 'auth/login' );
+        }
+
+        $this->view->form = $form = new ViMbAdmin_Form_Auth_Totp();
+
+        if( $this->getRequest()->isPost() && $form->isValid( $_POST ) )
+        {
+            $tfa  = $this->_twoFactor();
+            $code = $form->getValue( 'code' );
+
+            $ok = $tfa->verifyForAdmin( $admin, $code ) || $tfa->consumeBackupCode( $admin, $code );
+
+            if( $ok )
+            {
+                $this->_bruteForce()->clear( $admin->getUsername(), $this->getRequest() );
+
+                // Complete the login: re-establish identity, mark 2FA done.
+                Zend_Session::regenerateId();
+                $this->getSessionNamespace()->totp_verified = true;
+                $this->getSessionNamespace()->logged_in_via = $this->getSessionNamespace()->totp_pending_via;
+                unset( $this->getSessionNamespace()->totp_pending_admin_id );
+                unset( $this->getSessionNamespace()->totp_pending_via );
+
+                $this->_reauthenticate( $admin );
+
+                $this->getSessionNamespace()->timeOfLastAction = time();
+                $this->getD2EM()->flush();
+                $this->getLogger()->info( sprintf( _( "%s passed 2FA and logged in" ), $admin->getUsername() ) );
+
+                if( isset( $this->getSessionNamespace()->postAuthRedirect ) )
+                    $this->_redirect( $this->getSessionNamespace()->postAuthRedirect );
+                $this->_redirect( '' );
+            }
+
+            // wrong code: count it against brute-force, complain.
+            $this->_bruteForce()->record( $admin->getUsername(), $this->getRequest() );
+            $this->getD2EM()->flush();
+            $this->getLogger()->notice( sprintf( _( "Failed 2FA attempt for %s" ), $admin->getUsername() ) );
+            $this->addMessage( _( 'Invalid authentication code. Please try again.' ), OSS_Message::ERROR );
+        }
     }
 
     /**

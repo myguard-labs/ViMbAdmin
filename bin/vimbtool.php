@@ -59,7 +59,9 @@ try
             'action|a=s'    => 'Action to perform in format of module.controller.action',
             'verbose|v'     => 'Verbose messages will be dumped to the default output.',
             'debug|d'       => 'Enables debug mode.',
-            'copyright|c'   => 'Display copyright information.'
+            'copyright|c'   => 'Display copyright information.',
+            'username|u=s'  => 'Action-specific: target admin username (e.g. admin.cli-reset-totp).',
+            'all'           => 'Action-specific: apply to all (e.g. admin.cli-reset-totp).'
         )
     );
 

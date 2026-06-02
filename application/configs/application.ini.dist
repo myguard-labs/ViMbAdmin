@@ -639,6 +639,41 @@ resources.auth.oss.rememberme.secure  = true
 
 resources.auth.oss.lost_password.use_captcha = true
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Two-factor authentication (TOTP)
+;;
+;; Admins enable 2FA themselves at /admin/two-factor (scan QR, confirm a
+;; code, save the one-time backup codes). The TOTP secret is stored
+;; encrypted (libsodium, keyed off securitysalt) in the admin's preferences.
+;;
+;; Lost-device escape hatches:
+;;   1. CLI (immediate):
+;;        ./bin/vimbtool.php -a admin.cli-reset-totp --username=admin@example.com
+;;        ./bin/vimbtool.php -a admin.cli-reset-totp --all
+;;   2. Config (applied at that admin's next login) -- uncomment + set:
+;;        twofactor.force_disable = "admin@example.com"   ; or "*" for everyone
+;;; twofactor.force_disable = ""
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Brute-force login protection
+;;
+;; Counts login attempts per source IP; locks the source out for `lockout`
+;; seconds once it makes `max_attempts` failures inside `window` seconds. A
+;; fully successful login (password + 2FA) clears the counter. Whitelisted
+;; IPs / CIDRs are never counted or locked.
+bruteforce.enabled      = 1
+bruteforce.max_attempts = 5
+bruteforce.window       = 900
+bruteforce.lockout      = 900
+;; State directory (defaults to APPLICATION_PATH/../var/bruteforce):
+;;; bruteforce.statedir  = "/opt/vimbadmin/var/bruteforce"
+;; Whitelist (repeat for each entry; single IPs or CIDR):
+bruteforce.whitelist[]  = "127.0.0.1"
+bruteforce.whitelist[]  = "::1"
+;;; bruteforce.whitelist[] = "10.0.0.0/8"
+
 resources.session.save_path = APPLICATION_PATH "/../var/session"
 resources.session.use_only_cookies = true
 resources.session.remember_me_seconds = 3600

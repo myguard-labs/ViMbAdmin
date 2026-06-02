@@ -1,0 +1,27 @@
+{tmplinclude file="header.phtml"}
+
+<div class="page-content" >
+
+    <div class="page-header" >
+        <h1>Two-Factor Authentication</h1>
+    </div>
+
+{OSS_Message}
+
+<div class="row">
+
+    <div class="span6 offset3">
+
+        <p>
+        Enter the 6-digit code from your authenticator app. Lost your device?
+        Enter one of your one-time <em>backup codes</em> instead.
+        </p>
+
+        {$form nofilter}
+
+    </div>
+</div>
+
+</div>
+
+{tmplinclude file="footer.phtml"}

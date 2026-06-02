@@ -49,17 +49,18 @@ resources.doctrine2.connection.options.password = 'xxx'
 resources.doctrine2.connection.options.host     = 'localhost'
 resources.doctrine2.connection.options.charset  = 'utf8'
 
-;; Doctrine2 requires Memcache for maximum efficency. Without Memcache
-;; it can be highly inefficient and will slow page requests down.
-;;
-;; You are strongly advised to install memcache and comment ArrayCache
-;; here and uncomment MemcacheCache.
-;;
+;; Doctrine metadata/query cache. Without a persistent backend the XML entity
+;; mappings are re-parsed on every request. Pick one:
+;;   ArrayCache     - per-request only (no caching across requests); fine for dev
+;;   ApcuCache      - in-process shared memory; best for a single host (ext-apcu)
+;;   MemcachedCache - shared across hosts (ext-memcached)
+;; The Docker image installs APCu and defaults to ApcuCache.
 
-resources.doctrine2cache.type                    = 'ArrayCache'
-;resources.doctrine2cache.type                    = 'MemcacheCache'
+resources.doctrine2cache.type      = 'ArrayCache'
+;resources.doctrine2cache.type      = 'ApcuCache'
+;resources.doctrine2cache.type      = 'MemcachedCache'
 ;resources.doctrine2cache.memcache.servers.0.host = '127.0.0.1'
-resources.doctrine2cache.namespace              = 'ViMbAdmin3'
+resources.doctrine2cache.namespace = 'ViMbAdmin3'
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -153,15 +154,6 @@ defaults.mailbox.min_password_length = 8
 ; BLF-CRYPT, SHA512-CRYPT, SHA256-CRYPT in descending order of strength
 defaults.mailbox.password_scheme = "dovecot:BLF-CRYPT"
 
-; April 2016 - Bad salts - it was pointed out that a typo in the code below meant that
-; the now deprecated md5.salted and sha1.salted (as opposed to their hyphenated versions above)
-; didn't actually use the requested salt string but a fixed salt of "md5.salted" and "sha1.salted"
-; respectively. These options still work for backwards compatibility.
-; See:
-; https://github.com/opensolutions/OSS-Framework/issues/43#issuecomment-207040421
-; https://github.com/opensolutions/OSS-Framework/commit/b3d669a81f8214032a70e594472ece9fe9322fe2
-
-
 ; The path to (and initial option(s) if necessary) the Dovecot password generator. Typical
 ; values may be something like:
 ;
@@ -240,8 +232,8 @@ defaults.export_settings.allowed_subnet[] = "192.168."
 server.smtp.enabled = 1
 server.smtp.host    = "mail.%d"
 server.smtp.user    = "%m"
-server.smtp.port    = "465"
-server.smtp.crypt   = "SSL"
+server.smtp.port    = "587"
+server.smtp.crypt   = "STARTTLS"
 
 server.pop3.enabled = 1
 server.pop3.host  = "gpo.%d"
@@ -298,23 +290,27 @@ server.email.address = "support@example.com"
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; See: http://framework.zend.com/manual/en/zend.mail.smtp-authentication.html
+;; Outgoing mail transport ViMbAdmin uses to SEND its own mail (notifications,
+;; password resets, error alerts). Defaults to submission on 587 + STARTTLS.
 ;;
-;; Ensure you have a working mail server configuration so the system can
-;; send emails.
-;; Possible values:
-;; transport.type: sendmail, smtp
-;; transport.auth: crammd5, login, plain
-;; transport.ssl: ssl, tls
+;;   type : smtp | sendmail
+;;   ssl  : tls (STARTTLS, port 587) | ssl (implicit TLS, port 465) | omit (plaintext)
+;;   auth : plain | login | crammd5   (omit entirely for an unauthenticated relay)
 ;;
 
 resources.mail.transport.type = "smtp"
 resources.mail.transport.host = "localhost"
+resources.mail.transport.port = "587"
+resources.mail.transport.ssl  = "tls"
+;resources.mail.transport.auth     = "login"
 ;resources.mail.transport.username = ""
 ;resources.mail.transport.password = ""
-;resources.mail.transport.auth = ""
-;resources.mail.transport.ssl = ""
-;resources.mail.transport.port = "25"
+
+;; Accept an untrusted TLS cert on the smarthost — self-signed, expired, or a
+;; hostname mismatch — by setting BOTH of these to 0. Leave at 1 for a relay
+;; with a valid, publicly-trusted certificate.
+resources.mail.transport.verify_peer      = 1
+resources.mail.transport.verify_peer_name = 1
 
 
 
@@ -350,21 +346,10 @@ skipVersionCheck = 0
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; ViMbAdmin 'pings' the developers as part of the set up process to let
-;; them know there is a new installation.
-;;
-;; All we are interested in is knowing whether people are using the software
-;; or not and whether continued support and development is worth the time
-;; and effort.
-;;
-;; Unless you're very shy, PLEASE LET US KNOW YOU'RE USING IT!
-;;
-;; This can be disabled by setting the below to 1
-;;
+;; Install pingback to the upstream authors. The endpoint is long dead, so
+;; this is disabled by default in the fork.
 
-skipInstallPingback = 0
+skipInstallPingback = 1
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -425,152 +410,39 @@ vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "webmaster"
 ;;
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Allows to add additional information.
-;
-; This is handled via a plugin
-;
 
-vimbadmin_plugins.AccessPermissions.disabled = false
-vimbadmin_plugins.DirectoryEntry.disabled    = true
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Optional plugins. All disabled by default. DirectoryEntry and AdditionalInfo
+; add extra per-mailbox form fields (LDAP-style metadata); if you enable one,
+; define its form elements here -- see the wiki for the element syntax. Left
+; out of this template to keep it lean.
+;
+vimbadmin_plugins.DirectoryEntry.disabled = true
 vimbadmin_plugins.AdditionalInfo.disabled = true
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;; Disabling directory entry subform element
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-vimbadmin_plugins.DirectoryEntry.disabled_elements.JpegPhoto         = true
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Mail              = true
-vimbadmin_plugins.DirectoryEntry.disabled_elements.PreferredLanguage = true
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Secretary         = true
-
-vimbadmin_plugins.DirectoryEntry.disabled_elements.PersonalTitle            = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.GivenName                = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Sn                       = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.DisplayName              = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Initials                 = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.BusinessCategory         = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.EmployeeType             = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Title                    = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.DepartmentNumber         = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Ou                       = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.RoomNumber               = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.O                        = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.CarLicense               = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.EmployeeNumber           = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.HomePhone                = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.TelephoneNumber          = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Mobile                   = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Pager                    = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.FacsimileTelephoneNumber = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.HomePostalAddress        = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.LabeledURI               = false
-vimbadmin_plugins.DirectoryEntry.disabled_elements.Manager                  = false
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; Mailbox AdditionalInfo plugin elements
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-;;Additional text messages for plugin.
-AdditionalInfo.mailbox.formPreBlurb  = "<p><strong>NB:</strong> Do not edit the following. It is sync'd on a nightly basis ..."
-
-; First Name
-vimbadmin_plugins.AdditionalInfo.elements.id.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.id.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.id.options.label = "LDAP Id"
-
-; First Name
-vimbadmin_plugins.AdditionalInfo.elements.first_name.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.first_name.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.first_name.options.label = "First Name"
-
-; Last Name
-vimbadmin_plugins.AdditionalInfo.elements.second_name.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.second_name.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.second_name.options.label = "Last Name"
-
-; Grade
-vimbadmin_plugins.AdditionalInfo.elements.grade.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.grade.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.grade.options.label = "Grade"
-
-; Grade Id
-vimbadmin_plugins.AdditionalInfo.elements.grade_id.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.label = "Grade Id"
-vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.validators.digits[] = 'Digits'
-vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.validators.digits[] = true
-
-; Department
-vimbadmin_plugins.AdditionalInfo.elements.department.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.department.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.department.options.label = "Department"
-
-; Department Id
-vimbadmin_plugins.AdditionalInfo.elements.department_id.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.department_id.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.department_id.options.label = "Department Id"
-vimbadmin_plugins.AdditionalInfo.elements.department_id.options.validators.digits[] = 'Digits'
-vimbadmin_plugins.AdditionalInfo.elements.department_id.options.validators.digits[] = true
-
-; Section
-vimbadmin_plugins.AdditionalInfo.elements.section.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.section.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.section.options.label = "Section"
-
-; Extension Number
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.label = "Extension Number"
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.digits[] = 'Digits'
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.digits[] = true
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.length[] = 'StringLength'
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.length[] = false
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.length.range[] = 4
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.length.range[] = 4
-;;to disable autocomplete functionality
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.autocomplete = 'off'
-
-; Direct Dial
-vimbadmin_plugins.AdditionalInfo.elements.d_dial.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.d_dial.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.d_dial.options.label = "Direct Dial"
-vimbadmin_plugins.AdditionalInfo.elements.d_dial.options.autocomplete = 'off'
-
-; Mobile
-vimbadmin_plugins.AdditionalInfo.elements.mobile.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.elements.mobile.options.required = false
-vimbadmin_plugins.AdditionalInfo.elements.mobile.options.label = "Mobile"
-vimbadmin_plugins.AdditionalInfo.elements.mobile.options.autocomplete = 'off'
-
-;;;;;;;
-;; Aliases additional information
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-; First Name
-vimbadmin_plugins.AdditionalInfo.alias.elements.name.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.alias.elements.name.options.required = false
-vimbadmin_plugins.AdditionalInfo.alias.elements.name.options.label = "Name"
-
-; Extension Number
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.required = false
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.label = "Extension Number"
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.digits[] = 'Digits'
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.digits[] = true
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.length[] = 'StringLength'
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.length[] = false
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.length.range[] = 4
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.length.range[] = 4
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.autocomplete = 'off'
-
-; Direct Dial
-vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.type = "Zend_Form_Element_Text"
-vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.options.required = false
-vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.options.label = "Direct Dial"
-vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.options.autocomplete = 'off'
-
+;;  ABOUT THESE [section] HEADERS  (Zend environment sections)
+;;
+;;  This is a Zend_Application config. `[name]` and `[name : parent]` are
+;;  *environments*, and `: parent` means "inherit everything from parent,
+;;  then override". Which section loads is chosen by APPLICATION_ENV.
+;;
+;;      [user]                  <- your settings (the block above)
+;;      [production : user]     <- framework wiring; inherits [user]
+;;      [development : production]  inherits [production] (verbose errors)
+;;
+;;  So with APPLICATION_ENV=production the app reads [user] + [production].
+;;  The Docker image runs APPLICATION_ENV=docker and appends a
+;;  `[docker : production]` section for its container-specific overrides.
+;;
+;;  You normally only edit [user] at the top. Everything below is plumbing —
+;;  paths, Doctrine wiring, auth, sessions, Smarty. Change it only if you know
+;;  why. (2FA / brute-force / footer toggles live down here too, near the end.)
+;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 [production : user]
 

@@ -53,6 +53,11 @@
                         <a class="btn btn-mini have-tooltip" id="password-{$admin->getId()}" title="Password" href="{genUrl controller='admin' action='password' aid=$admin->getId()}">
                             <i class="icon-lock"></i>
                         </a>
+                        {if $user->isSuper() && $admin->getId() != $user->getId()}
+                        <a class="btn btn-mini have-tooltip" id="admin_2fa_{$admin->getId()}" title="Manage two-factor" href="{genUrl controller='admin' action='manage-two-factor' aid=$admin->getId()}">
+                            <i class="icon-qrcode"></i>
+                        </a>
+                        {/if}
                         <a class="btn btn-mini have-tooltip" id="admin_logs_{$admin->getId()}" title="Logs" href="{genUrl controller='log' action='list' aid=$admin->getId()}">
                             <i class="icon-align-justify"></i>
                         </a>

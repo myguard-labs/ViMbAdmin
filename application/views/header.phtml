@@ -76,6 +76,9 @@
                                 <li>
                                     <a id="your_password" href="{genUrl controller='admin' action='password' aid=$user->getId()}">Password</a>
                                 </li>
+                                <li {if $controller eq 'admin' && $action eq 'two-factor'}class="active"{/if}>
+                                    <a id="your_2fa" href="{genUrl controller='admin' action='two-factor'}">2FA</a>
+                                </li>
                                  <li {if $action eq 'about'}class="active"{/if}>
                                     <a href="http://www.vimbadmin.net/" target="_blank">About</a>
                                 </li>

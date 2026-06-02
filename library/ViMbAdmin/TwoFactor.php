@@ -19,6 +19,7 @@ class ViMbAdmin_TwoFactor
     const PREF_SECRET = 'auth.totp.secret';
     const PREF_BACKUP = 'auth.totp.backup';
     const PREF_LASTTS = 'auth.totp.lastts';   // last accepted TOTP timeslice (replay guard)
+    const PREF_FORCE  = 'auth.totp.force';    // admin must enrol 2FA at next login
 
     /** @var \RobThree\Auth\TwoFactorAuth */
     private $_tfa;
@@ -106,12 +107,50 @@ class ViMbAdmin_TwoFactor
         return $this->regenerateBackupCodes( $admin );
     }
 
+    /**
+     * Provision 2FA for an admin with a freshly generated secret (used by a
+     * super-admin setting it up on someone's behalf). Returns the plaintext
+     * secret + backup codes so they can be shown / handed over.
+     *
+     * @return array{secret:string,backup:string[]}
+     */
+    public function provision( $admin )
+    {
+        $secret = $this->createSecret();
+        $backup = $this->enable( $admin, $secret );
+        $this->clearForce( $admin );   // provisioned now, no need to force
+        return [ 'secret' => $secret, 'backup' => $backup ];
+    }
+
     /** Disable 2FA for an admin (clears secret + backup codes + replay state). */
     public function disable( $admin )
     {
         $admin->deletePreference( self::PREF_SECRET );
         $admin->deletePreference( self::PREF_BACKUP );
         $admin->deletePreference( self::PREF_LASTTS );
+    }
+
+    // ---- force-at-next-login -------------------------------------------
+
+    /** Is this admin required to set up 2FA at their next login? */
+    public function isForced( $admin )
+    {
+        return (bool) $admin->getPreference( self::PREF_FORCE );
+    }
+
+    /** Require (or stop requiring) the admin to enrol 2FA at next login. */
+    public function setForce( $admin, $on = true )
+    {
+        if( $on )
+            $admin->setPreference( self::PREF_FORCE, 1 );
+        else
+            $this->clearForce( $admin );
+    }
+
+    /** Clear the force flag. */
+    public function clearForce( $admin )
+    {
+        $admin->deletePreference( self::PREF_FORCE );
     }
 
     /** Decrypt and return the admin's TOTP secret (or null). */

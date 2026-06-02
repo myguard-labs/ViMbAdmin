@@ -120,6 +120,20 @@ class AuthController extends ViMbAdmin_Controller_Action
             $this->_redirect( 'auth/totp' );   // Redirector exits
         }
 
+        // ---- forced enrolment -------------------------------------------
+        // A super-admin can require an account to set up 2FA. If forced and
+        // not yet enrolled, divert to a mandatory enrolment step before the
+        // login completes.
+        if( $tfa->isForced( $user ) && !$tfa->isEnabled( $user )
+            && !$this->getSessionNamespace()->totp_verified )
+        {
+            $this->getSessionNamespace()->totp_pending_admin_id = $user->getId();
+            $this->getSessionNamespace()->totp_pending_via      = $this->getSessionNamespace()->logged_in_via;
+            $auth->clearIdentity();
+
+            $this->_redirect( 'auth/totp-setup' );   // Redirector exits
+        }
+
         // Login fully succeeds here (no 2FA, or already verified): clear the
         // brute-force counter for this source.
         $this->_bruteForce()->clear( $user->getUsername(), $this->getRequest() );
@@ -188,6 +202,71 @@ class AuthController extends ViMbAdmin_Controller_Action
             $this->addMessage( _( 'Invalid authentication code. Please try again.' ), OSS_Message::ERROR );
         }
     }
+
+
+    /**
+     * Mandatory 2FA enrolment, reached after a correct password when a
+     * super-admin has forced enrolment on the account and it isn't set up yet.
+     * The admin cannot proceed into the panel until they enrol.
+     */
+    public function totpSetupAction()
+    {
+        if( $this->getIdentity() )
+            $this->redirectAndEnsureDie( '' );
+
+        $pendingId = $this->getSessionNamespace()->totp_pending_admin_id;
+        if( !$pendingId )
+            $this->redirectAndEnsureDie( 'auth/login' );
+
+        $admin = $this->getD2EM()->getRepository( '\\Entities\\Admin' )->find( $pendingId );
+        if( !$admin )
+        {
+            unset( $this->getSessionNamespace()->totp_pending_admin_id );
+            $this->redirectAndEnsureDie( 'auth/login' );
+        }
+
+        $tfa = $this->_twoFactor();
+
+        // Stash an enrolment secret for this pending admin.
+        $secret = $this->getSessionNamespace()->totp_setup_secret;
+        if( !$secret )
+        {
+            $secret = $tfa->createSecret();
+            $this->getSessionNamespace()->totp_setup_secret = $secret;
+        }
+
+        if( $this->getRequest()->isPost() && $this->getParam( 'code', '' ) !== '' )
+        {
+            if( $tfa->verifyCode( $secret, $this->getParam( 'code' ) ) )
+            {
+                $backup = $tfa->enable( $admin, $secret );
+                $tfa->clearForce( $admin );
+                $this->getD2EM()->flush();
+                unset( $this->getSessionNamespace()->totp_setup_secret );
+
+                // Complete the login (2FA is now satisfied for this session).
+                Zend_Session::regenerateId();
+                $this->getSessionNamespace()->totp_verified = true;
+                $this->getSessionNamespace()->logged_in_via = $this->getSessionNamespace()->totp_pending_via;
+                unset( $this->getSessionNamespace()->totp_pending_admin_id );
+                unset( $this->getSessionNamespace()->totp_pending_via );
+                $this->_reauthenticate( $admin );
+                $this->getSessionNamespace()->timeOfLastAction = time();
+                $this->_bruteForce()->clear( $admin->getUsername(), $this->getRequest() );
+                $this->getD2EM()->flush();
+
+                $this->getLogger()->info( sprintf( _( "%s completed forced 2FA enrolment" ), $admin->getUsername() ) );
+                $this->view->backupCodes = $backup;   // shown once, then continue
+                $this->view->justEnabled = true;
+                return;
+            }
+            $this->addMessage( _( 'That code did not verify. Scan the QR and try again.' ), OSS_Message::ERROR );
+        }
+
+        $this->view->secret    = $secret;
+        $this->view->qrDataUri = $tfa->getQrDataUri( $admin->getUsername(), $secret );
+    }
+
 
     /**
      * Get the login form

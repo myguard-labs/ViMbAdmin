@@ -506,6 +506,90 @@ class AdminController extends ViMbAdmin_Controller_Action
 
 
     /**
+     * Super-admin management of ANOTHER admin's two-factor (aid param).
+     *
+     * preDispatch() already requires super-admin for this action. A super can:
+     *   - provision 2FA (generate secret) and see the secret + QR to hand over;
+     *   - regenerate the secret;
+     *   - disable 2FA;
+     *   - toggle "force enrolment at next login".
+     *
+     * The secret/QR is shown to the super deliberately (they're setting up the
+     * device), unlike self-service where only the owner ever sees it.
+     */
+    public function manageTwoFactorAction()
+    {
+        $target = $this->getTargetAdmin();
+        if( !$target )
+            $this->redirect( 'admin/list' );
+
+        // A super managing themselves is just self-service.
+        if( $target->getId() == $this->getAdmin()->getId() )
+            $this->redirect( 'admin/two-factor' );
+
+        $tfa = $this->_twoFactor();
+
+        if( $this->getRequest()->isPost() )
+        {
+            $this->_assertCsrf();
+            $op = $this->getParam( 'op', '' );
+
+            switch( $op )
+            {
+                case 'provision':   // generate + enable now, reveal secret/QR
+                    $res = $tfa->provision( $target );
+                    $this->getD2EM()->flush();
+                    $this->getLogger()->notice( sprintf( _( "%s provisioned 2FA for %s" ), $this->getAdmin()->getUsername(), $target->getUsername() ) );
+                    $this->view->revealSecret = $res['secret'];
+                    $this->view->backupCodes  = $res['backup'];
+                    $this->view->qrDataUri    = $tfa->getQrDataUri( $target->getUsername(), $res['secret'] );
+                    break;
+
+                case 'regen-secret':
+                    if( $tfa->isEnabled( $target ) )
+                    {
+                        $res = $tfa->provision( $target );  // new secret + backup
+                        $this->getD2EM()->flush();
+                        $this->getLogger()->notice( sprintf( _( "%s regenerated 2FA secret for %s" ), $this->getAdmin()->getUsername(), $target->getUsername() ) );
+                        $this->view->revealSecret = $res['secret'];
+                        $this->view->backupCodes  = $res['backup'];
+                        $this->view->qrDataUri    = $tfa->getQrDataUri( $target->getUsername(), $res['secret'] );
+                    }
+                    break;
+
+                case 'disable':
+                    $tfa->disable( $target );
+                    $this->getD2EM()->flush();
+                    $this->getLogger()->notice( sprintf( _( "%s disabled 2FA for %s" ), $this->getAdmin()->getUsername(), $target->getUsername() ) );
+                    $this->addMessage( sprintf( _( '2FA disabled for %s.' ), $target->getUsername() ), OSS_Message::SUCCESS );
+                    $this->redirect( 'admin/manage-two-factor/aid/' . $target->getId() );
+                    break;
+
+                case 'force-on':
+                    $tfa->setForce( $target, true );
+                    $this->getD2EM()->flush();
+                    $this->getLogger()->notice( sprintf( _( "%s forced 2FA enrolment for %s" ), $this->getAdmin()->getUsername(), $target->getUsername() ) );
+                    $this->addMessage( sprintf( _( '%s will be required to set up 2FA at next login.' ), $target->getUsername() ), OSS_Message::SUCCESS );
+                    $this->redirect( 'admin/manage-two-factor/aid/' . $target->getId() );
+                    break;
+
+                case 'force-off':
+                    $tfa->setForce( $target, false );
+                    $this->getD2EM()->flush();
+                    $this->addMessage( sprintf( _( 'Enrolment requirement cleared for %s.' ), $target->getUsername() ), OSS_Message::SUCCESS );
+                    $this->redirect( 'admin/manage-two-factor/aid/' . $target->getId() );
+                    break;
+            }
+        }
+
+        $this->view->target          = $target;
+        $this->view->enabled         = $tfa->isEnabled( $target );
+        $this->view->forced          = $tfa->isForced( $target );
+        $this->view->backupRemaining = $tfa->backupCodesRemaining( $target );
+    }
+
+
+    /**
      * CLI: reset / disable two-factor for an admin (lost-device escape hatch).
      *
      * Invoke via vimbtool:

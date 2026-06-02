@@ -1,0 +1,86 @@
+{tmplinclude file="header.phtml"}
+
+<div class="page-content">
+
+    <div class="page-header">
+        <h1>Two-Factor &mdash; {$target->getUsername()|escape}</h1>
+    </div>
+
+{OSS_Message}
+
+<div class="row">
+    <div class="span8 offset2">
+
+{if isset( $revealSecret ) && $revealSecret}
+    {* Just provisioned/regenerated: show secret + QR + backup codes ONCE. *}
+    <div class="alert alert-success">
+        2FA is now <strong>enabled</strong> for <strong>{$target->getUsername()|escape}</strong>.
+        Show them this QR / secret to add to their authenticator, and hand over
+        the backup codes. This is the only time the secret is displayed.
+    </div>
+
+    <p style="text-align:center;margin:1.5em 0;">
+        <img src="{$qrDataUri|escape}" alt="TOTP QR code" />
+    </p>
+    <p>Secret: <code>{$revealSecret|escape}</code></p>
+
+    {if isset( $backupCodes ) && $backupCodes}
+    <p><strong>Backup codes</strong> (each works once):</p>
+    <pre>{foreach $backupCodes as $bc}{$bc|escape}
+{/foreach}</pre>
+    {/if}
+
+    <a class="btn btn-primary" href="{genUrl controller='admin' action='manage-two-factor'}/aid/{$target->getId()}">Done</a>
+
+{else}
+
+    <p>Two-factor for this account is currently
+       {if $enabled}<strong style="color:#468847">enabled</strong>{else}<strong>disabled</strong>{/if}.
+       {if $enabled} Backup codes remaining: <strong>{$backupRemaining|escape}</strong>.{/if}
+    </p>
+
+    {if !$enabled}
+        {* Enable: super provisions a secret on their behalf *}
+        <form method="post" action="{genUrl controller='admin' action='manage-two-factor'}/aid/{$target->getId()}" class="form-inline" style="margin-bottom:1em;">
+            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+            <input type="hidden" name="op" value="provision" />
+            <button type="submit" class="btn btn-primary">Enable &amp; show secret/QR</button>
+        </form>
+    {else}
+        {* Regenerate secret (new QR) *}
+        <form method="post" action="{genUrl controller='admin' action='manage-two-factor'}/aid/{$target->getId()}" class="form-inline" style="margin-bottom:1em;">
+            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+            <input type="hidden" name="op" value="regen-secret" />
+            <button type="submit" class="btn">Regenerate secret / QR</button>
+        </form>
+
+        {* Disable *}
+        <form method="post" action="{genUrl controller='admin' action='manage-two-factor'}/aid/{$target->getId()}" class="form-inline" style="margin-bottom:1em;">
+            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+            <input type="hidden" name="op" value="disable" />
+            <button type="submit" class="btn btn-danger">Disable two-factor</button>
+        </form>
+    {/if}
+
+    <hr/>
+
+    {* Force enrolment at next login *}
+    <p>Force enrolment at next login is
+       {if $forced}<strong style="color:#468847">ON</strong>{else}<strong>off</strong>{/if}.
+       When on, this admin must set up 2FA before they can use the panel.</p>
+    <form method="post" action="{genUrl controller='admin' action='manage-two-factor'}/aid/{$target->getId()}" class="form-inline">
+        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+        <input type="hidden" name="op" value="{if $forced}force-off{else}force-on{/if}" />
+        <button type="submit" class="btn">{if $forced}Clear enrolment requirement{else}Force enrolment at next login{/if}</button>
+    </form>
+
+{/if}
+
+    <p style="margin-top:1.5em;"><a href="{genUrl controller='admin' action='list'}">&larr; Back to administrators</a></p>
+
+    </div>
+</div>
+
+</div>
+
+{tmplinclude file="footer.phtml"}

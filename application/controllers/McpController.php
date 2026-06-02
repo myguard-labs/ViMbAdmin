@@ -60,9 +60,11 @@ class McpController extends ViMbAdmin_Controller_Action
         try
         {
             $auth  = new ViMbAdmin_Mcp_Auth( $this->getD2EM() );
-            $scope = ( strpos( $method, '.' ) === false || substr( $method, -5 ) === '.list' || $method === 'ping' )
-                   ? 'read' : 'write';
-            $token = $auth->authenticate( $_SERVER, $scope );
+            $token = $auth->authenticate( $_SERVER, $this->_scopeFor( $method ) );
+
+            // Destructive methods are additionally per-token rate-limited.
+            if( $this->_isDestructive( $method ) )
+                $this->_rateLimiter()->hit( $token->getId() );
         }
         catch( ViMbAdmin_Mcp_Exception $e )
         {
@@ -74,13 +76,29 @@ class McpController extends ViMbAdmin_Controller_Action
         {
             switch( $method )
             {
+                // read
                 case 'ping':            $result = $this->_ping();                  break;
                 case 'domains.list':    $result = $this->_domainsList();           break;
                 case 'mailboxes.list':  $result = $this->_mailboxesList( $params ); break;
                 case 'aliases.list':    $result = $this->_aliasesList( $params );   break;
+                // write
+                case 'domain.create':   $result = $this->_domainCreate( $params );  break;
+                case 'domain.delete':   $result = $this->_domainDelete( $params );  break;
+                case 'mailbox.create':  $result = $this->_mailboxCreate( $params ); break;
+                case 'mailbox.delete':  $result = $this->_mailboxDelete( $params ); break;
+                case 'alias.create':    $result = $this->_aliasCreate( $params );   break;
+                case 'alias.delete':    $result = $this->_aliasDelete( $params );   break;
+                // destructive (archive queue)
+                case 'mailbox.archive': $result = $this->_mailboxArchive( $params );break;
+                case 'archive.restore': $result = $this->_archiveState( $params, \Entities\Archive::STATUS_PENDING_RESTORE ); break;
+                case 'archive.delete':  $result = $this->_archiveState( $params, \Entities\Archive::STATUS_PENDING_DELETE );  break;
                 default:
                     return $this->_rpcError( $id, -32601, "unknown method '{$method}'" );
             }
+        }
+        catch( ViMbAdmin_Mcp_Exception $e )
+        {
+            return $this->_rpcError( $id, -32602, $e->getMessage() );
         }
         catch( \Throwable $e )
         {
@@ -145,19 +163,251 @@ class McpController extends ViMbAdmin_Controller_Action
         return [ 'domain' => $domain->getDomain(), 'aliases' => $out ];
     }
 
+    // ---- write abilities (scope: write) --------------------------------
+
+    private function _domainCreate( array $params )
+    {
+        $name = $this->_str( $params, 'domain', true );
+        if( $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] ) )
+            throw new ViMbAdmin_Mcp_Exception( 'domain already exists' );
+
+        $d = new \Entities\Domain();
+        $d->setDomain( $name );
+        $d->setActive( isset( $params['active'] ) ? (bool) $params['active'] : true );
+        $d->setTransport( $this->_str( $params, 'transport' ) ?: ( $this->_options['defaults']['domain']['transport'] ?? 'virtual' ) );
+        $d->setQuota(        (int) ( $params['quota']        ?? ( $this->_options['defaults']['domain']['quota']     ?? 0 ) ) );
+        $d->setMaxQuota(     (int) ( $params['maxquota']     ?? ( $this->_options['defaults']['domain']['maxquota']  ?? 0 ) ) );
+        $d->setMaxMailboxes( (int) ( $params['max_mailboxes']?? ( $this->_options['defaults']['domain']['mailboxes']?? 0 ) ) );
+        $d->setMaxAliases(   (int) ( $params['max_aliases']  ?? ( $this->_options['defaults']['domain']['aliases']  ?? 0 ) ) );
+        $d->setBackupmx( false );
+        $d->setMailboxCount( 0 );
+        $d->setAliasCount( 0 );
+        $d->setCreated( new \DateTime() );
+
+        $em = $this->getD2EM();
+        $em->persist( $d );
+        $em->flush();
+        return [ 'created' => true, 'domain' => $d->getDomain(), 'id' => $d->getId() ];
+    }
+
+    private function _domainDelete( array $params )
+    {
+        $domain = $this->_requireDomain( $params );
+        $name   = $domain->getDomain();
+        $this->getD2EM()->getRepository( '\\Entities\\Domain' )->purge( $domain );
+        return [ 'deleted' => true, 'domain' => $name ];
+    }
+
+    private function _mailboxCreate( array $params )
+    {
+        $domain    = $this->_requireDomain( $params );
+        $localPart = $this->_str( $params, 'local_part', true );
+        $password  = $this->_str( $params, 'password', true );
+        $username  = $localPart . '@' . $domain->getDomain();
+
+        $repo = $this->getD2EM()->getRepository( '\\Entities\\Mailbox' );
+        if( !$repo->isUnique( $username ) )
+            throw new ViMbAdmin_Mcp_Exception( 'mailbox already exists' );
+
+        $m = new \Entities\Mailbox();
+        $m->setLocalPart( $localPart );
+        $m->setUsername( $username );
+        $m->setName( $this->_str( $params, 'name' ) ?: $username );
+        $m->setDomain( $domain );
+        $m->setUid( $this->_options['defaults']['mailbox']['uid'] );
+        $m->setGid( $this->_options['defaults']['mailbox']['gid'] );
+        $m->formatHomedir( $this->_options['defaults']['mailbox']['homedir'] );
+        $m->formatMaildir( $this->_options['defaults']['mailbox']['maildir'] );
+        $m->setQuota( (int) ( $params['quota'] ?? 0 ) );
+        $m->setActive( isset( $params['active'] ) ? (bool) $params['active'] : true );
+        $m->setDeletePending( false );
+        $m->setCreated( new \DateTime() );
+        $m->setPassword( OSS_Auth_Password::hash( $password, [
+            'pwhash'    => $this->_options['defaults']['mailbox']['password_scheme'],
+            'pwsalt'    => $this->_options['defaults']['mailbox']['password_salt'] ?? null,
+            'pwdovecot' => $this->_options['defaults']['mailbox']['dovecot_pw_binary'] ?? null,
+            'username'  => $username,
+        ] ) );
+
+        $em = $this->getD2EM();
+        $em->persist( $m );
+
+        if( ( $this->_options['mailboxAliases'] ?? 0 ) == 1 )
+        {
+            $a = new \Entities\Alias();
+            $a->setAddress( $username );
+            $a->setGoto( $username );
+            $a->setDomain( $domain );
+            $a->setActive( true );
+            $a->setCreated( new \DateTime() );
+            $em->persist( $a );
+            $domain->setAliasCount( $domain->getAliasCount() + 1 );
+        }
+        $domain->setMailboxCount( $domain->getMailboxCount() + 1 );
+        $em->flush();
+        return [ 'created' => true, 'username' => $username ];
+    }
+
+    private function _mailboxDelete( array $params )
+    {
+        $m = $this->_requireMailbox( $params );
+        $username = $m->getUsername();
+        $domain   = $m->getDomain();
+        $this->getD2EM()->getRepository( '\\Entities\\Mailbox' )->purgeMailbox( $m, null, true );
+        $domain->setMailboxCount( max( 0, $domain->getMailboxCount() - 1 ) );
+        $this->getD2EM()->flush();
+        return [ 'deleted' => true, 'username' => $username ];
+    }
+
+    private function _aliasCreate( array $params )
+    {
+        $domain  = $this->_requireDomain( $params );
+        $address = $this->_str( $params, 'address', true );
+        $goto    = $this->_str( $params, 'goto', true );
+        if( strpos( $address, '@' ) === false )
+            $address .= '@' . $domain->getDomain();
+
+        $repo = $this->getD2EM()->getRepository( '\\Entities\\Alias' );
+        if( $repo->findOneBy( [ 'address' => $address ] ) )
+            throw new ViMbAdmin_Mcp_Exception( 'alias already exists' );
+
+        $a = new \Entities\Alias();
+        $a->setAddress( $address );
+        $a->setGoto( $goto );
+        $a->setDomain( $domain );
+        $a->setActive( isset( $params['active'] ) ? (bool) $params['active'] : true );
+        $a->setCreated( new \DateTime() );
+        $em = $this->getD2EM();
+        $em->persist( $a );
+        $domain->setAliasCount( $domain->getAliasCount() + 1 );
+        $em->flush();
+        return [ 'created' => true, 'address' => $address ];
+    }
+
+    private function _aliasDelete( array $params )
+    {
+        $address = $this->_str( $params, 'address', true );
+        $a = $this->getD2EM()->getRepository( '\\Entities\\Alias' )->findOneBy( [ 'address' => $address ] );
+        if( !$a )
+            throw new ViMbAdmin_Mcp_Exception( 'unknown alias' );
+        $domain = $a->getDomain();
+        $em = $this->getD2EM();
+        $em->remove( $a );
+        if( $domain )
+            $domain->setAliasCount( max( 0, $domain->getAliasCount() - 1 ) );
+        $em->flush();
+        return [ 'deleted' => true, 'address' => $address ];
+    }
+
+    // ---- destructive: archive queue (scope: write, rate-limited) --------
+
+    private function _mailboxArchive( array $params )
+    {
+        $m  = $this->_requireMailbox( $params );
+        $em = $this->getD2EM();
+
+        // Serialize the mailbox the same way the panel does, so the archive
+        // worker (PHP or the SQL helper) can read homedir/maildir from `data`.
+        $ser  = new OSS_Doctrine2_EntitySerializer( $em );
+        $data = serialize( [ 'mailbox' => [ 'className' => get_class( $m ), 'params' => $ser->toArray( $m ) ] ] );
+
+        $archive = new \Entities\Archive();
+        $archive->setArchivedBy( null );
+        $archive->setArchivedAt( new \DateTime() );
+        $archive->setDomain( $m->getDomain() );
+        $archive->setUsername( $m->getUsername() );
+        $archive->setStatus( \Entities\Archive::STATUS_PENDING_ARCHIVE );
+        $archive->setStatusChangedAt( new \DateTime() );
+        $archive->setData( $data );
+        $em->persist( $archive );
+
+        $username = $m->getUsername();
+        $domain   = $m->getDomain();
+        $em->getRepository( '\\Entities\\Mailbox' )->purgeMailbox( $m, null, false );
+        $domain->setMailboxCount( max( 0, $domain->getMailboxCount() - 1 ) );
+        $em->flush();
+        return [ 'queued' => 'PENDING_ARCHIVE', 'username' => $username ];
+    }
+
+    private function _archiveState( array $params, $status )
+    {
+        $username = $this->_str( $params, 'username', true );
+        $archive  = $this->getD2EM()->getRepository( '\\Entities\\Archive' )->findOneBy( [ 'username' => $username ] );
+        if( !$archive )
+            throw new ViMbAdmin_Mcp_Exception( 'no archive for that username' );
+        $archive->setStatus( $status );
+        $archive->setStatusChangedAt( new \DateTime() );
+        $this->getD2EM()->flush();
+        return [ 'queued' => $status, 'username' => $username ];
+    }
+
+    // ---- lookup + param helpers ----------------------------------------
+
     /**
      * @return \Entities\Domain
-     * @throws RuntimeException
+     * @throws ViMbAdmin_Mcp_Exception
      */
     private function _requireDomain( array $params )
     {
-        $name = isset( $params['domain'] ) ? trim( (string) $params['domain'] ) : '';
-        if( $name === '' )
-            throw new RuntimeException( 'param "domain" required' );
+        $name   = $this->_str( $params, 'domain', true );
         $domain = $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] );
         if( !$domain )
-            throw new RuntimeException( 'unknown domain' );
+            throw new ViMbAdmin_Mcp_Exception( 'unknown domain' );
         return $domain;
+    }
+
+    /**
+     * @return \Entities\Mailbox
+     * @throws ViMbAdmin_Mcp_Exception
+     */
+    private function _requireMailbox( array $params )
+    {
+        $username = $this->_str( $params, 'username', true );
+        $m = $this->getD2EM()->getRepository( '\\Entities\\Mailbox' )->findOneBy( [ 'username' => $username ] );
+        if( !$m )
+            throw new ViMbAdmin_Mcp_Exception( 'unknown mailbox' );
+        return $m;
+    }
+
+    private function _str( array $params, $key, $required = false )
+    {
+        $v = isset( $params[ $key ] ) ? trim( (string) $params[ $key ] ) : '';
+        if( $v === '' && $required )
+            throw new ViMbAdmin_Mcp_Exception( "param \"{$key}\" required" );
+        return $v;
+    }
+
+    // ---- scope / rate-limit routing ------------------------------------
+
+    private function _writeMethods()
+    {
+        return [ 'domain.create','domain.delete','mailbox.create','mailbox.delete',
+                 'alias.create','alias.delete','mailbox.archive','archive.restore','archive.delete' ];
+    }
+
+    private function _destructiveMethods()
+    {
+        return [ 'mailbox.delete','domain.delete','mailbox.archive','archive.restore','archive.delete' ];
+    }
+
+    private function _scopeFor( $method )
+    {
+        return in_array( $method, $this->_writeMethods(), true ) ? 'write' : 'read';
+    }
+
+    private function _isDestructive( $method )
+    {
+        return in_array( $method, $this->_destructiveMethods(), true );
+    }
+
+    private function _rateLimiter()
+    {
+        $rl = $this->_options['mcp']['ratelimit']['destructive'] ?? [];
+        return new ViMbAdmin_Mcp_RateLimit( [
+            'statedir' => $this->_options['mcp']['ratelimit']['statedir'] ?? null,
+            'max'      => $rl['max']    ?? 10,
+            'window'   => $rl['window'] ?? 3600,
+        ] );
     }
 
     // ---- helpers -------------------------------------------------------

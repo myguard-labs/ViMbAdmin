@@ -368,6 +368,14 @@ skipInstallPingback = 1
 
 mcp.enabled = 0
 
+;; Per-token rate limit on DESTRUCTIVE calls (mailbox.delete, domain.delete,
+;; mailbox.archive, archive.restore, archive.delete): max N per window seconds.
+;; A compromised/buggy client can't mass-destroy. Set max to 0 to disable.
+mcp.ratelimit.destructive.max    = 10
+mcp.ratelimit.destructive.window = 3600
+;; State dir (defaults to the system temp dir if unset):
+;mcp.ratelimit.statedir = APPLICATION_PATH "/../var/mcp-ratelimit"
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Allow admins to dictate whether a user can use BOTH, IMAP ONLY,

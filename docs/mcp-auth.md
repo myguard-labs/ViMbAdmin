@@ -65,7 +65,7 @@ curl -s https://mail.example.com/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"ping"}'
 ```
 
-### Methods (read scope)
+### Read methods (scope: `read`)
 
 | Method | Params | Returns |
 |---|---|---|
@@ -74,8 +74,35 @@ curl -s https://mail.example.com/mcp \
 | `mailboxes.list` | `{domain}` | mailboxes of that domain |
 | `aliases.list` | `{domain}` | aliases of that domain |
 
-Read methods need a token whose scope contains `read` (or `*`). Write methods
-(none shipped yet) would need `write`.
+### Write methods (scope: `write`)
+
+| Method | Params | Notes |
+|---|---|---|
+| `domain.create` | `{domain, active?, transport?, quota?, maxquota?, max_mailboxes?, max_aliases?}` | |
+| `domain.delete` | `{domain}` | **destructive** — purges the domain + its mailboxes/aliases |
+| `mailbox.create` | `{domain, local_part, password, name?, quota?, active?}` | password hashed in the configured scheme (`doveadm pw`) |
+| `mailbox.delete` | `{username}` | **destructive** |
+| `alias.create` | `{domain, address, goto, active?}` | `address` may be a local part (domain appended) or full |
+| `alias.delete` | `{address}` | **destructive** |
+| `mailbox.archive` | `{username}` | **destructive** — queues `PENDING_ARCHIVE` (panel-compatible) |
+| `archive.restore` | `{username}` | **destructive** — sets `PENDING_RESTORE` |
+| `archive.delete` | `{username}` | **destructive** — sets `PENDING_DELETE` |
+
+A token's scope must contain the method's scope (`read`/`write`) or `*`. Issue a
+read-only token by default; only grant `write` where needed.
+
+### Rate limiting (destructive methods)
+
+The **destructive** methods above are additionally rate-limited **per token**:
+max `N` per `window` seconds (file-based sliding window under `var/`). Over the
+limit returns HTTP `429`. So a leaked or buggy `write` token still can't
+mass-destroy mailboxes. Configure in `application.ini`:
+
+```ini
+mcp.ratelimit.destructive.max    = 10     ; 0 disables the limiter
+mcp.ratelimit.destructive.window = 3600
+;mcp.ratelimit.statedir = APPLICATION_PATH "/../var/mcp-ratelimit"
+```
 
 ### Errors
 

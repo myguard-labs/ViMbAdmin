@@ -40,6 +40,11 @@ The short version: it runs, and it's hard to break into.
 
 **Hardened, in layers**
 
+- **Two-factor authentication (TOTP)** — opt-in per admin, secret encrypted
+  at rest (libsodium), QR enrolment, one-time backup codes, and lost-device
+  reset from the CLI or `application.ini`. See [Two-factor](#two-factor-authentication).
+- **Brute-force protection** — per-source-IP attempt lockout with an IP/CIDR
+  allowlist, configured in `application.ini`.
 - **CSRF** on every form (per-session token in the base form class) *and* on
   every destructive GET link. Forge a request, get a 403.
 - **XSS** auto-escaping on by default in Smarty; genuine HTML output is
@@ -140,6 +145,50 @@ In order, because the order matters:
    `postmaster@`, your role addresses, your distribution lists.
 
 Every action is logged, validated, and CSRF-protected.
+
+## Two-factor authentication
+
+Opt-in, per admin. Each admin enables it on themselves at **`/admin/two-factor`**:
+
+1. Scan the QR with an authenticator app (Aegis, Google Authenticator,
+   1Password, …) or type the shown secret in by hand.
+2. Enter the 6-digit code to confirm and enable.
+3. **Save the one-time backup codes.** They're shown once. Each works once,
+   for when your phone inevitably ends up in a washing machine.
+
+After that, login is password → 6-digit code. The TOTP secret is stored
+encrypted (libsodium, keyed off `securitysalt`); a database read alone
+doesn't yield usable secrets.
+
+**Lost your second factor?** Two escape hatches, no DB surgery required:
+
+```sh
+# CLI (immediate):
+./bin/vimbtool.php -a admin.cli-reset-totp --username=admin@example.com
+./bin/vimbtool.php -a admin.cli-reset-totp --all
+
+# or in application.ini (applied at that admin's next login):
+twofactor.force_disable = "admin@example.com"     ; or "*" for everyone
+```
+
+## Brute-force protection
+
+On by default. Counts failed logins per source IP and locks the source out
+once it crosses the threshold; a fully successful login (password + 2FA)
+clears the counter. Configure in `application.ini`:
+
+```ini
+bruteforce.enabled      = 1
+bruteforce.max_attempts = 5       ; failures before lockout
+bruteforce.window       = 900     ; seconds the counter accumulates over
+bruteforce.lockout      = 900     ; seconds locked
+bruteforce.whitelist[]  = "127.0.0.1"
+bruteforce.whitelist[]  = "10.0.0.0/8"    ; IPs or CIDRs never counted
+```
+
+If you terminate TLS at a proxy, make sure the real client IP reaches PHP as
+`REMOTE_ADDR` (e.g. Angie `realip`) or every request looks like it comes from
+the proxy.
 
 ## What it is *not*
 

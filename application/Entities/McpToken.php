@@ -76,7 +76,7 @@ class McpToken
     /**
      * True if the token is usable right now (not revoked, not expired).
      */
-    public function isActive( \DateTime $now = null )
+    public function isActive( ?\DateTime $now = null )
     {
         if( $this->revoked )
             return false;

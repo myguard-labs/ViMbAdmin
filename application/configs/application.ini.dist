@@ -343,7 +343,7 @@ ondemand_resources.logger.writers.stream.level = 7
 ;; This can be disabled by setting the below to 1
 ;;
 
-skipVersionCheck = 0
+skipVersionCheck = 1
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

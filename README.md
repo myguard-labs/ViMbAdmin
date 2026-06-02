@@ -42,7 +42,7 @@ The short version: it runs, and it's hard to break into.
   rewritten to match.
 - **Cache layer rebuilt on Symfony Cache.** `doctrine/cache` 2.x dropped the
   old concrete `*Cache` providers, so the metadata/query cache now wraps a
-  Symfony PSR-6 pool (`ArrayAdapter` / `ApcuAdapter` / `MemcachedAdapter`) in
+  Symfony PSR-6 pool (`ArrayAdapter` / `ApcuAdapter` / `RedisAdapter`) in
   `DoctrineProvider` — pick the backend in `application.ini`. The Docker image
   ships **APCu** + a tuned **OPcache** for a persistent, per-request-free cache.
 
@@ -284,14 +284,15 @@ The panel is light, but two things keep it snappy:
   resources.doctrine2cache.type = "ArrayCache"
   ; persistent, in-process shared memory (recommended single-host) -- needs ext-apcu
   resources.doctrine2cache.type = "ApcuCache"
-  ; shared across hosts -- needs ext-memcached
-  ;resources.doctrine2cache.type = "MemcachedCache"
-  ;resources.doctrine2cache.memcache.servers.0.host = "127.0.0.1"
+  ; shared across hosts/replicas -- needs ext-redis
+  ;resources.doctrine2cache.type = "RedisCache"
+  ;resources.doctrine2cache.redis.dsn = "redis://127.0.0.1:6379"
   ```
 
   The Docker image defaults to **`ApcuCache`**. For a single container APCu
-  beats Redis/Memcache (in-process, no socket); reach for Memcached only when
-  you run multiple replicas that must share a cache.
+  beats Redis (in-process, no socket); reach for Redis only when you run
+  multiple replicas that must share a cache. A configured backend whose PHP
+  extension is missing degrades to `ArrayCache` instead of fataling.
 
 ## Archiving, quotas & disk deletion
 

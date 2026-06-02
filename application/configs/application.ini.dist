@@ -51,15 +51,16 @@ resources.doctrine2.connection.options.charset  = 'utf8'
 
 ;; Doctrine metadata/query cache. Without a persistent backend the XML entity
 ;; mappings are re-parsed on every request. Pick one:
-;;   ArrayCache     - per-request only (no caching across requests); fine for dev
-;;   ApcuCache      - in-process shared memory; best for a single host (ext-apcu)
-;;   MemcachedCache - shared across hosts (ext-memcached)
-;; The Docker image installs APCu and defaults to ApcuCache.
+;;   ArrayCache - per-request only (no caching across requests); fine for dev
+;;   ApcuCache  - in-process shared memory; best for a single host (ext-apcu)
+;;   RedisCache - shared across hosts/replicas (ext-redis)
+;; A missing extension degrades to ArrayCache (it won't fatal). The Docker
+;; image installs APCu and defaults to ApcuCache.
 
 resources.doctrine2cache.type      = 'ArrayCache'
 ;resources.doctrine2cache.type      = 'ApcuCache'
-;resources.doctrine2cache.type      = 'MemcachedCache'
-;resources.doctrine2cache.memcache.servers.0.host = '127.0.0.1'
+;resources.doctrine2cache.type      = 'RedisCache'
+;resources.doctrine2cache.redis.dsn = 'redis://127.0.0.1:6379'
 resources.doctrine2cache.namespace = 'ViMbAdmin3'
 
 
@@ -483,17 +484,8 @@ resources.doctrine2.repositories_namespace = "Repositories"
 
 
 resources.doctrine2cache.autoload_method    = "composer"
-;resources.doctrine2cache.type              = 'ArrayCache'
-;resources.doctrine2cache.type               = 'MemcacheCache'
-;resources.doctrine2cache.memcache.servers.0.host       = '127.0.0.1'
-;resources.doctrine2cache.memcache.servers.0.port       = '11211'
-;resources.doctrine2cache.memcache.servers.0.persistent = false
-;resources.doctrine2cache.memcache.servers.0.weight     = 1
-;resources.doctrine2cache.memcache.servers.0.timeout    = 1
-;resources.doctrine2cache.memcache.servers.0.retry_int  = 15
-
-; resources.doctrine2cache.memcache.servers.1.host       = 'xxx'
-; resources.doctrine2cache.memcache.servers.2.host       = 'yyy'
+;; Cache backend + namespace are set in the [user] section above
+;; (ArrayCache / ApcuCache / RedisCache).
 
 resources.namespace.checkip = 0
 

@@ -85,36 +85,44 @@ class OSS_Resource_Doctrine2cache extends Zend_Application_Resource_ResourceAbst
             // symfony/cache and wrap it in DoctrineProvider so that both the
             // ORM (setMetadataCacheImpl etc.) and the legacy ->fetch()/->save()
             // callers keep working unchanged.
-            switch( $config['type'] )
+            //
+            // Backends needing a PHP extension (APCu, Redis) are built inside a
+            // try/catch: if the extension is missing we fall back to the
+            // per-request ArrayAdapter rather than fatally throwing at boot.
+            $pool = null;
+
+            try
             {
-                case 'ApcCache':
-                case 'ApcuCache':
-                    $pool = new \Symfony\Component\Cache\Adapter\ApcuAdapter( $namespace );
-                    break;
+                switch( $config['type'] )
+                {
+                    case 'ApcCache':
+                    case 'ApcuCache':
+                        $pool = new \Symfony\Component\Cache\Adapter\ApcuAdapter( $namespace );
+                        break;
 
-                case 'MemcacheCache':
-                case 'MemcachedCache':
-                    $dsns = array();
-                    if( isset( $config['memcache']['servers'] ) )
-                    {
-                        foreach( $config['memcache']['servers'] as $server )
-                        {
-                            $host = isset( $server['host'] ) ? $server['host'] : '127.0.0.1';
-                            $port = isset( $server['port'] ) ? $server['port'] : 11211;
-                            $dsns[] = 'memcached://' . $host . ':' . $port;
-                        }
-                    }
-                    if( !$dsns )
-                        $dsns[] = 'memcached://127.0.0.1:11211';
+                    case 'RedisCache':
+                    case 'PredisCache':
+                        $dsn = isset( $config['redis']['dsn'] )
+                             ? (string) $config['redis']['dsn']
+                             : 'redis://127.0.0.1:6379';
+                        $client = \Symfony\Component\Cache\Adapter\RedisAdapter::createConnection( $dsn );
+                        $pool   = new \Symfony\Component\Cache\Adapter\RedisAdapter( $client, $namespace );
+                        break;
 
-                    $client = \Symfony\Component\Cache\Adapter\MemcachedAdapter::createConnection( $dsns );
-                    $pool   = new \Symfony\Component\Cache\Adapter\MemcachedAdapter( $client, $namespace );
-                    break;
-
-                default:
-                    // ArrayCache (per-request, in-memory) is the safe default.
-                    $pool = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
+                    // 'ArrayCache' and anything unrecognised -> per-request cache.
+                }
             }
+            catch( \Throwable $e )
+            {
+                // Extension missing / server unreachable: degrade, don't die.
+                if( Zend_Registry::isRegistered( 'logger' ) )
+                    Zend_Registry::get( 'logger' )->warn(
+                        "Doctrine2 cache '{$config['type']}' unavailable ({$e->getMessage()}); using ArrayCache." );
+                $pool = null;
+            }
+
+            if( $pool === null )
+                $pool = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
 
             $cache = \Doctrine\Common\Cache\Psr6\DoctrineProvider::wrap( $pool );
 

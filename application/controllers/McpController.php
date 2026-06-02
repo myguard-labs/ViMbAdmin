@@ -453,9 +453,16 @@ class McpController extends ViMbAdmin_Controller_Action
         if( $name === null )
             return $this->_cliDie( "ERROR: --name is required\n" );
 
-        $em = $this->getD2EM();
-        if( $em->getRepository( '\\Entities\\McpToken' )->findByName( $name ) )
-            return $this->_cliDie( "ERROR: a token named '{$name}' already exists (revoke it first)\n" );
+        $em  = $this->getD2EM();
+        $old = $em->getRepository( '\\Entities\\McpToken' )->findByName( $name );
+        if( $old !== null )
+        {
+            if( !$old->getRevoked() )
+                return $this->_cliDie( "ERROR: an active token named '{$name}' already exists (revoke it first)\n" );
+            // name is free to reuse: drop the old revoked row
+            $em->remove( $old );
+            $em->flush();
+        }
 
         $raw  = bin2hex( random_bytes( 32 ) );
         $tok  = new \Entities\McpToken();

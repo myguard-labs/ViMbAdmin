@@ -42,24 +42,26 @@
     </form>
 
 {else}
+  <div style="text-align:center;">
     <p>Protect your admin login with a time-based one-time password (TOTP).
        Scan the QR code with an authenticator app (Aegis, Google Authenticator,
        1Password, etc.), then enter the 6-digit code it shows to confirm.</p>
 
-    <p style="text-align:center;margin:1.5em 0;">
+    <p style="margin:1.5em 0;">
         <img src="{$qrDataUri|escape}" alt="TOTP QR code" />
     </p>
 
     <p>Can't scan? Enter this secret manually:
        <code>{$secret|escape}</code></p>
 
-    <form method="post" action="{genUrl controller='admin' action='two-factor'}" class="form-inline">
+    <form method="post" action="{genUrl controller='admin' action='two-factor'}" class="form-inline" style="display:inline-block;">
         <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
         <input type="hidden" name="op" value="enable" />
         <input type="text" name="code" placeholder="6-digit code from app"
                autocomplete="one-time-code" inputmode="numeric" autofocus="autofocus" />
         <button type="submit" class="btn btn-primary">Enable two-factor</button>
     </form>
+  </div>
 {/if}
 
     </div>

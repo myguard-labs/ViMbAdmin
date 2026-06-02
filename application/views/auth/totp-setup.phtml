@@ -20,12 +20,13 @@
 {/foreach}</pre>
     <a class="btn btn-primary" href="{genUrl}">Continue</a>
 {else}
+  <div style="text-align:center;">
     <p>Your administrator requires two-factor authentication on this account.
        Scan the QR code with an authenticator app (Aegis, Google Authenticator,
        1Password, &hellip;) and enter the 6-digit code to finish. You can't
        continue until 2FA is set up.</p>
 
-    <p style="text-align:center;margin:1.5em 0;">
+    <p style="margin:1.5em 0;">
         <img src="{$qrDataUri|escape}" alt="TOTP QR code" />
     </p>
 
@@ -33,11 +34,12 @@
 
     {* No CSRF field: this step runs pre-auth (identity cleared) and is gated
        by the unforgeable pending-session id, so there's no token to embed. *}
-    <form method="post" action="{genUrl controller='auth' action='totp-setup'}" class="form-inline">
+    <form method="post" action="{genUrl controller='auth' action='totp-setup'}" class="form-inline" style="display:inline-block;">
         <input type="text" name="code" placeholder="6-digit code" autocomplete="one-time-code"
                inputmode="numeric" autofocus="autofocus" />
         <button type="submit" class="btn btn-primary">Enable &amp; continue</button>
     </form>
+  </div>
 {/if}
 
     </div>

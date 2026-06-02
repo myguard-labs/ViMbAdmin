@@ -8,11 +8,67 @@ measuring maildir sizes for the panel's quota column.
 The panel only flags work in the database; the mail host carries it out,
 because that's where the maildirs and `archive.path` actually live.
 
+There are **two ways** to drive the queue, pick one:
+
+| Script | Needs | What it does |
+|---|---|---|
+| `vimbadmin-archive-sql.sh` | **just `mariadb-client` + `tar`/`bzip2`** | Standalone worker — no PHP, no ViMbAdmin checkout. Talks to the DB directly. **Recommended for a Dovecot container.** |
+| `vimbadmin-archive.sh` + `vimbadmin-sizes.sh` | a full ViMbAdmin checkout + PHP CLI | Thin wrappers around the bundled `vimbtool.php` (the PHP queue consumer). |
+
+> **Do you need a whole ViMbAdmin checkout on the mail host to archive/delete?**
+> **No.** Use `vimbadmin-archive-sql.sh` — it only needs the MariaDB client and
+> `tar`/`bzip2`. Reach for the PHP scripts (and a checkout) only if you also
+> want **restore** (which re-creates DB rows — the SQL script deliberately
+> doesn't) or the **quota sizes** job, which is PHP-only.
+
+### Option A — standalone, no PHP (`vimbadmin-archive-sql.sh`)
+
+Wire-compatible with the panel: the "Archive" button writes a `PENDING_ARCHIVE`
+row and purges the mailbox; this script tars the maildir exactly the way the
+PHP worker does (so a later panel **restore** still finds the tarballs), writes
+the `*_file`/`*_size` columns, and flips the row to `ARCHIVED`. `delete`
+processes `PENDING_DELETE` rows (rm tarballs + drop row).
+
+```sh
+# deps only:
+sudo apt-get install --no-install-recommends -y mariadb-client tar bzip2 coreutils
+
+# a credentials file (chmod 600), so the password isn't on the command line:
+sudo install -d -m 0750 /etc/vimbadmin
+sudo tee /etc/vimbadmin/db.cnf >/dev/null <<'CNF'
+[client]
+host     = 127.0.0.1
+user     = vimbadmin
+password = the-db-password
+CNF
+sudo chmod 600 /etc/vimbadmin/db.cnf
+
+sudo install -m 0755 contrib/cron/vimbadmin-archive-sql.sh /usr/local/sbin/
+sudo install -d -o vmail -g vmail -m 0750 /srv/archives
+
+# test, then cron:
+sudo -u vmail DB_CNF=/etc/vimbadmin/db.cnf DB_NAME=vimbadmin \
+     ARCHIVE_PATH=/srv/archives /usr/local/sbin/vimbadmin-archive-sql.sh list
+```
+
+```cron
+# /etc/cron.d/vimbadmin  (DB-only worker)
+*/5 * * * * vmail DB_CNF=/etc/vimbadmin/db.cnf DB_NAME=vimbadmin ARCHIVE_PATH=/srv/archives /usr/local/sbin/vimbadmin-archive-sql.sh archive
+*/5 * * * * vmail DB_CNF=/etc/vimbadmin/db.cnf DB_NAME=vimbadmin ARCHIVE_PATH=/srv/archives /usr/local/sbin/vimbadmin-archive-sql.sh delete
+```
+
+`ARCHIVE_PATH` must match the panel's `application.ini` `archive.path`. Don't
+run this **and** the PHP archive cron against the same DB at once — pick one.
+
+### Option B — PHP wrappers (full checkout)
+
 | Script | Action(s) | Cron cadence |
 |---|---|---|
 | `vimbadmin-archive.sh` | `archive.cli-archive-pendings` / `restore` / `delete` | every 5 min |
 | `vimbadmin-sizes.sh` | `mailbox.cli-get-sizes` | nightly |
 | `crontab.example` | sample `/etc/cron.d/vimbadmin` | — |
+
+The rest of this document covers Option B.
 
 ---
 

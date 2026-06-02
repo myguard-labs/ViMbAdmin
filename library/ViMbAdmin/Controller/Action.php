@@ -107,6 +107,12 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
         // if we issue a redirect, we want it to exit immediatly
         $this->getHelper( 'Redirector' )->setExit( true );
 
+        // Skin-aware assets: if a skin is configured and ships a stylesheet at
+        // public/css/_skins/<skin>/skin.css, expose its URL so header-css.phtml
+        // can load it last (overriding the base theme). Empty when absent, so
+        // no broken <link>. Available on every page, including login.
+        $this->view->skinCss = $this->_skinCssUrl();
+
         // SECURITY and other stuff for logged in users
         if( $this->getAuth()->hasIdentity() )
         {
@@ -134,6 +140,34 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
             // it as ?csrf=... and be validated by _assertCsrf().
             $this->view->csrfToken = $this->_getCsrfToken();
         }
+    }
+
+
+    /**
+     * Resolve the per-skin stylesheet URL, or '' if none.
+     *
+     * Looks for public/css/_skins/<skin>/skin.css on disk; returns its
+     * web URL (base-url aware) when present so it can be linked last to
+     * override the base theme. Returns '' when no skin is set or the file
+     * is missing (so no dangling <link>).
+     *
+     * @return string
+     */
+    protected function _skinCssUrl()
+    {
+        $skin = isset( $this->_options['resources']['smarty']['skin'] )
+            ? trim( (string) $this->_options['resources']['smarty']['skin'] )
+            : '';
+
+        if( $skin === '' || !preg_match( '/^[A-Za-z0-9_-]+$/', $skin ) )
+            return '';
+
+        $rel  = 'css/_skins/' . $skin . '/skin.css';
+        $file = APPLICATION_PATH . '/../public/' . $rel;
+        if( !is_readable( $file ) )
+            return '';
+
+        return rtrim( Zend_Controller_Front::getInstance()->getBaseUrl(), '/' ) . '/' . $rel;
     }
 
 

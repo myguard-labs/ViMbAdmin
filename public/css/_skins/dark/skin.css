@@ -1,0 +1,118 @@
+/*
+ * ViMbAdmin sample skin: "dark"
+ * ----------------------------------------------------------------------
+ * A reference skin proving the skin-aware asset pipeline. It is loaded
+ * AFTER the base Bootstrap-2 stylesheets (see header-css.phtml), so these
+ * rules win without touching the originals.
+ *
+ * Enable:
+ *   application.ini -> resources.smarty.skin = "dark"
+ * This file is served from public/css/_skins/dark/skin.css automatically.
+ * See contrib/THEMING.md for the full guide.
+ */
+
+:root {
+    --vimb-bg:        #0b1220;
+    --vimb-surface:   #131c2e;
+    --vimb-surface-2: #1b2740;
+    --vimb-border:    #243150;
+    --vimb-text:      #e6edf6;
+    --vimb-muted:     #9fb0c8;
+    --vimb-accent:    #f59e0b;
+    --vimb-accent-2:  #fbbf24;
+    --vimb-danger:    #ef4444;
+    --vimb-ok:        #22c55e;
+}
+
+/* ---- page ---------------------------------------------------------- */
+body {
+    background: var(--vimb-bg);
+    color: var(--vimb-text);
+}
+a            { color: var(--vimb-accent); }
+a:hover      { color: var(--vimb-accent-2); }
+hr           { border-top-color: var(--vimb-border); }
+.page-header { border-bottom-color: var(--vimb-border); }
+.page-header h1, h1, h2, h3, h4, legend { color: var(--vimb-text); }
+
+/* ---- top navbar --------------------------------------------------- */
+.navbar-inverse .navbar-inner {
+    background: var(--vimb-surface);
+    border-color: var(--vimb-border);
+    background-image: none;
+    box-shadow: none;
+}
+.navbar-inverse .brand,
+.navbar-inverse .nav > li > a { color: var(--vimb-text); }
+.navbar-inverse .nav > li > a:hover,
+.navbar-inverse .nav > .active > a,
+.navbar-inverse .nav > .active > a:hover {
+    background: var(--vimb-surface-2);
+    color: var(--vimb-accent);
+}
+.navbar-inverse .brand { color: var(--vimb-accent); }
+
+/* ---- panels / wells ---------------------------------------------- */
+.well, .hero-unit {
+    background: var(--vimb-surface);
+    border-color: var(--vimb-border);
+    box-shadow: none;
+}
+
+/* ---- tables ------------------------------------------------------- */
+.table, .table th, .table td { color: var(--vimb-text); }
+.table th { color: var(--vimb-text); border-bottom-color: var(--vimb-border); }
+.table td, .table th { border-top-color: var(--vimb-border); }
+.table-striped tbody > tr:nth-child(odd) > td,
+.table-striped tbody > tr:nth-child(odd) > th { background: var(--vimb-surface); }
+.table tbody tr:hover > td, .table tbody tr:hover > th { background: var(--vimb-surface-2); }
+.table-bordered { border-color: var(--vimb-border); }
+
+/* ---- forms -------------------------------------------------------- */
+input, textarea, select, .uneditable-input {
+    background: var(--vimb-surface-2);
+    color: var(--vimb-text);
+    border-color: var(--vimb-border);
+}
+input:focus, textarea:focus, select:focus {
+    border-color: var(--vimb-accent);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, .25);
+}
+.control-label, label, .help-block, .muted { color: var(--vimb-muted); }
+.control-group.error input,
+.control-group.error textarea { border-color: var(--vimb-danger); }
+code, pre {
+    background: var(--vimb-surface-2);
+    color: var(--vimb-accent-2);
+    border-color: var(--vimb-border);
+}
+
+/* ---- buttons ------------------------------------------------------ */
+.btn {
+    background: var(--vimb-surface-2);
+    color: var(--vimb-text);
+    border-color: var(--vimb-border);
+    background-image: none;
+    text-shadow: none;
+}
+.btn:hover { background: var(--vimb-border); color: var(--vimb-text); }
+.btn-primary {
+    background: var(--vimb-accent);
+    border-color: var(--vimb-accent);
+    color: #1a1300;
+}
+.btn-primary:hover { background: var(--vimb-accent-2); color: #1a1300; }
+.btn-danger { background: var(--vimb-danger); border-color: var(--vimb-danger); color: #fff; }
+
+/* ---- alerts / messages ------------------------------------------- */
+.alert {
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border);
+    color: var(--vimb-text);
+}
+.alert-success { border-left: 3px solid var(--vimb-ok); }
+.alert-error   { border-left: 3px solid var(--vimb-danger); }
+.alert-info    { border-left: 3px solid var(--vimb-accent); }
+
+/* ---- footer ------------------------------------------------------- */
+footer, .footer { color: var(--vimb-muted); border-top-color: var(--vimb-border); }

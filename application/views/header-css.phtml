@@ -11,3 +11,10 @@
     <link rel="stylesheet" type="text/css" href="{genUrl}/css/920-style.css" />
     <link rel="stylesheet" type="text/css" href="{genUrl}/css/930-popup.css" />
 {/if}
+
+{* Skin override stylesheet, loaded last so it wins. Enable via
+   resources.smarty.skin in application.ini + drop the file at
+   public/css/_skins/<skin>/skin.css. See contrib/THEMING.md. *}
+{if isset( $skinCss ) && $skinCss}
+    <link rel="stylesheet" type="text/css" href="{$skinCss|escape}" />
+{/if}

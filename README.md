@@ -96,6 +96,18 @@ stock upstream had **none** of the application-layer items below.
   `['allowed_classes' => false]`.
 - **CSPRNG** — tokens, salts and backup codes use `random_int()` (the old
   `str_shuffle`/`mt_rand` was replaced).
+- **Real client IP** — a spoof-resistant trusted-proxy resolver
+  (`trustedproxy.mode`, default `auto`) feeds the brute-force limiter and the
+  MCP IP allowlist the actual client, not the reverse proxy. See
+  [Real client IP behind a proxy](#real-client-ip-behind-a-proxy).
+
+### MCP adapter (optional, off by default)
+
+- **Bearer-token JSON-RPC API** at `/mcp` for agents: SHA-256-hashed tokens
+  (raw shown once), scoped read/write, optional per-token IP/CIDR allowlist,
+  expiry + revoke, and a per-token **rate limit on destructive operations**.
+  Edge IP-allowlisted in the vhost; bearer-only (no admin session). See the
+  [MCP adapter](#mcp-adapter) section and [docs/mcp-auth.md](docs/mcp-auth.md).
 
 ### Runtime (Snuffleupagus)
 
@@ -265,9 +277,46 @@ bruteforce.whitelist[]  = "127.0.0.1"
 bruteforce.whitelist[]  = "10.0.0.0/8"    ; IPs or CIDRs never counted
 ```
 
-If you terminate TLS at a proxy, make sure the real client IP reaches PHP as
-`REMOTE_ADDR` (e.g. Angie `realip`) or every request looks like it comes from
-the proxy.
+### Real client IP behind a proxy
+
+The brute-force limiter (and the MCP per-token IP allowlist) need the **real**
+client IP, not your reverse proxy's. Controlled by `trustedproxy.mode` in
+`application.ini`:
+
+```ini
+trustedproxy.mode = "auto"   ; auto | on | off
+;trustedproxy.proxies[] = "10.0.0.0/8"   ; for mode "on"
+```
+
+- **`auto`** (default) — trust `X-Forwarded-For` only when the request reaches
+  PHP from a private/loopback address (a local reverse proxy). Standalone
+  (public `REMOTE_ADDR`) just uses `REMOTE_ADDR`. No config needed for the
+  usual "proxy on the same host/LAN" setup.
+- **`on`** — trust `X-Forwarded-For` only from the proxies you list.
+- **`off`** — always use `REMOTE_ADDR`.
+
+`X-Forwarded-For` is client-spoofable, so the client is taken as the right-most
+address in the chain that isn't a trusted proxy. Alternatively, let the web
+server rewrite `REMOTE_ADDR` (Angie/nginx `realip`; see the commented block in
+`contrib/angie/vimbadmin.conf`) and leave the mode at `auto`.
+
+## MCP adapter
+
+An optional **JSON-RPC API at `/mcp`** so an agent can read and manage the
+mailbox database. **Off by default** (`mcp.enabled = 1` to turn on). Guarded in
+depth: an edge IP allowlist, a **bearer token** (only its SHA-256 hash is
+stored, scoped + revocable + expirable), a per-token IP/CIDR allowlist, and a
+per-token **rate limit on destructive calls**. Read methods (`domains.list`,
+`mailboxes.list`, …) and write methods (`mailbox.create`, `mailbox.archive`, …)
+are scope-gated. Manage tokens from the CLI:
+
+```sh
+./bin/vimbtool.php -a mcp.cli-token-generate --name=agent1 --scope="read"
+./bin/vimbtool.php -a mcp.cli-token-list
+./bin/vimbtool.php -a mcp.cli-token-revoke --name=agent1
+```
+
+Full method list, auth model and examples: **[docs/mcp-auth.md](docs/mcp-auth.md)**.
 
 ## Performance
 
@@ -324,14 +373,20 @@ and trusted.
 ## Layout
 
 ```
-application/    ZF1 controllers, entities, views (Smarty)
-library/        OSS + ViMbAdmin framework, Doctrine, auth
+application/    ZF1 controllers (incl. McpController), entities, views (Smarty)
+library/        OSS + ViMbAdmin framework (Doctrine, auth, Net, Mcp/)
 public/         web docroot (index.php front controller)
 bin/            CLI tools (doctrine2-cli.php, vimbtool.php, crons)
 contrib/        deploy configs: php-fpm pool, Angie vhost, mail-host crons,
-                snuffleupagus/ (the validated SP ruleset), theming
+                snuffleupagus/ (the validated SP ruleset), migrations/, theming
 doctrine2/xml/  Doctrine XML mappings (the schema source of truth)
+docs/           extra documentation (mcp-auth.md)
 ```
+
+A separate, optional **OWASP CRS / ModSecurity plugin** lives at
+[vimbadmin-crs-plugin](https://github.com/eilandert/vimbadmin-crs-plugin) —
+payload-signature scanning on top of the vhost, only if you already run
+libmodsecurity.
 
 ## Credits & licence
 

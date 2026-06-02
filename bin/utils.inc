@@ -55,11 +55,18 @@ require_once 'Zend/Application.php';
  */
 function scriptutils_get_application_env()
 {
+    // Prefer an explicit environment variable (containers / systemd / CI set
+    // APPLICATION_ENV directly). Fall back to parsing public/.htaccess for
+    // traditional Apache deployments.
+    $env = getenv( 'APPLICATION_ENV' );
+    if( $env !== false && trim( $env ) !== '' )
+        return trim( $env );
+
     $htaccess_path = dirname( __FILE__ ) . "/../public/.htaccess";
 
     if( !is_readable( $htaccess_path ) )
     {
-        die( "ERROR: public/.htaccess does not exist / is not readable - set this up first!\n" );
+        die( "ERROR: APPLICATION_ENV not set and public/.htaccess missing - set one of them first!\n" );
     }
 
     $htaccess = file_get_contents( $htaccess_path );

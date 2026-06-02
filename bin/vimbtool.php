@@ -8,7 +8,7 @@
 date_default_timezone_set(@date_default_timezone_get());
 require_once( dirname( __FILE__ ) . '/../vendor/autoload.php' );
 require_once( dirname( __FILE__ ) . '/utils.inc' );
-//define( 'APPLICATION_ENV', scriptutils_get_application_env() );
+defined( 'APPLICATION_ENV' ) || define( 'APPLICATION_ENV', scriptutils_get_application_env() );
 
 define( 'SCRIPT_NAME', 'vimbadtool - ViMbAdmin CLI Management Tool' );
 define( 'SCRIPT_COPY', '(c) Copyright 2010 - ' . date( 'Y' ) . ' Open Source Solutions Limited' );

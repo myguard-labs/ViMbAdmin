@@ -64,18 +64,6 @@ class AuthController extends ViMbAdmin_Controller_Action
 
 
     /**
-     * Two-factor helper, configured with the app issuer + securitysalt.
-     *
-     * @return ViMbAdmin_TwoFactor
-     */
-    protected function _twoFactor()
-    {
-        $salt = isset( $this->_options['securitysalt'] ) ? $this->_options['securitysalt'] : '';
-        return new ViMbAdmin_TwoFactor( 'ViMbAdmin', $salt );
-    }
-
-
-    /**
      * Brute-force protection helper (per username+IP attempt tracking with an
      * IP allowlist from application.ini).
      *

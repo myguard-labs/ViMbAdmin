@@ -18,6 +18,7 @@ class ViMbAdmin_TwoFactor
 {
     const PREF_SECRET = 'auth.totp.secret';
     const PREF_BACKUP = 'auth.totp.backup';
+    const PREF_LASTTS = 'auth.totp.lastts';   // last accepted TOTP timeslice (replay guard)
 
     /** @var \RobThree\Auth\TwoFactorAuth */
     private $_tfa;
@@ -105,11 +106,12 @@ class ViMbAdmin_TwoFactor
         return $this->regenerateBackupCodes( $admin );
     }
 
-    /** Disable 2FA for an admin (clears secret + backup codes). */
+    /** Disable 2FA for an admin (clears secret + backup codes + replay state). */
     public function disable( $admin )
     {
         $admin->deletePreference( self::PREF_SECRET );
         $admin->deletePreference( self::PREF_BACKUP );
+        $admin->deletePreference( self::PREF_LASTTS );
     }
 
     /** Decrypt and return the admin's TOTP secret (or null). */
@@ -119,11 +121,35 @@ class ViMbAdmin_TwoFactor
         return $enc ? $this->_decrypt( $enc ) : null;
     }
 
-    /** Verify a submitted TOTP code for an enrolled admin. */
+    /**
+     * Verify a submitted TOTP code for an enrolled admin, with replay
+     * protection: a given time-slice can only be used once (a code captured by
+     * a MITM cannot be replayed within its validity window).
+     *
+     * @return bool
+     */
     public function verifyForAdmin( $admin, $code )
     {
         $secret = $this->getSecret( $admin );
-        return $secret !== null && $this->verifyCode( $secret, $code );
+        if( $secret === null )
+            return false;
+
+        $code = preg_replace( '/\s+/', '', (string) $code );
+        if( !preg_match( '/^\d{6}$/', $code ) )
+            return false;
+
+        $timeslice = 0;
+        if( !$this->_tfa->verifyCode( $secret, $code, 1, null, $timeslice ) )
+            return false;
+
+        // Reject replay: the matched slice must be newer than the last one we
+        // accepted for this admin.
+        $last = (int) $admin->getPreference( self::PREF_LASTTS );
+        if( $timeslice <= $last )
+            return false;
+
+        $admin->setPreference( self::PREF_LASTTS, $timeslice );
+        return true;
     }
 
     // ---- backup codes --------------------------------------------------

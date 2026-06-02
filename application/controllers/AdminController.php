@@ -161,7 +161,7 @@ class AdminController extends ViMbAdmin_Controller_Action
     public function ajaxToggleActiveAction()
     {
         if( !$this->getTargetAdmin() || $this->getAdmin()->getId() == $this->getTargetAdmin()->getId() )
-            print 'ko';
+            { print "ko"; return; }
 
         $this->getTargetAdmin()->setActive( !$this->getTargetAdmin()->getActive() );
         $this->getTargetAdmin()->setModified( new \DateTime() );
@@ -182,7 +182,7 @@ class AdminController extends ViMbAdmin_Controller_Action
     public function ajaxToggleSuperAction()
     {
         if( !$this->getTargetAdmin() || $this->getAdmin()->getId() == $this->getTargetAdmin()->getId() )
-            print 'ko';
+            { print "ko"; return; }
 
         $this->getTargetAdmin()->setSuper( !$this->getTargetAdmin()->getSuper() );
         $this->getTargetAdmin()->setModified( new \DateTime() );
@@ -327,7 +327,7 @@ class AdminController extends ViMbAdmin_Controller_Action
         );
         $this->getD2EM()->flush();
 
-        $this->addMEssage( 'You have successfully purged the admin record.', OSS_Message::SUCCESS );
+        $this->addMessage( 'You have successfully purged the admin record.', OSS_Message::SUCCESS );
         $this->redirect( 'admin/list' );
     }
 
@@ -414,18 +414,6 @@ class AdminController extends ViMbAdmin_Controller_Action
         $this->getD2EM()->flush();
         $this->addMessage( 'You have successfully removed the admin from domain '. $this->getDomain()->getDomain(), OSS_Message::SUCCESS );
         $this->redirect( 'admin/domains/aid/' . $this->getTargetAdmin()->getId() );
-    }
-
-
-    /**
-     * ViMbAdmin_TwoFactor helper bound to the app issuer + securitysalt.
-     *
-     * @return ViMbAdmin_TwoFactor
-     */
-    protected function _twoFactor()
-    {
-        $salt = isset( $this->_options['securitysalt'] ) ? $this->_options['securitysalt'] : '';
-        return new ViMbAdmin_TwoFactor( 'ViMbAdmin', $salt );
     }
 
 

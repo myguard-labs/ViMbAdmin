@@ -138,6 +138,19 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
 
 
     /**
+     * Two-factor helper, configured with the app issuer + securitysalt.
+     * Shared by AuthController (login gate) and AdminController (enrolment).
+     *
+     * @return ViMbAdmin_TwoFactor
+     */
+    protected function _twoFactor()
+    {
+        $salt = isset( $this->_options['securitysalt'] ) ? $this->_options['securitysalt'] : '';
+        return new ViMbAdmin_TwoFactor( 'ViMbAdmin', $salt );
+    }
+
+
+    /**
      * Get (creating on first use) the per-session CSRF token used to guard
      * link-based (GET) state-changing actions.
      *

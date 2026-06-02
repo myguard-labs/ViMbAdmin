@@ -569,14 +569,14 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
             exec( $command, $output, $result );
             if( !$result === 0 )
             {
-                $this->getLogger->debug( "bunzip2 failed path '{$tarPath}.bz2' not found" );
+                $this->getLogger()->debug( "bunzip2 failed path '{$tarPath}.bz2' not found" );
                 return false;       
             }
         }
         
         if( !file_exists( $tarPath ) )
         {
-            $this->getLogger->debug( "'{$tarPath}' was not found for extracting tar" );
+            $this->getLogger()->debug( "'{$tarPath}' was not found for extracting tar" );
             return false;
         }
         
@@ -614,7 +614,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
                     );
         exec( $command, $output, $result1 );
         if( $result1 !== 0 )
-            $this->getLogger->debug( "chown command for '{$destiantion}' failed" );  
+            $this->getLogger()->debug( "chown command for '{$destination}' failed" );  
 
         if( $result === 0 && is_dir( $destination ) )
             return true;
@@ -650,7 +650,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
                 );
         exec( $command, $output, $result );
         if( $result !== 0 )
-            $this->getLogger->debug( "chown command for '{$path}' failed" );
+            $this->getLogger()->debug( "chown command for '{$path}' failed" );
             
     }
 

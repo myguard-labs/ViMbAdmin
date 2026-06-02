@@ -232,7 +232,12 @@ class McpController extends ViMbAdmin_Controller_Action
         $em = $this->getD2EM();
         $em->persist( $m );
 
-        if( ( $this->_options['mailboxAliases'] ?? 0 ) == 1 )
+        // Auto mailbox-alias (address -> address). Reuse an existing alias with
+        // that address rather than inserting a duplicate (which would violate
+        // the unique key and roll the whole create back -- e.g. an orphan alias
+        // left by an earlier failed attempt).
+        if( ( $this->_options['mailboxAliases'] ?? 0 ) == 1
+            && !$em->getRepository( '\\Entities\\Alias' )->findOneBy( [ 'address' => $username ] ) )
         {
             $a = new \Entities\Alias();
             $a->setAddress( $username );

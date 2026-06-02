@@ -318,7 +318,13 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
                         )
                     );
 
-                    if( $this->_options['mailboxAliases'] == 1 )
+                    // Auto mailbox-alias (address -> address). Skip if an alias
+                    // with that address already exists (e.g. an orphan from an
+                    // earlier failed attempt) -- inserting a duplicate violates
+                    // the unique key and rolls the whole create back.
+                    if( $this->_options['mailboxAliases'] == 1
+                        && !$this->getD2EM()->getRepository( '\\Entities\\Alias' )
+                                ->findOneBy( [ 'address' => $this->getMailbox()->getUsername() ] ) )
                     {
                         $alias = new \Entities\Alias();
                         $alias->setAddress( $this->getMailbox()->getUsername() );
@@ -362,11 +368,13 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
                 try {
                     $this->getD2EM()->flush();
                 } catch( Doctrine\DBAL\Exception\UniqueConstraintViolationException $e ) {
-                    if( strpos( $e->getMessage(), 'occurred while executing \'INSERT INTO alias' ) > 0 ) {
-                        $this->addMessage(_("An alias already exists for the mailbox you are trying to create. Please delete the alias first."), OSS_Message::ERROR);
-                        return;
-                    }
-                    throw $e;
+                    // Any unique-key clash on create -> friendly message instead
+                    // of a 500/blank form. (The DBAL 3 message wording varies, so
+                    // don't string-match the SQL; tell the admin what to do.)
+                    $this->addMessage(
+                        _( "Could not save: an alias or mailbox with this address already exists. Delete the conflicting entry first." ),
+                        OSS_Message::ERROR );
+                    return;
                 }
 
 

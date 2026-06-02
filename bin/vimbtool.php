@@ -13,8 +13,9 @@ defined( 'APPLICATION_ENV' ) || define( 'APPLICATION_ENV', scriptutils_get_appli
 define( 'SCRIPT_NAME', 'vimbadtool - ViMbAdmin CLI Management Tool' );
 define( 'SCRIPT_COPY', '(c) Copyright 2010 - ' . date( 'Y' ) . ' Open Source Solutions Limited' );
 
-error_reporting( E_ALL | E_STRICT );
-//error_reporting( ( E_ALL | E_STRICT ) ^ E_NOTICE );
+// Show real errors, but not the framework's forward-compat deprecation noise
+// (ZF1 / Smarty 5 on PHP 8.5) which would otherwise spam every CLI command.
+error_reporting( E_ALL & ~E_DEPRECATED & ~E_STRICT );
 
 ini_set( 'display_errors', true );
 

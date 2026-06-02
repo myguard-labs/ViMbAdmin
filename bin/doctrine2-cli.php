@@ -39,6 +39,9 @@
 
 //ini_set('memory_limit', -1);
 
+// Hide the framework's forward-compat deprecation noise (ZF1/Smarty on PHP 8.5).
+error_reporting( E_ALL & ~E_DEPRECATED & ~E_STRICT );
+
 require_once( dirname( __FILE__ ) . '/../vendor/autoload.php' );
 require_once( dirname( __FILE__ ) . '/utils.inc' );
 

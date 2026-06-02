@@ -167,7 +167,7 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
         if( !is_readable( $file ) )
             return '';
 
-        return rtrim( Zend_Controller_Front::getInstance()->getBaseUrl(), '/' ) . '/' . $rel;
+        return rtrim( (string) Zend_Controller_Front::getInstance()->getBaseUrl(), '/' ) . '/' . $rel;
     }
 
 

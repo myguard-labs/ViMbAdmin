@@ -43,5 +43,5 @@
  */
 function smarty_modifier_flipflop( $input )
 {
-    return (int) !( (boolean) $input );
+    return (int) !( (bool) $input );
 }

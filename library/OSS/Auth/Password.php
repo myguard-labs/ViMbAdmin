@@ -211,12 +211,13 @@ class OSS_Auth_Password
         }
 
         if( substr( $hash, 0, 6) == 'crypt:' )
-            return crypt( $pwplain, $pwhash ) == $pwhash;
+            return hash_equals( $pwhash, crypt( $pwplain, $pwhash ) );
 
         if( substr( $hash, 0, 8 ) == 'dovecot:' )
             return ViMbAdmin_Dovecot::passwordVerify( substr( $hash, 8 ), $pwhash, $pwplain, $config['username'] );
 
 
-        return $pwhash == self::hash( $pwplain, $config );
+        // Constant-time comparison to avoid leaking the hash via timing.
+        return hash_equals( $pwhash, self::hash( $pwplain, $config ) );
     }
 }

@@ -96,7 +96,8 @@ class OSS_Crypt_Bcrypt
     
     public static function verify( $plain, $hash )
     {
-        return $hash === crypt( $plain, $hash );
+        // Constant-time comparison (avoid timing side-channel on the hash).
+        return hash_equals( (string) $hash, crypt( $plain, (string) $hash ) );
     }
 
     public static function generateSalt()

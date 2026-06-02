@@ -133,6 +133,12 @@ trait OSS_Controller_Trait_Auth
                     break;
 
                 case Zend_Auth_Result::SUCCESS:
+                    // Session-fixation defence: issue a fresh session id on
+                    // every successful authentication so a pre-auth fixed id
+                    // cannot be reused post-login.
+                    if( session_status() === PHP_SESSION_ACTIVE )
+                        Zend_Session::regenerateId();
+
                     $identity = $auth->getIdentity();
                     $user = $identity['user'];
 

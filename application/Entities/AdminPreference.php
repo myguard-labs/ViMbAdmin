@@ -176,7 +176,7 @@ class AdminPreference
      * @param Entities\Admin $preferences
      * @return AdminPreference
      */
-    public function setPreferences(\Entities\Admin $preferences = null)
+    public function setPreferences(?\Entities\Admin $preferences = null)
     {
         $this->Preferences = $preferences;
     
@@ -204,7 +204,7 @@ class AdminPreference
      * @param Entities\Admin $admin
      * @return AdminPreference
      */
-    public function setAdmin(\Entities\Admin $admin = null)
+    public function setAdmin(?\Entities\Admin $admin = null)
     {
         $this->Admin = $admin;
     

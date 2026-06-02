@@ -74,59 +74,50 @@ class OSS_Resource_Doctrine2cache extends Zend_Application_Resource_ResourceAbst
             // Get Doctrine configuration options from the application.ini file
             $config = $this->getOptions();
 
-            if( !isset( $config['autoload_method'] ) )
-                $config['autoload_method'] = 'git';
-            
-            switch( $config['autoload_method'] )
+            // Autoloading is handled by Composer now; the legacy
+            // Doctrine\ORM\Tools\Setup::registerAutoload* helpers were removed
+            // in Doctrine ORM 2.20.
+
+            $namespace = isset( $config['namespace'] ) ? (string) $config['namespace'] : '';
+
+            // Doctrine ORM 2.20 / doctrine-cache 2.x dropped the concrete
+            // Doctrine\Common\Cache\*Cache classes. We build a PSR-6 pool with
+            // symfony/cache and wrap it in DoctrineProvider so that both the
+            // ORM (setMetadataCacheImpl etc.) and the legacy ->fetch()/->save()
+            // callers keep working unchanged.
+            switch( $config['type'] )
             {
-                case 'pear':
-                    require_once( $config['path'] . '/Tools/Setup.php' );
-                    Doctrine\ORM\Tools\Setup::registerAutoloadPEAR();
-                    break;
-                    
-                case 'dir':
-                    require_once( $config['path'] . '/Tools/Setup.php' ); // FIXME
-                    Doctrine\ORM\Tools\Setup::registerAutoloadDirectory();
+                case 'ApcCache':
+                case 'ApcuCache':
+                    $pool = new \Symfony\Component\Cache\Adapter\ApcuAdapter( $namespace );
                     break;
 
-                case 'composer':
+                case 'MemcacheCache':
+                case 'MemcachedCache':
+                    $dsns = array();
+                    if( isset( $config['memcache']['servers'] ) )
+                    {
+                        foreach( $config['memcache']['servers'] as $server )
+                        {
+                            $host = isset( $server['host'] ) ? $server['host'] : '127.0.0.1';
+                            $port = isset( $server['port'] ) ? $server['port'] : 11211;
+                            $dsns[] = 'memcached://' . $host . ':' . $port;
+                        }
+                    }
+                    if( !$dsns )
+                        $dsns[] = 'memcached://127.0.0.1:11211';
+
+                    $client = \Symfony\Component\Cache\Adapter\MemcachedAdapter::createConnection( $dsns );
+                    $pool   = new \Symfony\Component\Cache\Adapter\MemcachedAdapter( $client, $namespace );
                     break;
-                                        
+
                 default:
-                    require_once( $config['path'] . '/lib/Doctrine/ORM/Tools/Setup.php' );
-                    Doctrine\ORM\Tools\Setup::registerAutoloadGit( $config['path'] );
+                    // ArrayCache (per-request, in-memory) is the safe default.
+                    $pool = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
             }
-            
-            if( $config['type'] == 'ApcCache' )
-                $cache = new \Doctrine\Common\Cache\ApcCache();
-            elseif( $config['type'] == 'MemcacheCache' )
-            {
-                $memcache = new Memcache();
-                
-                for( $cnt = 0; $cnt < count( $config['memcache']['servers'] ); $cnt++ )
-                {
-                    $server = $config['memcache']['servers'][$cnt];
-                
-                    $memcache->addServer(
-                        isset( $server['host'] )         ? $server['host']         : '127.0.0.1',
-                        isset( $server['port'] )         ? $server['port']         : 11211,
-                        isset( $server['persistent'] )   ? $server['persistent']   : false,
-                        isset( $server['weight'] )       ? $server['weight']       : 1,
-                        isset( $server['timeout'] )      ? $server['timeout']      : 1,
-                        isset( $server['retry_int'] )    ? $server['retry_int']    : 15
-                    );
-                }
-                
-                $cache = new \Doctrine\Common\Cache\MemcacheCache();
-                $cache->setMemcache( $memcache );
-            }
-            else
-                $cache = new \Doctrine\Common\Cache\ArrayCache();
-            
-            if( isset( $config['namespace'] ) )
-                $cache->setNamespace( $config['namespace'] );
-            
-            
+
+            $cache = \Doctrine\Common\Cache\Psr6\DoctrineProvider::wrap( $pool );
+
             // stick the cache in the registry
             Zend_Registry::set( 'd2cache', $cache );
             $this->setDoctrine2Cache( $cache );

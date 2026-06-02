@@ -187,7 +187,7 @@ class Twitter_Form extends Zend_Form
 	 * @param  Zend_View_Interface $view
 	 * @return Zend_View
 	 */
-	public function render(Zend_View_Interface $view = null)
+	public function render(?Zend_View_Interface $view = null)
 	{
         $formTypes = array( // avaible form types of Twitter Bootstrap form (i.e. classes)
           'horizontal',

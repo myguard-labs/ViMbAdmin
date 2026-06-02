@@ -178,7 +178,7 @@ class Alias
      * @param Entities\Domain $domain
      * @return Alias
      */
-    public function setDomain(\Entities\Domain $domain = null)
+    public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
     

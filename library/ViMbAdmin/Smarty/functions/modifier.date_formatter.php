@@ -30,16 +30,27 @@
 function smarty_modifier_date_formatter($string, $format=null, $default_date='', $formatter='auto')
 {
     if ($format === null) {
-        $format = Smarty::$_DATE_FORMAT;
+        // Smarty 5 removed Smarty::$_DATE_FORMAT.
+        $format = '%b %e, %Y';
     }
-    /**
-    * Include the {@link shared.make_timestamp.php} plugin
-    */
-    require_once(SMARTY_PLUGINS_DIR . 'shared.make_timestamp.php');
+
+    // Smarty 5 no longer ships shared.make_timestamp.php / SMARTY_PLUGINS_DIR;
+    // resolve the timestamp inline.
+    $make_ts = static function ($value) {
+        if (is_numeric($value)) {
+            return (int) $value;
+        }
+        if (is_string($value) && $value !== '') {
+            $ts = strtotime($value);
+            return $ts === false ? time() : $ts;
+        }
+        return time();
+    };
+
     if ($string != '' && $string != '0000-00-00' && $string != '0000-00-00 00:00:00') {
-        $timestamp = smarty_make_timestamp($string);
+        $timestamp = $make_ts($string);
     } elseif ($default_date != '') {
-        $timestamp = smarty_make_timestamp($default_date);
+        $timestamp = $make_ts($default_date);
     } else {
         return;
     }

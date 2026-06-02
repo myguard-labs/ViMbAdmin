@@ -54,20 +54,10 @@ $application = get_zend_application();
 $em = get_doctrine2_entity_manager( $application, $db );
 
 
-$helpers = array(
-    'db' => new \Doctrine\DBAL\Tools\Console\Helper\ConnectionHelper( $em->getConnection() ),
-    'em' => new \Doctrine\ORM\Tools\Console\Helper\EntityManagerHelper( $em )
-);
+// Doctrine ORM 2.20 dropped the ConnectionHelper / EntityManagerHelper
+// helper-set wiring in favour of an EntityManagerProvider.
+$emProvider = new \Doctrine\ORM\Tools\Console\EntityManagerProvider\SingleManagerProvider( $em );
 
-$cli = new \Symfony\Component\Console\Application( 'Doctrine Command Line Interface' );
-$cli->setCatchExceptions(true);
-$helperSet = $cli->getHelperSet();
-foreach ($helpers as $name => $helper) {
-    $helperSet->set($helper, $name);
-}
-
-Doctrine\ORM\Tools\Console\ConsoleRunner::addCommands( $cli );
-
-$cli->run();
+\Doctrine\ORM\Tools\Console\ConsoleRunner::run( $emProvider );
 
 

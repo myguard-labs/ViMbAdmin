@@ -112,7 +112,7 @@ class OSS_Resource_Logger extends Zend_Application_Resource_ResourceAbstract
                             if( file_exists( $log_file ) == false )
                             {
                                 touch(  $log_file                          );
-                                @chmod( $log_file, 0777                    );
+                                @chmod( $log_file, 0640                    );
                                 @chown( $log_file, $writerOptions['owner'] );
                                 @chgrp( $log_file, $writerOptions['group'] );
                             }

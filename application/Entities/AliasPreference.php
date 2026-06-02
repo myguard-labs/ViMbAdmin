@@ -176,7 +176,7 @@ class AliasPreference
      * @param \Entities\Alias $alias
      * @return AliasPreference
      */
-    public function setAlias(\Entities\Alias $alias = null)
+    public function setAlias(?\Entities\Alias $alias = null)
     {
         $this->Alias = $alias;
     

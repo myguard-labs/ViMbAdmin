@@ -74,8 +74,8 @@ class OSS_DiskUtils
 
         if( $summarize )
         {
-            $command = sprintf( "%s -sk %s", $du, $path );
-            @exec( escapeshellcmd( $command ), $output, $result );
+            $command = sprintf( "%s -sk %s", escapeshellcmd( $du ), escapeshellarg( $path ) );
+            @exec( $command, $output, $result );
             if( $result === 0 )
             {
                 $output = explode( "\t", $output[0] );
@@ -84,8 +84,8 @@ class OSS_DiskUtils
         }
         else
         {
-            $command = sprintf( "%s -k %s", $du, $path );
-            @exec( escapeshellcmd( $command ), $output, $result );
+            $command = sprintf( "%s -k %s", escapeshellcmd( $du ), escapeshellarg( $path ) );
+            @exec( $command, $output, $result );
             if( $result === 0 )
             {
                 foreach( $output as $key => $line )

@@ -176,7 +176,7 @@ class DomainPreference
      * @param \Entities\Domain $domain
      * @return DomainPreference
      */
-    public function setDomain(\Entities\Domain $domain = null)
+    public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
     

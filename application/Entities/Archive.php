@@ -428,7 +428,7 @@ class Archive
      * @param \Entities\Domain $domain
      * @return Archive
      */
-    public function setDomain(\Entities\Domain $domain = null)
+    public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
     
@@ -451,7 +451,7 @@ class Archive
      * @param \Entities\Admin $archivedBy
      * @return Archive
      */
-    public function setArchivedBy(\Entities\Admin $archivedBy = null)
+    public function setArchivedBy(?\Entities\Admin $archivedBy = null)
     {
         $this->ArchivedBy = $archivedBy;
     

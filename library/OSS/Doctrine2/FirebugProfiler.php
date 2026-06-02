@@ -95,7 +95,7 @@ class OSS_Doctrine2_FirebugProfiler implements \Doctrine\DBAL\Logging\SQLLogger
      * @param float $executionMS Time for query to return
      * @return void
      */
-    public function startQuery($sql, array $params = null, array $types = null)
+    public function startQuery($sql, ?array $params = null, ?array $types = null)
     {
         $this->_curQuery = new \stdClass();
         $this->_curQuery->sql = $sql;

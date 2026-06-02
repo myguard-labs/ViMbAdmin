@@ -114,8 +114,9 @@ class OSS_Resource_Doctrine2 extends Zend_Application_Resource_ResourceAbstract
             $config->setProxyNamespace( $dconfig['proxies_namespace'] );
             $config->setAutoGenerateProxyClasses( $dconfig['autogen_proxies'] );
 
-            if( isset( $dconfig['logger'] ) && $dconfig['logger'] )
-                $config->setSQLLogger( new OSS_Doctrine2_FirebugProfiler() );
+            // Doctrine ORM 2.20 removed Configuration::setSQLLogger() (and the
+            // SQLLogger interface) in favour of a DBAL middleware. The legacy
+            // Firebug profiler is no longer wired up.
 
             $this->_doctrine2[ $db ] = Doctrine\ORM\EntityManager::create( $dconfig['connection']['options'], $config );
 
@@ -132,8 +133,8 @@ class OSS_Resource_Doctrine2 extends Zend_Application_Resource_ResourceAbstract
             $autoloader->pushAutoloader( array( $modelAutoLoader,      'loadClass' ), $dconfig['models_namespace']       );
             $autoloader->pushAutoloader( array( $repositoryAutoLoader, 'loadClass' ), $dconfig['repositories_namespace'] );
 
-            // http://docs.doctrine-project.org/en/latest/reference/configuration.html#autoloading-proxies
-            Doctrine\ORM\Proxy\Autoloader::register( $dconfig['proxies_path'], $dconfig['proxies_namespace'] );
+            // Doctrine ORM 2.20 removed Doctrine\ORM\Proxy\Autoloader; proxy
+            // classes are autoloaded by Composer / generated in proxies_path.
         }
 
         return $this->_doctrine2[ $db ];

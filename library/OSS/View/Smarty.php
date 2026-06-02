@@ -240,7 +240,8 @@ class OSS_View_Smarty extends Zend_View_Abstract
      */
     public function __set( $key, $val )
     {
-        $this->_smarty->assignByRef( $key, $val );
+        // Smarty 5 removed assignByRef(); plain assign() is the supported call.
+        $this->_smarty->assign( $key, $val );
     }
 
 

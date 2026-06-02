@@ -69,6 +69,10 @@ function smarty_function_includeIfExists( $params, $smarty )
     if( !isset( $params['file'] ) )
         throw new SmartyCompilerException( "Missing 'file' attribute in tmplinclude tag" );
 
+    // Smarty 5 passes a \Smarty\Template (not the engine) to function plugins;
+    // templateExists()/fetch() live on the engine, so resolve it.
+    $engine = method_exists( $smarty, 'getSmarty' ) ? $smarty->getSmarty() : $smarty;
+
     $original_values = array();
 
     foreach( $params as $arg => $value )
@@ -91,23 +95,23 @@ function smarty_function_includeIfExists( $params, $smarty )
     else
         $skin = false;
 
-    if( $skin && $smarty->templateExists( '_skins/' . $skin . '/' . $params['file'] ) )
+    if( $skin && $engine->templateExists( '_skins/' . $skin . '/' . $params['file'] ) )
         $params['file'] = '_skins/' . $skin . '/' . $params['file'];
-    elseif( $skin && $smarty->templateExists( '_skins/' . $skin . '/' . $params['else'] ) )
+    elseif( $skin && $engine->templateExists( '_skins/' . $skin . '/' . $params['else'] ) )
         $params['file'] = '_skins/' . $skin . '/' . $params['else'];
-    elseif( $smarty->templateExists( $params['file'] ) )
+    elseif( $engine->templateExists( $params['file'] ) )
         $params['file'] = $params['file'];
-    elseif( $smarty->templateExists( $params['else'] ) )
+    elseif( $engine->templateExists( $params['else'] ) )
         $params['file'] = $params['else'];
     else
         throw new SmartyCompilerException( "Template file nor alternative does not exist for all skins - [{$params['file']}]" );
-    
+
     $output = '';
 
     if( isset( $params['assign'] ) )
-        $smarty->assign( $params['assign'], $smarty->fetch( $params['file'] ) );
+        $smarty->assign( $params['assign'], $engine->fetch( $params['file'] ) );
     else
-        $output = $smarty->fetch( $params['file'] );
+        $output = $engine->fetch( $params['file'] );
 
     foreach( $original_values as $arg => $value )
     {

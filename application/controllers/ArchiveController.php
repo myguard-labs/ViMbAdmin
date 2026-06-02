@@ -312,7 +312,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
             if( !$result )
                 continue;
                 
-            $data = unserialize( $archive->getData() );
+            $data = unserialize( $archive->getData(), [ "allowed_classes" => false ] );
             if( !isset( $data['mailbox']['params'] ) || !isset( $data['mailbox']['className'] ) )
                continue;
            
@@ -459,7 +459,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
             if( !$this->_archiveStateChange( $archive, \Entities\Archive::STATUS_RESTORING, \Entities\Archive::STATUS_PENDING_RESTORE ) )
                 continue;
                 
-            $data = unserialize( $archive->getData() );
+            $data = unserialize( $archive->getData(), [ "allowed_classes" => false ] );
 
             if( !isset( $data['mailbox']['params'] ) || !isset( $data['mailbox']['className'] ) )
             {
@@ -562,7 +562,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
     {
         if( file_exists( $tarPath . ".bz2" ) )
         {
-            $command = sprintf( "%s %s.bz2",  $this->_options['binary']['path']['bunzip2_q'], $tarPath );
+            $command = sprintf( "%s %s",  $this->_options['binary']['path']['bunzip2_q'], escapeshellarg( $tarPath . ".bz2" ) );
             exec( $command, $output, $result );
             if( !$result === 0 )
             {
@@ -603,11 +603,11 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
         if( !is_dir( $rdest ) )
            $this-> _makedirOwned( $rdest, $uid, $gid );
     
-        $command = sprintf( "%s %s -C %s", $this->_options['binary']['path']['tar_xf'], $tarPath, $rdest );
+        $command = sprintf( "%s %s -C %s", $this->_options['binary']['path']['tar_xf'], escapeshellarg( $tarPath ), escapeshellarg( $rdest ) );
         exec( $command, $ouput, $result );
-        
+
         $command = sprintf( "%s %d:%d %s", $this->_options['binary']['path']['chown_R'],
-                         $uid, $gid, $destination
+                         $uid, $gid, escapeshellarg( $destination )
                     );
         exec( $command, $output, $result1 );
         if( $result1 !== 0 )
@@ -643,7 +643,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
         
         mkdir( $path, 0755 );
         $command = sprintf( "%s %d:%d %s", $this->_options['binary']['path']['chown_R'],
-                     $uid, $gid, $path
+                     $uid, $gid, escapeshellarg( $path )
                 );
         exec( $command, $output, $result );
         if( $result !== 0 )
@@ -668,12 +668,12 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
         if( $size == false )
             $this->getLogger()->err( "Cannot create tar for path '{$path}'" );
         
-        $command = sprintf( "%s %s", $this->_options['binary']['path']['rm_rf'], $path );
+        $command = sprintf( "%s %s", $this->_options['binary']['path']['rm_rf'], escapeshellarg( $path ) );
         exec( $command, $output, $result );
         if( $result !== 0 )
             $this->getLogger()->debug( "Cannot remove '{$path}'" );
 
-        $command = sprintf( "%s %s/%s.tar", $this->_options['binary']['path']['bzip2_q'], $archivedir, $tarName );
+        $command = sprintf( "%s %s", $this->_options['binary']['path']['bzip2_q'], escapeshellarg( $archivedir . "/" . $tarName . ".tar" ) );
         exec( $command, $output, $result );
         if( $result !== 0 )
             $this->getLogger()->debug( "bzip2 failed for '{$path}'" );
@@ -704,19 +704,19 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
 
         if( $fullPath )
         {
-            $command = sprintf( "%s %s/%s.tar %s 2>&1", 
+            $command = sprintf( "%s %s %s 2>&1",
                         $this->_options['binary']['path']['tar_cf'],
-                        $archiveDir, $tarName,
-                        $path
+                        escapeshellarg( $archiveDir . "/" . $tarName . ".tar" ),
+                        escapeshellarg( $path )
                 );
         }
         else
         {
             $dir = substr( $path, strrpos( $path, "/" ) + 1 );
-            $command = sprintf( "cd %s/../\n%s %s/%s.tar %s 2>&1", 
-                        $path, $this->_options['binary']['path']['tar_cf'],
-                        $archiveDir, $tarName, $dir
-                );           
+            $command = sprintf( "cd %s/../\n%s %s %s 2>&1",
+                        escapeshellarg( $path ), $this->_options['binary']['path']['tar_cf'],
+                        escapeshellarg( $archiveDir . "/" . $tarName . ".tar" ), escapeshellarg( $dir )
+                );
         }
         exec( $command, $ouput, $result );
                 
@@ -886,7 +886,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
     {
         $debug = $this->getParam( 'debug', false );
         $this->getD2EM()->flush();
-        $data = unserialize( $data );
+        $data = unserialize( $data, [ "allowed_classes" => false ] );
 
         if( $debug ) echo "[DEBUG] Unserialising {$data['mailbox']['params']['username']}\n";
         $params = $data['mailbox']['params'];

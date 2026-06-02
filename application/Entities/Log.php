@@ -153,7 +153,7 @@ class Log
      * @param Entities\Admin $admin
      * @return Log
      */
-    public function setAdmin(\Entities\Admin $admin = null)
+    public function setAdmin(?\Entities\Admin $admin = null)
     {
         $this->Admin = $admin;
     
@@ -176,7 +176,7 @@ class Log
      * @param Entities\Domain $domain
      * @return Log
      */
-    public function setDomain(\Entities\Domain $domain = null)
+    public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
     

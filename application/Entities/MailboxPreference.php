@@ -176,7 +176,7 @@ class MailboxPreference
      * @param Entities\Mailbox $mailbox
      * @return MailboxPreference
      */
-    public function setMailbox(\Entities\Mailbox $mailbox = null)
+    public function setMailbox(?\Entities\Mailbox $mailbox = null)
     {
         $this->Mailbox = $mailbox;
     

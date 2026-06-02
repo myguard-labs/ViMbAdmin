@@ -39,7 +39,7 @@
 
         {foreach $exceptions as $exception}
         
-            <h2>{get_class( $exception )}</h2>
+            <h2>{$exception::class}</h2>
             
             <dl>
                 <dt>File</dt>

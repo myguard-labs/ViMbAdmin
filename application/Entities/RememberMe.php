@@ -176,7 +176,7 @@ class RememberMe
      * @param \Entities\Admin $user
      * @return RememberMe
      */
-    public function setUser(\Entities\Admin $user = null)
+    public function setUser(?\Entities\Admin $user = null)
     {
         $this->User = $user;
     

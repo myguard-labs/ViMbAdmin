@@ -501,7 +501,7 @@ class Mailbox
      * @param Entities\Domain $domain
      * @return Mailbox
      */
-    public function setDomain(\Entities\Domain $domain = null)
+    public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
 
@@ -697,7 +697,7 @@ class Mailbox
      * @param \Entities\DirectoryEntry $directoryEntry
      * @return Mailbox
      */
-    public function setDirectoryEntry(\Entities\DirectoryEntry $directoryEntry = null)
+    public function setDirectoryEntry(?\Entities\DirectoryEntry $directoryEntry = null)
     {
         $this->DirectoryEntry = $directoryEntry;
 

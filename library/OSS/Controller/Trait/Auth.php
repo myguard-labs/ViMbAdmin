@@ -663,10 +663,6 @@ trait OSS_Controller_Trait_Auth
     {
         switch( $this->getOptions()['resources']['auth']['oss']['adapter'] )
         {
-            case 'OSS_Auth_DoctrineAdapter':
-                $authAdapter = new OSS_Auth_DoctrineAdapter( $un, $pw );
-                break;
-
             case 'OSS_Auth_Doctrine2Adapter':
                 $authAdapter = new OSS_Auth_Doctrine2Adapter(
                     $un, $pw, $this->getOptions()['resources']['auth']['oss']['entity'],

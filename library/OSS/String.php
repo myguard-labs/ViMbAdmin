@@ -147,10 +147,10 @@ class OSS_String
             }
         }
 
-        $repeat = ceil( ( 1 + ( $length / mb_strlen( $str ) ) ) );
-        $retVal = substr( str_shuffle( str_repeat( $str, $repeat ) ), 1, $length );
-
-        return $retVal;
+        // Use a CSPRNG (random_int) rather than str_shuffle()/str_repeat(),
+        // which rely on the insecure Mersenne-Twister PRNG. This function feeds
+        // remember-me tokens and salts, so predictability is a security issue.
+        return self::randomFromSet( $str, $length );
     }
 
 
@@ -163,8 +163,18 @@ class OSS_String
     */
     public static function randomFromSet( $charSet, $length = 16 )
     {
-        $repeat = ceil( ( 1 + ( $length / mb_strlen( $charSet ) ) ) );
-        return substr( str_shuffle( str_repeat( $charSet, $repeat ) ), 1, $length );
+        if( $length <= 0 || $charSet === '' )
+            return '';
+
+        // Multibyte-safe, CSPRNG-backed random selection.
+        $chars = preg_split( '//u', $charSet, -1, PREG_SPLIT_NO_EMPTY );
+        $max = count( $chars ) - 1;
+
+        $retVal = '';
+        for( $i = 0; $i < $length; $i++ )
+            $retVal .= $chars[ random_int( 0, $max ) ];
+
+        return $retVal;
     }
 
 
@@ -179,11 +189,12 @@ class OSS_String
     */
     public static function randomPassword( $length = 8 )
     {
-        $chars = "23456789abcdefghijkmnopqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        $chars = "23456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
         while( true )
         {
-            $password = substr( str_shuffle( $chars ), 0, $length );
+            // CSPRNG-backed (randomFromSet uses random_int), not str_shuffle().
+            $password = self::randomFromSet( $chars, $length );
 
             // "/[a-zA-Z0-9]/" is NOT the same!
             if( preg_match( "/[a-z]/", $password ) && preg_match( "/[A-Z]/", $password ) && preg_match( "/[0-9]/", $password ) )

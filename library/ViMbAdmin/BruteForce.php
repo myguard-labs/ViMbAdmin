@@ -31,6 +31,8 @@ class ViMbAdmin_BruteForce
     private $_lockout   = 900;
     private $_statedir  = null;
     private $_whitelist = [];
+    private $_proxyMode = 'auto';
+    private $_proxies   = [];
 
     /**
      * @param mixed $em   Unused (kept for call-site compatibility).
@@ -49,6 +51,13 @@ class ViMbAdmin_BruteForce
 
         if( isset( $opts['whitelist'] ) )
             $this->_whitelist = is_array( $opts['whitelist'] ) ? $opts['whitelist'] : [ $opts['whitelist'] ];
+
+        // Trusted-proxy policy for resolving the real client IP (see [trustedproxy]).
+        if( isset( $opts['trustedproxy']['mode'] ) )
+            $this->_proxyMode = (string) $opts['trustedproxy']['mode'];
+        if( isset( $opts['trustedproxy']['proxies'] ) )
+            $this->_proxies = is_array( $opts['trustedproxy']['proxies'] )
+                ? $opts['trustedproxy']['proxies'] : [ $opts['trustedproxy']['proxies'] ];
     }
 
     // ---- public API ----------------------------------------------------
@@ -175,9 +184,10 @@ class ViMbAdmin_BruteForce
 
     private function _ip( $request )
     {
-        // Trust REMOTE_ADDR. If you terminate TLS at a trusted proxy, map the
-        // real client IP into REMOTE_ADDR there (e.g. Angie realip), not here.
-        return isset( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : '0.0.0.0';
+        // Resolve the real client IP per the trusted-proxy policy (default
+        // 'auto': peel X-Forwarded-For only when the direct peer is a private
+        // proxy). See ViMbAdmin_Net::clientIp.
+        return ViMbAdmin_Net::clientIp( $_SERVER, $this->_proxyMode, $this->_proxies );
     }
 
     private function _isWhitelisted( $ip )

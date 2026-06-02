@@ -59,7 +59,7 @@ class McpController extends ViMbAdmin_Controller_Action
         // ---- authenticate (bearer + ip + scope) -------------------------
         try
         {
-            $auth  = new ViMbAdmin_Mcp_Auth( $this->getD2EM() );
+            $auth  = new ViMbAdmin_Mcp_Auth( $this->getD2EM(), $this->_options['trustedproxy'] ?? [] );
             $token = $auth->authenticate( $_SERVER, $this->_scopeFor( $method ) );
 
             // Destructive methods are additionally per-token rate-limited.

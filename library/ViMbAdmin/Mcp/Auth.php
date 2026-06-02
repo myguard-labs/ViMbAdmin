@@ -16,10 +16,23 @@ class ViMbAdmin_Mcp_Auth
 {
     /** @var \Doctrine\ORM\EntityManager */
     private $_em;
+    /** @var string */
+    private $_proxyMode = 'auto';
+    /** @var array */
+    private $_proxies = [];
 
-    public function __construct( $em )
+    /**
+     * @param object $em
+     * @param array  $trustedProxy  ['mode'=>'auto|off|on','proxies'=>[...]]
+     */
+    public function __construct( $em, array $trustedProxy = [] )
     {
         $this->_em = $em;
+        if( isset( $trustedProxy['mode'] ) )
+            $this->_proxyMode = (string) $trustedProxy['mode'];
+        if( isset( $trustedProxy['proxies'] ) )
+            $this->_proxies = is_array( $trustedProxy['proxies'] )
+                ? $trustedProxy['proxies'] : [ $trustedProxy['proxies'] ];
     }
 
     /**
@@ -66,12 +79,11 @@ class ViMbAdmin_Mcp_Auth
     }
 
     /**
-     * Resolve the client IP. Trusts REMOTE_ADDR -- terminate TLS at a trusted
-     * proxy and map the real client into REMOTE_ADDR there (Angie realip).
+     * Resolve the client IP per the trusted-proxy policy (default 'auto').
      */
     public function clientIp( array $server )
     {
-        return isset( $server['REMOTE_ADDR'] ) ? $server['REMOTE_ADDR'] : '0.0.0.0';
+        return ViMbAdmin_Net::clientIp( $server, $this->_proxyMode, $this->_proxies );
     }
 
     // ---- internals -----------------------------------------------------
@@ -101,44 +113,8 @@ class ViMbAdmin_Mcp_Auth
             return true;
 
         foreach( preg_split( '/[\s,]+/', $list, -1, PREG_SPLIT_NO_EMPTY ) as $entry )
-        {
-            if( strpos( $entry, '/' ) !== false )
-            {
-                if( $this->_inCidr( $ip, $entry ) )
-                    return true;
-            }
-            elseif( $ip === $entry )
-            {
+            if( ViMbAdmin_Net::ipInCidr( $ip, $entry ) )
                 return true;
-            }
-        }
         return false;
-    }
-
-    /**
-     * IPv4/IPv6 CIDR match (same approach as ViMbAdmin_BruteForce).
-     */
-    private function _inCidr( $ip, $cidr )
-    {
-        list( $subnet, $bits ) = array_pad( explode( '/', $cidr, 2 ), 2, null );
-        if( $bits === null )
-            return $ip === $subnet;
-        $bits = (int) $bits;
-
-        $ipBin     = @inet_pton( $ip );
-        $subnetBin = @inet_pton( $subnet );
-        if( $ipBin === false || $subnetBin === false || strlen( $ipBin ) !== strlen( $subnetBin ) )
-            return false;
-
-        $bytes = intdiv( $bits, 8 );
-        $rem   = $bits % 8;
-
-        if( $bytes > 0 && strncmp( $ipBin, $subnetBin, $bytes ) !== 0 )
-            return false;
-        if( $rem === 0 )
-            return true;
-
-        $mask = chr( 0xff << ( 8 - $rem ) & 0xff );
-        return ( ( $ipBin[ $bytes ] & $mask ) === ( $subnetBin[ $bytes ] & $mask ) );
     }
 }

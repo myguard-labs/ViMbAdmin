@@ -74,6 +74,8 @@ class AuthController extends ViMbAdmin_Controller_Action
         $opts = isset( $this->_options['bruteforce'] ) ? $this->_options['bruteforce'] : [];
         if( empty( $opts['statedir'] ) )
             $opts['statedir'] = APPLICATION_PATH . '/../var/bruteforce';
+        if( isset( $this->_options['trustedproxy'] ) )
+            $opts['trustedproxy'] = $this->_options['trustedproxy'];
         return new ViMbAdmin_BruteForce( $this->getD2EM(), $opts );
     }
 

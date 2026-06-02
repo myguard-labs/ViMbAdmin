@@ -562,6 +562,34 @@ bruteforce.whitelist[]  = "127.0.0.1"
 bruteforce.whitelist[]  = "::1"
 ;;; bruteforce.whitelist[] = "10.0.0.0/8"
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Trusted proxy / real client IP
+;;
+;; Decides which IP the brute-force limiter and the MCP per-token IP allowlist
+;; treat as "the client" when ViMbAdmin runs behind a reverse proxy (TLS
+;; terminator, the Docker image's edge, a load balancer).
+;;
+;;   auto : (default) use X-Forwarded-For only when the direct connection
+;;          (REMOTE_ADDR) comes from a private/loopback address -- i.e. a local
+;;          reverse proxy. Standalone (public REMOTE_ADDR) just uses REMOTE_ADDR.
+;;          Safe for the common "proxy on the same host/LAN" case with no config.
+;;   on   : trust X-Forwarded-For only when REMOTE_ADDR is one of the proxies
+;;          listed below (use this if your proxy has a public IP).
+;;   off  : ignore X-Forwarded-For entirely; always use REMOTE_ADDR.
+;;
+;; X-Forwarded-For is client-spoofable, so the real client is taken as the
+;; right-most address in the chain that is NOT a trusted proxy.
+trustedproxy.mode = "auto"
+;; For mode "on", list the proxy IPs/CIDRs allowed to set X-Forwarded-For:
+;;; trustedproxy.proxies[] = "10.0.0.0/8"
+;;; trustedproxy.proxies[] = "172.16.0.0/12"
+
+;; You can also let the web server rewrite REMOTE_ADDR itself (Angie/nginx
+;; `realip` module) -- see the realip block in contrib/angie/vimbadmin.conf.
+;; If you do that, leave trustedproxy.mode = "auto" (REMOTE_ADDR is then already
+;; the client) or "off".
+
 resources.session.save_path = APPLICATION_PATH "/../var/session"
 resources.session.use_only_cookies = true
 resources.session.remember_me_seconds = 3600

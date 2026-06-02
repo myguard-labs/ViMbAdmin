@@ -1,8 +1,11 @@
 # ViMbAdmin — modernised fork
 
+> 📖 **Full write-up, history & guided tour:**
+> **<https://deb.myguard.nl/2026/06/vimbadmin-postfix-dovecot-mailbox-admin-panel/>**
+
 *Virtual Mailbox Administration that runs on a PHP version released this decade.*
 
-[![PHP](https://img.shields.io/badge/PHP-8.1%E2%80%938.5-777bb4)]()
+[![PHP](https://img.shields.io/badge/PHP-8.4%2B-777bb4)]()
 [![Framework](https://img.shields.io/badge/ZF1--future%20%C2%B7%20Doctrine%202.20%20%C2%B7%20Smarty%205-informational)]()
 
 **ViMbAdmin** (*vim-be-admin*, and yes the editor war is intentional) is a web

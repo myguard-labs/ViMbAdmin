@@ -353,6 +353,22 @@ skipVersionCheck = 0
 skipInstallPingback = 1
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; MCP adapter (JSON-RPC at /mcp). OFF by default; opt in here.
+;;
+;; Auth is a bearer token (only its SHA-256 hash is stored, in the mcp_token
+;; table) + an optional per-token IP/CIDR allowlist + scopes. Manage tokens
+;; from the CLI:
+;;   ./bin/vimbtool.php -a mcp.cli-token-generate --name=agent1 --scope="read" [--ip="10.0.0.0/8"] [--days=365]
+;;   ./bin/vimbtool.php -a mcp.cli-token-list
+;;   ./bin/vimbtool.php -a mcp.cli-token-revoke --name=agent1
+;;
+;; ALSO restrict /mcp to known client IPs at the web server (the primary
+;; barrier) -- see contrib/angie/vimbadmin.conf. See docs/mcp-auth.md.
+
+mcp.enabled = 0
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Allow admins to dictate whether a user can use BOTH, IMAP ONLY,
 ; POP3 ONLY when creating mailboxes.

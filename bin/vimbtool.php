@@ -61,7 +61,12 @@ try
             'debug|d'       => 'Enables debug mode.',
             'copyright|c'   => 'Display copyright information.',
             'username|u=s'  => 'Action-specific: target admin username (e.g. admin.cli-reset-totp).',
-            'all'           => 'Action-specific: apply to all (e.g. admin.cli-reset-totp).'
+            'all'           => 'Action-specific: apply to all (e.g. admin.cli-reset-totp).',
+            'name=s'        => 'MCP: token label (mcp.cli-token-generate / revoke).',
+            'scope=s'       => 'MCP: token scope, e.g. "read" or "read write" (default: read).',
+            'ip=s'          => 'MCP: token IP/CIDR allowlist (space/comma separated; default: any).',
+            'days=i'        => 'MCP: token validity in days (default: no expiry).',
+            'id=i'          => 'MCP: token id (mcp.cli-token-revoke).'
         )
     );
 
@@ -131,7 +136,13 @@ if( isset( $opts->a ) )
             $front->getRequest()->setParam( 'verbose', true );
             $front->getRequest()->setParam( 'debug', true );
         }
-        
+
+        // Forward action-specific named options to the request so controllers
+        // can read them via $this->getRequest()->getParam( ... ).
+        foreach( array( 'username', 'all', 'name', 'scope', 'ip', 'days', 'id' ) as $__opt )
+            if( isset( $opts->$__opt ) )
+                $front->getRequest()->setParam( $__opt, $opts->$__opt );
+
         $front->addModuleDirectory( APPLICATION_PATH . '/modules');
 
         $application->run();

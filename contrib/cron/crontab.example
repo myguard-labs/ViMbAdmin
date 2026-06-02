@@ -1,0 +1,24 @@
+# =====================================================================
+#  ViMbAdmin filesystem maintenance  --  EXAMPLE crontab for the MAIL HOST
+# =====================================================================
+#  Install as /etc/cron.d/vimbadmin on the Dovecot/Postfix host (the box that
+#  actually stores the maildirs). These jobs do NOT belong on the web/panel
+#  host -- the panel only flags work in the DB; the mail host carries it out.
+#
+#  See the header of each script for full requirements. In short: a ViMbAdmin
+#  checkout + PHP CLI + an application.ini pointing at the SAME MariaDB as the
+#  panel, plus read/write access to the maildirs and archive.path, and the
+#  tar/bzip2/chown/rm binaries.
+#
+#  Adjust VIMBADMIN_DIR, the run-as user (here `vmail`), and paths to taste.
+# =====================================================================
+
+SHELL=/bin/sh
+MAILTO=postmaster@example.com
+VIMBADMIN_DIR=/opt/vimbadmin
+
+# Process the archive / restore / delete queue every 5 minutes.
+*/5 *  * * *   vmail   /usr/local/sbin/vimbadmin-archive.sh
+
+# Refresh maildir sizes for the panel's quota column, nightly.
+15  3  * * *   vmail   /usr/local/sbin/vimbadmin-sizes.sh

@@ -223,6 +223,34 @@ immediately, on a trusted network.
 3. Pick a real password. It's bcrypt-hashed and constant-time-compared; the
    strength is on you.
 
+## Upgrading & schema migrations
+
+Pulling a newer version of the fork may add columns, indexes or tables. Bring
+your database in line in one of two ways:
+
+```sh
+# A) let Doctrine reconcile the DB with the entity mappings (shows the SQL):
+./bin/doctrine2-cli.php orm:schema-tool:update --dump-sql      # preview
+./bin/doctrine2-cli.php orm:schema-tool:update --force         # apply
+```
+
+```sh
+# B) apply a specific hand-written migration from contrib/migrations/
+mysql -u<user> -p <database> < contrib/migrations/2026-06-mailbox-username-unique.sql
+```
+
+`contrib/migrations/` holds idempotent, targeted SQL for changes that warrant a
+note (each file documents *why* and any pre-checks). The current one adds the
+**`UNIQUE` index on `mailbox.username`** — Postfix and Dovecot query that column
+on every delivery and login, so without the index they full-scan the mailbox
+table. Fresh installs (`orm:schema-tool:create`) already include it; only DBs
+created from the older SQL dumps need the migration. Always back up first; the
+index is `UNIQUE`, so dedupe any duplicate usernames before applying:
+
+```sh
+SELECT username, COUNT(*) c FROM mailbox GROUP BY username HAVING c > 1;
+```
+
 ## Day-to-day
 
 In order, because the order matters:

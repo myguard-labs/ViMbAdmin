@@ -702,6 +702,15 @@ resources.smarty.plugins[] = APPLICATION_PATH "/../library/OSS/Smarty/functions"
 resources.smarty.debugging = 0
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; UI
+;;
+;; Hide the footer branding block (copyright / version / source links).
+;; Default (unset) shows it. The upstream authors ask that you keep their
+;; credit; set this only if you have reason to.
+;;; footer.hide = 1
+
+
 
 
 [development : production]

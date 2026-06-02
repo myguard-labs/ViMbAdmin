@@ -40,8 +40,14 @@ The short version: it runs, and it's hard to break into.
   plugin from a cloned view — which is why your forms used to render blank).
 - **Doctrine ORM 2.8 → 2.20** (latest 2.x LTS) + DBAL 3. CLI and query API
   rewritten to match.
+- **Cache layer rebuilt on Symfony Cache.** `doctrine/cache` 2.x dropped the
+  old concrete `*Cache` providers, so the metadata/query cache now wraps a
+  Symfony PSR-6 pool (`ArrayAdapter` / `ApcuAdapter` / `MemcachedAdapter`) in
+  `DoctrineProvider` — pick the backend in `application.ini`. The Docker image
+  ships **APCu** + a tuned **OPcache** for a persistent, per-request-free cache.
 
-See **[Security](#security)** below for the full list of what was hardened.
+See **[Security](#security)** below for the full list of what was hardened,
+and **[Performance](#performance)** for the caching notes.
 
 ---
 
@@ -132,8 +138,9 @@ stock upstream had **none** of the application-layer items below.
 
 ### Dependencies
 
-- On current LTS lines (doctrine/orm 2.20, dbal 3, symfony 7, smarty 5,
-  zf1-future 1.25); `composer audit` reports **no advisories**.
+- On current LTS lines (doctrine/orm 2.20, dbal 3, symfony/cache 6.4/7,
+  smarty 5, zf1-future 1.25, robthree/twofactorauth 3, bacon/bacon-qr-code 3);
+  `composer audit` reports **no advisories**.
 
 ---
 
@@ -172,7 +179,10 @@ ModSecurity plugin shipped alongside this repo.
 
 ## Quick start (from source)
 
-PHP 8.1+ with `pdo_mysql`, `mbstring`, `intl`, `gettext`, `dom`, `ctype`.
+PHP **8.4.1+** (the dependency-tree floor) with `pdo_mysql`, `mbstring`,
+`intl`, `gettext`, `dom`, `ctype`, `iconv` and `sodium` (the 2FA secrets are
+encrypted with libsodium). `apcu` is optional but recommended (see
+[Performance](#performance)).
 
 ```sh
 git clone https://github.com/eilandert/ViMbAdmin.git
@@ -259,6 +269,49 @@ If you terminate TLS at a proxy, make sure the real client IP reaches PHP as
 `REMOTE_ADDR` (e.g. Angie `realip`) or every request looks like it comes from
 the proxy.
 
+## Performance
+
+The panel is light, but two things keep it snappy:
+
+- **OPcache** — caches compiled PHP bytecode. The Docker image tunes it for an
+  immutable codebase (`opcache.validate_timestamps=0`, no stat() per include).
+- **Doctrine metadata/query cache.** Without a persistent cache Doctrine
+  re-parses the XML entity mappings on **every request**. Set a real backend in
+  `application.ini`:
+
+  ```ini
+  ; per-request only (default; fine for dev)
+  resources.doctrine2cache.type = "ArrayCache"
+  ; persistent, in-process shared memory (recommended single-host) -- needs ext-apcu
+  resources.doctrine2cache.type = "ApcuCache"
+  ; shared across hosts -- needs ext-memcached
+  ;resources.doctrine2cache.type = "MemcachedCache"
+  ;resources.doctrine2cache.memcache.servers.0.host = "127.0.0.1"
+  ```
+
+  The Docker image defaults to **`ApcuCache`**. For a single container APCu
+  beats Redis/Memcache (in-process, no socket); reach for Memcached only when
+  you run multiple replicas that must share a cache.
+
+## Archiving, quotas & disk deletion
+
+Three features touch the **mail filesystem** (the maildirs), so they run shell
+tools (`tar`/`bzip2`/`rm`) and must execute **where the mail lives — the
+Dovecot host — not the web panel**:
+
+- **Archive** — flagging a mailbox in the UI queues a DB row and purges it from
+  the live tables; the actual tarball is produced by the
+  `archive.cli-*-pendings` cron.
+- **Maildir sizes** (`mailbox.cli-get-sizes`) — fills the panel's quota column.
+- **On-disk deletion** (`mailbox_deletion_fs_enabled`, default off).
+
+Example mail-host scripts + crontab, with their requirements documented inline,
+are in [`contrib/cron/`](contrib/cron/) (`vimbadmin-archive.sh`,
+`vimbadmin-sizes.sh`, `crontab.example`). They need a checkout + PHP CLI + an
+`application.ini` pointing at the **same database** as the panel, plus read
+access to the maildirs. Without them, the Archive button just queues rows that
+are never tarred — by design; ignore it if you don't archive.
+
 ## What it is *not*
 
 Not a mail-server appliance. It manages the user database; it does not
@@ -274,7 +327,7 @@ application/    ZF1 controllers, entities, views (Smarty)
 library/        OSS + ViMbAdmin framework, Doctrine, auth
 public/         web docroot (index.php front controller)
 bin/            CLI tools (doctrine2-cli.php, vimbtool.php, crons)
-contrib/        hardened deploy configs: php-fpm pool, Angie vhost, fastcgi
+contrib/        deploy configs: php-fpm pool, Angie vhost, mail-host crons, theming
 snuffleupagus/  vimbadmin-strict.list (validated SP ruleset)
 doctrine2/xml/  Doctrine XML mappings (the schema source of truth)
 ```

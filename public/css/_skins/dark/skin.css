@@ -172,5 +172,83 @@ table.dataTable thead td,
 .btn-danger  [class^="icon-"],
 .navbar-inverse [class^="icon-"] { filter: none; }
 
+/* ---- form action bars (Bootstrap 2 .form-actions = #f5f5f5) -------- */
+.form-actions {
+    background-color: var(--vimb-surface);
+    border-top-color: var(--vimb-border);
+}
+
+/* ---- plugin tabs (mailbox/domain add-edit) ------------------------ */
+.nav-tabs { border-bottom-color: var(--vimb-border); }
+.nav-tabs > li > a { color: var(--vimb-muted); }
+.nav-tabs > li > a:hover {
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border) var(--vimb-border) var(--vimb-border);
+}
+.nav-tabs > .active > a,
+.nav-tabs > .active > a:hover,
+.nav-tabs > .active > a:focus {
+    color: var(--vimb-text);
+    background: var(--vimb-surface);
+    border-color: var(--vimb-border) var(--vimb-border) transparent;
+}
+.tab-content { background: transparent; }
+
+/* ---- dropdowns / typeahead autocomplete --------------------------- */
+.dropdown-menu, .typeahead {
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border);
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+}
+.dropdown-menu > li > a { color: var(--vimb-text); }
+.dropdown-menu > li > a:hover,
+.dropdown-menu > .active > a {
+    background: var(--vimb-accent);
+    color: #1a1300;
+}
+.dropdown-menu .divider { background: var(--vimb-border); border-bottom-color: var(--vimb-border); }
+
+/* ---- popovers (the "?" help bubbles) + tooltips ------------------- */
+.popover {
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border);
+    color: var(--vimb-text);
+}
+.popover-title {
+    background: var(--vimb-surface);
+    border-bottom-color: var(--vimb-border);
+    color: var(--vimb-text);
+}
+.popover.top .arrow:after    { border-top-color: var(--vimb-surface-2); }
+.popover.bottom .arrow:after { border-bottom-color: var(--vimb-surface-2); }
+.popover.left .arrow:after   { border-left-color: var(--vimb-surface-2); }
+.popover.right .arrow:after  { border-right-color: var(--vimb-surface-2); }
+.tooltip-inner { background: var(--vimb-surface-2); color: var(--vimb-text); }
+
+/* ---- modals (if any are used outside colorbox) ------------------- */
+.modal, .modal-body { background: var(--vimb-surface); color: var(--vimb-text); }
+.modal-header, .modal-footer {
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border);
+}
+
+/* ---- pagination / pager ------------------------------------------ */
+.pagination ul > li > a,
+.pagination ul > li > span,
+.pager li > a, .pager li > span {
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border);
+    color: var(--vimb-text);
+}
+.pagination ul > li > a:hover,
+.pager li > a:hover { background: var(--vimb-border); }
+
+/* ---- breadcrumb / hero-unit -------------------------------------- */
+.breadcrumb, .hero-unit {
+    background: var(--vimb-surface);
+    color: var(--vimb-text);
+}
+.breadcrumb .divider { color: var(--vimb-muted); }
+
 /* ---- footer ------------------------------------------------------- */
 footer, .footer { color: var(--vimb-muted); border-top-color: var(--vimb-border); }

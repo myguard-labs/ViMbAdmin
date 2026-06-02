@@ -5,9 +5,10 @@
         name="{if $element->getName() != ''}{$element->getName()}{else}{$element->getId()}{/if}"
         {if $element->getAttrib('target')}target="{$element->getAttrib('target')}"{/if}
         class="form-horizontal">
+        {$element->csrf nofilter}
 
     <div style="position: fixed; z-index: 1;">
-    {$element->type}
+    {$element->type nofilter}
     </div>
     <div class="control-group">
         <label class="control-label optional">&nbsp;</label>
@@ -15,7 +16,7 @@
         </div>
     </div>
     <div id="other_email" {if $element->type->getValue() != 'other'}style="display: none"{/if}>
-        {$element->email}
+        {$element->email nofilter}
     </div>
 
 </form>

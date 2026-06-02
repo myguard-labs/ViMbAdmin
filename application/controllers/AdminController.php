@@ -281,6 +281,7 @@ class AdminController extends ViMbAdmin_Controller_Action
      */
     public function purgeAction()
     {
+        $this->_assertCsrf();
         if( !$this->getTargetAdmin() )
         {
             $this->addMessage( 'Invalid or non-existent admin.', OSS_Message::ERROR );

@@ -8,7 +8,7 @@
     	    	{/if}
 	    	</label>
     	    <div id="div-controls-{$ielement->getId()}" class="controls">
-    		    {$ielement}
+    		    {$ielement nofilter}
     		    {if isset( $ihint )}
         		    <span id="{$ielement->getId()}_hint" rel="popover" class="label"
         		    	data-content="{$ihint}">?</span>

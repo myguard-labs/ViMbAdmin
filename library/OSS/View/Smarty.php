@@ -66,6 +66,17 @@ class OSS_View_Smarty extends Zend_View_Abstract
      */
     protected $_isBeingCloned = false;
 
+    /**
+     * Custom Smarty plugin directories added via the constructor.
+     *
+     * Tracked separately because Smarty 5's getPluginsDir() returns an empty
+     * array after the BC plugin loader has run, which would otherwise make
+     * __clone() drop all custom function/modifier plugins.
+     *
+     * @var array
+     */
+    protected $_pluginsDirs = [];
+
 
     /**
      * Constructor
@@ -77,6 +88,25 @@ class OSS_View_Smarty extends Zend_View_Abstract
     public function __construct( $tmplPath = null, $extraParams = array() )
     {
         $this->_smarty = new \Smarty\Smarty();
+
+        // XSS defence: HTML-escape every {$var} by default. Output that is
+        // intentionally raw HTML (rendered Zend_Form elements, pre-built
+        // markup, URLs) is explicitly marked with the `nofilter` flag in the
+        // templates.
+        $this->_smarty->setEscapeHtml( true );
+
+        // Smarty 5 no longer allows bare PHP functions inside template
+        // expressions (e.g. {if substr($x,0,3) eq '...'}). ViMbAdmin's
+        // templates use a small set of them; register each as a modifier so the
+        // existing templates compile unchanged.
+        // (substr/strpos/strstr/sizeof are already provided as modifier.*.php
+        // plugins, so only the remaining ones are registered here. Guard with
+        // getRegisteredPlugin to stay idempotent.)
+        foreach( [ 'strlen', 'count', 'in_array', 'is_array' ] as $fn )
+        {
+            if( function_exists( $fn ) && !$this->_smarty->getRegisteredPlugin( 'modifier', $fn ) )
+                $this->_smarty->registerPlugin( 'modifier', $fn, $fn, true );
+        }
 
         if( null !== $tmplPath )
             $this->setScriptPath( $tmplPath );
@@ -95,7 +125,14 @@ class OSS_View_Smarty extends Zend_View_Abstract
                 case 'compile_dir':  $this->_smarty->setCompileDir( $value );  break;
                 case 'cache_dir':    $this->_smarty->setCacheDir( $value );    break;
                 case 'config_dir':   $this->_smarty->setConfigDir( $value );   break;
-                case 'plugins_dir':  $this->_smarty->addPluginsDir( $value );  break;
+                case 'plugins_dir':
+                    // Track the plugin dirs ourselves: Smarty 5's BC layer
+                    // loads them immediately but getPluginsDir() then returns []
+                    // (so __clone() cannot recover them from the engine).
+                    foreach( (array) $value as $pd )
+                        $this->_pluginsDirs[] = $pd;
+                    $this->_smarty->addPluginsDir( $value );
+                    break;
                 default:             $this->_smarty->$key = $value;            break;
             }
         }
@@ -116,7 +153,8 @@ class OSS_View_Smarty extends Zend_View_Abstract
         $template_dir = $this->_smarty->getTemplateDir();
         $compile_dir = $this->_smarty->getCompileDir();
         $config_dir = $this->_smarty->getConfigDir();
-        $plugins_dir = $this->_smarty->getPluginsDir();
+        // Use our tracked list, not getPluginsDir() (returns [] under Smarty 5).
+        $plugins_dir = $this->_pluginsDirs;
 
         $this->__construct();
 
@@ -124,7 +162,12 @@ class OSS_View_Smarty extends Zend_View_Abstract
         $this->_smarty->setTemplateDir( $template_dir );
         $this->_smarty->setCompileDir( $compile_dir );
         $this->_smarty->setConfigDir( $config_dir );
-        $this->_smarty->setPluginsDir( $plugins_dir );
+
+        // Re-register the custom plugin dirs (genUrl, substr, etc.) so cloned
+        // views -- e.g. the one Zend_View_Helper_Partial uses to render form
+        // ViewScript decorators -- still resolve our function/modifier plugins.
+        foreach( $plugins_dir as $pd )
+            $this->_smarty->addPluginsDir( $pd );
     }
 
 

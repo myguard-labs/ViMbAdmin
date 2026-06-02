@@ -62,11 +62,39 @@ class ViMbAdmin_Form extends Twitter_Form
         
         $this->addElementPrefixPath( 'OSS_Filter',   'OSS/Filter/',   'filter' );
         $this->addElementPrefixPath( 'OSS_Validate', 'OSS/Validate/', 'validate' );
-                                                                                                                                
+
         if( method_exists( $this, 'initialiseTraits' ) )
             $this->initialiseTraits( $options );
-                                                                                                                                                            
+
         parent::__construct( $options );
+
+        // CSRF protection: every ViMbAdmin form carries a per-session hash
+        // token. Zend_Form::isValid() validates it automatically on POST, so
+        // controllers need no extra code. The matching {$element->csrf} must be
+        // rendered inside each form's ViewScript (see application/views/*/form).
+        $this->addCsrfProtection();
+    }
+
+    /**
+     * Add a Zend_Form_Element_Hash ("csrf") to the form for CSRF protection.
+     *
+     * Idempotent and decorator-light so it renders cleanly inside the
+     * ViewScript form templates (just a hidden <input>).
+     *
+     * @return void
+     */
+    public function addCsrfProtection()
+    {
+        if( $this->getElement( 'csrf' ) !== null )
+            return;
+
+        $hash = new Zend_Form_Element_Hash( 'csrf', [
+            'salt'    => 'vimbadmin_csrf',
+            'timeout' => 3600,
+        ] );
+        // Render as a bare hidden input (no label / wrapper divs).
+        $hash->setDecorators( [ 'ViewHelper' ] );
+        $this->addElement( $hash );
     }
 
     /**

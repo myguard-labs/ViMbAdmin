@@ -7,6 +7,7 @@
           name="{if $element->getName() != ''}{$element->getName()}{else}{$element->getId()}{/if}"
           {if $element->getAttrib('target')}target="{$element->getAttrib('target')}"{/if}
           class="form-horizontal">
+        {$element->csrf nofilter}
 
           <div class="tabbable">
           
@@ -27,12 +28,12 @@
                     	    	</label>
                         	    <div id="div-controls-{$element->local_part->getId()}" class="controls">
                         		    <div class="input-append btn-group" style="float: left;">
-                        		        {$element->local_part}
+                        		        {$element->local_part nofilter}
                         		        {if !isset( $domain ) || !$domain}
                         		            <span class="btn">@</span>
-                        		            {$element->domain}
+                        		            {$element->domain nofilter}
                 		                {else}
-                		                    <div style="display: none;">{$element->domain}</div>
+                		                    <div style="display: none;">{$element->domain nofilter}</div>
                 		                    <span class="add-on">@{$domain->getDomain()}</span>
                 		                {/if}
                         		    </div>
@@ -85,7 +86,7 @@
                 	    	</label>
                     	    <div id="div-controls-{$element->password->getId()}" class="controls">
                     		    <div class="input-append">
-                    		        {$element->password}
+                    		        {$element->password nofilter}
                     		        {if $element->password->getAttrib('disabled') != 'disabled'}
                         		        <span id="password_rand" onclick="randPasword( 12, 'password' );" title="Random Password" class="btn add-on" style="margin-left: -5px;">
                                             <i class="icon-refresh"></i>
@@ -155,8 +156,8 @@
        
                 {* any plugin elements? *}
                 {foreach $element->getSubForms() as $name => $sf}
-                    {if substr( $name, 0, 9 ) eq 'pluginsf_'}
-                        {$sf}
+                    {if $name|substr:0:9 eq 'pluginsf_'}
+                        {$sf nofilter}
                     {/if}
                 {/foreach}
         

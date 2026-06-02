@@ -78,8 +78,8 @@
                             {if isset( $action.menu ) }
                                 {assign var="action_list_menu" value=$action}
                             {else}
-                                <{$action.tagName} {foreach $action as $attrib => $value}{if !in_array( $attrib, [ "tagName", "child"] )}{$attrib}="{$value|replace:'%id%':$oid}" {/if}{/foreach}>
-                                {if !is_array( $action.child ) }
+                                <{$action.tagName} {foreach $action as $attrib => $value}{if !$attrib|in_array:[ "tagName", "child"]}{$attrib}="{$value|replace:'%id%':$oid}" {/if}{/foreach}>
+                                {if !$action.child|is_array }
                                     {$action.child}
                                 {else}
                                     <{$action.child.tagName} {foreach $action.child as $attrib => $value}{if $attrib != "tagName"}{$attrib}="{$value}" {/if}{/foreach} {if $action.child.tagName != "img"}></{$action.child.tagName}>{else}/>{/if}
@@ -100,13 +100,13 @@
                     <a class="btn btn-mini have-tooltip" id="archive_{$mbox.id}" title="Archive" href="{genUrl controller='archive' action='add' mid=$mbox.id}">
                         <i class="icon-inbox"></i>
                     </a>
-                    <a class="btn btn-mini have-tooltip" id="purge_{$mbox.id}" title="Purge" href="{genUrl controller='mailbox' action='purge' mid=$mbox.id}">
+                    <a class="btn btn-mini have-tooltip" id="purge_{$mbox.id}" title="Purge" href="{genUrl controller='mailbox' action='purge' mid=$mbox.id csrf=$csrfToken}">
                         <i class="icon-trash"></i>
                     </a>
                     {if isset( $action_list_menu)}
                         {assign var="action" value=$action_list_menu}
-                        <{$action.tagName} {foreach $action as $attrib => $value}{if !in_array( $attrib, [ "tagName", "child", "menu" ] )}{$attrib}="{$value|replace:'%id%':$oid}" {/if}{/foreach}>
-                        {if !is_array( $action.child ) }
+                        <{$action.tagName} {foreach $action as $attrib => $value}{if !$attrib|in_array:[ "tagName", "child", "menu" ]}{$attrib}="{$value|replace:'%id%':$oid}" {/if}{/foreach}>
+                        {if !$action.child|is_array }
                             {$action.child}
                         {else}
                             <{$action.child.tagName} {foreach $action.child as $attrib => $value}{if $attrib != "tagName"}{$attrib}="{$value}" {/if}{/foreach} {if $action.child.tagName != "img"}></{$action.child.tagName}>{else}/>{/if}

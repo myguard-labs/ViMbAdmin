@@ -6,9 +6,10 @@
       name="{if $element->getName() != ''}{$element->getName()}{else}{$element->getId()}{/if}"
       {if $element->getAttrib('target')}target="{$element->getAttrib('target')}"{/if}
       class="form-horizontal">
+        {$element->csrf nofilter}
 
-    {$element->username}
-    {$element->password}
+    {$element->username nofilter}
+    {$element->password nofilter}
 
 
     <div class="form-actions">

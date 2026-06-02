@@ -7,8 +7,9 @@
           name="{if $element->getName() != ''}{$element->getName()}{else}{$element->getId()}{/if}"
           {if $element->getAttrib('target')}target="{$element->getAttrib('target')}"{/if}
           class="form-horizontal">
+        {$element->csrf nofilter}
 
-        {$element->domain}
+        {$element->domain nofilter}
 
         <fieldset class="form-actions">
             <a class="btn" href="{genUrl controller='admin' action='domains' aid=$targetAdmin->getId()}">Cancel</a>

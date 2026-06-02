@@ -35,18 +35,18 @@
             <td>{$archive.domain}</td>
             <td>
                 <div class="btn-group">
-                    {if in_array( $archive.status, $allowCancel )}
-                        <a class="btn btn-mini have-tooltip" id="cancel-archive-{$archive.id}" title="Cancel pending" href="{genUrl controller='archive' action='cancel' arid=$archive.id}">
+                    {if $archive.status|in_array:$allowCancel}
+                        <a class="btn btn-mini have-tooltip" id="cancel-archive-{$archive.id}" title="Cancel pending" href="{genUrl controller='archive' action='cancel' arid=$archive.id csrf=$csrfToken}">
                             <i class="icon-remove"></i>
                         </a>
                     {/if}
-                    {if in_array( $archive.status == "ARCHIVED", $allowRestore )}
-                        <a class="btn btn-mini have-tooltip" id="restore-archive-{$archive.id}" title="Restore" href="{genUrl controller='archive' action='restore' arid=$archive.id}">
+                    {if $archive.status == "ARCHIVED"|in_array:$allowRestore}
+                        <a class="btn btn-mini have-tooltip" id="restore-archive-{$archive.id}" title="Restore" href="{genUrl controller='archive' action='restore' arid=$archive.id csrf=$csrfToken}">
                             <i class="icon-retweet"></i>
                         </a>
                     {/if}
-                    {if in_array( $archive.status, $allowDelete )}
-                        <a class="btn btn-mini have-tooltip" id="delete-archive-{$archive.id}" title="Delete archive" href="{genUrl controller='archive' action='delete' arid=$archive.id}">
+                    {if $archive.status|in_array:$allowDelete}
+                        <a class="btn btn-mini have-tooltip" id="delete-archive-{$archive.id}" title="Delete archive" href="{genUrl controller='archive' action='delete' arid=$archive.id csrf=$csrfToken}">
                             <i class="icon-trash"></i>
                         </a>
                     {/if}

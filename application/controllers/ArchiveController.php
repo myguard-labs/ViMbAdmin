@@ -158,6 +158,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
      */
     public function cancelAction()
     {
+        $this->_assertCsrf();
         if( $this->getArchive()->getStatus() == \Entities\Archive::STATUS_PENDING_ARCHIVE )
         {
             $result = $this->_archiveStateChange( $this->getArchive(), \Entities\Archive::STATUS_ARCHIVED, \Entities\Archive::STATUS_PENDING_ARCHIVE );
@@ -238,6 +239,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
      */
     public function deleteAction()
     {
+        $this->_assertCsrf();
         if( $this->getArchive()->getStatus() == \Entities\Archive::STATUS_PENDING_ARCHIVE )
         {
             $result = $this->_archiveStateChange( $this->getArchive(), \Entities\Archive::STATUS_PENDING_DELETE, \Entities\Archive::STATUS_PENDING_ARCHIVE );
@@ -267,6 +269,7 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
      */
     public function restoreAction()
     {
+        $this->_assertCsrf();
         if( $this->getArchive()->getStatus() == \Entities\Archive::STATUS_ARCHIVED )
         {
             $result = $this->_archiveStateChange( $this->getArchive(), \Entities\Archive::STATUS_PENDING_RESTORE, \Entities\Archive::STATUS_ARCHIVED );

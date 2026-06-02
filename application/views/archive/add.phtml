@@ -18,7 +18,7 @@
                 <th colspan="2" class="center">Aliases</th>
             </tr>
         </thead>
-    {if count( $aliases ) > 0 }
+    {if $aliases|count > 0 }
             <tr>
                 <td class="bold">Address</td>
                 <td class="bold">Goto</td>
@@ -44,7 +44,7 @@
                 <th colspan="2" class="center">In aliases</th>
             </tr>
         </thead>
-    {if count( $inAliases ) > 0 }
+    {if $inAliases|count > 0 }
             <tr>
                 <td class="bold">Address</td>
                 <td class="bold">Goto</td>
@@ -53,7 +53,7 @@
             <tr >
                 <td>{$alias->getAddress()}</td>
                 <td>
-                    <div id="alias-goto-{$alias->getId()}" {if strlen( $alias->getGoto() ) > 50 } class="have-tooltip-long" title="{$alias->getGoto()|regex_replace:"/[,]/":", "}"{/if}>
+                    <div id="alias-goto-{$alias->getId()}" {if $alias->getGoto()|strlen > 50 } class="have-tooltip-long" title="{$alias->getGoto()|regex_replace:"/[,]/":", "}"{/if}>
                         {$alias->getGoto()|shorten:50}
                     </div>
                 </td>

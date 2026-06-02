@@ -12,7 +12,7 @@
     		    {/if}
 	    	</label>
     	    <div class="controls">
-    		    {$ielement}
+    		    {$ielement nofilter}
 	        	{if $ielement->getMessages()}
 					<script type="text/javascript">
 						$( '#{$ielement->getId()}' ).addClass( 'error' );

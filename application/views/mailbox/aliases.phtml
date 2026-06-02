@@ -41,7 +41,7 @@
             <tr id="alias_{$alias->getId()}">
                 <td>{$alias->getAddress()}</td>
                 <td >
-                    <div id="alias-goto-{$alias->getId()}" {if strlen( $alias->getGoto() ) > 50}class="have-tooltip" title="{$alias->getGoto()|regex_replace:"/[,]/":", "}"{/if}>
+                    <div id="alias-goto-{$alias->getId()}" {if $alias->getGoto()|strlen > 50}class="have-tooltip" title="{$alias->getGoto()|regex_replace:"/[,]/":", "}"{/if}>
                         {$alias->getGoto()|shorten:50}
                     </div>
                 </td>

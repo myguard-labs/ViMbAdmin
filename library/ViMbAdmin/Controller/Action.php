@@ -128,6 +128,51 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
 
             if( ( $arid = $this->getParam( 'arid', false ) ) )
                 $this->_archive = $this->loadArchive( $arid );
+
+            // Expose the per-session CSRF token to all views so that
+            // state-changing GET links (delete/purge/cancel/toggle) can carry
+            // it as ?csrf=... and be validated by _assertCsrf().
+            $this->view->csrfToken = $this->_getCsrfToken();
+        }
+    }
+
+
+    /**
+     * Get (creating on first use) the per-session CSRF token used to guard
+     * link-based (GET) state-changing actions.
+     *
+     * @return string
+     */
+    protected function _getCsrfToken()
+    {
+        $ns = $this->getSessionNamespace();
+
+        if( !isset( $ns->csrfToken ) || !$ns->csrfToken )
+            $ns->csrfToken = OSS_String::random( 40, true, true, true, '', '' );
+
+        return $ns->csrfToken;
+    }
+
+
+    /**
+     * Assert that the request carries a valid CSRF token (?csrf=...) matching
+     * the session token. Aborts with a 403 on mismatch.
+     *
+     * Call at the top of every link-triggered destructive action.
+     *
+     * @return void
+     */
+    protected function _assertCsrf()
+    {
+        $given = (string) $this->getParam( 'csrf', '' );
+
+        if( $given === '' || !hash_equals( $this->_getCsrfToken(), $given ) )
+        {
+            $this->getResponse()->setHttpResponseCode( 403 );
+            $this->addMessage( _( 'Invalid or missing security token. Please retry from the list page.' ), OSS_Message::ERROR );
+
+            // Bounce back to a safe listing rather than performing the action.
+            $this->redirect( $this->getRequest()->getControllerName() . '/list' );
         }
     }
 

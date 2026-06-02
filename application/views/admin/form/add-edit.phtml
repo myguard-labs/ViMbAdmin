@@ -7,6 +7,7 @@
       name="{if $element->getName() != ''}{$element->getName()}{else}{$element->getId()}{/if}"
       {if $element->getAttrib('target')}target="{$element->getAttrib('target')}"{/if}
       class="form-horizontal">
+        {$element->csrf nofilter}
 
 {if isset( $element->salt )}
     {include file='form/element-input.phtml' ielement=$element->salt}
@@ -21,7 +22,7 @@
 	    	</label>
     	    <div id="div-controls-{$element->password->getId()}" class="controls">
     		    <div class="input-append">
-    		        {$element->password}
+    		        {$element->password nofilter}
         		        <span id="password_rand" onclick="randPasword( 12, 'password' );" title="Random Password" style="margin-left: -5px;" class="btn add-on" >
                             <i class="icon-refresh"></i>
                         </span>

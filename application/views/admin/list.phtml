@@ -61,7 +61,7 @@
                             <a class="btn btn-mini have-tooltip {if $admin->isSuper()}hide{/if}" id="admin_domains_{$admin->getId()}" title="List Domains" href="{genUrl controller='admin' action='domains' aid=$admin->getId()}">
                                 <i class="icon-screenshot"></i>
                             </a>
-                            <a class="btn btn-mini have-tooltip" id="purge-admin-{$admin->getId()}" title="Purge"  href="{genUrl controller='admin' action='purge' aid=$admin->getId()}" ref="{$admin->getUsername()}">
+                            <a class="btn btn-mini have-tooltip" id="purge-admin-{$admin->getId()}" title="Purge"  href="{genUrl controller='admin' action='purge' aid=$admin->getId() csrf=$csrfToken}" ref="{$admin->getUsername()}">
                                 <i class="icon-trash"></i>
                             </a>
                         {/if}

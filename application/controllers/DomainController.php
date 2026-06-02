@@ -331,6 +331,7 @@ class DomainController extends ViMbAdmin_Controller_PluginAction
      */
     public function purgeAction()
     {
+        $this->_assertCsrf();
         $this->authorise( true );
         $this->notify( 'domain', 'purge', 'preRemove', $this );
         $this->getD2EM()->getRepository( '\\Entities\\Domain' )->purge( $this->getDomain() );

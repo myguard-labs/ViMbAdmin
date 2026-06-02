@@ -432,6 +432,7 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
      */
     public function purgeAction()
     {
+        $this->_assertCsrf();
         if( !$this->getMailbox() )
             return $this->forward( 'list' );
 
@@ -495,6 +496,7 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
      */
     public function deleteAliasAction()
     {
+        $this->_assertCsrf();
         if( $this->getMailbox()->getUsername() == $this->getAlias()->getGoto() )
         {
             $this->getD2EM()->remove( $this->getAlias() );

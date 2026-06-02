@@ -7,6 +7,7 @@
           name="{if $element->getName() != ''}{$element->getName()}{else}{$element->getId()}{/if}"
           {if $element->getAttrib('target')}target="{$element->getAttrib('target')}"{/if}
           class="form-horizontal">
+        {$element->csrf nofilter}
 
         <div class="tabbable">
 
@@ -19,16 +20,16 @@
                 <div class="tab-pane active row-fluid" id="tab-main">
 
                     <div class="span6">
-                        {$element->domain}
-                        {$element->description}
-                        {$element->backupmx}
-                        {$element->active}
+                        {$element->domain nofilter}
+                        {$element->description nofilter}
+                        {$element->backupmx nofilter}
+                        {$element->active nofilter}
                         <br/>
                     </div>
                     <div class="span6">
                         <div id="advanced_options" class="dontdisplay">
-                            {$element->max_aliases}
-                            {$element->max_mailboxes}
+                            {$element->max_aliases nofilter}
+                            {$element->max_mailboxes nofilter}
                             {* $element->max_quota *}
                             {* $element->quota *}
                             
@@ -78,14 +79,14 @@
                                 </div>
                             </div>
                             
-                            {$element->transport}
+                            {$element->transport nofilter}
                         </div>
                     </div>
                 </div>
                 {* any plugin elements? *}
                 {foreach $element->getSubForms() as $name => $sf}
-                    {if substr( $name, 0, 9 ) eq 'pluginsf_'}
-                        {$sf}
+                    {if $name|substr:0:9 eq 'pluginsf_'}
+                        {$sf nofilter}
                     {/if}
                 {/foreach}
             </div>

@@ -37,7 +37,7 @@
             <td>{$log.action}</td>
             <td>
                 {*
-                    <div id="log-message-{$log.id}" {if strlen( $log.data ) > 40 } title="{$log.data|regex_replace:"/[\r\t\n]/":" "}" class="have-tooltip-long"{/if}>
+                    <div id="log-message-{$log.id}" {if $log.data|strlen > 40 } title="{$log.data|regex_replace:"/[\r\t\n]/":" "}" class="have-tooltip-long"{/if}>
                         {$log.data|shorten:40}
                     </div>
                 *}

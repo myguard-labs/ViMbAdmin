@@ -339,6 +339,7 @@ class AliasController extends ViMbAdmin_Controller_PluginAction
      */
     public function deleteAction()
     {
+        $this->_assertCsrf();
         if( !$this->getAlias() )
             print 'ko';
 

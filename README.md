@@ -41,33 +41,99 @@ The short version: it runs, and it's hard to break into.
 - **Doctrine ORM 2.8 → 2.20** (latest 2.x LTS) + DBAL 3. CLI and query API
   rewritten to match.
 
-**Hardened, in layers**
+See **[Security](#security)** below for the full list of what was hardened.
 
-- **Two-factor authentication (TOTP)** — opt-in per admin, secret encrypted
-  at rest (libsodium), QR enrolment, one-time backup codes, and lost-device
-  reset from the CLI or `application.ini`. See [Two-factor](#two-factor-authentication).
-- **Brute-force protection** — per-source-IP attempt lockout with an IP/CIDR
-  allowlist, configured in `application.ini`.
-- **CSRF** on every form (per-session token in the base form class) *and* on
-  every destructive GET link. Forge a request, get a 403.
-- **XSS** auto-escaping on by default in Smarty; genuine HTML output is
-  explicitly `nofilter`. Stored `<script>` payloads render as inert text.
-- **Constant-time** password comparison; CSPRNG for tokens and salts;
-  session-id regeneration on login (no session fixation).
-- **[Snuffleupagus](snuffleupagus/vimbadmin-strict.list)** ruleset —
-  code-derived, bans every dangerous function the app doesn't use.
-- **Hardened PHP-FPM pool + Angie/nginx vhost** with BREACH mitigation (no
-  compression of secret-bearing dynamic responses), strict CSP, security
-  headers and a rate-limited login. See [`contrib/`](contrib/).
-- **OWASP CRS / ModSecurity plugin** (positive security: allow what
-  ViMbAdmin uses, block everything else) — separate repo:
+---
+
+## Security
+
+Everything this fork does to keep the panel hard to break into, by layer. The
+stock upstream had **none** of the application-layer items below.
+
+### Authentication
+
+- **Two-factor authentication (TOTP).** Opt-in per admin at `/admin/two-factor`.
+  - Secret **encrypted at rest** with libsodium (`crypto_secretbox`), keyed off
+    the app `securitysalt` — a DB read alone yields no usable secrets.
+  - QR-code enrolment + manual secret entry; **one-time backup codes**
+    (bcrypt-hashed, single-use).
+  - **Replay protection** — a TOTP time-slice is accepted once; a captured code
+    can't be replayed inside its validity window.
+  - **Super-admin management** of other accounts: provision (show secret/QR to
+    hand over), regenerate, disable, and **force enrolment at next login**.
+  - **Lost-device recovery** without DB surgery: backup codes, a CLI reset
+    (`vimbtool.php -a admin.cli-reset-totp --username=…|--all`), or
+    `application.ini` (`twofactor.force_disable`).
+- **Passwords.** Admin passwords bcrypt-hashed and compared in **constant time**
+  (`hash_equals`). Mailbox passwords hashed in a Dovecot-accepted scheme
+  (`doveadm pw`).
+- **Session-fixation defence** — the session id is regenerated on every
+  successful login (and again after the 2FA step).
+- **Brute-force protection** — per-source-IP attempt counter with lockout
+  window; a fully successful login clears it. IP/CIDR **allowlist** and all
+  thresholds configurable in `application.ini` (`[bruteforce]`). 429 when locked.
+- **CSRF** — a per-session token on **every form** (auto-validated by
+  `Zend_Form::isValid()`) *and* on every destructive GET link
+  (purge/delete/cancel/restore); forged request → 403.
+
+### Output / input handling
+
+- **XSS auto-escaping** — Smarty `setEscapeHtml(true)` globally; only
+  deliberately-HTML output is `nofilter`. A stored `<script>` payload renders as
+  inert text.
+- **SQL injection** — the app uses Doctrine ORM with parameterised queries; the
+  four unreferenced raw-SQL "OSS API" integration classes (one with an actual
+  injection) were deleted.
+- **Command injection** — every shell-out (Dovecot `doveadm`, archive
+  tar/bzip2/du) is `escapeshellarg`'d.
+- **Deserialisation** — `unserialize()` of archive blobs is restricted with
+  `['allowed_classes' => false]`.
+- **CSPRNG** — tokens, salts and backup codes use `random_int()` (the old
+  `str_shuffle`/`mt_rand` was replaced).
+
+### Runtime (Snuffleupagus)
+
+- A **code-derived [`vimbadmin-strict.list`](snuffleupagus/vimbadmin-strict.list)**
+  ruleset: bans every dangerous function the app doesn't use, allow-scopes the
+  `exec` it does, blocks RFI/LFI wrappers, eval/`base64_decode` webshell pipes,
+  mail-header injection, env hijacking, world-writable chmod, writing
+  PHP-loadable files, and insecure cURL/SSRF. Logs/encrypts cookies as available.
+  A unique `secret_key` must be set per deployment.
+
+### Edge / deployment (`contrib/`)
+
+- **Hardened PHP-FPM pool** (`contrib/php-fpm/vimbadmin.conf`) —
+  `open_basedir`, empty native `disable_functions` (Snuffleupagus owns the
+  policy), strict session-cookie flags, `security.limit_extensions=.php`,
+  resource limits.
+- **Hardened Angie/nginx vhost** (`contrib/angie/vimbadmin.conf`) — a **native
+  positive-security gate**: only known HTTP methods, the real route map
+  (controllers + ZF1 param URLs), and the app's known argument names reach PHP;
+  scanner/empty user-agents are dropped. Plus TLS, strict **CSP** + security
+  headers, a **rate-limited login**, internal-path/dotfile denies, and
+  **BREACH mitigation** (no compression of secret-bearing dynamic responses).
+- **OWASP CRS / ModSecurity plugin** *(optional, belt-and-braces)* — payload
+  signature scanning on top of the vhost, only where you already run
+  libmodsecurity:
   [vimbadmin-crs-plugin](https://github.com/eilandert/vimbadmin-crs-plugin).
+- **Docker image** — read-only rootfs, root-owned read-only codebase,
+  per-deployment secrets generated at first run, all caps dropped bar the few
+  needed, docs/repos/setuid stripped. See the
+  [image README](https://github.com/eilandert/dockerized/tree/master/src/vimbadmin).
 
-**Removed**
+### Attack surface removed
 
-- Dead Doctrine 1 code, an unused PDF chain, and four unreferenced "OSS API"
-  integration classes — one of which carried a SQL-injection. ~1,600 lines of
-  attack surface, gone.
+- Dead Doctrine 1 code, an unused PDF chain, the Yubico/Invoice/GeoIP/Csv/Phone/
+  Acl/Curl/Crypt_OpenSSL utilities, and four unreferenced "OSS API" classes
+  (one carrying SQLi). ~1,600+ lines gone.
+- Fixed real latent bugs surfaced on the way: AJAX toggle guards that printed
+  "ko" but toggled anyway (privilege bug), and `$this->getLogger->` property-
+  access fatals on the archive paths.
+
+### Dependencies
+
+- On current LTS lines (doctrine/orm 2.20, dbal 3, symfony 7, smarty 5,
+  zf1-future 1.25); `composer audit` reports **no advisories**.
 
 ---
 

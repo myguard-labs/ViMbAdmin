@@ -19,7 +19,7 @@ $(document).ready( function()
         source: {$emails nofilter}
     })
 
-    tempArr = {if $alias->getGoto()}'{$alias->getGoto() nofilter}'.split( ',' ){else}{}{/if};
+    tempArr = {if $alias->getGoto()}'{$alias->getGoto()|escape:'javascript'}'.split( ',' ){else}{}{/if};
 
     for( var i in tempArr )
     {
@@ -29,7 +29,7 @@ $(document).ready( function()
             insertGoto( gotoItem );
     }
 
-    {if isset($defaultGoto)}$( '#goto_empty' ).val( '{$defaultGoto nofilter}' );{/if}
+    {if isset($defaultGoto)}$( '#goto_empty' ).val( '{$defaultGoto|escape:'javascript'}' );{/if}
 }); // document onready
 
 

@@ -471,7 +471,10 @@ class AliasController extends ViMbAdmin_Controller_PluginAction
         foreach( $aliases as $alias )
             $addresses[] = $alias['address'];
 
-        return json_encode( $addresses );
+        // HEX flags neutralise <, >, &, ', " so the JSON is safe both inside
+        // a <script> tag and as a JS string literal (the view emits it with
+        // |nofilter). See feedback-vimbadmin-smarty5-js-escaping.
+        return json_encode( $addresses, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
     }
 
 }

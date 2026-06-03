@@ -16,10 +16,10 @@ $(document).ready( function()
     });
 
     $( '#goto_empty' ).typeahead( {
-        source: {$emails}
+        source: {$emails nofilter}
     })
 
-    tempArr = {if $alias->getGoto()}'{$alias->getGoto()}'.split( ',' ){else}{}{/if};
+    tempArr = {if $alias->getGoto()}'{$alias->getGoto() nofilter}'.split( ',' ){else}{}{/if};
 
     for( var i in tempArr )
     {
@@ -29,7 +29,7 @@ $(document).ready( function()
             insertGoto( gotoItem );
     }
 
-    {if isset($defaultGoto)}$( '#goto_empty' ).val( '{$defaultGoto}' );{/if}
+    {if isset($defaultGoto)}$( '#goto_empty' ).val( '{$defaultGoto nofilter}' );{/if}
 }); // document onready
 
 

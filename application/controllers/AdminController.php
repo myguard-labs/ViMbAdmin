@@ -316,6 +316,9 @@ class AdminController extends ViMbAdmin_Controller_Action
         foreach( $this->getTargetAdmin()->getLogs() as $log )
             $this->getD2EM()->remove( $log );
 
+        foreach( $this->getTargetAdmin()->getRememberMes() as $rememberMe )
+            $this->getD2EM()->remove( $rememberMe );
+
         foreach( $this->getTargetAdmin()->getDomains() as $domain )
             $domain->removeAdmin( $this->getTargetAdmin() );
 

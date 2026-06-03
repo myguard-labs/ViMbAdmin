@@ -79,6 +79,23 @@ input:focus, textarea:focus, select:focus {
     box-shadow: 0 0 0 2px rgba(245, 158, 11, .25);
 }
 .control-label, label, .help-block, .muted { color: var(--vimb-muted); }
+/* input-group addons: domain suffix (@example.com) + the [+] add button.
+   Bootstrap 2 .add-on defaults to a light #eee gradient -> invisible on dark. */
+.input-prepend .add-on,
+.input-append .add-on {
+    background: var(--vimb-surface);
+    color: var(--vimb-text);
+    border-color: var(--vimb-border);
+    text-shadow: none;
+}
+.input-prepend .btn,
+.input-append .btn {
+    background: var(--vimb-surface-2);
+    color: var(--vimb-text);
+    border-color: var(--vimb-border);
+}
+.input-prepend .btn:hover,
+.input-append .btn:hover { background: var(--vimb-border); }
 .control-group.error input,
 .control-group.error textarea { border-color: var(--vimb-danger); }
 code, pre {

@@ -131,7 +131,7 @@ class OSS_View_Smarty extends Zend_View_Abstract
                     // (so __clone() cannot recover them from the engine).
                     foreach( (array) $value as $pd )
                         $this->_pluginsDirs[] = $pd;
-                    $this->_smarty->addPluginsDir( $value );
+                    @$this->_smarty->addPluginsDir( $value );
                     break;
                 default:             $this->_smarty->$key = $value;            break;
             }
@@ -167,7 +167,7 @@ class OSS_View_Smarty extends Zend_View_Abstract
         // views -- e.g. the one Zend_View_Helper_Partial uses to render form
         // ViewScript decorators -- still resolve our function/modifier plugins.
         foreach( $plugins_dir as $pd )
-            $this->_smarty->addPluginsDir( $pd );
+            @$this->_smarty->addPluginsDir( $pd );
     }
 
 

@@ -75,7 +75,7 @@ trait OSS_Controller_Action_Trait_Smarty
         $this->view->basepath = Zend_Controller_Front::getInstance()->getBaseUrl();
 
         
-        $this->view->getEngine()->loadFilter( "pre", 'whitespace_control' );
+        $this->view->getEngine()->registerFilter( 'pre', 'smarty_prefilter_whitespace_control', 'whitespace_control' );
         
         if( substr( $request->getActionName(), 0, 4 ) == 'ajax' || substr( $request->getActionName(), 0, 3 ) == 'cli' )
         {

@@ -37,6 +37,7 @@ class Log
     const ACTION_ADMIN_PW_CHANGE      = 'ADMIN_PW_CHANGE';
     const ACTION_ADMIN_TO_DOMAIN_ADD  = 'ADMIN_TO_DOMAIN_ADD';
     const ACTION_ADMIN_TO_DOMAIN_REMOVE  = 'ADMIN_TO_DOMAIN_REMOVE';
+    const ACTION_MAINTENANCE          = 'MAINTENANCE';
     /**
      * @var string $action
      */

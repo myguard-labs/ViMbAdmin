@@ -6,6 +6,7 @@
                 <li><a href="{genUrl controller='log'}" {* title="Logs" *}>Logs</a></li>
             {if $hasIdentity and $identity.admin->isSuper()}
                 <li><a href="{genUrl controller='admin'}" {* title="Administrators" *}>Administrators</a></li>
+                <li><a href="{genUrl controller='maintenance'}" {* title="Maintenance" *}>Maintenance</a></li>
             {/if}
                 <li><a id="your_password" href="{genUrl controller='admin' action='password' aid=$identity.user->getId()}">Password</a></li>
                 <li><a href="{genUrl controller='auth' action='logout'}" {* title="Logout" *}>Logout</a></li>

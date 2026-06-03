@@ -1,0 +1,73 @@
+{*
+ * Maintenance — super-admin housekeeping.
+ * Two POST+CSRF forms: disable inactive-domain accounts, and Doctrine schema sync.
+ *}
+<div class="page-header">
+    <h1>Maintenance</h1>
+</div>
+
+<div class="row-fluid">
+
+    {* ============================ Disable inactive accounts ============================ *}
+    <div class="span6">
+        <div class="well">
+            <h3>Disable inactive-domain accounts</h3>
+            <p>
+                Set <strong>active = 0</strong> on every mailbox and alias whose
+                parent domain is itself inactive. Already-disabled rows are left
+                untouched, so this is safe to run repeatedly.
+            </p>
+            <p>
+                Currently affected:
+                <strong>{$stats.domains}</strong> inactive domain(s),
+                <strong>{$stats.mailboxes}</strong> still-active mailbox(es),
+                <strong>{$stats.aliases}</strong> still-active alias(es).
+            </p>
+
+            {if $stats.mailboxes + $stats.aliases > 0}
+                <form method="post" action="{genUrl controller='maintenance' action='disable-inactive'}"
+                      onsubmit="return confirm('Disable {$stats.mailboxes} mailbox(es) and {$stats.aliases} alias(es) of inactive domains?');">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <button class="btn btn-warning" type="submit">
+                        Disable {$stats.mailboxes} mailbox(es) + {$stats.aliases} alias(es)
+                    </button>
+                </form>
+            {else}
+                <p class="text-success"><em>Nothing to disable — all clear.</em></p>
+            {/if}
+        </div>
+    </div>
+
+    {* ================================ Schema update ================================ *}
+    <div class="span6">
+        <div class="well">
+            <h3>Update database schema</h3>
+            <p>
+                Sync the database to the current Doctrine mappings. This shows
+                the pending SQL first — nothing is applied until you confirm.
+            </p>
+
+            {if isset( $schemaSql )}
+                <div class="alert alert-warning">
+                    <strong>Review before applying.</strong>
+                    {$schemaSql|@count} statement(s) will run:
+                </div>
+                <pre style="max-height:18em;overflow:auto;">{foreach from=$schemaSql item=stmt}{$stmt|escape};
+{/foreach}</pre>
+                <form method="post" action="{genUrl controller='maintenance' action='schema-update'}"
+                      onsubmit="return confirm('Apply {$schemaSql|@count} schema statement(s) to the live database?');">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <input type="hidden" name="confirm" value="1" />
+                    <button class="btn btn-danger" type="submit">Apply {$schemaSql|@count} statement(s)</button>
+                    <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
+                </form>
+            {else}
+                <form method="post" action="{genUrl controller='maintenance' action='schema-update'}">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <button class="btn btn-primary" type="submit">Show pending schema changes</button>
+                </form>
+            {/if}
+        </div>
+    </div>
+
+</div>

@@ -150,10 +150,22 @@ defaults.mailbox.min_password_length = 8
 ;                      done natively in PHP (no external doveadm binary), so XXX
 ;                      must be one of the crypt-family schemes PHP and Dovecot
 ;                      share: BLF-CRYPT, SHA512-CRYPT, SHA256-CRYPT.
-
-; You should pick a hashing function as strong as your mail system allows.
-; At time of writing, Dovecot ( http://wiki2.dovecot.org/Authentication/PasswordSchemes ) recommends one of
-; BLF-CRYPT, SHA512-CRYPT, SHA256-CRYPT in descending order of strength
+;
+; Pick a hashing scheme as strong as your mail system allows. Relative strength
+; of the password schemes (strongest first):
+;
+;   ARGON2ID      strongest (memory-hard). Dovecot's recommended modern scheme,
+;                 but NOT produced by this panel's native PHP hasher yet — set it
+;                 only if you hash out-of-band; otherwise use BLF-CRYPT below.
+;   BLF-CRYPT     bcrypt / Blowfish ($2y$). RECOMMENDED DEFAULT here — strong,
+;                 universally supported by Dovecot, and produced natively in PHP.
+;   SHA512-CRYPT  ($6$) widely used and fine, but not memory-hard.
+;   SHA256-CRYPT  ($5$) weakest of these — avoid for new deployments.
+;
+; Summary:  ARGON2ID  >  BLF-CRYPT  >  SHA512-CRYPT  >  SHA256-CRYPT
+;          (strongest) (recommended) (widely used)   (avoid for new)
+;
+; See https://doc.dovecot.org/2.4.4/core/man/doveadm-pw.1.html for the full list.
 defaults.mailbox.password_scheme = "dovecot:BLF-CRYPT"
 
 ; NOTE: a local "doveadm pw" binary is no longer required — "dovecot:" hashes

@@ -448,6 +448,27 @@ class QueueController extends ViMbAdmin_Controller_Action
         // removes aliases/preferences and decrements the domain mailbox count,
         // so we must NOT decrement it again here.
         $em->getRepository( '\\Entities\\Mailbox' )->purgeMailbox( $mailbox, null, true );
+
+        // Drop the live-usage row written by Dovecot's quota-clone plugin.
+        // `dovecot_quota` is a read-only, dedicated table with NO Doctrine
+        // association to Mailbox (the username join collides — see the Quota
+        // entity), so purgeMailbox() never touches it; a deleted user would
+        // otherwise leave an orphan row. Remove it by username via native SQL.
+        try
+        {
+            $conn = $em->getConnection();
+            $conn->executeStatement(
+                'DELETE FROM dovecot_quota WHERE username = ?',
+                [ $username ]
+            );
+        }
+        catch( \Exception $e )
+        {
+            // Non-fatal: the mailbox is already gone; a leftover quota row is
+            // cosmetic. Log and continue rather than failing the delete task.
+            error_log( 'vimbadmin: dovecot_quota cleanup failed for '
+                . $username . ': ' . $e->getMessage() );
+        }
     }
 
     // =====================================================================

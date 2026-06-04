@@ -24,9 +24,15 @@ class Archive extends EntityRepository
     public function loadForArchiveList( $admin, $domain = null )
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'a.id as id , a.username as username, a.status as status, d.domain as domain' )
+            ->select( 'a.id as id , a.username as username, a.status as status, '
+                    . 'a.archived_at as archived_at, a.autoprune as autoprune, '
+                    . 'd.domain as domain, '
+                    . '(CASE WHEN m.id IS NULL THEN 0 ELSE 1 END) as user_exists' )
             ->from( '\\Entities\\Archive', 'a' )
-            ->join( 'a.Domain', 'd' );
+            ->join( 'a.Domain', 'd' )
+            // LEFT JOIN the live mailbox by username so the list can show whether
+            // the account still exists (ARCHIVE keeps it, DELETE removes it).
+            ->leftJoin( '\\Entities\\Mailbox', 'm', \Doctrine\ORM\Query\Expr\Join::WITH, 'm.username = a.username' );
 
         if( !$admin->isSuper() )
             $qb->join( 'd.Admins', 'd2a' )
@@ -38,5 +44,27 @@ class Archive extends EntityRepository
                 ->setParameter( 2, $domain );
 
         return $qb->getQuery()->getArrayResult();
+    }
+
+    /**
+     * Archives flagged autoprune=1. With $before set, only those archived at or
+     * before that cutoff (expired); without it, every autoprune-on archive.
+     * Returns Archive entities (the prune needs their maildir dest + row).
+     *
+     * @param \DateTime|null $before  expiry cutoff (null = all autoprune rows)
+     * @return \Entities\Archive[]
+     */
+    public function findAutoprune( ?\DateTime $before = null )
+    {
+        $qb = $this->getEntityManager()->createQueryBuilder()
+            ->select( 'a' )
+            ->from( '\\Entities\\Archive', 'a' )
+            ->where( 'a.autoprune = true' );
+
+        if( $before !== null )
+            $qb->andWhere( 'a.archived_at <= :before' )
+               ->setParameter( 'before', $before );
+
+        return $qb->getQuery()->getResult();
     }
 }

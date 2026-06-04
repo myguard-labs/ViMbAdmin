@@ -98,6 +98,11 @@ class Archive
     private $data;
 
     /**
+     * @var boolean
+     */
+    private $autoprune = false;
+
+    /**
      * @var integer
      */
     private $id;
@@ -413,9 +418,32 @@ class Archive
     }
 
     /**
+     * Set autoprune
+     *
+     * @param boolean $autoprune
+     * @return Archive
+     */
+    public function setAutoprune($autoprune)
+    {
+        $this->autoprune = (bool) $autoprune;
+
+        return $this;
+    }
+
+    /**
+     * Get autoprune
+     *
+     * @return boolean
+     */
+    public function getAutoprune()
+    {
+        return (bool) $this->autoprune;
+    }
+
+    /**
      * Get id
      *
-     * @return integer 
+     * @return integer
      */
     public function getId()
     {

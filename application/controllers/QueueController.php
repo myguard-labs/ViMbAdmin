@@ -391,19 +391,38 @@ class QueueController extends ViMbAdmin_Controller_Action
 
             case \Entities\MailboxTask::TYPE_ARCHIVE:
                 // backup first; only empty the store if the backup succeeded.
+                // An explicit archive is kept indefinitely (autoprune off) — the
+                // admin asked to archive it, not to let it expire.
                 $dest = $this->_backupDest( $task );
                 $task->appendLog( "backup -> {$dest}" );
                 $doveadm->backup( $user, $dest );
+                $task->appendLog( 'recording archive row' );
+                $this->_recordArchive( $task, $dest, false );
                 $task->appendLog( 'mailbox delete (empty store, keep account)' );
                 $doveadm->mailboxDelete( $user );
                 // Account row is intentionally KEPT.
                 break;
 
             case \Entities\MailboxTask::TYPE_DELETE:
-                // backup (safety) -> empty store -> remove the ViMbAdmin row.
+                // queue.autoprune.days == 0 => "instant": no backup is taken,
+                // the store is emptied and the account removed immediately.
+                if( $this->_autopruneDays() === 0 )
+                {
+                    $task->appendLog( 'autoprune.days=0 — instant delete, no backup' );
+                    $doveadm->mailboxDelete( $user );
+                    $task->appendLog( 'removing ViMbAdmin mailbox row' );
+                    $this->_removeMailboxRow( $user );
+                    break;
+                }
+
+                // Otherwise: backup (safety) -> record an autoprune-on archive
+                // row (so it expires after queue.autoprune.days) -> empty store
+                // -> remove the ViMbAdmin row.
                 $dest = $this->_backupDest( $task );
                 $task->appendLog( "backup -> {$dest}" );
                 $doveadm->backup( $user, $dest );
+                $task->appendLog( 'recording archive row (autoprune on)' );
+                $this->_recordArchive( $task, $dest, true );
                 $task->appendLog( 'mailbox delete (empty store)' );
                 $doveadm->mailboxDelete( $user );
                 $task->appendLog( 'removing ViMbAdmin mailbox row' );
@@ -427,6 +446,71 @@ class QueueController extends ViMbAdmin_Controller_Action
         $user = $task->getUsername();
         $dom  = $task->getDomain() ? $task->getDomain()->getDomain() : ( strstr( $user, '@' ) ? substr( strrchr( $user, '@' ), 1 ) : '' );
         return str_replace( [ '%d', '%u' ], [ $dom, $user ], $tpl );
+    }
+
+    /**
+     * Auto-prune window in days, from application.ini queue.autoprune.days.
+     * 0  = "instant": delete tasks take no backup and remove immediately.
+     * >0 = keep the backup this many days past archived_at, then prune.
+     * Default 90 when unset.
+     *
+     * @return int
+     */
+    private function _autopruneDays()
+    {
+        $v = $this->_options['queue']['autoprune']['days'] ?? 90;
+        return max( 0, (int) $v );
+    }
+
+    /**
+     * Upsert the `archive` row that backs a queue ARCHIVE / DELETE backup, so
+     * the backup shows on the Archives page. username is UNIQUE, so a repeat
+     * archive of the same address updates the existing row rather than failing.
+     *
+     * @param \Entities\MailboxTask $task
+     * @param string $dest      the doveadm backup destination (maildir:/...)
+     * @param bool   $autoprune whether this backup expires automatically
+     * @return void
+     */
+    private function _recordArchive( \Entities\MailboxTask $task, $dest, $autoprune )
+    {
+        $em   = $this->getD2EM();
+        $user = $task->getUsername();
+        $now  = new \DateTime();
+
+        $archive = $em->getRepository( '\\Entities\\Archive' )->findOneBy( [ 'username' => $user ] );
+        if( !$archive )
+        {
+            $archive = new \Entities\Archive();
+            $archive->setUsername( $user );
+        }
+
+        // Pre-empty store size (bytes) from the Dovecot quota-clone mirror, if
+        // present — best-effort, purely informational on the Archives page.
+        $origSize = null;
+        $q = $em->getRepository( '\\Entities\\Quota' )->findOneBy( [ 'username' => $user ] );
+        if( $q )
+            $origSize = $q->getBytes();
+
+        $archive->setStatus( \Entities\Archive::STATUS_ARCHIVED )
+                ->setArchivedAt( $now )
+                ->setStatusChangedAt( $now )
+                ->setArchivedBy( $task->getRequestedBy() )
+                ->setDomain( $task->getDomain() )
+                ->setMaildirServer( (string) ( $this->_options['doveadm']['http']['url'] ?? '' ) )
+                ->setMaildirFile( $dest )
+                ->setMaildirOrigSize( $origSize )
+                ->setMaildirSize( $origSize )
+                ->setAutoprune( $autoprune )
+                ->setData( json_encode( [
+                    'username' => $user,
+                    'type'     => $task->getType(),
+                    'task_id'  => $task->getId(),
+                    'dest'     => $dest,
+                ] ) );
+
+        $em->persist( $archive );
+        // flushed by _drain() after _execute returns.
     }
 
     /**

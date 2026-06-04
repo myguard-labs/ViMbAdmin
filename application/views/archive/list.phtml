@@ -24,7 +24,10 @@
             <th>Username</th>
             <th>Status</th>
             <th>Domain</th>
-            <th width="140"></th>
+            <th>Archived</th>
+            <th>User exists</th>
+            <th>Autoprune</th>
+            <th width="180"></th>
         </tr>
     </thead>
     <tbody>
@@ -33,6 +36,9 @@
             <td>{$archive.username}</td>
             <td>{$statuses[$archive.status]}</td>
             <td>{$archive.domain}</td>
+            <td>{if $archive.archived_at}{$archive.archived_at->format('Y-m-d H:i')}{else}&mdash;{/if}</td>
+            <td>{if $archive.user_exists}<span class="label label-success">Yes</span>{else}<span class="label">No</span>{/if}</td>
+            <td>{if $archive.autoprune}<span class="label label-warning">On</span>{else}<span class="label">Off</span>{/if}</td>
             <td>
                 <div class="btn-group">
                     {if $archive.status|in_array:$allowCancel}
@@ -48,6 +54,12 @@
                     {if $archive.status|in_array:$allowDelete}
                         <a class="btn btn-mini have-tooltip" id="delete-archive-{$archive.id}" title="Delete archive" href="{genUrl controller='archive' action='delete' arid=$archive.id csrf=$csrfToken}">
                             <i class="icon-trash"></i>
+                        </a>
+                    {/if}
+                    {if !$archive.autoprune}
+                        <a class="btn btn-mini btn-warning have-tooltip" id="autoprune-archive-{$archive.id}" title="Enable autoprune (resets archived date to now)" href="{genUrl controller='archive' action='set-autoprune' arid=$archive.id csrf=$csrfToken}"
+                           onclick="return confirm('Enable autoprune for {$archive.username|escape}? This resets its archived date to now, so the prune window restarts.');">
+                            <i class="icon-time"></i>
                         </a>
                     {/if}
                 </div>

@@ -17,6 +17,11 @@
     <field name="maildir_orig_size" type="bigint" nullable="true"/>
     <field name="maildir_size" type="bigint" nullable="true"/>
     <field name="data" type="text" nullable="false"/>
+    <field name="autoprune" type="boolean" nullable="false">
+      <options>
+        <option name="default">0</option>
+      </options>
+    </field>
     <many-to-one field="Domain" target-entity="Entities\Domain" inversed-by="Archives">
       <join-columns>
         <join-column name="Domain_id" referenced-column-name="id"/>

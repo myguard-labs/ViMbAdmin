@@ -173,5 +173,50 @@
     </div>
 </div>
 
+<div class="row-fluid">
+    {* ======================= Autoprune archive backups ======================= *}
+    <div class="span12">
+        <div class="well">
+            <h3>Autoprune archive backups</h3>
+            <div class="alert alert-info">
+                Deleted-mailbox backups are flagged <strong>autoprune</strong> and
+                removed automatically once they pass the
+                <code>queue.autoprune.days</code> window
+                ({if isset($pruneExpiredDays)}{$pruneExpiredDays}{else}90{/if} days).
+                Pruning deletes the on-disk <code>/backups</code> maildir
+                (<code>doveadm fs delete</code>) <em>and</em> the archive row.
+                Explicit archives are never autopruned.
+            </div>
+
+            {if isset( $confirmPruneExpired )}
+                <form method="post" action="{genUrl controller='maintenance' action='prune-expired'}"
+                      onsubmit="return confirm('Prune {$pruneExpiredCount} expired archive backup(s)? This permanently deletes their mail backups.');">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <input type="hidden" name="confirm" value="1" />
+                    <button class="btn btn-danger" type="submit">Yes, prune {$pruneExpiredCount} expired backup(s)</button>
+                    <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
+                </form>
+            {elseif isset( $confirmPruneAll )}
+                <form method="post" action="{genUrl controller='maintenance' action='prune-all'}"
+                      onsubmit="return confirm('Delete ALL {$pruneAllCount} autoprune-on archive backup(s) regardless of age? This cannot be undone.');">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <input type="hidden" name="confirm" value="1" />
+                    <button class="btn btn-danger" type="submit">Yes, delete all {$pruneAllCount} autoprune backup(s)</button>
+                    <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
+                </form>
+            {else}
+                <form method="post" action="{genUrl controller='maintenance' action='prune-expired'}" style="display:inline">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <button class="btn btn-warning" type="submit">Run autoprune now (expired only)…</button>
+                </form>
+                <form method="post" action="{genUrl controller='maintenance' action='prune-all'}" style="display:inline">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <button class="btn btn-danger" type="submit">Delete ALL autoprune backups…</button>
+                </form>
+            {/if}
+        </div>
+    </div>
+</div>
+
 </div>
 {tmplinclude file="footer.phtml"}

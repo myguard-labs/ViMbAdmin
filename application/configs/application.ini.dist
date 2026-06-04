@@ -214,6 +214,15 @@ doveadm.backup.dest  = "maildir:/srv/vmail-backup/%d/%u"
 ; How many queued tasks a single queue-runner invocation drains. Caps load.
 queue.runner.max_per_run = 5
 
+; Auto-prune window for DELETE backups, in DAYS. When a mailbox is DELETEd (not
+; archived) the queue takes a safety backup and records an archive row flagged
+; autoprune=on; that backup is removed automatically this many days after it
+; was archived (run via the Maintenance tab "Run autoprune" button, or a cron
+; hitting the same action). Explicit ARCHIVE actions are NEVER autopruned.
+;   90 = keep deleted-mailbox backups 90 days, then prune (default).
+;    0 = "instant": DELETE takes NO backup and removes the mailbox immediately.
+queue.autoprune.days = 90
+
 ; Remote queue-runner trigger endpoint (/queue/trigger). Lets an off-box cron
 ; kick the runner. Authenticated by a bearer key (only its SHA-256 hash is
 ; compared) plus an IP/CIDR allowlist. Leave the key empty to DISABLE the

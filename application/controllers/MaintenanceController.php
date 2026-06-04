@@ -95,6 +95,106 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
     }
 
     /**
+     * Autoprune EXPIRED backups: every autoprune-on archive older than
+     * queue.autoprune.days. Removes the /backups maildir (doveadm fs delete)
+     * and the archive row. Two-step: confirm=1 to actually run.
+     */
+    public function pruneExpiredAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        $days = max( 0, (int) ( $this->_options['queue']['autoprune']['days'] ?? 90 ) );
+        // days=0 means instant-delete (no backups are ever kept), so nothing to
+        // expire by age — treat the cutoff as "now" (prunes anything already there).
+        $cutoff = ( new \DateTime() )->modify( '-' . $days . ' days' );
+
+        $candidates = $this->getD2EM()->getRepository( '\\Entities\\Archive' )->findAutoprune( $cutoff );
+
+        if( (int) $this->getParam( 'confirm', 0 ) !== 1 )
+        {
+            $this->view->confirmPruneExpired = true;
+            $this->view->pruneExpiredCount   = count( $candidates );
+            $this->view->pruneExpiredDays    = $days;
+            $this->indexAction();
+            return $this->render( 'index' );
+        }
+
+        $n = $this->_prune( $candidates );
+        $this->log( \Entities\Log::ACTION_MAINTENANCE,
+            "{$this->getAdmin()->getFormattedName()} autopruned {$n} expired archive backup(s) (> {$days} days)" );
+        $this->addMessage(
+            sprintf( _( 'Pruned %d expired archive backup(s).' ), $n ), OSS_Message::SUCCESS );
+        $this->redirect( 'archive/list' );
+    }
+
+    /**
+     * Delete ALL autoprune-on backups regardless of age. Removes the /backups
+     * maildir + archive row for every archive flagged autoprune. confirm=1.
+     */
+    public function pruneAllAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        $candidates = $this->getD2EM()->getRepository( '\\Entities\\Archive' )->findAutoprune( null );
+
+        if( (int) $this->getParam( 'confirm', 0 ) !== 1 )
+        {
+            $this->view->confirmPruneAll = true;
+            $this->view->pruneAllCount   = count( $candidates );
+            $this->indexAction();
+            return $this->render( 'index' );
+        }
+
+        $n = $this->_prune( $candidates );
+        $this->log( \Entities\Log::ACTION_MAINTENANCE,
+            "{$this->getAdmin()->getFormattedName()} deleted ALL {$n} autoprune-on archive backup(s)" );
+        $this->addMessage(
+            sprintf( _( 'Deleted %d autoprune-on archive backup(s).' ), $n ), OSS_Message::SUCCESS );
+        $this->redirect( 'archive/list' );
+    }
+
+    /**
+     * Remove each archive's backup maildir (doveadm fs delete -R) and its row.
+     * A doveadm failure on one archive is logged and skipped (the row is kept
+     * so it retries next run), so a single bad path can't abort the whole prune.
+     *
+     * @param \Entities\Archive[] $archives
+     * @return int  number fully pruned
+     */
+    private function _prune( array $archives )
+    {
+        if( !$archives )
+            return 0;
+
+        $em      = $this->getD2EM();
+        $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
+        $pruned  = 0;
+
+        foreach( $archives as $archive )
+        {
+            $dest = $archive->getMaildirFile();   // e.g. maildir:/backups/dom/user
+            try
+            {
+                if( $dest )
+                    $doveadm->fsDelete( $dest );
+                $em->remove( $archive );
+                $pruned++;
+            }
+            catch( \Throwable $e )
+            {
+                $this->getLogger()->err( "MaintenanceController::_prune {$archive->getUsername()}: " . $e->getMessage() );
+                // keep the row; it will be retried on the next prune run.
+            }
+        }
+        $em->flush();
+        return $pruned;
+    }
+
+    /**
      * Count active mailboxes/aliases that sit under an inactive domain.
      *
      * @return array{domains:int,mailboxes:int,aliases:int}

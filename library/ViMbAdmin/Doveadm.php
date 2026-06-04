@@ -266,6 +266,32 @@ class ViMbAdmin_Doveadm
     }
 
     /**
+     * Recursively delete a filesystem path via doveadm's `fs delete`, using a
+     * configured posix fs filter (dovecot conf.d: `fs posix { driver = posix }`).
+     * Used by autoprune to remove a /backups maildir off the dovecot host
+     * without sharing its filesystem with ViMbAdmin.
+     *
+     * Accepts either a bare path or a `maildir:/path` / `mdbox:/path` dest URI
+     * (the leading `<driver>:` is stripped — fs operates on the raw path).
+     *
+     * @param string $path  filesystem path or `<driver>:<path>` dest URI
+     * @param string $filter  the fs filter name (default "posix")
+     * @return array
+     */
+    public function fsDelete( $path, $filter = 'posix' )
+    {
+        // Strip a leading mail-driver prefix (maildir:/..., mdbox:/...).
+        if( preg_match( '#^[a-z0-9]+:(/.*)$#i', $path, $m ) )
+            $path = $m[1];
+
+        return $this->run( 'fsDelete', [
+            'recursive'  => true,
+            'filterName' => $filter,
+            'path'       => [ $path ],
+        ] );
+    }
+
+    /**
      * Flush Dovecot's authentication cache. With no users, flushes the whole
      * cache; pass user(s) to flush only those entries. Non-destructive — forces
      * the next auth to re-read from the userdb/passdb (e.g. after a password or

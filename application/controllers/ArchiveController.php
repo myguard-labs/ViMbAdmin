@@ -276,12 +276,47 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
             if( $result )
                 $this->addMessage( "Archive status changed to restore pending.", OSS_Message::SUCCESS );         
             else
-                $this->addMessage( "State was changed during restore. Restore action cannot be performed at this state.", OSS_Message::INFO );   
+                $this->addMessage( "State was changed during restore. Restore action cannot be performed at this state.", OSS_Message::INFO );
          }
         else
-            $this->addMessage( "Restore action cannot be performed at this state.", OSS_Message::INFO );   
+            $this->addMessage( "Restore action cannot be performed at this state.", OSS_Message::INFO );
 
         $this->getD2EM()->flush();
+        $this->redirect( 'archive/list' );
+    }
+
+    /**
+     * Enable autoprune on an archive and (re)start its prune window by setting
+     * archived_at = now. The prune itself runs from the Maintenance tab. There
+     * is intentionally no "disable" action here — turning autoprune off again
+     * is the unusual case; delete or restore the archive instead.
+     */
+    public function setAutopruneAction()
+    {
+        $this->_assertCsrf();
+        $archive = $this->getArchive();
+
+        if( $archive->getAutoprune() )
+        {
+            $this->addMessage( "Autoprune is already enabled for this archive.", OSS_Message::INFO );
+        }
+        else
+        {
+            $now = new \DateTime();
+            $archive->setAutoprune( true )
+                    ->setArchivedAt( $now )
+                    ->setStatusChangedAt( $now );
+            $this->getD2EM()->flush();
+
+            $this->log(
+                \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                "{$this->getAdmin()->getFormattedName()} enabled autoprune for archive {$archive->getUsername()} (window reset to now)"
+            );
+            $this->addMessage(
+                sprintf( "Autoprune enabled for %s; the prune window restarts from now.", $archive->getUsername() ),
+                OSS_Message::SUCCESS );
+        }
+
         $this->redirect( 'archive/list' );
     }
 

@@ -10,11 +10,15 @@ use Doctrine\ORM\Mapping as ORM;
  * Live mailbox quota usage as written by Dovecot's quota-clone plugin.
  *
  * Dovecot 2.4's quota-clone plugin mirrors each user's current usage into an
- * SQL dictionary. With the default dict_map this is a `quota` table keyed by
- * `username` holding two values:
+ * SQL dictionary. We point its dict_map at a DEDICATED `dovecot_quota` table
+ * (keyed by `username` = full email address) holding two values:
  *
  *   priv/quota/storage   -> bytes    (storage usage in bytes)
  *   priv/quota/messages  -> messages (message count)
+ *
+ * A dedicated table (not the `mailbox` table) is required because quota-clone
+ * writes with INSERT .. ON DUPLICATE KEY UPDATE, which fails against mailbox's
+ * NOT NULL columns (password / quota / local_part have no default).
  *
  * The mail database is the authority; ViMbAdmin only ever READS this table to
  * display live usage in the GUI. Dovecot replaces (never increments) the row
@@ -38,6 +42,11 @@ class Quota
      * @var integer $messages
      */
     private $messages = 0;
+
+    /**
+     * @var \DateTime $updated_at
+     */
+    private $updated_at;
 
     /**
      * Set username
@@ -106,5 +115,15 @@ class Quota
     public function getMessages()
     {
         return $this->messages;
+    }
+
+    /**
+     * Get updated_at (when Dovecot last wrote this row)
+     *
+     * @return \DateTime
+     */
+    public function getUpdatedAt()
+    {
+        return $this->updated_at;
     }
 }

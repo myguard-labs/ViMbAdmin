@@ -435,18 +435,21 @@ INSERT INTO `mailbox` VALUES (1,'a@example.com','817ebc64fa60d6b582578f76916057b
 UNLOCK TABLES;
 
 --
--- Table structure for table `quota`
+-- Table structure for table `dovecot_quota`
 --   Live mailbox usage written by Dovecot's quota-clone plugin (read-only to
---   ViMbAdmin). Keyed by username (= full email address).
+--   ViMbAdmin). Keyed by username (= full email address). Dedicated table (not
+--   `mailbox`) because quota-clone's INSERT..ON DUPLICATE KEY UPDATE collides
+--   with mailbox's NOT NULL columns.
 --
 
-DROP TABLE IF EXISTS `quota`;
+DROP TABLE IF EXISTS `dovecot_quota`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `quota` (
+CREATE TABLE `dovecot_quota` (
   `username` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
   `bytes` bigint(20) NOT NULL DEFAULT '0',
   `messages` bigint(20) NOT NULL DEFAULT '0',
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

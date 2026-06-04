@@ -120,10 +120,10 @@ class Domain extends EntityRepository
     /**
      * Graft per-domain mailbox usage (`mailboxes_size`) onto a domain list array.
      *
-     * Usage now comes from Dovecot's quota-clone `quota` table (Entities\Quota),
-     * keyed by full email address (username). We sum quota.bytes grouped by the
-     * domain part of the username and merge the total onto each domain row.
-     * Domains with no quota rows yet report 0.
+     * Usage now comes from Dovecot's quota-clone `dovecot_quota` table
+     * (Entities\Quota), keyed by full email address (username). We sum bytes
+     * grouped by the domain part of the username and merge the total onto each
+     * domain row. Domains with no quota rows yet report 0.
      *
      * @param array $rows Domain list rows from getArrayResult()
      * @return array
@@ -133,12 +133,12 @@ class Domain extends EntityRepository
         if( !$rows )
             return $rows;
 
-        // SUBSTRING_INDEX is MySQL/MariaDB-specific; quota.username is always
+        // SUBSTRING_INDEX is MySQL/MariaDB-specific; username is always
         // local@domain, so take everything after the last '@'.
         $conn = $this->getEntityManager()->getConnection();
         $sums = $conn->fetchAllAssociative(
             "SELECT SUBSTRING_INDEX( username, '@', -1 ) AS domain, SUM( bytes ) AS bytes
-               FROM quota GROUP BY SUBSTRING_INDEX( username, '@', -1 )"
+               FROM dovecot_quota GROUP BY SUBSTRING_INDEX( username, '@', -1 )"
         );
 
         $byDomain = [];

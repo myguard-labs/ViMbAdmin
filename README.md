@@ -251,13 +251,13 @@ index is `UNIQUE`, so dedupe any duplicate usernames before applying:
 SELECT username, COUNT(*) c FROM mailbox GROUP BY username HAVING c > 1;
 ```
 
-There is also a **`quota` table** migration
+There is also a **`dovecot_quota` table** migration
 ([`2026-06-quota-clone-table.sql`](contrib/migrations/2026-06-quota-clone-table.sql)).
 This fork has retired the old nightly maildir-scan (`mailbox.cli-get-sizes`) and
 gets **live** mailbox usage straight from Dovecot's quota-clone plugin instead.
-The migration creates the `quota` table, seeds it from the old `maildir_size`
-values, then drops the retired `maildir_size` / `homedir_size` / `size_at`
-columns. See
+The migration creates the `dovecot_quota` table, seeds it from the old
+`maildir_size` values, then drops the retired `maildir_size` / `homedir_size` /
+`size_at` columns. See
 [Live quota usage (Dovecot quota-clone)](#live-quota-usage-dovecot-quota-clone)
 for the Dovecot config.
 
@@ -404,54 +404,90 @@ maildir scan. See below.
 
 ### Live quota usage (Dovecot quota-clone)
 
-Older ViMbAdmin scanned every maildir from a nightly `mailbox.cli-get-sizes`
-cron and stored the result in `mailbox.maildir_size` — accurate only as often as
-the cron ran. **This fork has dropped that path entirely.** Usage now comes
-straight from Dovecot 2.4's
-[quota-clone plugin](https://doc.dovecot.org/2.4.4/core/plugins/quota_clone.html),
-which pushes each user's **current** storage and message count into a `quota`
-table, so the panel shows real-time figures with no maildir scan and no cron.
+There are **two separate quota concerns** — keep them apart:
 
-ViMbAdmin reads the `quota` table automatically (mailbox list + per-domain
-totals). A mailbox shows `0` until Dovecot writes its first usage figure. The
-table is created on fresh installs by the entity mapping
+| | What | Where it lives | Who writes it |
+|---|---|---|---|
+| **Limit** | the cap per mailbox | `mailbox.quota` (bytes) | ViMbAdmin (you, in the GUI) |
+| **Usage** | how full the mailbox is now | `dovecot_quota` table | Dovecot, live |
+
+ViMbAdmin sets the **limit**; Dovecot enforces it and reports back the **usage**.
+The panel reads `dovecot_quota` and shows usage (and a % of the limit) in the
+mailbox list and per-domain totals.
+
+#### How it used to work vs now
+
+Older ViMbAdmin scanned every maildir from a nightly `mailbox.cli-get-sizes`
+cron and stored the result in `mailbox.maildir_size`. That was only as fresh as
+the cron, and meant a full `du` walk of every maildir. **This fork drops that
+entirely.** Usage now comes straight from Dovecot 2.4's
+[quota-clone plugin](https://doc.dovecot.org/2.4.4/core/plugins/quota_clone.html),
+which writes each user's current storage + message count into the database on
+every change — real-time, no cron, no scan.
+
+#### Why a dedicated `dovecot_quota` table
+
+quota-clone writes with `INSERT .. ON DUPLICATE KEY UPDATE`. Pointed straight at
+the `mailbox` table that fails, because `mailbox` has NOT NULL columns with no
+default (`password`, `quota`, `local_part`) that the upsert can't supply. So
+quota-clone gets its **own** clean table — `dovecot_quota(username, bytes,
+messages, updated_at)`, keyed by the full email address (= `mailbox.username`).
+ViMbAdmin reads that table directly; it never writes it (Dovecot is the
+authority and replaces the row on every change). A mailbox shows `0` until
+Dovecot writes its first figure.
+
+The table is created on fresh installs by the entity mapping
 (`orm:schema-tool:create`); existing DBs apply
 [`contrib/migrations/2026-06-quota-clone-table.sql`](contrib/migrations/2026-06-quota-clone-table.sql)
-(it also seeds from the old `maildir_size` and drops the retired columns).
-ViMbAdmin only ever **reads** this table — Dovecot is the authority and replaces
-the row on every change.
+(it creates `dovecot_quota`, seeds it from the old `maildir_size`, and drops the
+retired `maildir_size` / `homedir_size` / `size_at` columns).
 
-Configure Dovecot (the **mail host**, not the panel) to mirror usage into that
-table. Enable the plugins:
+#### Dovecot config (on the mail host, not the panel)
+
+This is a complete, working setup. **Two plugins, two jobs:**
+
+`quota` = the **enforcement** backend (rejects over-quota mail). The per-user
+limit comes from your SQL userdb — ViMbAdmin exposes the mailbox's limit as
+`userdb_quota_rule = *:bytes=N`, so this just needs to be enabled:
 
 ```
 mail_plugins {
   quota = yes
+}
+
+quota "User quota" {
+  driver = count          # recommended for maildir; index-based, no du
+}
+quota_full_tempfail = yes # 4xx on backend error instead of bouncing mail
+```
+
+`quota_clone` = the **reporting** half that feeds ViMbAdmin's display. Point its
+dict at the ViMbAdmin database, writing storage→`bytes` and messages→`messages`
+in `dovecot_quota`:
+
+```
+mail_plugins {
   quota_clone = yes
 }
-```
 
-Point quota-clone at the same SQL database the panel uses. With the default
-dict_map this writes `storage` → `quota.bytes` and `messages` → `quota.messages`,
-keyed by the full email address (`mailbox.username`):
-
-```
 dict_server {
-  dict sql {
+  dict vimbadmin {
     driver = sql
     sql_driver = mysql
-    # connect string for the ViMbAdmin database
-    # (host, dbname, user, password — same DB as the panel)
-
+    mysql <db-host> {
+      user     = vimbadmin
+      password = <password>
+      dbname   = vimbadmin
+    }
     dict_map priv/quota/storage {
-      sql_table       = quota
-      username_field  = username
+      sql_table      = dovecot_quota
+      username_field = username
       value_field bytes {
       }
     }
     dict_map priv/quota/messages {
-      sql_table       = quota
-      username_field  = username
+      sql_table      = dovecot_quota
+      username_field = username
       value_field messages {
       }
     }
@@ -460,15 +496,31 @@ dict_server {
 
 quota_clone {
   dict proxy {
-    name = sql
+    name = vimbadmin
   }
 }
 ```
 
-> Note: quota-clone is *not* an authoritative quota backend — it only mirrors
-> usage for display. Keep your real quota backend (e.g. `quota = count` /
-> `maildir:User quota`) configured as usual; the per-mailbox **limit** is still
-> the `quota` value ViMbAdmin sets on each mailbox.
+> **Gotcha — dict socket permissions.** Mail processes run as `vmail`, but the
+> default dict socket is `root:dovecot 0660` and `vmail` is not in group
+> `dovecot`, so quota-clone fails with
+> `net_connect_unix(/run/dovecot/dict): Permission denied`. Hand the socket to
+> `vmail`:
+>
+> ```
+> service dict {
+>   unix_listener dict {
+>     user  = vmail
+>     group = vmail
+>     mode  = 0600
+>   }
+> }
+> ```
+
+> **Don't confuse the two plugins.** `quota` enforces and is authoritative;
+> `quota_clone` only mirrors usage for display. The per-mailbox **limit** is
+> always the value ViMbAdmin sets (`mailbox.quota`), surfaced to Dovecot via the
+> userdb `quota_rule`.
 
 ## What it is *not*
 

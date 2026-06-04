@@ -68,8 +68,8 @@ class Mailbox extends EntityRepository
     /**
      * Merge live Dovecot quota-clone usage into a mailbox list array.
      *
-     * The `quota` table (Entities\Quota) is populated by Dovecot's quota-clone
-     * plugin and keyed by username. It has no mailbox id, so we batch-load every
+     * The `dovecot_quota` table (Entities\Quota) is populated by Dovecot's
+     * quota-clone plugin and keyed by username. It has no mailbox id, so we batch-load every
      * row for the usernames in $rows and graft `quota_bytes` / `quota_messages`
      * onto each. Both default to null when the plugin has not yet written a row
      * (e.g. a brand new mailbox), in which case the view shows 0 until Dovecot

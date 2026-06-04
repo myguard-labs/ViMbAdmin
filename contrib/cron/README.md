@@ -101,3 +101,38 @@ sudoedit /etc/cron.d/vimbadmin       # set VIMBADMIN_DIR + run-as user
 `-v` prints per-task progress. A non-zero exit means a task failed — check the
 panel's Queue tab (the task is marked FAILED with the error in its log) and the
 audit log.
+
+---
+
+## HTTP trigger (off-box cron)
+
+If the cron host can't run the CLI (no checkout, no `docker exec` access) it can
+kick the runner over HTTP instead. The panel exposes **`POST /queue/trigger`**,
+authenticated by a **Bearer key** and an **IP/CIDR allowlist** — both set in
+`application.ini`:
+
+```ini
+queue.runner.key         = "a-long-random-secret"        ; empty = endpoint OFF
+queue.runner.allowed_ips = "203.0.113.7, 10.0.0.0/8"     ; empty = deny all
+```
+
+Generate a key once (e.g. `openssl rand -hex 32`), put it in `application.ini`,
+and have the remote cron POST it as a Bearer token:
+
+```cron
+# /etc/cron.d/vimbadmin-trigger  (on the OFF-BOX cron machine)
+*/2 * * * *  root  curl -fsS -X POST \
+    -H "Authorization: Bearer a-long-random-secret" \
+    https://mail.example.com/vimbadmin/queue/trigger >/dev/null
+```
+
+Notes:
+- It's **POST** — a GET returns nothing useful. `-f` makes curl exit non-zero on
+  an HTTP error so cron mails you on failure.
+- The key is compared by SHA-256 in constant time; a wrong/missing key is 401/403.
+- The source IP must match `queue.runner.allowed_ips` (proxy-aware — it honours
+  the same trusted-proxy config as the MCP endpoint). An empty allowlist denies
+  everything, so the endpoint is effectively off until you set both values.
+- Leaving `queue.runner.key` empty disables `/queue/trigger` entirely (returns
+  404); the CLI runner and the in-panel "Run now" button still work.
+- The response is JSON `{"processed": N}` on success.

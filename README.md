@@ -435,8 +435,39 @@ backups* buttons; a cron can call the same `maintenance.prune-expired` action.
 
 `doveadm fs delete` needs a `fs posix { driver = posix }` filter in the Dovecot
 config (the prune removes a backup maildir over the HTTP API rather than sharing
-the filesystem with the panel). The queue runner itself just needs a periodic
-`vimbtool.php -a queue.cli-run` — see [`contrib/cron/`](contrib/cron/).
+the filesystem with the panel).
+
+### Scheduling the queue runner
+
+The queue is only drained when something invokes `queue.cli-run` (or the HTTP
+trigger). Pick **one** of these and add it to cron — every 2 minutes is typical.
+Full requirements + an autoprune cron are in [`contrib/cron/`](contrib/cron/).
+
+**1. Docker (`docker exec`)** — run from the *host* crontab against the
+container:
+
+```cron
+*/2 * * * *  root  docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
+```
+
+**2. Bare metal / inside the container** — plain PHP CLI, from an
+`application.ini` that points at the panel's DB + doveadm HTTP endpoint:
+
+```cron
+*/2 * * * *  vmail  php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
+```
+
+**3. HTTP trigger** — when the cron host can't run the CLI at all. Set
+`queue.runner.key` + `queue.runner.allowed_ips` in `application.ini`, then have
+any host on the allowlist `POST` the key as a Bearer token:
+
+```cron
+*/2 * * * *  root  curl -fsS -X POST -H "Authorization: Bearer <key>" \
+    https://mail.example.com/vimbadmin/queue/trigger >/dev/null
+```
+
+(Empty `queue.runner.key` disables the HTTP endpoint; the CLI runner and the
+in-panel "Run now" button always work.)
 
 A separate, default-off **CLI on-disk purge** (`mailbox_deletion_fs_enabled`,
 `binary.path.rm_rf`) still exists for direct maildir removal on a host that can

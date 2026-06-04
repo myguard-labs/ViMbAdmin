@@ -501,22 +501,6 @@ quota_clone {
 }
 ```
 
-> **Gotcha — dict socket permissions.** Mail processes run as `vmail`, but the
-> default dict socket is `root:dovecot 0660` and `vmail` is not in group
-> `dovecot`, so quota-clone fails with
-> `net_connect_unix(/run/dovecot/dict): Permission denied`. Hand the socket to
-> `vmail`:
->
-> ```
-> service dict {
->   unix_listener dict {
->     user  = vmail
->     group = vmail
->     mode  = 0600
->   }
-> }
-> ```
-
 > **Don't confuse the two plugins.** `quota` enforces and is authoritative;
 > `quota_clone` only mirrors usage for display. The per-mailbox **limit** is
 > always the value ViMbAdmin sets (`mailbox.quota`), surfaced to Dovecot via the

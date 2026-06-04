@@ -28,7 +28,7 @@
             <th>Mailboxes</th>
             <th>Aliases</th>
             {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                <th>Used / Max ({$size_multiplier})</th>
+                <th>Used ({$size_multiplier}) / Max</th>
             {/if}
             <th>Default quota</th>
             <th width="55">Active</th>
@@ -59,12 +59,12 @@
                         {/if}
                         /
                         {* max_quota = domain-wide cap (0 = unlimited) *}
-                        {if $domain.maxquota}{$domain.maxquota|string_format:"%.0f"}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
+                        {if $domain.maxquota}{$domain.maxquota|filesize}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
                     </td>
                 {/if}
                 <td>
                     {* per-mailbox default quota for new mailboxes (0 = unlimited) *}
-                    {if $domain.quota}{$domain.quota|string_format:"%.0f"}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
+                    {if $domain.quota}{$domain.quota|filesize}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
                 </td>
                 <td>
                     <div id="throb-toggle-active-{$domain.id}" style="float: right;"></div>

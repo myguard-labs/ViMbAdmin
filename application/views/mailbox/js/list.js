@@ -53,6 +53,7 @@ $(document).ready( function() {
             {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
             { 'sType': 'num-html' },
             {/if}
+            { 'sType': 'num-html' },
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
             null,
             {/if}
@@ -130,6 +131,7 @@ function toggleActive(elid, id) {
                                         {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
                                             formatMdirsize( row.id, row.quota, row.quota_bytes, row.quota_messages ),
                                         {/if}
+                                        formatQuotaLimit( row.quota ),
                                         row.domain,
                                         formatActive( row.id, row.active ),
                                         formatControlls( row.id )
@@ -242,20 +244,27 @@ function toggleActive(elid, id) {
     {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
     function formatMdirsize( id, quota, quota_bytes, quota_messages )
     {
-        // Usage / limit. quota_bytes = live usage from Dovecot quota-clone;
-        // quota = configured limit (in {$size_multiplier} units, 0 = unlimited).
-        var limit = ( quota && parseFloat( quota ) > 0 )
-                  ? Math.round( parseFloat( quota ) ).toString()
-                  : '<span class="muted" title="Unlimited">&infin;</span>';
-
+        // Live usage from Dovecot quota-clone (the limit is a separate column).
         if( quota_bytes !== undefined && quota_bytes !== null ){
             var used_msgs = ( quota_messages !== undefined && quota_messages !== null ) ? quota_messages : '';
             var mdir_size = quota_bytes / {$multiplier};
-            return '<a href="#" data-sizes="'+ quota_bytes + '|{$multiplier}|{$size_multiplier}|' + quota + '|' + used_msgs + '" id="dir-size-' + id + '">' + mdir_size.toFixed(1) + '</a> / ' + limit;
+            return '<a href="#" data-sizes="'+ quota_bytes + '|{$multiplier}|{$size_multiplier}|' + quota + '|' + used_msgs + '" id="dir-size-' + id + '">' + mdir_size.toFixed(1) + '</a>';
         }
         else
-            return "0 / " + limit;
+            return "0";
     }
     {/if}
+
+    // Configured quota limit (bytes) -> human-readable; 0 = unlimited.
+    function formatQuotaLimit( q )
+    {
+        var b = parseFloat( q );
+        if( !b || b <= 0 )
+            return '<span class="muted" title="Unlimited">&infin;</span>';
+        var units = [ 'B', 'KB', 'MB', 'GB', 'TB', 'PB' ], i = 0;
+        while( b >= 1024 && i < units.length - 1 ) { b /= 1024; i++; }
+        var r = Math.round( b * 10 ) / 10;
+        return ( r === Math.floor( r ) ? r.toString() : r.toFixed( 1 ) ) + ' ' + units[ i ];
+    }
 
 {/if}

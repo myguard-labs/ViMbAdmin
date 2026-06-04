@@ -136,10 +136,15 @@ function getEntries( event ){
 
 function formatQuotaLimit( q )
 {
-    // 0 / null = unlimited.
-    return ( q && parseFloat( q ) > 0 )
-         ? Math.round( parseFloat( q ) ).toString()
-         : '<span class="muted" title="Unlimited">&infin;</span>';
+    // 0 / null = unlimited. Otherwise a byte count -> human-readable size.
+    var b = parseFloat( q );
+    if( !b || b <= 0 )
+        return '<span class="muted" title="Unlimited">&infin;</span>';
+
+    var units = [ 'B', 'KB', 'MB', 'GB', 'TB', 'PB' ], i = 0;
+    while( b >= 1024 && i < units.length - 1 ) { b /= 1024; i++; }
+    var r = Math.round( b * 10 ) / 10;
+    return ( r === Math.floor( r ) ? r.toString() : r.toFixed( 1 ) ) + ' ' + units[ i ];
 }
 
 function formatActive( id, active )

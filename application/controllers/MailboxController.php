@@ -257,7 +257,22 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
         {
             $this->notify( 'mailbox', 'add', 'addPrevalidate', $this );
 
-            if( $form->isValid( $_POST ) )
+            if( !$form->isValid( $_POST ) )
+            {
+                // Surface validation failures instead of silently re-rendering
+                // the form with no feedback (admin pressed Save, nothing
+                // happened). Show one combined message + log the details.
+                $errs = [];
+                foreach( $form->getMessages() as $field => $msgs )
+                    foreach( (array) $msgs as $m )
+                        $errs[] = "{$field}: {$m}";
+                if( $errs )
+                {
+                    $this->addMessage( _( 'Could not save the mailbox: ' ) . implode( '; ', $errs ), OSS_Message::ERROR );
+                    $this->getLogger()->notice( 'Mailbox add/edit validation failed: ' . implode( ' | ', $errs ) );
+                }
+            }
+            else
             {
                 $this->notify( 'mailbox', 'add', 'addPostvalidate', $this );
 

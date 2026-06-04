@@ -326,9 +326,7 @@ class McpController extends ViMbAdmin_Controller_Action
         ViMbAdmin_MailboxQueue::enqueue( $em, $m, \Entities\MailboxTask::TYPE_ARCHIVE, null );
         $em->flush();
 
-        // Nudge a background runner (best-effort) so MCP-queued work starts
-        // without waiting for the next cron tick.
-        ViMbAdmin_QueueRunner::triggerCheck( $em, $this->_options );
+        // (The queue is drained only by the external cron; no in-app trigger.)
 
         return [ 'queued' => \Entities\MailboxTask::TYPE_ARCHIVE, 'username' => $username ];
     }

@@ -86,6 +86,16 @@ class ViMbAdmin_Schema
         $db   = $conn->getDatabase();
         $out  = [];
 
+        // Tiny key/value settings store (ViMbAdmin_Setting): last-queuerun /
+        // last-prune timestamps shown on the Maintenance tab. IF NOT EXISTS so
+        // it is safe to emit unconditionally on every schema pass.
+        $out[] = 'CREATE TABLE IF NOT EXISTS `setting` ('
+               . ' `name` VARCHAR(64) NOT NULL,'
+               . ' `value` VARCHAR(255) NULL DEFAULT NULL,'
+               . ' `updated_at` DATETIME NULL DEFAULT NULL,'
+               . ' PRIMARY KEY (`name`)'
+               . ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci';
+
         // The two Dovecot-owned tables that should cascade-delete with mailbox.
         $fks = [
             'dovecot_quota'      => 'FK_dovecot_quota_mailbox',
@@ -121,10 +131,12 @@ class ViMbAdmin_Schema
         }
         catch( \Throwable $e )
         {
-            // Introspection failed (e.g. a table not present yet on a brand-new
-            // install before schema-tool created it). Skip — the next run picks
-            // it up once the base tables exist.
-            return [];
+            // Introspection failed (e.g. a base table not present yet on a
+            // brand-new install before schema-tool created it). Skip the FK
+            // work — the next run picks it up once the base tables exist — but
+            // still return the unconditional `setting` CREATE (IF NOT EXISTS,
+            // no introspection needed).
+            return $out;
         }
 
         return $out;

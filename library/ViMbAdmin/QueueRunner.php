@@ -108,6 +108,12 @@ class ViMbAdmin_QueueRunner
             $em->flush();
             return null;
         }
+
+        // Record when the runner last actually started a drain (the lease row
+        // is deleted on exit, so the Maintenance overview reads this marker
+        // rather than the live queue_runner table).
+        ViMbAdmin_Setting::stampNow( $em, ViMbAdmin_Setting::LAST_QUEUERUN );
+
         return $lease;
     }
 

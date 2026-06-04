@@ -10,6 +10,70 @@
     <h1>Maintenance</h1>
 </div>
 
+{* ============================ Version, build & updates ============================ *}
+<div class="row-fluid">
+    <div class="span6">
+        <div class="well">
+            <h3>Version &amp; build</h3>
+            <p>
+                Release: <strong>{$appVersion|escape}</strong>
+                <form method="post" style="display:inline;margin-left:.5em;"
+                      action="{genUrl controller='maintenance' action='check-update'}">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <input type="hidden" name="which" value="release" />
+                    <button class="btn btn-small" type="submit">Check for newer release</button>
+                </form>
+            </p>
+            <p>
+                Git commit:
+                {if $gitCommit}
+                    <strong><code>{$gitCommitShort|escape}</code></strong>
+                    <a class="muted" target="_blank" rel="noopener"
+                       href="https://github.com/{$githubRepo|escape}/commit/{$gitCommit|escape}">view</a>
+                {else}
+                    <span class="muted">unknown (no build marker)</span>
+                {/if}
+                <form method="post" style="display:inline;margin-left:.5em;"
+                      action="{genUrl controller='maintenance' action='check-update'}">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <input type="hidden" name="which" value="commit" />
+                    <button class="btn btn-small" type="submit">Check for newer commit</button>
+                </form>
+            </p>
+            <p><small class="muted">Update checks query GitHub
+                (<code>{$githubRepo|escape}</code>). A newer commit means a newer
+                build is available — rebuild the image to update.</small></p>
+        </div>
+    </div>
+
+    {* ============================ Background runs ============================ *}
+    <div class="span6">
+        <div class="well">
+            <h3>Background runs</h3>
+            <p>
+                Last queue runner started:
+                {if $lastQueueRun}
+                    <strong>{$lastQueueRun|escape}</strong>
+                {else}
+                    <span class="muted">never (since this was added)</span>
+                {/if}
+            </p>
+            <p>
+                Last prune run:
+                {if $lastPrune}
+                    <strong>{$lastPrune|escape}</strong>
+                {else}
+                    <span class="muted">never (since this was added)</span>
+                {/if}
+            </p>
+            <p><small class="muted">The queue is drained only by the external
+                cron (<code>queue.cli-run</code>) / the remote trigger endpoint;
+                opening this tab no longer nudges it. Pruning is manual (the
+                buttons below).</small></p>
+        </div>
+    </div>
+</div>
+
 <div class="row-fluid">
 
     {* ============================ Disable inactive accounts ============================ *}

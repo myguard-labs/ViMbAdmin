@@ -142,10 +142,7 @@ class AuthController extends ViMbAdmin_Controller_Action
         $user->setLastLogin( new \DateTime() );
         $this->getD2EM()->flush();
 
-        // Nudge the queue: if tasks are pending and a runner slot is free, spawn
-        // a background runner so a fresh login gets the queue moving. Best-effort
-        // (never blocks or fails the login) — a cron is still the guaranteed path.
-        ViMbAdmin_QueueRunner::triggerCheck( $this->getD2EM(), $this->_options );
+        // (The queue is drained only by the external cron; no in-app trigger.)
 
         return true;
     }

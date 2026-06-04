@@ -30,13 +30,16 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
 
     public function indexAction()
     {
-        // Opening the Maintenance tab nudges the queue (best-effort, background).
-        ViMbAdmin_QueueRunner::triggerCheck( $this->getD2EM(), $this->_options );
-
+        // NOTE: opening this tab no longer nudges the queue. The queue is
+        // drained ONLY by the external cron (queue.cli-run); all in-app
+        // trigger-checks were removed so the runner has a single, predictable
+        // entry point.
         $this->view->stats = $this->_inactiveStats();
         $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
             'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();
         $this->_schemaVersionToView();
+        $this->_versionToView();
+        $this->_lastRunToView();
     }
 
     /**
@@ -50,6 +53,65 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         $this->view->dbPending        = count( $schema->pendingSql() );
         $this->view->appVersion       = ViMbAdmin_Version::VERSION;
         $this->view->appDbVersionName = defined( 'ViMbAdmin_Version::DBVERSION_NAME' ) ? ViMbAdmin_Version::DBVERSION_NAME : '';
+    }
+
+    /**
+     * Expose the running release + the git commit the image was built from.
+     */
+    private function _versionToView()
+    {
+        $this->view->appVersion = ViMbAdmin_Version::VERSION;
+        $this->view->gitCommit  = ViMbAdmin_Version::gitCommit();
+        $this->view->gitCommitShort = ViMbAdmin_Version::gitCommitShort();
+        $this->view->githubRepo = ViMbAdmin_Version::GITHUB_REPO;
+    }
+
+    /**
+     * Expose the last-queuerun / last-prune timestamps for the overview.
+     */
+    private function _lastRunToView()
+    {
+        $em = $this->getD2EM();
+        $this->view->lastQueueRun = ViMbAdmin_Setting::get( $em, ViMbAdmin_Setting::LAST_QUEUERUN );
+        $this->view->lastPrune    = ViMbAdmin_Setting::get( $em, ViMbAdmin_Setting::LAST_PRUNE );
+    }
+
+    /**
+     * Check GitHub for a newer release and/or newer commits. POST + CSRF.
+     * `which` = 'release' | 'commit' (the button pressed). Sets a flash
+     * message and redirects back; never blocks the page if GitHub is
+     * unreachable.
+     */
+    public function checkUpdateAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        $which = $this->getParam( 'which' ) === 'commit' ? 'commit' : 'release';
+
+        if( $which === 'release' )
+        {
+            $res = ViMbAdmin_Version::releaseUpdateAvailable();
+            if( $res === null )
+                $this->addMessage( _( 'Could not reach GitHub to check for a newer release.' ), OSS_Message::ERROR );
+            elseif( $res === false )
+                $this->addMessage( sprintf( _( 'You are on the latest release (%s).' ), ViMbAdmin_Version::VERSION ), OSS_Message::SUCCESS );
+            else
+                $this->addMessage( sprintf( _( 'A newer release is available: %1$s (you have %2$s).' ), $res, ViMbAdmin_Version::VERSION ), OSS_Message::INFO );
+        }
+        else
+        {
+            $res = ViMbAdmin_Version::commitUpdateAvailable();
+            if( $res === null )
+                $this->addMessage( _( 'Could not check commits (no network, or this build has no recorded commit).' ), OSS_Message::ERROR );
+            elseif( $res === false )
+                $this->addMessage( _( 'This image is built from the latest commit.' ), OSS_Message::SUCCESS );
+            else
+                $this->addMessage( sprintf( _( 'Newer commits exist on GitHub (latest %1$s, this build %2$s). Rebuild the image to update.' ), $res, ViMbAdmin_Version::gitCommitShort() ?: '?' ), OSS_Message::INFO );
+        }
+
+        $this->redirect( 'maintenance/index' );
     }
 
     /**
@@ -170,6 +232,9 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
      */
     private function _prune( array $archives )
     {
+        // Record that a prune ran (even if it pruned nothing) for the overview.
+        ViMbAdmin_Setting::stampNow( $this->getD2EM(), ViMbAdmin_Setting::LAST_PRUNE );
+
         if( !$archives )
             return 0;
 

@@ -58,6 +58,14 @@ final class ViMbAdmin_Version
     const VERSION = '4.0.0-rc1';
 
     /**
+     * Upstream GitHub repository (owner/repo) for the Maintenance update checks.
+     */
+    const GITHUB_REPO = 'eilandert/ViMbAdmin';
+
+    /** Default branch the running code is built from (commits-behind check). */
+    const GITHUB_BRANCH = 'master';
+
+    /**
      * Version milestone
      *
      * The version milestone is used to publicly identify the running version
@@ -68,7 +76,7 @@ final class ViMbAdmin_Version
     /**
      * Database schema version
      */
-    const DBVERSION = 3;
+    const DBVERSION = 4;
 
     /**
      * Database schema version name
@@ -91,7 +99,7 @@ final class ViMbAdmin_Version
      *     queue.autoprune.days — application.ini).
      * Standalone SQL mirror: contrib/migrations/2026-06-fork-schema.sql.
      */
-    const DBVERSION_NAME = 'ViMbAdmin fork schema (queue, MCP, Dovecot dicts, cascade FKs, archive autoprune)';
+    const DBVERSION_NAME = 'ViMbAdmin fork schema (queue, MCP, Dovecot dicts, cascade FKs, archive autoprune, setting KV)';
 
     /**
      * The latest stable version Zend Framework available
@@ -116,25 +124,139 @@ final class ViMbAdmin_Version
     }
 
     /**
-     * Fetches the version of the latest stable release
+     * The git commit the running image was built from.
      *
-     * @link http://framework.zend.com/download/latest
-     * @return string
+     * The Docker build writes the short+long SHA to var/GIT_COMMIT just before
+     * stripping .git (the image ships no .git, so this is the only source of
+     * truth at runtime). Returns the 40-char SHA, or null if the marker is
+     * absent (e.g. running straight from a working tree in dev).
+     *
+     * @return string|null
      */
-    public static function getLatest()
+    public static function gitCommit()
     {
-        if( null === self::$_lastestVersion )
+        // Dev fallback: a real .git in the tree (the image strips it).
+        $root = dirname( dirname( __DIR__ ) );          // .../ (app root)
+        // NOTE: the marker lives at the app ROOT, NOT under var/ -- var/ is a
+        // writable volume at runtime and would shadow a baked-in file.
+        $marker = $root . '/GIT_COMMIT';
+        if( is_readable( $marker ) )
         {
-            self::$_lastestVersion = 'not available';
-
-            $handle = fopen( 'http://www.opensolutions.ie/open-source/vimbadmin/latest-v3', 'r' );
-            if( $handle !== false )
-            {
-                self::$_lastestVersion = preg_replace( "/[^0-9\.]/", "", trim( stream_get_contents( $handle, 12 ) ) );
-                fclose( $handle );
-            }
+            $sha = trim( (string) file_get_contents( $marker ) );
+            if( preg_match( '/^[0-9a-f]{7,40}$/i', $sha ) )
+                return $sha;
         }
+        $head = $root . '/.git/HEAD';
+        if( is_readable( $head ) )
+        {
+            $ref = trim( (string) file_get_contents( $head ) );
+            if( strpos( $ref, 'ref:' ) === 0 )
+            {
+                $path = $root . '/.git/' . trim( substr( $ref, 4 ) );
+                if( is_readable( $path ) )
+                    return trim( (string) file_get_contents( $path ) );
+            }
+            elseif( preg_match( '/^[0-9a-f]{40}$/i', $ref ) )
+                return $ref;
+        }
+        return null;
+    }
 
-        return self::$_lastestVersion;
+    /** Short (12-char) form of the build commit, or null. */
+    public static function gitCommitShort()
+    {
+        $c = self::gitCommit();
+        return $c ? substr( $c, 0, 12 ) : null;
+    }
+
+    /**
+     * GitHub REST helper. Returns the decoded JSON body, or null on any error
+     * (no network, rate limit, bad status). Fail-soft: the update check is a
+     * convenience, never load-bearing.
+     *
+     * @param string $path  e.g. "releases/latest"
+     * @return array|null
+     */
+    private static function _github( $path )
+    {
+        $url = 'https://api.github.com/repos/' . self::GITHUB_REPO . '/' . $path;
+        $ctx = stream_context_create( [ 'http' => [
+            'method'        => 'GET',
+            'timeout'       => 6,
+            'ignore_errors' => true,
+            'header'        => "Accept: application/vnd.github+json\r\n"
+                             . 'User-Agent: ViMbAdmin/' . self::VERSION . "\r\n",
+        ] ] );
+        $body = @file_get_contents( $url, false, $ctx );
+        if( $body === false )
+            return null;
+        $json = json_decode( $body, true );
+        return is_array( $json ) ? $json : null;
+    }
+
+    /**
+     * Latest release tag on GitHub (e.g. "v4.0.0"), or null. Falls back to the
+     * newest tag if the repo has no formal "release".
+     *
+     * @return string|null
+     */
+    public static function latestRelease()
+    {
+        $rel = self::_github( 'releases/latest' );
+        if( is_array( $rel ) && !empty( $rel['tag_name'] ) )
+            return (string) $rel['tag_name'];
+
+        $tags = self::_github( 'tags' );
+        if( is_array( $tags ) && isset( $tags[0]['name'] ) )
+            return (string) $tags[0]['name'];
+
+        return null;
+    }
+
+    /**
+     * HEAD commit SHA of the default branch on GitHub, or null.
+     *
+     * @return string|null
+     */
+    public static function latestCommit()
+    {
+        $c = self::_github( 'commits/' . self::GITHUB_BRANCH );
+        if( is_array( $c ) && !empty( $c['sha'] ) )
+            return (string) $c['sha'];
+        return null;
+    }
+
+    /**
+     * Is a newer RELEASE available than VERSION? Returns the newer tag string,
+     * false if up to date, or null if the check couldn't run.
+     *
+     * @return string|false|null
+     */
+    public static function releaseUpdateAvailable()
+    {
+        $tag = self::latestRelease();
+        if( $tag === null )
+            return null;
+        $remote = ltrim( $tag, 'vV' );
+        return version_compare( $remote, self::VERSION, '>' ) ? $tag : false;
+    }
+
+    /**
+     * Are there newer COMMITS than the one this image was built from? "If
+     * there is another commit it must be a higher version." Returns the remote
+     * short SHA if it differs from ours, false if identical, or null if the
+     * check couldn't run (no network, or no baked commit to compare).
+     *
+     * @return string|false|null
+     */
+    public static function commitUpdateAvailable()
+    {
+        $local = self::gitCommit();
+        if( $local === null )
+            return null;
+        $remote = self::latestCommit();
+        if( $remote === null )
+            return null;
+        return ( strcasecmp( $local, $remote ) !== 0 ) ? substr( $remote, 0, 12 ) : false;
     }
 }

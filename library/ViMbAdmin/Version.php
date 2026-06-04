@@ -59,12 +59,19 @@ final class ViMbAdmin_Version
     /**
      * Database schema version
      */
-    const DBVERSION = 5;
+    const DBVERSION = 3;
 
     /**
      * Database schema version name
+     *
+     * Single consolidated fork schema step above upstream's v2 ("Earth"):
+     * covers the mailbox-task queue (mailbox_task), admin last_login, the MCP
+     * token table incl. allowed_domains, the Dovecot quota-clone table
+     * (dovecot_quota) and the Dovecot last-login table (dovecot_last_login).
+     * Doctrine SchemaTool applies the whole diff in one pass on a fresh DB, so
+     * these never needed separate version steps.
      */
-    const DBVERSION_NAME = 'Dovecot last_login table';
+    const DBVERSION_NAME = 'ViMbAdmin fork schema (queue, MCP, Dovecot dicts)';
 
     /**
      * The latest stable version Zend Framework available

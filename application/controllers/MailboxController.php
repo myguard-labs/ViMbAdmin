@@ -262,10 +262,22 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
                 // Surface validation failures instead of silently re-rendering
                 // the form with no feedback (admin pressed Save, nothing
                 // happened). Show one combined message + log the details.
-                $errs = [];
-                foreach( $form->getMessages() as $field => $msgs )
-                    foreach( (array) $msgs as $m )
-                        $errs[] = "{$field}: {$m}";
+                // Flatten Zend's (possibly sub-form-nested) message tree into
+                // "field: message" lines. getMessages() on a form with
+                // sub-forms returns nested arrays, so recurse.
+                $flatten = function( $msgs, $prefix, $self ) {
+                    $out = [];
+                    foreach( $msgs as $k => $v )
+                    {
+                        $path = $prefix === '' ? $k : "{$prefix}.{$k}";
+                        if( is_array( $v ) )
+                            $out = array_merge( $out, $self( $v, $path, $self ) );
+                        else
+                            $out[] = "{$path}: {$v}";
+                    }
+                    return $out;
+                };
+                $errs = $flatten( $form->getMessages(), '', $flatten );
                 if( $errs )
                 {
                     $this->addMessage( _( 'Could not save the mailbox: ' ) . implode( '; ', $errs ), OSS_Message::ERROR );

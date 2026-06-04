@@ -7,6 +7,15 @@ Dovecot over the **doveadm HTTP API** (`doveadm backup`, `mailbox delete`,
 `fs delete`, `sync`). That runner has to be invoked periodically — that is all
 this directory is for.
 
+> **A cron is REQUIRED.** ViMbAdmin has no daemon. The panel does *trigger-check*
+> (spawn a background runner when there's pending work and a free slot) on
+> container start, any login, the Maintenance tab, an MCP archive call, and the
+> HTTP trigger — but those are best-effort nudges, not a replacement for cron.
+>
+> Concurrency is capped by `queue.runner.max_concurrent` (default 1, serial),
+> enforced by a `queue_runner` DB lease — so frequent cron ticks + trigger-checks
+> never run more than the configured number of runners at once.
+
 > There is **no** tar/bzip2 archive cron any more, and no mail-host filesystem
 > job. Archive/delete backups are written by the queue as zstd-compressed
 > Dovecot maildirs under the configured `doveadm.backup.dest` (e.g. `/backups`),

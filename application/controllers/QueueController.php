@@ -101,6 +101,12 @@ class QueueController extends ViMbAdmin_Controller_Action
 
         $n = $this->_drain( (int) ( $this->_options['queue']['runner']['max_per_run'] ?? 5 ) );
 
+        if( $n < 0 )
+        {
+            $this->addMessage( _( 'A queue runner is already active (max_concurrent reached) — it will pick up the work.' ), OSS_Message::INFO );
+            $this->redirect( 'queue/index' );
+        }
+
         $this->log( \Entities\Log::ACTION_MAINTENANCE,
             "{$this->getAdmin()->getFormattedName()} ran the mailbox-task queue ({$n} task(s))" );
 
@@ -299,9 +305,10 @@ class QueueController extends ViMbAdmin_Controller_Action
         if( !$this->_ipAllowed( $ip ) )
             return $this->_json( 403, [ 'error' => "source IP {$ip} not allowed" ] );
 
-        $max = (int) ( $this->_options['queue']['runner']['max_per_run'] ?? 5 );
-        $n   = $this->_drain( $max );
-        return $this->_json( 200, [ 'processed' => $n ] );
+        // Non-blocking: spawn a background runner if there is work and a slot is
+        // free, then return immediately (don't make the cron/curl wait).
+        $spawned = ViMbAdmin_QueueRunner::triggerCheck( $this->getD2EM(), $this->_options );
+        return $this->_json( 200, [ 'triggered' => $spawned ] );
     }
 
     /**
@@ -333,34 +340,55 @@ class QueueController extends ViMbAdmin_Controller_Action
         $em   = $this->getD2EM();
         $repo = $em->getRepository( '\\Entities\\MailboxTask' );
 
-        $processed = 0;
-        foreach( $repo->pending( $max ) as $task )
+        // Concurrency cap: take a runner lease. If every slot
+        // (queue.runner.max_concurrent) is busy, do nothing and report -1 so the
+        // caller knows it was throttled rather than "no work".
+        $lease = ViMbAdmin_QueueRunner::acquireLease( $em, $this->_options );
+        if( $lease === null )
         {
-            // Atomic PENDING -> RUNNING; skip if another runner won the row.
-            if( !$repo->claim( $task ) )
-                continue;
-
-            try
-            {
-                $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
-                $this->_execute( $task, $doveadm );
-                $task->setStatus( \Entities\MailboxTask::STATUS_DONE );
-                $task->appendLog( 'done' );
-            }
-            catch( \Throwable $e )
-            {
-                $task->setStatus( \Entities\MailboxTask::STATUS_FAILED );
-                $task->appendLog( 'FAILED: ' . $e->getMessage() );
-                $this->getLogger()->err( "QueueController task {$task->getId()} ({$task->getType()} {$task->getUsername()}): " . $e->getMessage() );
-            }
-
-            $task->setFinishedAt( new \DateTime() );
-            $em->flush();
-
             if( $this->getParam( 'verbose' ) )
-                echo " - #{$task->getId()} {$task->getType()} {$task->getUsername()}: {$task->getStatus()}\n";
+                echo "All runner slots busy (queue.runner.max_concurrent) — skipping.\n";
+            return -1;
+        }
 
-            $processed++;
+        $processed = 0;
+        try
+        {
+            foreach( $repo->pending( $max ) as $task )
+            {
+                // Atomic PENDING -> RUNNING; skip if another runner won the row.
+                if( !$repo->claim( $task ) )
+                    continue;
+
+                try
+                {
+                    $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
+                    $this->_execute( $task, $doveadm );
+                    $task->setStatus( \Entities\MailboxTask::STATUS_DONE );
+                    $task->appendLog( 'done' );
+                }
+                catch( \Throwable $e )
+                {
+                    $task->setStatus( \Entities\MailboxTask::STATUS_FAILED );
+                    $task->appendLog( 'FAILED: ' . $e->getMessage() );
+                    $this->getLogger()->err( "QueueController task {$task->getId()} ({$task->getType()} {$task->getUsername()}): " . $e->getMessage() );
+                }
+
+                $task->setFinishedAt( new \DateTime() );
+                $em->flush();
+
+                // Keep the lease fresh through a long run so it isn't reaped.
+                ViMbAdmin_QueueRunner::heartbeat( $em, $lease );
+
+                if( $this->getParam( 'verbose' ) )
+                    echo " - #{$task->getId()} {$task->getType()} {$task->getUsername()}: {$task->getStatus()}\n";
+
+                $processed++;
+            }
+        }
+        finally
+        {
+            ViMbAdmin_QueueRunner::release( $em, $lease );
         }
         return $processed;
     }

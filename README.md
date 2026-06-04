@@ -439,9 +439,20 @@ the filesystem with the panel).
 
 ### Scheduling the queue runner
 
-The queue is only drained when something invokes `queue.cli-run` (or the HTTP
-trigger). Pick **one** of these and add it to cron — every 2 minutes is typical.
-Full requirements + an autoprune cron are in [`contrib/cron/`](contrib/cron/).
+**ViMbAdmin runs no daemon — you MUST install a cron.** The queue is only
+drained when something invokes `queue.cli-run`. As a convenience the panel also
+*trigger-checks* (spawns a background runner if there's pending work and a free
+slot) on five events — **container start, any login, opening the Maintenance
+tab, an MCP archive call, and the HTTP trigger** — but those are best-effort
+nudges, **not** a substitute for the cron. Pick **one** cron form below; every
+2 minutes is typical. Full requirements + an autoprune cron are in
+[`contrib/cron/`](contrib/cron/).
+
+Concurrency is capped by **`queue.runner.max_concurrent`** (default **1** =
+strictly serial). A DB lease (`queue_runner` table) enforces it across CLI, web
+and containers, so overlapping cron ticks or trigger-checks never run more than
+the configured number of runners at once; a crashed runner's lease is reaped
+after a timeout so a slot is never lost.
 
 **1. Docker (`docker exec`)** — run from the *host* crontab against the
 container:

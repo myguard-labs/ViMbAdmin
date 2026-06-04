@@ -30,6 +30,9 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
 
     public function indexAction()
     {
+        // Opening the Maintenance tab nudges the queue (best-effort, background).
+        ViMbAdmin_QueueRunner::triggerCheck( $this->getD2EM(), $this->_options );
+
         $this->view->stats = $this->_inactiveStats();
         $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
             'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();

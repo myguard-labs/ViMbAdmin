@@ -318,42 +318,78 @@ class McpController extends ViMbAdmin_Controller_Action
     {
         $m  = $this->_requireMailbox( $params );
         $em = $this->getD2EM();
-
-        // Serialize the mailbox the same way the panel does, so the archive
-        // worker (PHP or the SQL helper) can read homedir/maildir from `data`.
-        $ser  = new OSS_Doctrine2_EntitySerializer( $em );
-        $data = serialize( [ 'mailbox' => [ 'className' => get_class( $m ), 'params' => $ser->toArray( $m ) ] ] );
-
-        $archive = new \Entities\Archive();
-        $archive->setArchivedBy( null );
-        $archive->setArchivedAt( new \DateTime() );
-        $archive->setDomain( $m->getDomain() );
-        $archive->setUsername( $m->getUsername() );
-        $archive->setStatus( \Entities\Archive::STATUS_PENDING_ARCHIVE );
-        $archive->setStatusChangedAt( new \DateTime() );
-        $archive->setData( $data );
-        $em->persist( $archive );
-
         $username = $m->getUsername();
-        $domain   = $m->getDomain();
-        $em->getRepository( '\\Entities\\Mailbox' )->purgeMailbox( $m, null, false );
-        $domain->setMailboxCount( max( 0, $domain->getMailboxCount() - 1 ) );
+
+        // Queue a real ARCHIVE task (doveadm backup -> empty store, keep
+        // account), exactly like the panel button. The runner records the
+        // archive row + backup; we don't serialise/purge here.
+        ViMbAdmin_MailboxQueue::enqueue( $em, $m, \Entities\MailboxTask::TYPE_ARCHIVE, null );
         $em->flush();
-        return [ 'queued' => 'PENDING_ARCHIVE', 'username' => $username ];
+
+        // Nudge a background runner (best-effort) so MCP-queued work starts
+        // without waiting for the next cron tick.
+        ViMbAdmin_QueueRunner::triggerCheck( $em, $this->_options );
+
+        return [ 'queued' => \Entities\MailboxTask::TYPE_ARCHIVE, 'username' => $username ];
     }
 
+    /**
+     * Restore or delete an existing archive. These map onto the immediate
+     * ArchiveController actions; over MCP we perform the equivalent directly.
+     * $status is TYPE_RESTORE / TYPE_DELETE intent.
+     */
     private function _archiveState( array $params, $status )
     {
         $username = $this->_str( $params, 'username', true );
-        $archive  = $this->getD2EM()->getRepository( '\\Entities\\Archive' )->findOneBy( [ 'username' => $username ] );
+        $em       = $this->getD2EM();
+        $archive  = $em->getRepository( '\\Entities\\Archive' )->findOneBy( [ 'username' => $username ] );
         if( !$archive )
             throw new ViMbAdmin_Mcp_Exception( 'no archive for that username' );
         if( $archive->getDomain() )
             $this->_assertDomainAllowed( $archive->getDomain()->getDomain() );
-        $archive->setStatus( $status );
-        $archive->setStatusChangedAt( new \DateTime() );
-        $this->getD2EM()->flush();
-        return [ 'queued' => $status, 'username' => $username ];
+
+        $dest    = $archive->getMaildirFile();
+        $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
+
+        if( $status === \Entities\Archive::STATUS_PENDING_DELETE )
+        {
+            // delete the backup files + the archive row.
+            if( $dest )
+                $doveadm->fsDelete( $dest );
+            $em->remove( $archive );
+            $em->flush();
+            return [ 'deleted' => $username ];
+        }
+
+        // restore: recreate the mailbox from the snapshot if it's gone, sync the
+        // mail back, then drop the backup + row.
+        $mailbox = $em->getRepository( '\\Entities\\Mailbox' )->findOneBy( [ 'username' => $username ] );
+        if( !$mailbox )
+        {
+            $snap = json_decode( (string) $archive->getData(), true );
+            $mb   = ( is_array( $snap ) && isset( $snap['mailbox'] ) ) ? $snap['mailbox'] : null;
+            if( !$mb )
+                throw new ViMbAdmin_Mcp_Exception( 'no mailbox snapshot stored with this archive — cannot restore' );
+
+            $mailbox = new \Entities\Mailbox();
+            $mailbox->setUsername( $mb['username'] )->setLocalPart( $mb['local_part'] )
+                    ->setName( $mb['name'] )->setPassword( $mb['password'] )
+                    ->setQuota( $mb['quota'] )->setHomedir( $mb['homedir'] )
+                    ->setMaildir( $mb['maildir'] )->setUid( $mb['uid'] )
+                    ->setGid( $mb['gid'] )->setActive( $mb['active'] )
+                    ->setDomain( $archive->getDomain() )->setCreated( new \DateTime() );
+            $archive->getDomain()->increaseMailboxCount();
+            $em->persist( $mailbox );
+            $em->flush();
+        }
+        if( $dest )
+        {
+            $doveadm->restoreFrom( $username, $dest );
+            $doveadm->fsDelete( $dest );
+        }
+        $em->remove( $archive );
+        $em->flush();
+        return [ 'restored' => $username ];
     }
 
     // ---- lookup + param helpers ----------------------------------------

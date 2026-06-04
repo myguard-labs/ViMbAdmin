@@ -160,3 +160,20 @@ SET @ddl := IF( @have = 0,
     'ALTER TABLE `archive` ADD `autoprune` TINYINT(1) NOT NULL DEFAULT 0',
     'DO 0 /* archive.autoprune already present */' );
 PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
+
+
+-- ---------------------------------------------------------------------
+-- 5) queue_runner lease table (runner concurrency cap)
+-- ---------------------------------------------------------------------
+-- One row per ACTIVE queue runner; queue.runner.max_concurrent is enforced by
+-- counting the non-stale rows before a new drain starts. Created by the entity
+-- mapping on a fresh DB; this is the standalone mirror.
+CREATE TABLE IF NOT EXISTS `queue_runner` (
+    `id`           BIGINT       NOT NULL AUTO_INCREMENT,
+    `host`         VARCHAR(255) NOT NULL,
+    `pid`          INT          NOT NULL,
+    `started_at`   DATETIME     NOT NULL,
+    `heartbeat_at` DATETIME     NOT NULL,
+    PRIMARY KEY (`id`),
+    INDEX `queue_runner_heartbeat_idx` (`heartbeat_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -224,6 +224,19 @@ doveadm.backup.dest  = "maildir:/srv/vmail-backup/%d/%u"
 ; How many queued tasks a single queue-runner invocation drains. Caps load.
 queue.runner.max_per_run = 5
 
+; Maximum number of queue runners allowed to drain CONCURRENTLY. A DB lease
+; (queue_runner table) enforces this across CLI, web and containers. Default 1
+; = strictly serial (a new runner only starts if no other is active). Raise it
+; to drain more in parallel when doveadm work is the bottleneck.
+queue.runner.max_concurrent = 1
+
+; IMPORTANT: ViMbAdmin does NOT run a daemon. The queue is only drained when a
+; runner is invoked. The in-app trigger-checks (on login, from the Maintenance
+; tab, via MCP, on container start, or the HTTP endpoint below) are best-effort
+; nudges — you still MUST install a cron that runs the queue periodically:
+;   */2 * * * *  docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
+; See README "Scheduling the queue runner" + contrib/cron/ for all three forms.
+
 ; Auto-prune window for DELETE backups, in DAYS. When a mailbox is DELETEd (not
 ; archived) the queue takes a safety backup and records an archive row flagged
 ; autoprune=on; that backup is removed automatically this many days after it
@@ -233,15 +246,17 @@ queue.runner.max_per_run = 5
 ;    0 = "instant": DELETE takes NO backup and removes the mailbox immediately.
 queue.autoprune.days = 90
 
-; Remote queue-runner trigger endpoint (/queue/trigger). Lets an off-box cron
-; kick the runner. Authenticated by a bearer key (only its SHA-256 hash is
+; Remote queue-runner trigger endpoint (POST /queue/trigger). Lets an off-box
+; cron kick the runner. Authenticated by a bearer key (only its SHA-256 hash is
 ; compared) plus an IP/CIDR allowlist. Leave the key empty to DISABLE the
 ; remote endpoint entirely (the CLI runner and UI button still work).
-;   curl -H 'Authorization: Bearer <key>' https://host/vimbadmin/queue/trigger
+;   curl -X POST -H 'Authorization: Bearer <key>' https://host/vimbadmin/queue/trigger
 queue.runner.key         = ""
 ; Comma- or whitespace-separated IPs / CIDRs allowed to hit /queue/trigger.
-; Empty = deny all (endpoint effectively off even if a key is set).
-queue.runner.allowed_ips = ""
+; Default = all RFC1918 private ranges + loopback + IPv6 unique-local, so an
+; internal cron works out of the box; a bearer key is still required on top.
+; Set to "" to deny all (endpoint effectively off even if a key is set).
+queue.runner.allowed_ips = "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1/128, fc00::/7"
 
 
 

@@ -45,6 +45,8 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         $this->view->dbVersionApplied = $schema->currentVersion();
         $this->view->dbVersionCode    = $schema->codeVersion();
         $this->view->dbPending        = count( $schema->pendingSql() );
+        $this->view->appVersion       = ViMbAdmin_Version::VERSION;
+        $this->view->appDbVersionName = defined( 'ViMbAdmin_Version::DBVERSION_NAME' ) ? ViMbAdmin_Version::DBVERSION_NAME : '';
     }
 
     /**

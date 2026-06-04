@@ -44,9 +44,18 @@
 final class ViMbAdmin_Version
 {
     /**
-     * Version identification - see compareVersion()
+     * Version identification - see compareVersion().
+     *
+     * This is the single source of truth for the application version: the
+     * footer and the Maintenance tab both read VERSION directly. Release
+     * workflow:
+     *   1. bump VERSION here (e.g. 4.0.0-rc1 -> 4.0.0-rc2 -> 4.0.0),
+     *      and MILESTONE on a minor/major change,
+     *   2. tag the commit: `git tag v4.0.0-rc1 && git push --tags`.
+     * DBVERSION is independent — bump it ONLY when the schema (entity mappings)
+     * changes, not on every release.
      */
-    const VERSION = '3.4.1';
+    const VERSION = '4.0.0-rc1';
 
     /**
      * Version milestone
@@ -54,7 +63,7 @@ final class ViMbAdmin_Version
      * The version milestone is used to publicly identify the running version
      * and should therefore not include the patch level.
      */
-    const MILESTONE = '3.4';
+    const MILESTONE = '4.0';
 
     /**
      * Database schema version

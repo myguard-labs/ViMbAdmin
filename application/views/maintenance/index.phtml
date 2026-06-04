@@ -51,6 +51,10 @@
                 the pending SQL first — nothing is applied until you confirm.
             </p>
             <p>
+                Application version: <strong>{$appVersion|escape}</strong>
+                {if $appDbVersionName}<br/><small class="muted">Schema: {$appDbVersionName|escape}</small>{/if}
+            </p>
+            <p>
                 Schema version:
                 <strong>{if $dbVersionApplied !== null}{$dbVersionApplied}{else}—{/if}</strong>
                 applied / <strong>{if $dbVersionCode !== null}{$dbVersionCode}{else}—{/if}</strong> expected by code.

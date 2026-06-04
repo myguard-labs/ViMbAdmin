@@ -283,23 +283,94 @@ class ViMbAdmin_Doveadm
     }
 
     /**
-     * Delete one or more mailboxes (folders) for a user. With mailbox "*" and
-     * recursive this empties the whole account's mail store.
+     * List a user's mailboxes (folders). Returns a flat array of mailbox names.
      *
      * @param string $user
-     * @param array  $mailboxes  Mailbox names to delete (default: all, recursive)
+     * @return string[]
+     */
+    public function mailboxList( $user )
+    {
+        $rows  = $this->run( 'mailbox list', [ 'user' => $user ] );
+        $names = [];
+        if( is_array( $rows ) )
+        {
+            foreach( $rows as $row )
+            {
+                if( is_array( $row ) && isset( $row['mailbox'] ) )
+                    $names[] = (string) $row['mailbox'];
+                elseif( is_string( $row ) )
+                    $names[] = $row;
+            }
+        }
+        return $names;
+    }
+
+    /**
+     * Empty a user's whole mail store, leaving no trace on disk.
+     *
+     * "mailbox delete *" does NOT work — doveadm treats "*" as a literal name,
+     * not a wildcard (HTTP API exit 68 "Mailbox doesn't exist: *"). So we list
+     * the real mailbox names and delete each recursively + unsafe.
+     *
+     * INBOX is special: in this maildir layout INBOX == the maildir root, so
+     * doveadm "mailbox delete INBOX" returns exit 65 ("can't delete INBOX") even
+     * though the recursive expunge it performs first DOES wipe the mail and the
+     * maildir directory is GC'd to nothing. We delete it LAST and tolerate that
+     * one specific failure — every other box is fatal-on-error. After this the
+     * on-disk maildir dir is gone; a subsequent "mailbox list" only shows the
+     * namespace's auto-synthesised INBOX/special-use placeholders, which are
+     * in-memory and never written back.
+     *
+     * @param string $user
+     * @return void
+     * @throws ViMbAdmin_Exception if a non-INBOX mailbox delete fails
+     */
+    public function mailboxDelete( $user )
+    {
+        $names = $this->mailboxList( $user );
+
+        // Delete every non-INBOX box first (fatal on error), INBOX last.
+        $inboxLast = [];
+        foreach( $names as $name )
+        {
+            if( strcasecmp( $name, 'INBOX' ) === 0 )
+                $inboxLast[] = $name;
+            else
+                $this->_mailboxDeleteOne( $user, $name );
+        }
+
+        foreach( $inboxLast as $name )
+        {
+            try
+            {
+                $this->_mailboxDeleteOne( $user, $name );
+            }
+            catch( ViMbAdmin_Exception $e )
+            {
+                // Expected: INBOX (== maildir root) cannot be deleted as a box,
+                // but the recursive expunge already emptied the store. Swallow
+                // only this case; the mail is gone and the dir is GC'd.
+                if( stripos( $e->getMessage(), 'inbox' ) === false
+                    && stripos( $e->getMessage(), 'exit 65' ) === false )
+                    throw $e;
+            }
+        }
+    }
+
+    /**
+     * Delete a single named mailbox, recursively + unsafe (no empty-check).
+     *
+     * @param string $user
+     * @param string $mailbox
      * @return array
      */
-    public function mailboxDelete( $user, array $mailboxes = [ '*' ] )
+    private function _mailboxDeleteOne( $user, $mailbox )
     {
         // doveadm "mailbox delete" params (2.4): recursive (-r), unsafe (-Z),
         // require-empty (-e), subscriptions (-s), mailbox (positional array).
-        // There is NO "unsafeEmptyTrash" param — sending it makes the HTTP API
-        // reject the whole call with `invalidRequest`. We want a forced, full
-        // recursive wipe, so: recursive + unsafe (skip the empty-check).
         return $this->run( 'mailbox delete', [
             'user'      => $user,
-            'mailbox'   => array_values( $mailboxes ),
+            'mailbox'   => [ $mailbox ],
             'recursive' => true,
             'unsafe'    => true,
         ] );

@@ -286,23 +286,36 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
     }
 
     /**
-     * Enable autoprune on an archive and (re)start its prune window by setting
-     * archived_at = now. The prune itself runs from the Maintenance tab. There
-     * is intentionally no "disable" action here — turning autoprune off again
-     * is the unusual case; delete or restore the archive instead.
+     * Toggle autoprune on/off for an archive. Turning it ON also (re)starts the
+     * prune window by setting archived_at = now, so a freshly-enabled backup
+     * gets the full queue.autoprune.days before it can expire. Turning it OFF
+     * just clears the flag (the archived date is left as-is). The prune itself
+     * runs from the Maintenance tab.
      */
-    public function setAutopruneAction()
+    public function toggleAutopruneAction()
     {
         $this->_assertCsrf();
         $archive = $this->getArchive();
+        $now     = new \DateTime();
 
         if( $archive->getAutoprune() )
         {
-            $this->addMessage( "Autoprune is already enabled for this archive.", OSS_Message::INFO );
+            // ON -> OFF
+            $archive->setAutoprune( false )
+                    ->setStatusChangedAt( $now );
+            $this->getD2EM()->flush();
+
+            $this->log(
+                \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                "{$this->getAdmin()->getFormattedName()} disabled autoprune for archive {$archive->getUsername()}"
+            );
+            $this->addMessage(
+                sprintf( "Autoprune disabled for %s.", $archive->getUsername() ),
+                OSS_Message::SUCCESS );
         }
         else
         {
-            $now = new \DateTime();
+            // OFF -> ON (restart the prune window)
             $archive->setAutoprune( true )
                     ->setArchivedAt( $now )
                     ->setStatusChangedAt( $now );

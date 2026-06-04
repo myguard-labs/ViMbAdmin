@@ -56,10 +56,15 @@
                             <i class="icon-trash"></i>
                         </a>
                     {/if}
-                    {if !$archive.autoprune}
-                        <a class="btn btn-mini btn-warning have-tooltip" id="autoprune-archive-{$archive.id}" title="Enable autoprune (resets archived date to now)" href="{genUrl controller='archive' action='set-autoprune' arid=$archive.id csrf=$csrfToken}"
+                    {if $archive.autoprune}
+                        <a class="btn btn-mini have-tooltip" id="autoprune-archive-{$archive.id}" title="Disable autoprune" href="{genUrl controller='archive' action='toggle-autoprune' arid=$archive.id csrf=$csrfToken}"
+                           onclick="return confirm('Disable autoprune for {$archive.username|escape}? Its backup will no longer expire automatically.');">
+                            <i class="icon-off"></i> Autoprune off
+                        </a>
+                    {else}
+                        <a class="btn btn-mini btn-warning have-tooltip" id="autoprune-archive-{$archive.id}" title="Enable autoprune (resets archived date to now)" href="{genUrl controller='archive' action='toggle-autoprune' arid=$archive.id csrf=$csrfToken}"
                            onclick="return confirm('Enable autoprune for {$archive.username|escape}? This resets its archived date to now, so the prune window restarts.');">
-                            <i class="icon-time"></i>
+                            <i class="icon-time"></i> Autoprune on
                         </a>
                     {/if}
                 </div>

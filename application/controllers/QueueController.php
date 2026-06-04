@@ -136,6 +136,55 @@ class QueueController extends ViMbAdmin_Controller_Action
         $this->redirect( 'queue/index' );
     }
 
+    /**
+     * Delete a single task row (any status except RUNNING — never remove a task
+     * mid-execution). For cleaning up DONE/FAILED/CANCELLED/PENDING entries.
+     */
+    public function deleteAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'queue/index' );
+
+        $task = $this->getD2EM()->getRepository( '\\Entities\\MailboxTask' )
+            ->find( (int) $this->getParam( 'id', 0 ) );
+
+        if( $task && $task->getStatus() !== \Entities\MailboxTask::STATUS_RUNNING )
+        {
+            $this->getD2EM()->remove( $task );
+            $this->getD2EM()->flush();
+            $this->addMessage( _( 'Task deleted.' ), OSS_Message::SUCCESS );
+        }
+        else
+        {
+            $this->addMessage( _( 'Task not found, or it is currently running.' ), OSS_Message::ERROR );
+        }
+        $this->redirect( 'queue/index' );
+    }
+
+    /**
+     * Bulk-delete all finished tasks (DONE / FAILED / CANCELLED). Leaves
+     * PENDING and RUNNING untouched.
+     */
+    public function clearAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'queue/index' );
+
+        $n = (int) $this->getD2EM()->createQuery(
+            'DELETE FROM \Entities\MailboxTask t WHERE t.status IN (:done)' )
+            ->setParameter( 'done', [
+                \Entities\MailboxTask::STATUS_DONE,
+                \Entities\MailboxTask::STATUS_FAILED,
+                \Entities\MailboxTask::STATUS_CANCELLED,
+            ] )
+            ->execute();
+
+        $this->addMessage( sprintf( _( 'Cleared %d finished task(s).' ), $n ), OSS_Message::SUCCESS );
+        $this->redirect( 'queue/index' );
+    }
+
     // =====================================================================
     //  CLI runner (vimbtool / local cron)
     // =====================================================================

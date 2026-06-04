@@ -41,6 +41,10 @@
     "require-dev": {
         "opensolutions/minify": "1.*"
     },
+    "scripts": {
+        "audit": "@composer audit",
+        "outdated": "@composer outdated --direct"
+    },
     "autoload": {
         "psr-0": {
             "OSS_": "library/",

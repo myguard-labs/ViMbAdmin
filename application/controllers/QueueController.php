@@ -110,6 +110,53 @@ class QueueController extends ViMbAdmin_Controller_Action
     }
 
     /**
+     * Run a single PENDING task now (synchronously). CSRF + POST guarded.
+     */
+    public function runTaskAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'queue/index' );
+
+        $em   = $this->getD2EM();
+        $repo = $em->getRepository( '\\Entities\\MailboxTask' );
+        $task = $repo->find( (int) $this->getParam( 'id', 0 ) );
+
+        if( !$task || $task->getStatus() !== \Entities\MailboxTask::STATUS_PENDING )
+        {
+            $this->addMessage( _( 'Task not found or not pending.' ), OSS_Message::ERROR );
+            $this->redirect( 'queue/index' );
+        }
+
+        // Atomic PENDING -> RUNNING; bail if a background runner grabbed it.
+        if( !$repo->claim( $task ) )
+        {
+            $this->addMessage( _( 'Task is already being processed.' ), OSS_Message::INFO );
+            $this->redirect( 'queue/index' );
+        }
+
+        try
+        {
+            $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
+            $this->_execute( $task, $doveadm );
+            $task->setStatus( \Entities\MailboxTask::STATUS_DONE );
+            $task->appendLog( 'done (run-now by ' . $this->getAdmin()->getFormattedName() . ')' );
+            $this->addMessage( sprintf( _( 'Task #%d completed.' ), $task->getId() ), OSS_Message::SUCCESS );
+        }
+        catch( \Throwable $e )
+        {
+            $task->setStatus( \Entities\MailboxTask::STATUS_FAILED );
+            $task->appendLog( 'FAILED: ' . $e->getMessage() );
+            $this->getLogger()->err( "QueueController run-now task {$task->getId()}: " . $e->getMessage() );
+            $this->addMessage( sprintf( _( 'Task #%d failed: %s' ), $task->getId(), $e->getMessage() ), OSS_Message::ERROR );
+        }
+
+        $task->setFinishedAt( new \DateTime() );
+        $em->flush();
+        $this->redirect( 'queue/index' );
+    }
+
+    /**
      * Cancel a PENDING task.
      */
     public function cancelAction()
@@ -237,14 +284,9 @@ class QueueController extends ViMbAdmin_Controller_Action
      */
     private function _ipAllowed( $ip )
     {
+        // empty list = deny all (ipInList returns false on empty, matching).
         $raw = (string) ( $this->_options['queue']['runner']['allowed_ips'] ?? '' );
-        $list = preg_split( '/[\s,]+/', trim( $raw ), -1, PREG_SPLIT_NO_EMPTY );
-        if( !count( $list ) )
-            return false; // empty = deny all
-        foreach( $list as $cidr )
-            if( ViMbAdmin_Net::ipInCidr( $ip, $cidr ) )
-                return true;
-        return false;
+        return ViMbAdmin_Net::ipInList( $ip, $raw );
     }
 
     // =====================================================================
@@ -312,6 +354,10 @@ class QueueController extends ViMbAdmin_Controller_Action
                 $task->appendLog( 'force-resync' );  $doveadm->forceResync( $user );
                 $task->appendLog( 'index' );          $doveadm->index( $user );
                 $task->appendLog( 'purge' );          $doveadm->purge( $user );
+                $task->appendLog( 'quota recalc' );   $doveadm->quotaRecalc( $user );
+                break;
+
+            case \Entities\MailboxTask::TYPE_QUOTA_RECALC:
                 $task->appendLog( 'quota recalc' );   $doveadm->quotaRecalc( $user );
                 break;
 

@@ -41,9 +41,10 @@ $(document).ready(function()
             null,
             { 'sType': 'num-html' },
             { 'sType': 'num-html' },
-            {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
             { 'sType': 'num-html' },
             {/if}
+            null,
             null,
             null,
             null,
@@ -108,9 +109,10 @@ function getEntries( event ){
                                     row.name,
                                     formatMailboxes( row.id, row.mailboxes, row.maxmailboxes ),
                                     formatAliases( row.id, row.aliases, row.maxaliases ),
-                                    {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
-                                    row.mailboxes_size == null ? 0 : (row.mailboxes_size / {$multiplier}).toFixed(1),
+                                    {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
+                                    ( row.mailboxes_size == null ? 0 : (row.mailboxes_size / {$multiplier}).toFixed(1) ) + ' / ' + formatQuotaLimit( row.maxquota ),
                                     {/if}
+                                    formatQuotaLimit( row.quota ),
                                     formatActive( row.id, row.active ),
                                     row.transport,
                                     row.backupmx ? "Yes": "No",
@@ -130,6 +132,14 @@ function getEntries( event ){
     {
         oDataTable.fnClearTable();
     }
+}
+
+function formatQuotaLimit( q )
+{
+    // 0 / null = unlimited.
+    return ( q && parseFloat( q ) > 0 )
+         ? Math.round( parseFloat( q ) ).toString()
+         : '<span class="muted" title="Unlimited">&infin;</span>';
 }
 
 function formatActive( id, active )

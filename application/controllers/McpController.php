@@ -9,7 +9,7 @@
  * allowlist in front of this as the primary network barrier.
  *
  * Tokens are managed from the CLI:
- *   ./bin/vimbtool.php -a mcp.cli-token-generate --name=agent1 [--scope="read"] [--ip="10.0.0.0/8"] [--days=365]
+ *   ./bin/vimbtool.php -a mcp.cli-token-generate --name=agent1 [--scope="read"] [--ip="10.0.0.0/8"] [--domains="a.com b.com"] [--days=365]
  *   ./bin/vimbtool.php -a mcp.cli-token-list
  *   ./bin/vimbtool.php -a mcp.cli-token-revoke --name=agent1     (or --id=N)
  *
@@ -18,6 +18,9 @@
  */
 class McpController extends ViMbAdmin_Controller_Action
 {
+    /** @var \Entities\McpToken|null  the authenticated token for this request */
+    private $_token = null;
+
     public function preDispatch()
     {
         // No session auth here. Web action authenticates via bearer; the
@@ -60,7 +63,7 @@ class McpController extends ViMbAdmin_Controller_Action
         try
         {
             $auth  = new ViMbAdmin_Mcp_Auth( $this->getD2EM(), $this->_options['trustedproxy'] ?? [] );
-            $token = $auth->authenticate( $_SERVER, $this->_scopeFor( $method ) );
+            $token = $this->_token = $auth->authenticate( $_SERVER, $this->_scopeFor( $method ) );
 
             // Destructive methods are additionally per-token rate-limited.
             if( $this->_isDestructive( $method ) )
@@ -120,6 +123,9 @@ class McpController extends ViMbAdmin_Controller_Action
     {
         $out = [];
         foreach( $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findAll() as $d )
+        {
+            if( $this->_token && !$this->_token->allowsDomain( $d->getDomain() ) )
+                continue;
             $out[] = [
                 'id'        => $d->getId(),
                 'domain'    => $d->getDomain(),
@@ -130,6 +136,7 @@ class McpController extends ViMbAdmin_Controller_Action
                 'mailboxes' => $d->getMailboxCount(),
                 'aliases'   => $d->getAliasCount(),
             ];
+        }
         return [ 'domains' => $out ];
     }
 
@@ -295,6 +302,8 @@ class McpController extends ViMbAdmin_Controller_Action
         if( !$a )
             throw new ViMbAdmin_Mcp_Exception( 'unknown alias' );
         $domain = $a->getDomain();
+        if( $domain )
+            $this->_assertDomainAllowed( $domain->getDomain() );
         $em = $this->getD2EM();
         $em->remove( $a );
         if( $domain )
@@ -339,6 +348,8 @@ class McpController extends ViMbAdmin_Controller_Action
         $archive  = $this->getD2EM()->getRepository( '\\Entities\\Archive' )->findOneBy( [ 'username' => $username ] );
         if( !$archive )
             throw new ViMbAdmin_Mcp_Exception( 'no archive for that username' );
+        if( $archive->getDomain() )
+            $this->_assertDomainAllowed( $archive->getDomain()->getDomain() );
         $archive->setStatus( $status );
         $archive->setStatusChangedAt( new \DateTime() );
         $this->getD2EM()->flush();
@@ -357,7 +368,21 @@ class McpController extends ViMbAdmin_Controller_Action
         $domain = $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] );
         if( !$domain )
             throw new ViMbAdmin_Mcp_Exception( 'unknown domain' );
+        $this->_assertDomainAllowed( $domain->getDomain() );
         return $domain;
+    }
+
+    /**
+     * Enforce the token's per-token domain allowlist. Empty allowlist = all
+     * domains. Reports "unknown domain" rather than "forbidden" so a token
+     * can't enumerate which domains exist outside its scope.
+     *
+     * @throws ViMbAdmin_Mcp_Exception
+     */
+    private function _assertDomainAllowed( $domain )
+    {
+        if( $this->_token && !$this->_token->allowsDomain( $domain ) )
+            throw new ViMbAdmin_Mcp_Exception( 'unknown domain' );
     }
 
     /**
@@ -370,6 +395,8 @@ class McpController extends ViMbAdmin_Controller_Action
         $m = $this->getD2EM()->getRepository( '\\Entities\\Mailbox' )->findOneBy( [ 'username' => $username ] );
         if( !$m )
             throw new ViMbAdmin_Mcp_Exception( 'unknown mailbox' );
+        if( $m->getDomain() )
+            $this->_assertDomainAllowed( $m->getDomain()->getDomain() );
         return $m;
     }
 
@@ -474,6 +501,7 @@ class McpController extends ViMbAdmin_Controller_Action
         $tok->setTokenHash( hash( 'sha256', $raw ) );
         $tok->setScope( $this->_cliOpt( 'scope' ) ?: 'read' );
         $tok->setAllowedIps( $this->_cliOpt( 'ip' ) ?: null );
+        $tok->setAllowedDomains( $this->_cliOpt( 'domains' ) ?: null );
         $tok->setCreated( new \DateTime() );
         $tok->setRevoked( false );
 
@@ -486,6 +514,7 @@ class McpController extends ViMbAdmin_Controller_Action
 
         echo "MCP token '{$name}' created. Scope: {$tok->getScope()}.";
         echo $tok->getAllowedIps() ? " IPs: {$tok->getAllowedIps()}." : " IPs: any.";
+        echo $tok->getAllowedDomains() ? " Domains: {$tok->getAllowedDomains()}." : " Domains: all.";
         echo $tok->getExpiresAt() ? " Expires: " . $tok->getExpiresAt()->format( 'Y-m-d' ) . ".\n" : " No expiry.\n";
         echo "\n  TOKEN (shown once, store it now):\n\n    {$raw}\n\n";
         echo "Use it as:  Authorization: Bearer {$raw}\n";
@@ -499,12 +528,13 @@ class McpController extends ViMbAdmin_Controller_Action
             echo "No MCP tokens.\n";
             return;
         }
-        printf( "%-4s %-20s %-12s %-20s %-10s %-19s\n", 'ID', 'NAME', 'SCOPE', 'IPS', 'STATE', 'LAST USED' );
+        printf( "%-4s %-20s %-12s %-20s %-20s %-10s %-19s\n", 'ID', 'NAME', 'SCOPE', 'IPS', 'DOMAINS', 'STATE', 'LAST USED' );
         foreach( $tokens as $t )
         {
-            printf( "%-4d %-20s %-12s %-20s %-10s %-19s\n",
+            printf( "%-4d %-20s %-12s %-20s %-20s %-10s %-19s\n",
                 $t->getId(), $t->getName(), $t->getScope(),
                 $t->getAllowedIps() ?: 'any',
+                $t->getAllowedDomains() ?: 'all',
                 $t->getRevoked() ? 'revoked' : ( $t->isActive() ? 'active' : 'expired' ),
                 $t->getLastUsedAt() ? $t->getLastUsedAt()->format( 'Y-m-d H:i:s' ) : '-' );
         }

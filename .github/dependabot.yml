@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: "composer"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    # Security advisories are picked up automatically; this also surfaces
+    # routine version bumps for the direct deps (doctrine/orm, smarty/smarty,
+    # robthree/twofactorauth, bacon/bacon-qr-code, symfony/cache, zf1-future).
+    groups:
+      php-deps:
+        patterns:
+          - "*"

@@ -94,7 +94,7 @@ class OSS_Auth_Password
 
         if( substr( $hash, 0, 8 ) == 'dovecot:' )
         {
-            return ViMbAdmin_Dovecot::password( substr( $hash, 8 ), $pw, $config['username'] );
+            return ViMbAdmin_Dovecot::password( substr( $hash, 8 ), $pw, ( is_array( $config ) && isset( $config['username'] ) ) ? $config['username'] : '' );
         }
         else if ( substr( $hash, 0, 6) == 'crypt:' )
         {
@@ -214,7 +214,7 @@ class OSS_Auth_Password
             return hash_equals( $pwhash, crypt( $pwplain, $pwhash ) );
 
         if( substr( $hash, 0, 8 ) == 'dovecot:' )
-            return ViMbAdmin_Dovecot::passwordVerify( substr( $hash, 8 ), $pwhash, $pwplain, $config['username'] );
+            return ViMbAdmin_Dovecot::passwordVerify( substr( $hash, 8 ), $pwhash, $pwplain, ( is_array( $config ) && isset( $config['username'] ) ) ? $config['username'] : '' );
 
 
         // Constant-time comparison to avoid leaking the hash via timing.

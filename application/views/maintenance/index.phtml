@@ -89,6 +89,52 @@
 </div>
 
 <div class="row-fluid">
+    {* ============================ Flush Dovecot auth cache ============================ *}
+    <div class="span6">
+        <div class="well">
+            <h3>Flush Dovecot auth cache</h3>
+            <p>
+                Clear Dovecot's authentication cache so the next login re-reads
+                the userdb/passdb. Use after bulk password or active-flag changes
+                that aren't picking up immediately. Non-destructive.
+            </p>
+            <form method="post" action="{genUrl controller='maintenance' action='flush-auth-cache'}">
+                <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                <button class="btn btn-primary" type="submit">Flush auth cache</button>
+            </form>
+        </div>
+    </div>
+
+    {* ============================ Recalc quota for all mailboxes ============================ *}
+    <div class="span6">
+        <div class="well">
+            <h3>Recalculate quota usage (all mailboxes)</h3>
+            <p>
+                Queue a Dovecot <strong>quota recalc</strong> for every active
+                mailbox ({$activeMailboxCount} mailbox(es)), refreshing the
+                <code>Used</code> figures shown in the mailbox/domain lists.
+                Lighter than a full repair — quota only. Processed gradually by
+                the background runner.
+            </p>
+            {if isset( $confirmRecalcAll )}
+                <form method="post" action="{genUrl controller='maintenance' action='recalc-all'}"
+                      onsubmit="return confirm('Queue quota recalc for ALL {$activeMailboxCount} active mailboxes?');">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <input type="hidden" name="confirm" value="1" />
+                    <button class="btn btn-warning" type="submit">Yes, queue {$activeMailboxCount} recalc task(s)</button>
+                    <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
+                </form>
+            {else}
+                <form method="post" action="{genUrl controller='maintenance' action='recalc-all'}">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <button class="btn btn-primary" type="submit">Recalc quota for all mailboxes…</button>
+                </form>
+            {/if}
+        </div>
+    </div>
+</div>
+
+<div class="row-fluid">
     {* ======================= Repair & optimize ALL mailboxes ======================= *}
     <div class="span12">
         <div class="well">

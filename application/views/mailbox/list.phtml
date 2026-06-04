@@ -34,8 +34,8 @@
         <tr>
             <th>Email</th>
             <th>Name</th>
-            {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
-                <th>Size ({$size_multiplier})</th>
+            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
+                <th>Used / Quota ({$size_multiplier})</th>
             {/if}
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
                 <th>Domain</th>
@@ -49,15 +49,19 @@
         <tr>
             <td>{$mbox.username}</td>
             <td>{$mbox.name}</td>
-            {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
                 <td>
-                    {* Live usage from Dovecot quota-clone (quota_bytes / quota_messages) *}
+                    {* Usage / limit. quota_bytes = live usage from Dovecot
+                       quota-clone; $mbox.quota = the configured limit (in
+                       $size_multiplier units, 0 = unlimited). *}
                     {if $mbox.quota_bytes}
                         {assign var=mdir_size value=($mbox.quota_bytes/$multiplier)|string_format:"%.2f"}
                         <a href="#" data-sizes="{$mbox.quota_bytes}|{$multiplier}|{$size_multiplier}|{$mbox.quota}|{$mbox.quota_messages}" id="dir-size-{$mbox.id}">{$mdir_size}</a>
                     {else}
                         0
                     {/if}
+                    /
+                    {if $mbox.quota}{$mbox.quota|string_format:"%.0f"}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
                 </td>
             {/if}
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}

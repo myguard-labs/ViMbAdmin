@@ -73,6 +73,22 @@ class ViMbAdmin_Net
     }
 
     /**
+     * Match $ip against a whitespace/comma-separated list of IPs or CIDRs.
+     * Empty list => false (callers decide what an empty list means).
+     *
+     * @param string $ip
+     * @param string $list  e.g. "127.0.0.1, 10.0.0.0/8 ::1"
+     * @return bool
+     */
+    public static function ipInList( $ip, $list )
+    {
+        foreach( preg_split( '/[\s,]+/', trim( (string) $list ), -1, PREG_SPLIT_NO_EMPTY ) as $entry )
+            if( self::ipInCidr( $ip, $entry ) )
+                return true;
+        return false;
+    }
+
+    /**
      * Match $ip against a single IP or CIDR (IPv4 + IPv6).
      */
     public static function ipInCidr( $ip, $cidr )

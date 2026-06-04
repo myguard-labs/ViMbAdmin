@@ -120,6 +120,19 @@ code, pre {
 }
 .btn-primary:hover { background: var(--vimb-accent-2); color: #1a1300; }
 .btn-danger { background: var(--vimb-danger); border-color: var(--vimb-danger); color: #fff; }
+.btn-success { background: var(--vimb-ok); border-color: var(--vimb-ok); color: #052e12; }
+.btn-success:hover { background: var(--vimb-ok); color: #052e12; filter: brightness(1.1); }
+/* keep colour even when the toggle is shown disabled (self row) */
+.btn-success.disabled, .btn-danger.disabled { opacity: .8; }
+/* Super-admin toggle: green when on, neutral/transparent when off (the
+   shared toggle JS still tags it btn-danger to track state — we just don't
+   paint it red). */
+.super-toggle.btn-danger {
+    background: var(--vimb-surface-2);
+    border-color: var(--vimb-border);
+    color: var(--vimb-text);
+}
+.super-toggle.btn-danger:hover { background: var(--vimb-border); }
 
 /* ---- alerts / messages ------------------------------------------- */
 .alert {

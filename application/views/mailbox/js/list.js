@@ -3,7 +3,7 @@ var oDataTable;
 
 $(document).ready( function() {
 
-    {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+    {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
         $( "a[id|='dir-size']" ).bind( "click", showSizes );
     {/if}
     
@@ -23,7 +23,7 @@ $(document).ready( function() {
                         </div>');
                     $( "#list_table_filter > label > input" ).unbind().bind( "keyup", getEntries );
                 };
-                 {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+                 {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
                     $( "a[id|='dir-size']" ).unbind().bind( "click", showSizes );
                 {/if}
                 $( "a[id|='modal-dialog']" ).unbind().bind( 'click', tt_openModalDialog );
@@ -50,7 +50,7 @@ $(document).ready( function() {
         'aoColumns': [
             null,
             null,
-            {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
             { 'sType': 'num-html' },
             {/if}
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
@@ -68,7 +68,7 @@ function toggleActive(elid, id) {
     ossToggle( $( '#' + elid ), "{genUrl controller='mailbox' action='ajax-toggle-active'}", { "mid": id } );
 };
 
-{if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+{if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
     function showSizes( event ) {
         event.preventDefault();
         // data-sizes layout (Dovecot quota-clone): bytes|multiplier|size_multiplier|quota_limit|messages
@@ -127,7 +127,7 @@ function toggleActive(elid, id) {
                                    oDataTable.fnAddData([
                                         row.username,
                                         row.name,
-                                        {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+                                        {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
                                             formatMdirsize( row.id, row.quota, row.quota_bytes, row.quota_messages ),
                                         {/if}
                                         row.domain,
@@ -239,20 +239,22 @@ function toggleActive(elid, id) {
         
     }
 
-    {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+    {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
     function formatMdirsize( id, quota, quota_bytes, quota_messages )
     {
-        // Live usage from Dovecot quota-clone
+        // Usage / limit. quota_bytes = live usage from Dovecot quota-clone;
+        // quota = configured limit (in {$size_multiplier} units, 0 = unlimited).
+        var limit = ( quota && parseFloat( quota ) > 0 )
+                  ? Math.round( parseFloat( quota ) ).toString()
+                  : '<span class="muted" title="Unlimited">&infin;</span>';
+
         if( quota_bytes !== undefined && quota_bytes !== null ){
             var used_msgs = ( quota_messages !== undefined && quota_messages !== null ) ? quota_messages : '';
-            if( quota_bytes / {$multiplier} < 0.1 )
-                var mdir_size = 0.1;
-            else
-                var mdir_size = quota_bytes / {$multiplier};
-            return '<a href="#" data-sizes="'+ quota_bytes + '|{$multiplier}|{$size_multiplier}|' + quota + '|' + used_msgs + '" id="dir-size-' + id + '">' + mdir_size.toFixed(1) + '</a>';
+            var mdir_size = quota_bytes / {$multiplier};
+            return '<a href="#" data-sizes="'+ quota_bytes + '|{$multiplier}|{$size_multiplier}|' + quota + '|' + used_msgs + '" id="dir-size-' + id + '">' + mdir_size.toFixed(1) + '</a> / ' + limit;
         }
         else
-            return "0" ;
+            return "0 / " + limit;
     }
     {/if}
 

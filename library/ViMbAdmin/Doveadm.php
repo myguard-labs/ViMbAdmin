@@ -266,6 +266,23 @@ class ViMbAdmin_Doveadm
     }
 
     /**
+     * Flush Dovecot's authentication cache. With no users, flushes the whole
+     * cache; pass user(s) to flush only those entries. Non-destructive — forces
+     * the next auth to re-read from the userdb/passdb (e.g. after a password or
+     * active-flag change in the panel).
+     *
+     * @param array $users  Optional list of usernames to flush (default: all)
+     * @return array
+     */
+    public function authCacheFlush( array $users = [] )
+    {
+        $params = [];
+        if( $users )
+            $params['user'] = array_values( $users );
+        return $this->run( 'auth cache flush', $params );
+    }
+
+    /**
      * Delete one or more mailboxes (folders) for a user. With mailbox "*" and
      * recursive this empties the whole account's mail store.
      *

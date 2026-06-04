@@ -59,12 +59,12 @@ final class ViMbAdmin_Version
     /**
      * Database schema version
      */
-    const DBVERSION = 3;
+    const DBVERSION = 4;
 
     /**
      * Database schema version name
      */
-    const DBVERSION_NAME = 'Mailbox-task queue + admin last_login';
+    const DBVERSION_NAME = 'MCP token per-domain allowlist';
 
     /**
      * The latest stable version Zend Framework available

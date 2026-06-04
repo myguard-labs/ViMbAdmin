@@ -446,27 +446,8 @@ class AuthController extends ViMbAdmin_Controller_Action
                     $this->addMessage( _( 'Your administrator account has been added. Please log in below.' ), OSS_Message::SUCCESS );
                 }
 
-                if( !( isset( $this->_options['skipInstallPingback'] ) && $this->_options['skipInstallPingback'] ) )
-                {
-                    try
-                    {
-                        // Try and track new installs to see if it is worthwhile continuing development
-                        include_once( APPLICATION_PATH . '/../public/PiwikTracker.php' );
-
-                        if( class_exists( 'PiwikTracker' ) )
-                        {
-                            if( isset( $_SERVER['HTTPS'] ) && $_SERVER['HTTPS'] == 'on' )
-                                PiwikTracker::$URL = 'https://stats.opensolutions.ie/';
-                            else
-                                PiwikTracker::$URL = 'http://stats.opensolutions.ie/';
-
-                            $piwikTracker = new PiwikTracker( $idSite = 5 );
-                            $piwikTracker->doTrackPageView( 'New V3 Install Completed' );
-                            $piwikTracker->doTrackGoal( $idGoal = 2, $revenue = 1 );
-                        }
-                    }
-                    catch( Exception $e ){}
-                }
+                // (Removed: upstream install pingback to stats.opensolutions.ie —
+                // this fork does not phone home.)
 
                 $this->_redirect( 'auth/login' );
             }

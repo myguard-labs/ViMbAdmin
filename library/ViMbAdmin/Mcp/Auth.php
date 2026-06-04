@@ -67,11 +67,17 @@ class ViMbAdmin_Mcp_Auth
         if( !$this->_ipAllowed( $token, $ip ) )
             throw new ViMbAdmin_Mcp_Exception( "source IP {$ip} not allowed for this token", 403 );
 
-        // touch last_used_at (best effort)
+        // touch last_used_at (best effort), but throttle the write: only
+        // persist when the stored value is more than 60s stale, so a token
+        // hammering read calls can't turn every request into a DB write.
         try
         {
-            $token->setLastUsedAt( new \DateTime() );
-            $this->_em->flush();
+            $last = $token->getLastUsedAt();
+            if( $last === null || ( time() - $last->getTimestamp() ) > 60 )
+            {
+                $token->setLastUsedAt( new \DateTime() );
+                $this->_em->flush();
+            }
         }
         catch( \Throwable $e ) { /* non-fatal */ }
 
@@ -112,9 +118,6 @@ class ViMbAdmin_Mcp_Auth
         if( $list === '' )
             return true;
 
-        foreach( preg_split( '/[\s,]+/', $list, -1, PREG_SPLIT_NO_EMPTY ) as $entry )
-            if( ViMbAdmin_Net::ipInCidr( $ip, $entry ) )
-                return true;
-        return false;
+        return ViMbAdmin_Net::ipInList( $ip, $list );
     }
 }

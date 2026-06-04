@@ -88,8 +88,10 @@ class ViMbAdmin_BruteForce
     }
 
     /**
-     * Record one failed attempt for (username, source IP). Locks the source
-     * when it crosses the threshold inside the window.
+     * Record one failed attempt for the request's source IP. Locks the source
+     * when it crosses the threshold inside the window. Counting is per-IP only;
+     * $username is accepted for call-site symmetry/logging but not keyed on
+     * (an attacker rotating usernames from one IP still trips the same lock).
      */
     public function record( $username, $request )
     {
@@ -192,46 +194,8 @@ class ViMbAdmin_BruteForce
 
     private function _isWhitelisted( $ip )
     {
-        foreach( $this->_whitelist as $entry )
-        {
-            $entry = trim( $entry );
-            if( $entry === '' )
-                continue;
-            if( strpos( $entry, '/' ) !== false )
-            {
-                if( $this->_inCidr( $ip, $entry ) )
-                    return true;
-            }
-            elseif( $ip === $entry )
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private function _inCidr( $ip, $cidr )
-    {
-        list( $subnet, $bits ) = array_pad( explode( '/', $cidr, 2 ), 2, null );
-        if( $bits === null )
-            return $ip === $subnet;
-        $bits = (int) $bits;
-
-        $ipBin     = @inet_pton( $ip );
-        $subnetBin = @inet_pton( $subnet );
-        if( $ipBin === false || $subnetBin === false || strlen( $ipBin ) !== strlen( $subnetBin ) )
-            return false;
-
-        $bytes = intdiv( $bits, 8 );
-        $rem   = $bits % 8;
-
-        if( $bytes > 0 && strncmp( $ipBin, $subnetBin, $bytes ) !== 0 )
-            return false;
-
-        if( $rem === 0 )
-            return true;
-
-        $mask = chr( 0xff << ( 8 - $rem ) & 0xff );
-        return ( ( $ipBin[ $bytes ] & $mask ) === ( $subnetBin[ $bytes ] & $mask ) );
+        // Shared IP/CIDR matching (see ViMbAdmin_Net) so the brute-force
+        // whitelist, the MCP allowlist and the queue trigger all agree.
+        return ViMbAdmin_Net::ipInList( $ip, implode( ' ', $this->_whitelist ) );
     }
 }

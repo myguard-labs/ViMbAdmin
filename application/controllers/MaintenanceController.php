@@ -155,6 +155,79 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
     }
 
     /**
+     * Enqueue a QUOTA_RECALC task for every active mailbox so the
+     * dovecot_quota usage table is refreshed instance-wide. Lighter than
+     * repair-all (quota recalc only). Two-step: first POST shows a confirm,
+     * confirm=1 enqueues; the runner drains throttled.
+     */
+    public function recalcAllAction()
+    {
+        $this->_assertCsrf();
+
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        if( (int) $this->getParam( 'confirm', 0 ) !== 1 )
+        {
+            $this->view->stats              = $this->_inactiveStats();
+            $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
+                'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();
+            $this->view->confirmRecalcAll   = true;
+            $this->_schemaVersionToView();
+            return $this->render( 'index' );
+        }
+
+        $em        = $this->getD2EM();
+        $mailboxes = $em->getRepository( '\\Entities\\Mailbox' )->findBy( [ 'active' => 1 ] );
+
+        $queued = 0;
+        foreach( $mailboxes as $mailbox )
+        {
+            $task = ViMbAdmin_MailboxQueue::enqueue( $em, $mailbox, \Entities\MailboxTask::TYPE_QUOTA_RECALC, $this->getAdmin() );
+            if( $task )
+                $queued++;
+        }
+        $em->flush();
+
+        $this->log( \Entities\Log::ACTION_MAINTENANCE,
+            "{$this->getAdmin()->getFormattedName()} queued quota recalc for all active mailboxes ({$queued} task(s))" );
+
+        $this->addMessage(
+            sprintf( _( 'Queued quota recalc for %d mailbox(es). The runner will process them in the background.' ), $queued ),
+            OSS_Message::SUCCESS );
+        $this->redirect( 'queue/index' );
+    }
+
+    /**
+     * Flush Dovecot's auth cache (whole cache). Useful after bulk
+     * password/active changes so the next login re-reads the userdb/passdb.
+     */
+    public function flushAuthCacheAction()
+    {
+        $this->_assertCsrf();
+
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        try
+        {
+            ViMbAdmin_Doveadm::fromOptions( $this->_options )->authCacheFlush();
+        }
+        catch( \Throwable $e )
+        {
+            $this->getLogger()->err( 'Maintenance flush-auth-cache: ' . $e->getMessage() );
+            $this->addMessage( _( 'Failed to flush Dovecot auth cache: ' ) . $e->getMessage(), OSS_Message::ERROR );
+            $this->redirect( 'maintenance/index' );
+        }
+
+        $this->log( \Entities\Log::ACTION_MAINTENANCE,
+            "{$this->getAdmin()->getFormattedName()} flushed the Dovecot auth cache" );
+
+        $this->addMessage( _( 'Dovecot authentication cache flushed.' ), OSS_Message::SUCCESS );
+        $this->redirect( 'maintenance/index' );
+    }
+
+    /**
      * Doctrine schema sync. Dry-run by default; applies only with confirm=1.
      */
     public function schemaUpdateAction()

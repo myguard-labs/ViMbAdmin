@@ -26,6 +26,9 @@ class McpToken
     /** @var string|null  space/comma separated IP/CIDR allowlist; null = any (rely on the edge). */
     private $allowed_ips;
 
+    /** @var string|null  space/comma separated domain allowlist; null = all domains. */
+    private $allowed_domains;
+
     /** @var \DateTime */
     private $created;
 
@@ -51,6 +54,25 @@ class McpToken
 
     public function getAllowedIps()         { return $this->allowed_ips; }
     public function setAllowedIps( $v )     { $this->allowed_ips = ( $v === '' ? null : $v ); return $this; }
+
+    public function getAllowedDomains()     { return $this->allowed_domains; }
+    public function setAllowedDomains( $v ) { $this->allowed_domains = ( $v === '' ? null : $v ); return $this; }
+
+    /**
+     * May this token operate on $domain? Empty/null allowlist => all domains.
+     * Matching is case-insensitive exact (no wildcards).
+     */
+    public function allowsDomain( $domain )
+    {
+        $list = trim( (string) $this->allowed_domains );
+        if( $list === '' )
+            return true;
+        $domain = strtolower( (string) $domain );
+        foreach( preg_split( '/[\s,]+/', $list, -1, PREG_SPLIT_NO_EMPTY ) as $d )
+            if( strtolower( $d ) === $domain )
+                return true;
+        return false;
+    }
 
     public function getCreated()            { return $this->created; }
     public function setCreated( $v )        { $this->created = $v; return $this; }

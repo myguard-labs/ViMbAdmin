@@ -40,19 +40,46 @@ class ViMbAdmin_Mcp_RateLimit
 
         $now  = time();
         $file = $this->_file( $tokenId, $bucket );
-        $hits = $this->_load( $file );
 
-        // drop entries outside the window
-        $hits = array_values( array_filter( $hits, function( $t ) use ( $now ) {
-            return ( $now - (int) $t ) < $this->_window;
-        } ) );
+        // The whole read-modify-write must be atomic, otherwise two concurrent
+        // destructive calls can each read a sub-limit count and both proceed,
+        // letting a compromised client slip past the cap. Hold an exclusive
+        // flock on the state file for the entire check+record.
+        $fh = @fopen( $file, 'c+' );
+        if( $fh === false )
+            return;  // fail-open on FS error (limiter is best-effort)
 
-        if( count( $hits ) >= $this->_max )
-            throw new ViMbAdmin_Mcp_Exception(
-                "rate limit: max {$this->_max} destructive operations per {$this->_window}s", 429 );
+        try
+        {
+            if( !flock( $fh, LOCK_EX ) )
+                return;
 
-        $hits[] = $now;
-        $this->_save( $file, $hits );
+            $raw  = stream_get_contents( $fh );
+            $hits = json_decode( (string) $raw, true );
+            if( !is_array( $hits ) )
+                $hits = [];
+
+            // drop entries outside the window
+            $hits = array_values( array_filter( $hits, function( $t ) use ( $now ) {
+                return ( $now - (int) $t ) < $this->_window;
+            } ) );
+
+            if( count( $hits ) >= $this->_max )
+                throw new ViMbAdmin_Mcp_Exception(
+                    "rate limit: max {$this->_max} destructive operations per {$this->_window}s", 429 );
+
+            $hits[] = $now;
+
+            ftruncate( $fh, 0 );
+            rewind( $fh );
+            fwrite( $fh, json_encode( $hits ) );
+            fflush( $fh );
+        }
+        finally
+        {
+            flock( $fh, LOCK_UN );
+            fclose( $fh );
+        }
     }
 
     // ---- internals -----------------------------------------------------
@@ -62,18 +89,5 @@ class ViMbAdmin_Mcp_RateLimit
         if( !is_dir( $this->_dir ) )
             @mkdir( $this->_dir, 0750, true );
         return $this->_dir . '/' . (int) $tokenId . '-' . preg_replace( '/[^a-z0-9]/', '', $bucket ) . '.json';
-    }
-
-    private function _load( $file )
-    {
-        if( !is_file( $file ) )
-            return [];
-        $j = json_decode( (string) @file_get_contents( $file ), true );
-        return is_array( $j ) ? $j : [];
-    }
-
-    private function _save( $file, array $hits )
-    {
-        @file_put_contents( $file, json_encode( $hits ), LOCK_EX );
     }
 }

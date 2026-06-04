@@ -136,7 +136,10 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
         else
             $this->view->mailboxes = $this->getD2EM()->getRepository( "\\Entities\\Mailbox" )->loadForMailboxList( $this->getAdmin(), $this->getDomain() );
 
-        if( isset( $this->_options['defaults']['list_size']['disabled'] ) && !$this->_options['defaults']['list_size']['disabled'] )
+        // Size column is on by default (only hidden when list_size.disabled=1),
+        // so always expose the multiplier view vars or the template divides by
+        // an undefined $multiplier.
+        if( !isset( $this->_options['defaults']['list_size']['disabled'] ) || !$this->_options['defaults']['list_size']['disabled'] )
         {
             if( isset( $this->_options['defaults']['list_size']['multiplier'] ) && isset( OSS_Filter_FileSize::$SIZE_MULTIPLIERS[ $this->_options['defaults']['list_size']['multiplier'] ] ) )
                 $size_multiplier = $this->_options['defaults']['list_size']['multiplier'];

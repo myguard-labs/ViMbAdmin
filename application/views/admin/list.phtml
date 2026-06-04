@@ -44,9 +44,9 @@
                 <td>
                     <div id="throb-toggle-super-{$admin->getId()}" style="float: right;"></div>
                     {if $identity.user->getId() != $admin->getId()}
-                        <span id="toggle-super-{$admin->getId()}" onclick="toggleSuper( 'toggle-super-{$admin->getId()}', {$admin->getId()} );" class="btn btn-mini {if $admin->getSuper()}btn-success{else}btn-danger{/if}">{$admin->getSuper()|yesno}</span>
+                        <span id="toggle-super-{$admin->getId()}" onclick="toggleSuper( 'toggle-super-{$admin->getId()}', {$admin->getId()} );" class="btn btn-mini super-toggle {if $admin->getSuper()}btn-success{else}btn-danger{/if}">{$admin->getSuper()|yesno}</span>
                     {else}
-                        <span id="toggle-super-{$admin->getId()}" class="btn btn-mini disabled {if $admin->getSuper()}btn-success{else}btn-danger{/if}">{$admin->getSuper()|yesno}</span>
+                        <span id="toggle-super-{$admin->getId()}" class="btn btn-mini disabled super-toggle {if $admin->getSuper()}btn-success{else}btn-danger{/if}">{$admin->getSuper()|yesno}</span>
                     {/if}
                 </td>
                 <td>

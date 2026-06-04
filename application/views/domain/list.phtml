@@ -27,9 +27,10 @@
             <th>Domain</th>
             <th>Mailboxes</th>
             <th>Aliases</th>
-            {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
-                <th>Size ({$size_multiplier})</th>
+            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
+                <th>Used / Max ({$size_multiplier})</th>
             {/if}
+            <th>Default quota</th>
             <th width="55">Active</th>
             <th>Transport</th>
             <th>Backup MX</th>
@@ -49,15 +50,22 @@
                     <a class="btn btn-mini have-tooltip" id="add_alias_{$domain.id}" title="Add Alias" href="{genUrl controller='alias' action='add' did=$domain.id}"><i class="icon-plus"></i></a>&nbsp;&nbsp;
                     <a class="ul" href="{genUrl controller='alias' action='list' did=$domain.id}">{$domain.aliases}{if $domain.maxaliases}/{$domain.maxaliases}{/if}</a>
                 </td>
-                {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
+                {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
                     <td>
                         {if $domain.mailboxes_size}
                             {($domain.mailboxes_size/$multiplier)|string_format:"%.3f"}
                         {else}
                             0
                         {/if}
+                        /
+                        {* max_quota = domain-wide cap (0 = unlimited) *}
+                        {if $domain.maxquota}{$domain.maxquota|string_format:"%.0f"}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
                     </td>
                 {/if}
+                <td>
+                    {* per-mailbox default quota for new mailboxes (0 = unlimited) *}
+                    {if $domain.quota}{$domain.quota|string_format:"%.0f"}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
+                </td>
                 <td>
                     <div id="throb-toggle-active-{$domain.id}" style="float: right;"></div>
                     <span id="toggle-active-{$domain.id}" onclick="toggleActive( 'toggle-active-{$domain.id}', {$domain.id}, '.', '' );" class="btn btn-mini {if $domain.active}btn-success{else}btn-danger{/if}">{$domain.active|yesno}</span>

@@ -69,6 +69,12 @@
             <td>{if $task->getFinishedAt()}{$task->getFinishedAt()->format('Y-m-d H:i')}{/if}</td>
             <td>
                 {if $task->getStatus() eq $cancellable}
+                    <form method="post" action="{genUrl controller='queue' action='run-task'}" style="display:inline"
+                          onsubmit="return confirm('Run task #{$task->getId()} now?');">
+                        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                        <input type="hidden" name="id" value="{$task->getId()}" />
+                        <button class="btn btn-mini btn-primary" type="submit">Run now</button>
+                    </form>
                     <form method="post" action="{genUrl controller='queue' action='cancel'}" style="display:inline"
                           onsubmit="return confirm('Cancel task #{$task->getId()}?');">
                         <input type="hidden" name="csrf" value="{$csrfToken|escape}" />

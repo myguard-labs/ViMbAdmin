@@ -26,12 +26,15 @@ class MailboxTask
     const TYPE_ARCHIVE = "ARCHIVE";
     /** doveadm backup, empty the mail store, then REMOVE the mailbox row. */
     const TYPE_DELETE  = "DELETE";
+    /** doveadm quota recalc only (non-destructive; refresh quota usage). */
+    const TYPE_QUOTA_RECALC = "QUOTA_RECALC";
 
     public static $TYPES = [
-        self::TYPE_REPAIR   => "Repair / optimize",
-        self::TYPE_OPTIMIZE => "Repair / optimize",
-        self::TYPE_ARCHIVE  => "Archive (backup, keep account)",
-        self::TYPE_DELETE   => "Delete (backup, remove account)",
+        self::TYPE_REPAIR       => "Repair / optimize",
+        self::TYPE_OPTIMIZE     => "Repair / optimize",
+        self::TYPE_ARCHIVE      => "Archive (backup, keep account)",
+        self::TYPE_DELETE       => "Delete (backup, remove account)",
+        self::TYPE_QUOTA_RECALC => "Quota recalc",
     ];
 
     // ---- statuses -------------------------------------------------------

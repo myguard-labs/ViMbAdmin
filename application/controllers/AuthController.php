@@ -52,6 +52,12 @@ class AuthController extends ViMbAdmin_Controller_Action
         if( $this->getD2EM()->getRepository( '\\Entities\\Admin' )->getCount() == 0 )
             $this->_redirect( 'auth/setup' );
 
+        // Demo lock: advertise the demo credentials on the login page so
+        // visitors can get in (the account is blocked from password/2FA
+        // changes elsewhere).
+        $this->view->demoAccount  = ViMbAdmin_Demo::account( $this->_options );
+        $this->view->demoPassword = ViMbAdmin_Demo::password( $this->_options );
+
         // Brute-force gate: refuse locked-out sources, then count this POST as
         // a pending attempt. A fully-successful login clears the counter (in
         // _postLoginChecks / totpAction); anything else leaves it standing, so
@@ -231,6 +237,15 @@ class AuthController extends ViMbAdmin_Controller_Action
             $this->redirectAndEnsureDie( 'auth/login' );
         }
 
+        // Demo lock: the demo account may not enrol/alter 2FA (that would lock
+        // other visitors out). Bounce back to the login flow.
+        if( ViMbAdmin_Demo::isLocked( $this->_options, $admin->getUsername() ) )
+        {
+            unset( $this->getSessionNamespace()->totp_pending_admin_id );
+            $this->addMessage( _( 'Two-factor enrolment is disabled for the demo account.' ), OSS_Message::INFO );
+            $this->redirectAndEnsureDie( 'auth/login' );
+        }
+
         $tfa = $this->_twoFactor();
 
         // Stash an enrolment secret for this pending admin.
@@ -310,6 +325,15 @@ class AuthController extends ViMbAdmin_Controller_Action
      */
     public function changePasswordAction()
     {
+        // Demo lock: the demo account's password is fixed (and advertised on
+        // the login page) so visitors can't lock each other out.
+        if( $this->getRequest()->isPost()
+            && ViMbAdmin_Demo::isLocked( $this->_options, $this->getParam( 'username' ) ) )
+        {
+            $this->addMessage( _( 'Password changes are disabled for the demo account.' ), OSS_Message::ERROR );
+            $this->redirect( 'auth/change-password' );
+        }
+
         $form = new ViMbAdmin_Form_Mailbox_Password();
 
         if( isset( $this->_options['defaults']['mailbox']['min_password_length'] ) )

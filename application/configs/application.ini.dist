@@ -613,6 +613,20 @@ resources.auth.oss.lost_password.use_captcha = true
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Demo-account lock
+;;
+;; For a PUBLIC demo deployment: pin one well-known login that visitors can
+;; use but cannot lock everyone else out of. When `demo.account` is set:
+;;   - that account is blocked from password changes AND from enrolling /
+;;     changing 2FA (the actions refuse with a "disabled in the demo" notice);
+;;   - the login page advertises the credentials below.
+;; The password is shown verbatim on the login page (a shared public secret),
+;; so DO NOT point this at a real account.
+;;; demo.account  = "demo@example.com"
+;;; demo.password = "letmein"
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Brute-force login protection
 ;;
 ;; Counts login attempts per source IP; locks the source out for `lockout`

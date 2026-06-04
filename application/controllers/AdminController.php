@@ -209,6 +209,14 @@ class AdminController extends ViMbAdmin_Controller_Action
         }
         $this->view->targetAdmin = $this->getTargetAdmin();
 
+        // Demo lock: the demo account's password is fixed (advertised on the
+        // login page); nobody (not even a super-admin) may change it here.
+        if( ViMbAdmin_Demo::isLocked( $this->_options, $this->getTargetAdmin()->getUsername() ) )
+        {
+            $this->addMessage( _( 'Password changes are disabled for the demo account.' ), OSS_Message::ERROR );
+            $this->redirect( $redirectUrl );
+        }
+
         $self = false;
         if( $this->getTargetAdmin()->getId() == $this->getAdmin()->getId() )
             $self = true;

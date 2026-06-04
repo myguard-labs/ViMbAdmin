@@ -97,7 +97,7 @@ class Domain extends EntityRepository
     public function loadForDomainList( $admin )
     {
         $dql = "SELECT d.id AS id, d.domain AS name, d.alias_count AS aliases, d.mailbox_count AS mailboxes,
-                    d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes, SUM( m.maildir_size ) AS mailboxes_size,
+                    d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes,
                     d.max_quota AS maxquota, d.quota AS quota, d.transport AS transport, d.backupmx AS backupmx,
                     d.active AS active, d.created AS created
                 FROM \\Entities\\Domain d LEFT JOIN d.Mailboxes m";
@@ -110,19 +110,54 @@ class Domain extends EntityRepository
         $dql .= " GROUP BY d.id ORDER BY d.domain ASC";
                 
         $q = $this->getEntityManager()->createQuery( $dql );
-        
+
         if( !$admin->isSuper() )
             $q->setParameter( 1, $admin );
 
-        return $q->getArrayResult();
+        return $this->_mergeDomainUsage( $q->getArrayResult() );
     }
-    
+
+    /**
+     * Graft per-domain mailbox usage (`mailboxes_size`) onto a domain list array.
+     *
+     * Usage now comes from Dovecot's quota-clone `quota` table (Entities\Quota),
+     * keyed by full email address (username). We sum quota.bytes grouped by the
+     * domain part of the username and merge the total onto each domain row.
+     * Domains with no quota rows yet report 0.
+     *
+     * @param array $rows Domain list rows from getArrayResult()
+     * @return array
+     */
+    private function _mergeDomainUsage( array $rows )
+    {
+        if( !$rows )
+            return $rows;
+
+        // SUBSTRING_INDEX is MySQL/MariaDB-specific; quota.username is always
+        // local@domain, so take everything after the last '@'.
+        $conn = $this->getEntityManager()->getConnection();
+        $sums = $conn->fetchAllAssociative(
+            "SELECT SUBSTRING_INDEX( username, '@', -1 ) AS domain, SUM( bytes ) AS bytes
+               FROM quota GROUP BY SUBSTRING_INDEX( username, '@', -1 )"
+        );
+
+        $byDomain = [];
+        foreach( $sums as $s )
+            $byDomain[ $s['domain'] ] = $s['bytes'];
+
+        foreach( $rows as &$row )
+            $row['mailboxes_size'] = isset( $byDomain[ $row['name'] ] ) ? $byDomain[ $row['name'] ] : 0;
+        unset( $row );
+
+        return $rows;
+    }
+
     /**
      * Load data for domains list
      *
      * Loads information for domains list.
      *
-     * @param string          $filter 
+     * @param string          $filter
      * @param \Entities\Admin $admin
      * @return array
      */
@@ -134,7 +169,7 @@ class Domain extends EntityRepository
             $filter = '%' . substr( $filter, 1 );
             
         $dql = "SELECT d.id AS id, d.domain AS name, d.alias_count AS aliases, d.mailbox_count AS mailboxes,
-                    d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes, SUM( m.maildir_size ) AS mailboxes_size,
+                    d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes,
                     d.max_quota AS maxquota, d.quota AS quota, d.transport AS transport, d.backupmx AS backupmx,
                     d.active AS active, d.created AS created
                 FROM \\Entities\\Domain d LEFT JOIN d.Mailboxes m 
@@ -146,11 +181,11 @@ class Domain extends EntityRepository
         $dql .= " GROUP BY d.id ORDER BY d.domain ASC";
                 
         $q = $this->getEntityManager()->createQuery( $dql );
-        
+
         if( !$admin->isSuper() )
             $q->setParameter( 1, $admin );
 
-        return $q->getArrayResult();
+        return $this->_mergeDomainUsage( $q->getArrayResult() );
     }
 
 

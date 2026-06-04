@@ -92,21 +92,6 @@ class Mailbox
     private $Preferences;
 
     /**
-     * @var integer
-     */
-    private $homedir_size;
-
-    /**
-     * @var integer
-     */
-    private $maildir_size;
-
-    /**
-     * @var \DateTime
-     */
-    private $size_at;
-
-    /**
      * Constructor
      */
     public function __construct()
@@ -595,74 +580,6 @@ class Mailbox
         return $str;
     }
 
-    /**
-     * Set homedir_size
-     *
-     * @param integer $homedirSize
-     * @return Mailbox
-     */
-    public function setHomedirSize($homedirSize)
-    {
-        $this->homedir_size = $homedirSize;
-
-        return $this;
-    }
-
-    /**
-     * Get homedir_size
-     *
-     * @return integer
-     */
-    public function getHomedirSize()
-    {
-        return $this->homedir_size;
-    }
-
-    /**
-     * Set maildir_size
-     *
-     * @param integer $maildirSize
-     * @return Mailbox
-     */
-    public function setMaildirSize($maildirSize)
-    {
-        $this->maildir_size = $maildirSize;
-
-        return $this;
-    }
-
-    /**
-     * Get maildir_size
-     *
-     * @return integer
-     */
-    public function getMaildirSize()
-    {
-        return $this->maildir_size;
-    }
-
-    /**
-     * Set size_at
-     *
-     * @param \DateTime $sizeAt
-     * @return Mailbox
-     */
-    public function setSizeAt($sizeAt)
-    {
-        $this->size_at = $sizeAt;
-
-        return $this;
-    }
-
-    /**
-     * Get size_at
-     *
-     * @return \DateTime
-     */
-    public function getSizeAt()
-    {
-        return $this->size_at;
-    }
 
     /**
      * Clean a maildir string into a standard filesystem path

@@ -413,9 +413,6 @@ CREATE TABLE `mailbox` (
   `maildir` varchar(255) COLLATE utf8_unicode_ci DEFAULT NULL,
   `uid` bigint(20) DEFAULT NULL,
   `gid` bigint(20) DEFAULT NULL,
-  `homedir_size` bigint(20) DEFAULT NULL,
-  `maildir_size` bigint(20) DEFAULT NULL,
-  `size_at` datetime DEFAULT NULL,
   `delete_pending` tinyint(1) DEFAULT '0',
   `created` datetime NOT NULL,
   `modified` datetime DEFAULT NULL,
@@ -433,9 +430,26 @@ CREATE TABLE `mailbox` (
 
 LOCK TABLES `mailbox` WRITE;
 /*!40000 ALTER TABLE `mailbox` DISABLE KEYS */;
-INSERT INTO `mailbox` VALUES (1,'a@example.com','817ebc64fa60d6b582578f76916057bb','A Mailbox','',0,'a',1,'ALL','/srv/vmail/example.com/a','maildir:/srv/vmail/example.com/a/mail:LAYOUT=fs',2000,2000,NULL,NULL,NULL,0,'2016-06-04 20:40:34',NULL,1),(2,'b@example.com','a7b62725d6f104b70271d25f69fcdeaa','B Mailbox','',0,'b',1,'ALL','/srv/vmail/example.com/b','maildir:/srv/vmail/example.com/b/mail:LAYOUT=fs',2000,2000,NULL,NULL,NULL,0,'2016-06-04 20:40:45',NULL,1);
+INSERT INTO `mailbox` VALUES (1,'a@example.com','817ebc64fa60d6b582578f76916057bb','A Mailbox','',0,'a',1,'ALL','/srv/vmail/example.com/a','maildir:/srv/vmail/example.com/a/mail:LAYOUT=fs',2000,2000,0,'2016-06-04 20:40:34',NULL,1),(2,'b@example.com','a7b62725d6f104b70271d25f69fcdeaa','B Mailbox','',0,'b',1,'ALL','/srv/vmail/example.com/b','maildir:/srv/vmail/example.com/b/mail:LAYOUT=fs',2000,2000,0,'2016-06-04 20:40:45',NULL,1);
 /*!40000 ALTER TABLE `mailbox` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `quota`
+--   Live mailbox usage written by Dovecot's quota-clone plugin (read-only to
+--   ViMbAdmin). Keyed by username (= full email address).
+--
+
+DROP TABLE IF EXISTS `quota`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `quota` (
+  `username` varchar(255) COLLATE utf8_unicode_ci NOT NULL,
+  `bytes` bigint(20) NOT NULL DEFAULT '0',
+  `messages` bigint(20) NOT NULL DEFAULT '0',
+  PRIMARY KEY (`username`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `mailbox_pref`

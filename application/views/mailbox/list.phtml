@@ -51,9 +51,10 @@
             <td>{$mbox.name}</td>
             {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
                 <td>
-                    {if $mbox.maildir_size}
-                        {assign var=mdir_size value=($mbox.maildir_size/$multiplier)|string_format:"%.2f"}
-                        <a href="#" data-sizes="{$mbox.size_at->format('d/m/Y H:i:s')}|{$mbox.homedir_size}|{$mbox.maildir_size}|{$multiplier}|{$size_multiplier}|{$mbox.quota}" id="dir-size-{$mbox.id}">{$mdir_size}</a>
+                    {* Live usage from Dovecot quota-clone (quota_bytes / quota_messages) *}
+                    {if $mbox.quota_bytes}
+                        {assign var=mdir_size value=($mbox.quota_bytes/$multiplier)|string_format:"%.2f"}
+                        <a href="#" data-sizes="{$mbox.quota_bytes}|{$multiplier}|{$size_multiplier}|{$mbox.quota}|{$mbox.quota_messages}" id="dir-size-{$mbox.id}">{$mdir_size}</a>
                     {else}
                         0
                     {/if}

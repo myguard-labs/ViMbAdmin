@@ -20,5 +20,5 @@ VIMBADMIN_DIR=/opt/vimbadmin
 # Process the archive / restore / delete queue every 5 minutes.
 */5 *  * * *   vmail   /usr/local/sbin/vimbadmin-archive.sh
 
-# Refresh maildir sizes for the panel's quota column, nightly.
-15  3  * * *   vmail   /usr/local/sbin/vimbadmin-sizes.sh
+# NOTE: mailbox usage for the panel's quota column is now fed live by Dovecot's
+# quota-clone plugin (see the main README) -- no nightly maildir-scan job.

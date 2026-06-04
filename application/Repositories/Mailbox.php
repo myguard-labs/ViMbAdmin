@@ -47,8 +47,8 @@ class Mailbox extends EntityRepository
     public function loadForMailboxList( $admin, $domain = null )
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active, m.maildir_size as maildir_size,
-                    m.homedir_size as homedir_size, m.size_at as size_at, m.quota as quota, d.domain as domain, m.delete_pending' )
+            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active,
+                    m.quota as quota, d.domain as domain, m.delete_pending' )
             ->from( '\\Entities\\Mailbox', 'm' )
             ->where( 'm.delete_pending = FALSE' )
             ->join( 'm.Domain', 'd' );
@@ -62,9 +62,51 @@ class Mailbox extends EntityRepository
             $qb->andWhere( 'm.Domain = ?2' )
                 ->setParameter( 2, $domain );
 
-        return $qb->getQuery()->getArrayResult();  
+        return $this->_mergeQuotaUsage( $qb->getQuery()->getArrayResult() );
     }
-    
+
+    /**
+     * Merge live Dovecot quota-clone usage into a mailbox list array.
+     *
+     * The `quota` table (Entities\Quota) is populated by Dovecot's quota-clone
+     * plugin and keyed by username. It has no mailbox id, so we batch-load every
+     * row for the usernames in $rows and graft `quota_bytes` / `quota_messages`
+     * onto each. Both default to null when the plugin has not yet written a row
+     * (e.g. a brand new mailbox), in which case the view shows 0 until Dovecot
+     * writes the first usage figure.
+     *
+     * @param array $rows Mailbox list rows from getArrayResult()
+     * @return array
+     */
+    private function _mergeQuotaUsage( array $rows )
+    {
+        if( !$rows )
+            return $rows;
+
+        $usernames = array_column( $rows, 'username' );
+
+        $quotas = $this->getEntityManager()->createQueryBuilder()
+            ->select( 'q.username as username, q.bytes as bytes, q.messages as messages' )
+            ->from( '\\Entities\\Quota', 'q' )
+            ->where( 'q.username IN ( :usernames )' )
+            ->setParameter( 'usernames', $usernames )
+            ->getQuery()->getArrayResult();
+
+        $byUser = [];
+        foreach( $quotas as $q )
+            $byUser[ $q['username'] ] = $q;
+
+        foreach( $rows as &$row )
+        {
+            $u = $row['username'];
+            $row['quota_bytes']    = isset( $byUser[$u] ) ? $byUser[$u]['bytes']    : null;
+            $row['quota_messages'] = isset( $byUser[$u] ) ? $byUser[$u]['messages'] : null;
+        }
+        unset( $row );
+
+        return $rows;
+    }
+
     /**
      * Return filtered mailboxes data array
      *
@@ -87,8 +129,8 @@ class Mailbox extends EntityRepository
             $filter = '%' . substr( $filter, 1 );
         
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active, m.maildir_size as maildir_size,
-                    m.homedir_size as homedir_size, m.size_at as size_at, m.quota as quota, d.domain as domain, m.delete_pending' )
+            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active,
+                    m.quota as quota, d.domain as domain, m.delete_pending' )
             ->from( '\\Entities\\Mailbox', 'm' )
             ->join( 'm.Domain', 'd' )
             ->where( "m.delete_pending = FALSE AND ( m.username LIKE '{$filter}%' OR m.name LIKE '{$filter}%' OR d.domain LIKE '{$filter}%' )" );
@@ -101,8 +143,8 @@ class Mailbox extends EntityRepository
         if( $domain )
             $qb->andWhere( 'm.Domain = ?2' )
                 ->setParameter( 2, $domain );
-                
-        return $qb->getQuery()->getArrayResult();  
+
+        return $this->_mergeQuotaUsage( $qb->getQuery()->getArrayResult() );
     }
 
     /**

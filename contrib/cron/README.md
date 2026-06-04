@@ -1,8 +1,11 @@
 # ViMbAdmin filesystem crons — mail-host HOWTO
 
 These scripts do the part of ViMbAdmin that touches the **mail on disk**:
-archiving a mailbox to a tarball, restoring/deleting those tarballs, and
-measuring maildir sizes for the panel's quota column.
+archiving a mailbox to a tarball and restoring/deleting those tarballs.
+
+> Mailbox **usage** for the panel's quota column is no longer measured by a
+> nightly maildir scan — it is fed live by Dovecot's quota-clone plugin into the
+> `quota` table. See the main [README](../../README.md#live-quota-usage-dovecot-quota-clone).
 
 **They run on the mail host (the Dovecot/Postfix box), not on the web panel.**
 The panel only flags work in the database; the mail host carries it out,
@@ -11,7 +14,6 @@ because that's where the maildirs and `archive.path` actually live.
 | Script | Action(s) | Cron cadence |
 |---|---|---|
 | `vimbadmin-archive.sh` | `archive.cli-archive-pendings` / `restore` / `delete` | every 5 min |
-| `vimbadmin-sizes.sh` | `mailbox.cli-get-sizes` | nightly |
 | `crontab.example` | sample `/etc/cron.d/vimbadmin` | — |
 
 ---
@@ -80,8 +82,7 @@ the copy small and the attack surface minimal.
 2. **A ViMbAdmin checkout** (the code + `vendor/`), reachable as
    `$VIMBADMIN_DIR/bin/vimbtool.php`.
 3. **`application.ini`** in that checkout pointing at the **same MariaDB/MySQL**
-   the web panel uses — that's how the host sees the archive queue and writes
-   sizes back.
+   the web panel uses — that's how the host sees the archive queue.
 4. **The shell tools** the archive code shells out to (configured under
    `binary.path.*` in `application.ini`): `tar`, `bzip2`, `bunzip2`, `chown`,
    `rm`. On a minimal install `bzip2` is usually **not** present — install it.
@@ -127,13 +128,10 @@ sudoedit application/configs/application.ini
 # 5) Archive target dir, owned by the user the cron runs as (here: vmail).
 sudo install -d -o vmail -g vmail -m 0750 /srv/archives
 
-# 6) Install the scripts.
+# 6) Install the script.
 sudo install -m 0755 contrib/cron/vimbadmin-archive.sh /usr/local/sbin/
-sudo install -m 0755 contrib/cron/vimbadmin-sizes.sh   /usr/local/sbin/
 
 # 7) Smoke-test by hand (verbose), as the cron user, before trusting cron.
-sudo -u vmail VIMBADMIN_DIR=/opt/vimbadmin VERBOSE=1 \
-     /usr/local/sbin/vimbadmin-sizes.sh
 sudo -u vmail VIMBADMIN_DIR=/opt/vimbadmin VERBOSE=1 \
      /usr/local/sbin/vimbadmin-archive.sh
 
@@ -144,7 +142,6 @@ sudoedit /etc/cron.d/vimbadmin     # set the run-as user + VIMBADMIN_DIR
 
 That's it. Flag a mailbox for archival in the panel; within ~5 minutes the
 archive cron tars it into `/srv/archives` and flips its status to *archived*.
-The nightly sizes job keeps the quota column honest.
 
 ---
 
@@ -168,8 +165,9 @@ check the mail host's log and the panel's audit log.
 
 ## Notes
 
-- **Sizes are cosmetic.** `mailbox.cli-get-sizes` only fills the UI's usage
-  column. Real quota *enforcement* is Dovecot's `quota` plugin, not this.
+- **Usage display is cosmetic.** The panel's usage column is filled live by
+  Dovecot's quota-clone plugin (the `quota` table); real quota *enforcement* is
+  Dovecot's `quota` plugin, not this.
 - **On-disk deletion** of a live mailbox (`mailbox_deletion_fs_enabled`) is a
   separate, default-off feature handled inside the web delete flow — it would
   need the web host to see the maildirs, which the hardened Docker image

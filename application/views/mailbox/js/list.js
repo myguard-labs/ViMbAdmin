@@ -71,19 +71,22 @@ function toggleActive(elid, id) {
 {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
     function showSizes( event ) {
         event.preventDefault();
+        // data-sizes layout (Dovecot quota-clone): bytes|multiplier|size_multiplier|quota_limit|messages
         data = $( event.target ).attr( 'data-sizes' ).split( '|' );
-        hdirsize = data[1] / data[3];
-        mdirsize = data[2] / data[3];
+        mdirsize = data[0] / data[1];
         msg =  "<table class=\"table\"><thead>";
-        msg += "<tr><th>Last size update:</th><td>" + data[0] + "</td></tr></thead>";
-        msg += "<tr><th>Home directory size:</th><td> " + hdirsize.toFixed( 5 ) + data[4] + "</td></tr>";
-        msg += "<tr><th>Mail directory size:</th><td> " + mdirsize.toFixed( 5 ) + data[4];
-        if( data[5] != 0 )
+        msg += "<tr><th>Source:</th><td>Live (Dovecot quota-clone)</td></tr></thead>";
+        msg += "<tr><th>Mailbox size:</th><td> " + mdirsize.toFixed( 5 ) + data[2];
+        if( data[3] != 0 )
         {
-            prc = 100 / data[5] * data[2];
+            prc = 100 / data[3] * data[0];
             msg += " (" + prc.toFixed(0) + "%)";
         }
-        msg += "</td></tr></table>";
+        msg += "</td></tr>";
+        // data[4] = message count
+        if( data[4] !== undefined && data[4] !== '' )
+            msg += "<tr><th>Messages:</th><td> " + data[4] + "</td></tr>";
+        msg += "</table>";
         bootbox.alert( msg );
     }
 {/if}
@@ -125,7 +128,7 @@ function toggleActive(elid, id) {
                                         row.username,
                                         row.name,
                                         {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
-                                            formatMdirsize( row.id, row.maildir_size, row.homedir_size, row.size_at, row.quota ),
+                                            formatMdirsize( row.id, row.quota, row.quota_bytes, row.quota_messages ),
                                         {/if}
                                         row.domain,
                                         formatActive( row.id, row.active ),
@@ -237,14 +240,16 @@ function toggleActive(elid, id) {
     }
 
     {if isset($options.defaults.list_size.disabled) && !$options.defaults.list_size.disabled}
-    function formatMdirsize( id, maildir_size, homedir_size, size_at, quota )
+    function formatMdirsize( id, quota, quota_bytes, quota_messages )
     {
-        if( maildir_size != null ){
-            if( maildir_size / {$multiplier} < 0.1 )
+        // Live usage from Dovecot quota-clone
+        if( quota_bytes !== undefined && quota_bytes !== null ){
+            var used_msgs = ( quota_messages !== undefined && quota_messages !== null ) ? quota_messages : '';
+            if( quota_bytes / {$multiplier} < 0.1 )
                 var mdir_size = 0.1;
             else
-                var mdir_size = maildir_size / {$multiplier};
-            return '<a href="#" data-sizes="'+ size_at.date + '|' + homedir_size + '|' + maildir_size + '|{$multiplier}|{$size_multiplier}|' + quota + '" id="dir-size-' + id + '">' + mdir_size.toFixed(1) + '</a>';
+                var mdir_size = quota_bytes / {$multiplier};
+            return '<a href="#" data-sizes="'+ quota_bytes + '|{$multiplier}|{$size_multiplier}|' + quota + '|' + used_msgs + '" id="dir-size-' + id + '">' + mdir_size.toFixed(1) + '</a>';
         }
         else
             return "0" ;

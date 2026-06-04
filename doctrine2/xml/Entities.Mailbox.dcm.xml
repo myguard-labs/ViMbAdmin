@@ -28,9 +28,6 @@
     <field name="maildir" type="string" length="255" nullable="true"/>
     <field name="uid" type="bigint" nullable="true"/>
     <field name="gid" type="bigint" nullable="true"/>
-    <field name="homedir_size" type="bigint" nullable="true"/>
-    <field name="maildir_size" type="bigint" nullable="true"/>
-    <field name="size_at" type="datetime" nullable="true"/>
     <field name="delete_pending" type="boolean" nullable="true">
       <options>
         <option name="default">0</option>

@@ -251,6 +251,16 @@ index is `UNIQUE`, so dedupe any duplicate usernames before applying:
 SELECT username, COUNT(*) c FROM mailbox GROUP BY username HAVING c > 1;
 ```
 
+There is also a **`quota` table** migration
+([`2026-06-quota-clone-table.sql`](contrib/migrations/2026-06-quota-clone-table.sql)).
+This fork has retired the old nightly maildir-scan (`mailbox.cli-get-sizes`) and
+gets **live** mailbox usage straight from Dovecot's quota-clone plugin instead.
+The migration creates the `quota` table, seeds it from the old `maildir_size`
+values, then drops the retired `maildir_size` / `homedir_size` / `size_at`
+columns. See
+[Live quota usage (Dovecot quota-clone)](#live-quota-usage-dovecot-quota-clone)
+for the Dovecot config.
+
 ## Day-to-day
 
 In order, because the order matters:
@@ -373,22 +383,92 @@ The panel is light, but two things keep it snappy:
 
 ## Archiving, quotas & disk deletion
 
-Three features touch the **mail filesystem** (the maildirs), so they run shell
+Two features touch the **mail filesystem** (the maildirs), so they run shell
 tools (`tar`/`bzip2`/`rm`) and must execute **where the mail lives — the
 Dovecot host — not the web panel**:
 
 - **Archive** — flagging a mailbox in the UI queues a DB row and purges it from
   the live tables; the actual tarball is produced by the
   `archive.cli-*-pendings` cron.
-- **Maildir sizes** (`mailbox.cli-get-sizes`) — fills the panel's quota column.
 - **On-disk deletion** (`mailbox_deletion_fs_enabled`, default off).
 
-Example mail-host scripts + crontab, with their requirements documented inline,
+Example mail-host script + crontab, with their requirements documented inline,
 are in [`contrib/cron/`](contrib/cron/) (`vimbadmin-archive.sh`,
-`vimbadmin-sizes.sh`, `crontab.example`). They need a checkout + PHP CLI + an
+`crontab.example`). They need a checkout + PHP CLI + an
 `application.ini` pointing at the **same database** as the panel, plus read
 access to the maildirs. Without them, the Archive button just queues rows that
 are never tarred — by design; ignore it if you don't archive.
+
+Mailbox **usage** in the panel is *not* in this list — it no longer needs a
+maildir scan. See below.
+
+### Live quota usage (Dovecot quota-clone)
+
+Older ViMbAdmin scanned every maildir from a nightly `mailbox.cli-get-sizes`
+cron and stored the result in `mailbox.maildir_size` — accurate only as often as
+the cron ran. **This fork has dropped that path entirely.** Usage now comes
+straight from Dovecot 2.4's
+[quota-clone plugin](https://doc.dovecot.org/2.4.4/core/plugins/quota_clone.html),
+which pushes each user's **current** storage and message count into a `quota`
+table, so the panel shows real-time figures with no maildir scan and no cron.
+
+ViMbAdmin reads the `quota` table automatically (mailbox list + per-domain
+totals). A mailbox shows `0` until Dovecot writes its first usage figure. The
+table is created on fresh installs by the entity mapping
+(`orm:schema-tool:create`); existing DBs apply
+[`contrib/migrations/2026-06-quota-clone-table.sql`](contrib/migrations/2026-06-quota-clone-table.sql)
+(it also seeds from the old `maildir_size` and drops the retired columns).
+ViMbAdmin only ever **reads** this table — Dovecot is the authority and replaces
+the row on every change.
+
+Configure Dovecot (the **mail host**, not the panel) to mirror usage into that
+table. Enable the plugins:
+
+```
+mail_plugins {
+  quota = yes
+  quota_clone = yes
+}
+```
+
+Point quota-clone at the same SQL database the panel uses. With the default
+dict_map this writes `storage` → `quota.bytes` and `messages` → `quota.messages`,
+keyed by the full email address (`mailbox.username`):
+
+```
+dict_server {
+  dict sql {
+    driver = sql
+    sql_driver = mysql
+    # connect string for the ViMbAdmin database
+    # (host, dbname, user, password — same DB as the panel)
+
+    dict_map priv/quota/storage {
+      sql_table       = quota
+      username_field  = username
+      value_field bytes {
+      }
+    }
+    dict_map priv/quota/messages {
+      sql_table       = quota
+      username_field  = username
+      value_field messages {
+      }
+    }
+  }
+}
+
+quota_clone {
+  dict proxy {
+    name = sql
+  }
+}
+```
+
+> Note: quota-clone is *not* an authoritative quota backend — it only mirrors
+> usage for display. Keep your real quota backend (e.g. `quota = count` /
+> `maildir:User quota`) configured as usual; the per-mailbox **limit** is still
+> the `quota` value ViMbAdmin sets on each mailbox.
 
 ## What it is *not*
 

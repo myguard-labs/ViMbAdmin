@@ -59,8 +59,7 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
      */
     public function preDispatch()
     {
-        if( $this->getRequest()->getActionName() != 'cli-get-sizes'
-                && $this->getRequest()->getActionName() != 'cli-delete-pending'
+        if( $this->getRequest()->getActionName() != 'cli-delete-pending'
                 && !$this->getMailbox() && !$this->getDomain() )
             $this->authorise();
 
@@ -621,62 +620,6 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
                 }
             }
         }
-    }
-
-    public function cliGetSizesAction()
-    {
-        if( !isset( $this->_options['defaults']['list_size']['disabled'] ) || $this->_options['defaults']['list_size']['disabled'] )
-        {
-            $this->getLogger()->info( "MailboxController::cliGetSizesAction: List size option is disabled in application.ini." );
-            echo "List size option is disabled in application.ini.\n";
-            return;
-        }
-
-        foreach( $this->getD2EM()->getRepository( "\\Entities\\Domain" )->findAll() as $domain )
-        {
-            $cnt = 0;
-
-            if( $this->getParam( 'verbose' ) )
-                echo "Processing {$domain->getDomain()}...\n";
-
-            foreach( $domain->getMailboxes() as $mailbox )
-            {
-                if( $this->getParam( 'debug' ) ) echo "    - {$mailbox->getUsername()}";
-
-                $msize = OSS_DiskUtils::du( $mailbox->getCleanedMaildir() );
-                if( $msize !== false )
-                {
-                    if( $this->getParam( 'debug' ) ) echo " [Mail Size: {$msize}]";
-                    $mailbox->setMaildirSize( $msize );
-                    $hsize = OSS_DiskUtils::du( $mailbox->getHomedir() );
-                    if( $hsize !== false )
-                    {
-                        $mailbox->setHomedirSize( $hsize - $msize );
-                        if( $this->getParam( 'debug' ) ) echo " [Home Size: {$hsize}]";
-                    }
-                    else
-                        if( $this->getParam( 'debug' ) ) echo " [Unknown Home Size]";
-                }
-                else
-                {
-                    $mailbox->setMaildirSize( null );
-                    $mailbox->setHomedirSize( null );
-                    if( $this->getParam( 'debug' ) ) echo " [Unknown Mail Size]";
-                }
-
-                $mailbox->setSizeAt( new \DateTime() );
-
-                if( $this->getParam( 'debug' ) ) echo "\n";
-
-                $cnt++;
-                if( $cnt % 200 == 0)
-                    $this->getD2EM()->flush();
-
-            } // mailboxes
-
-            $this->getD2EM()->flush();
-
-        } // domains
     }
 
     public function cliDeletePendingAction()

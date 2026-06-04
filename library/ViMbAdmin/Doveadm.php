@@ -292,11 +292,16 @@ class ViMbAdmin_Doveadm
      */
     public function mailboxDelete( $user, array $mailboxes = [ '*' ] )
     {
+        // doveadm "mailbox delete" params (2.4): recursive (-r), unsafe (-Z),
+        // require-empty (-e), subscriptions (-s), mailbox (positional array).
+        // There is NO "unsafeEmptyTrash" param — sending it makes the HTTP API
+        // reject the whole call with `invalidRequest`. We want a forced, full
+        // recursive wipe, so: recursive + unsafe (skip the empty-check).
         return $this->run( 'mailbox delete', [
-            'user'             => $user,
-            'mailbox'          => array_values( $mailboxes ),
-            'recursive'        => true,
-            'unsafeEmptyTrash' => true,
+            'user'      => $user,
+            'mailbox'   => array_values( $mailboxes ),
+            'recursive' => true,
+            'unsafe'    => true,
         ] );
     }
 }

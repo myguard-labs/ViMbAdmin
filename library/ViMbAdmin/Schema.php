@@ -44,7 +44,21 @@ class ViMbAdmin_Schema
     {
         $tool = new \Doctrine\ORM\Tools\SchemaTool( $this->_em );
         $meta = $this->_em->getMetadataFactory()->getAllMetadata();
-        return $tool->getUpdateSchemaSql( $meta, true );
+        $sql  = $tool->getUpdateSchemaSql( $meta, true );
+
+        // Drop no-op ALTERs against Dovecot-owned tables. These are read-only
+        // entities (dovecot_quota / dovecot_last_login); their timestamp column
+        // uses a `column-definition` override which Doctrine's schema comparator
+        // can never reconcile with what MariaDB introspects (current_timestamp()
+        // vs CURRENT_TIMESTAMP normalisation), so it emits an identical CHANGE
+        // statement on every run -- a perpetual phantom "1 pending statement".
+        // The ALTER is a no-op (column already in that exact shape), so filter
+        // these tables out: ViMbAdmin must never rewrite tables Dovecot owns.
+        $sql = array_values( array_filter( $sql, function( $stmt ) {
+            return !preg_match( '/\bALTER\s+TABLE\s+`?dovecot_(quota|last_login)`?\b/i', $stmt );
+        } ) );
+
+        return $sql;
     }
 
     /**

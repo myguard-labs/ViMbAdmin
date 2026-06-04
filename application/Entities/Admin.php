@@ -42,6 +42,11 @@ class Admin
     private $modified;
 
     /**
+     * @var \DateTime $last_login
+     */
+    private $last_login;
+
+    /**
      * @var integer $id
      */
     private $id;
@@ -239,6 +244,29 @@ class Admin
     public function getModified()
     {
         return $this->modified;
+    }
+
+    /**
+     * Set last_login
+     *
+     * @param \DateTime $last_login
+     * @return Admin
+     */
+    public function setLastLogin($last_login)
+    {
+        $this->last_login = $last_login;
+
+        return $this;
+    }
+
+    /**
+     * Get last_login
+     *
+     * @return \DateTime
+     */
+    public function getLastLogin()
+    {
+        return $this->last_login;
     }
 
     /**

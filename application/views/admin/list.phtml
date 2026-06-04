@@ -25,6 +25,7 @@
             <th>Username</th>
             <th width="55">Active</th>
             <th width="55">Super</th>
+            <th width="140">Last Login</th>
             <th width="115"></th>
         </tr>
     </thead>
@@ -47,6 +48,9 @@
                     {else}
                         <span id="toggle-super-{$admin->getId()}" class="btn btn-mini disabled {if $admin->getSuper()}btn-success{else}btn-danger{/if}">{$admin->getSuper()|yesno}</span>
                     {/if}
+                </td>
+                <td>
+                    {if $admin->getLastLogin()}{$admin->getLastLogin()|date_format:"%Y-%m-%d %H:%M"}{else}<span class="muted">never</span>{/if}
                 </td>
                 <td>
                     <div class="btn-group">

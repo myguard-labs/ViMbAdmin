@@ -18,6 +18,7 @@
     </field>
     <field name="created" type="datetime" nullable="false"/>
     <field name="modified" type="datetime" nullable="true"/>
+    <field name="last_login" type="datetime" nullable="true"/>
     <unique-constraints>
       <unique-constraint name="IX_Username_admin" columns="username"/>
     </unique-constraints>

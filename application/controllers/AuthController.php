@@ -139,6 +139,7 @@ class AuthController extends ViMbAdmin_Controller_Action
         // Login fully succeeds here (no 2FA, or already verified): clear the
         // brute-force counter for this source.
         $this->_bruteForce()->clear( $user->getUsername(), $this->getRequest() );
+        $user->setLastLogin( new \DateTime() );
         $this->getD2EM()->flush();
 
         return true;
@@ -189,6 +190,7 @@ class AuthController extends ViMbAdmin_Controller_Action
                 $this->_reauthenticate( $admin );
 
                 $this->getSessionNamespace()->timeOfLastAction = time();
+                $admin->setLastLogin( new \DateTime() );
                 $this->getD2EM()->flush();
                 $this->getLogger()->info( sprintf( _( "%s passed 2FA and logged in" ), $admin->getUsername() ) );
 

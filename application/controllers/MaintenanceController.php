@@ -26,6 +26,52 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
     public function indexAction()
     {
         $this->view->stats = $this->_inactiveStats();
+        $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
+            'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();
+    }
+
+    /**
+     * Enqueue a REPAIR (force-resync + index + purge + quota recalc) task for
+     * every active mailbox. HEAVY: this can queue thousands of doveadm jobs.
+     * Two-step: the first POST shows a disclaimer, confirm=1 actually enqueues.
+     * The queue-runner then drains them throttled (queue.runner.max_per_run).
+     */
+    public function repairAllAction()
+    {
+        $this->_assertCsrf();
+
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        // Dry-run: show the disclaimer + count, require explicit confirmation.
+        if( (int) $this->getParam( 'confirm', 0 ) !== 1 )
+        {
+            $this->view->stats              = $this->_inactiveStats();
+            $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
+                'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();
+            $this->view->confirmRepairAll   = true;
+            return $this->render( 'index' );
+        }
+
+        $em       = $this->getD2EM();
+        $mailboxes = $em->getRepository( '\\Entities\\Mailbox' )->findBy( [ 'active' => 1 ] );
+
+        $queued = 0;
+        foreach( $mailboxes as $mailbox )
+        {
+            $task = QueueController::enqueue( $em, $mailbox, \Entities\MailboxTask::TYPE_REPAIR, $this->getAdmin() );
+            if( $task )
+                $queued++;
+        }
+        $em->flush();
+
+        $this->log( \Entities\Log::ACTION_MAINTENANCE,
+            "{$this->getAdmin()->getFormattedName()} queued repair/optimize for all active mailboxes ({$queued} task(s))" );
+
+        $this->addMessage(
+            sprintf( _( 'Queued repair/optimize for %d mailbox(es). The runner will process them in the background.' ), $queued ),
+            OSS_Message::SUCCESS );
+        $this->redirect( 'queue/index' );
     }
 
     /**

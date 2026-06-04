@@ -30,6 +30,27 @@ so we fixed it. Then we kept fixing it until the audit log went quiet.
 
 The short version: it runs, and it's hard to break into.
 
+**🆕 No helper scripts, no Dovecot-side cron — mailbox ops are native**
+
+Mailbox maintenance no longer needs any external scripts or Dovecot-side cron
+jobs. Everything is driven straight from the panel:
+
+- **Repair / optimize / archive / delete** run against Dovecot's built-in
+  **doveadm HTTP API** (`force-resync`, `index`, `purge`, `backup`,
+  `mailbox delete`) — no shared mail filesystem, no `rm -rf`, no tar scripts.
+  Each request is **queued** in a dedicated table and drained by a single
+  throttled runner, so a bulk action can't hammer Dovecot. A **Queue** tab
+  shows progress and lets you run it on demand; an optional key+IP-gated
+  endpoint lets a remote cron kick it.
+- **Passwords** are hashed **natively in PHP** (`BLF-CRYPT`, `SHA512-CRYPT`,
+  `SHA256-CRYPT`) — the `doveadm pw` binary and the old `dovecotpasswd.php`
+  workaround are gone.
+- **Quota usage** comes live from Dovecot's quota-clone `dovecot_quota` table —
+  the old maildir-scan accounting cron is retired.
+
+Net result: the Dovecot container ships **zero** ViMbAdmin scripts/cron, and the
+only optional cron left is the panel's own queue-runner.
+
 **Brought into this decade**
 
 - **PHP 8.1 → 8.5** clean. Every implicit-nullable parameter fixed, every

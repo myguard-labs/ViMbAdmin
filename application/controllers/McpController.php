@@ -225,7 +225,6 @@ class McpController extends ViMbAdmin_Controller_Action
         $m->setPassword( OSS_Auth_Password::hash( $password, [
             'pwhash'    => $this->_options['defaults']['mailbox']['password_scheme'],
             'pwsalt'    => $this->_options['defaults']['mailbox']['password_salt'] ?? null,
-            'pwdovecot' => $this->_options['defaults']['mailbox']['dovecot_pw_binary'] ?? null,
             'username'  => $username,
         ] ) );
 

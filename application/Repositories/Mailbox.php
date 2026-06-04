@@ -221,7 +221,10 @@ class Mailbox extends EntityRepository
      */
     public function purgeMailbox( $mailbox, $admin, $removeMailbox = true )
     {
-        if( !$admin->isSuper() && !$mailbox->getDomain()->getAdmins()->contains( $admin ) )
+        // A null admin == trusted system context (CLI/queue runner): skip the
+        // per-admin ownership check. A non-null admin must own the domain (or
+        // be super) to purge.
+        if( $admin !== null && !$admin->isSuper() && !$mailbox->getDomain()->getAdmins()->contains( $admin ) )
             return false;
 
         $aliases = $this->getEntityManager()->getRepository( "\\Entities\\Alias" )->loadForMailbox( $mailbox, $admin, true );

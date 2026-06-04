@@ -146,22 +146,19 @@ defaults.mailbox.min_password_length = 8
 ;   "sha1"        - password hashed using sha1 without salt
 ;   "sha1-salted" - password hashed using sha1 with salt (salt set in defaults.mailbox.password_salt above)
 ;   "crypt:XXX"   - call the PHP crypt function (with random salt) where XXX is one of: md5, blowfish, sha256, sha512
-;   "dovecot:XXX" - call the Dovecot password generator (see next option below) and use the
-;                      scheme specified by XXX. To see available schemes, use 'dovecotpw -l'
-;                      or 'doveadm pw -l'
+;   "dovecot:XXX" - produce a Dovecot-compatible hash for scheme XXX. Hashing is
+;                      done natively in PHP (no external doveadm binary), so XXX
+;                      must be one of the crypt-family schemes PHP and Dovecot
+;                      share: BLF-CRYPT, SHA512-CRYPT, SHA256-CRYPT.
 
 ; You should pick a hashing function as strong as your mail system allows.
 ; At time of writing, Dovecot ( http://wiki2.dovecot.org/Authentication/PasswordSchemes ) recommends one of
 ; BLF-CRYPT, SHA512-CRYPT, SHA256-CRYPT in descending order of strength
 defaults.mailbox.password_scheme = "dovecot:BLF-CRYPT"
 
-; The path to (and initial option(s) if necessary) the Dovecot password generator. Typical
-; values may be something like:
-;
-; "/usr/bin/doveadm pw"
-; "/usr/bin/dovecotpw"
-
-defaults.mailbox.dovecot_pw_binary = "/usr/bin/doveadm pw"
+; NOTE: a local "doveadm pw" binary is no longer required — "dovecot:" hashes
+; are generated in PHP. (doveadm pw cannot be used over the doveadm HTTP API: it
+; writes to stdout, not the API response.)
 
 
 
@@ -189,6 +186,43 @@ binary.path.bunzip2_q = "/bin/bunzip2 -q"
 binary.path.rm_rf     = "/bin/rm -rf"
 
 archive.path = "/srv/archives"
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; doveadm HTTP API + mailbox-task queue
+;;
+;; ViMbAdmin can run Dovecot mailbox operations (repair/optimize/archive/delete)
+;; against the Dovecot container's doveadm HTTP API instead of touching the mail
+;; filesystem directly. Every operation is QUEUED in the mailbox_task table and
+;; drained by a single queue-runner (queue.cli-run) so a bulk action cannot fire
+;; hundreds of doveadm calls at once.
+;;
+;; Enable the API in the Dovecot container by setting DOVEADM_API_KEY there; the
+;; key below must match it. Keep both out of git.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; doveadm HTTP endpoint (POST /doveadm/v1) and the X-Dovecot-API bearer key.
+doveadm.http.url     = "http://dovecot:8081/doveadm/v1"
+doveadm.http.api_key = ""
+; Request timeout in seconds (backup / force-resync of large mailboxes is slow).
+doveadm.http.timeout = 900
+
+; Where the safety backup is written before an archive/delete task removes mail.
+; %d = domain, %u = full username. A dsync (doveadm backup) destination.
+doveadm.backup.dest  = "maildir:/srv/vmail-backup/%d/%u"
+
+; How many queued tasks a single queue-runner invocation drains. Caps load.
+queue.runner.max_per_run = 5
+
+; Remote queue-runner trigger endpoint (/queue/trigger). Lets an off-box cron
+; kick the runner. Authenticated by a bearer key (only its SHA-256 hash is
+; compared) plus an IP/CIDR allowlist. Leave the key empty to DISABLE the
+; remote endpoint entirely (the CLI runner and UI button still work).
+;   curl -H 'Authorization: Bearer <key>' https://host/vimbadmin/queue/trigger
+queue.runner.key         = ""
+; Comma- or whitespace-separated IPs / CIDRs allowed to hit /queue/trigger.
+; Empty = deny all (endpoint effectively off even if a key is set).
+queue.runner.allowed_ips = ""
 
 
 

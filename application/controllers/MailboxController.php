@@ -310,8 +310,6 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
                                 'pwhash' => $this->_options['defaults']['mailbox']['password_scheme'],
                                 'pwsalt' => isset( $this->_options['defaults']['mailbox']['password_salt'] )
                                                 ? $this->_options['defaults']['mailbox']['password_salt'] : null,
-                                'pwdovecot' => isset( $this->_options['defaults']['mailbox']['dovecot_pw_binary'] )
-                                                ? $this->_options['defaults']['mailbox']['dovecot_pw_binary'] : null,
                                 'username' => $username
                             ]
                         )
@@ -476,6 +474,68 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
             $this->_redirect( 'mailbox/list' );
 
         }
+    }
+
+
+    /**
+     * Queue a repair/optimize task (force-resync + index + purge + quota
+     * recalc, via the doveadm HTTP API). Non-destructive.
+     */
+    public function queueRepairAction()
+    {
+        $this->_queueMailboxTask( \Entities\MailboxTask::TYPE_REPAIR, _( 'Repair/optimize' ) );
+    }
+
+    /**
+     * Queue an archive task: doveadm backup, then empty the mail store. The
+     * ViMbAdmin account row is KEPT. Drained by the queue-runner.
+     */
+    public function queueArchiveAction()
+    {
+        $this->_queueMailboxTask( \Entities\MailboxTask::TYPE_ARCHIVE, _( 'Archive' ) );
+    }
+
+    /**
+     * Queue a delete task: doveadm backup (safety), empty the mail store, then
+     * remove the ViMbAdmin mailbox row. Drained by the queue-runner.
+     */
+    public function queueDeleteAction()
+    {
+        $this->_queueMailboxTask( \Entities\MailboxTask::TYPE_DELETE, _( 'Delete' ) );
+    }
+
+    /**
+     * Shared helper: CSRF-guard, enqueue a MailboxTask of $type for the current
+     * mailbox, log + flash, redirect to the mailbox list.
+     *
+     * @param string $type  One of MailboxTask::TYPE_*
+     * @param string $label Human label for flash messages
+     */
+    private function _queueMailboxTask( $type, $label )
+    {
+        $this->_assertCsrf();
+        if( !$this->getMailbox() )
+            return $this->forward( 'list' );
+
+        $username = $this->getMailbox()->getUsername();
+        $task = QueueController::enqueue(
+            $this->getD2EM(), $this->getMailbox(), $type, $this->getAdmin() );
+        $this->getD2EM()->flush();
+
+        if( $task )
+        {
+            $this->log( \Entities\Log::ACTION_MAILBOX_EDIT,
+                "{$this->getAdmin()->getFormattedName()} queued {$type} for {$username}" );
+            $this->addMessage(
+                sprintf( _( '%s queued for %s.' ), $label, $username ), OSS_Message::SUCCESS );
+        }
+        else
+        {
+            $this->addMessage(
+                sprintf( _( 'A %s task is already queued for %s.' ), strtolower( $label ), $username ),
+                OSS_Message::INFO );
+        }
+        $this->redirect( 'mailbox/list' );
     }
 
 
@@ -747,8 +807,6 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
                         'pwhash' => $this->_options['defaults']['mailbox']['password_scheme'],
                         'pwsalt' => isset( $this->_options['defaults']['mailbox']['password_salt'] )
                                         ? $this->_options['defaults']['mailbox']['password_salt'] : null,
-                        'pwdovecot' => isset( $this->_options['defaults']['mailbox']['dovecot_pw_binary'] )
-                                        ? $this->_options['defaults']['mailbox']['dovecot_pw_binary'] : null,
                         'username' => $this->getMailbox()->getUsername()
                     ]
                 )

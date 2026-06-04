@@ -39,70 +39,101 @@
 class ViMbAdmin_Dovecot
 {
 
+    // crypt() scheme identifiers, keyed by Dovecot scheme name. These produce
+    // exactly the bare hash strings Dovecot stores after its {SCHEME} prefix:
+    //   BLF-CRYPT    -> $2y$...   (bcrypt / Blowfish)
+    //   SHA512-CRYPT -> $6$...
+    //   SHA256-CRYPT -> $5$...
+    const SUPPORTED_SCHEMES = [ 'BLF-CRYPT', 'SHA512-CRYPT', 'SHA256-CRYPT' ];
+
     /**
-     * Utility function to call Dovecot password generator
+     * Generate a Dovecot-compatible password hash natively in PHP (no external
+     * doveadm binary, no network round-trip). Returns the BARE hash WITHOUT the
+     * leading {SCHEME} marker, matching the value Dovecot's `doveadm pw` printed
+     * (the panel stores the bare hash; the "dovecot:" marker lives elsewhere).
      *
-     * @param string $scheme The Dovecot scheme to use
-     * @param string $pass The password
-     * @param string $user The username (required by some schemes)
+     * Only the crypt-family schemes Dovecot and PHP share are supported
+     * (BLF-CRYPT, SHA512-CRYPT, SHA256-CRYPT). These cover the panel's offered
+     * options; any other scheme throws rather than silently producing a hash
+     * Dovecot would reject.
+     *
+     * @param string $scheme The Dovecot scheme (e.g. "BLF-CRYPT")
+     * @param string $pass The plaintext password
+     * @param string $user The username (unused for crypt schemes; kept for API)
      * @throws ViMbAdmin_Exception
-     * @return string The encrypted / hashed password
+     * @return string The bare crypt() hash (no {SCHEME} prefix)
      */
     public static function password( $scheme, $pass, $user )
     {
-        $cmd = self::checkOptions() . ' -s ' . escapeshellarg( $scheme ) . ' -u ' . escapeshellarg( $user ) . ' -p ' . escapeshellarg( $pass );
-        $a = exec( $cmd, $output, $retval );
-        
-        if( $retval != 0 )
-            throw new ViMbAdmin_Exception( sprintf( _( 'Error executing Dovecot password command: ' . $cmd ) ) );
-        
-        return trim( substr( $a, strlen( $scheme ) + 2 ) );
+        $scheme = strtoupper( $scheme );
+
+        switch( $scheme )
+        {
+            case 'BLF-CRYPT':
+                // password_hash() emits the modern $2y$ bcrypt prefix Dovecot
+                // accepts under {BLF-CRYPT}.
+                $hash = password_hash( $pass, PASSWORD_BCRYPT );
+                break;
+
+            case 'SHA512-CRYPT':
+                $hash = crypt( $pass, '$6$' . self::_cryptSalt() . '$' );
+                break;
+
+            case 'SHA256-CRYPT':
+                $hash = crypt( $pass, '$5$' . self::_cryptSalt() . '$' );
+                break;
+
+            default:
+                throw new ViMbAdmin_Exception( sprintf(
+                    _( 'Unsupported password scheme "%s" — supported: %s' ),
+                    $scheme, implode( ', ', self::SUPPORTED_SCHEMES ) ) );
+        }
+
+        if( !is_string( $hash ) || strlen( $hash ) < 13 )
+            throw new ViMbAdmin_Exception( _( 'Password hashing failed' ) );
+
+        return $hash;
     }
 
     /**
-     * Utility function to call Dovecot password generator
+     * Verify a plaintext password against a stored bare hash.
      *
-     * @param string $scheme The Dovecot scheme to use
-     * @param string $pwhash The hashed password
+     * Works directly off the crypt() string regardless of scheme — bcrypt via
+     * password_verify(), the $5$/$6$ families via a constant-time crypt()
+     * re-hash compare — so $scheme is advisory only.
+     *
+     * @param string $scheme The Dovecot scheme (advisory)
+     * @param string $pwhash The stored bare hash (no {SCHEME} prefix)
      * @param string $pwplain The plaintext password
-     * @param string $user The username (required by some schemes)
-     * @throws ViMbAdmin_Exception
-     * @return bool True if password matches
+     * @param string $user The username (unused for crypt schemes; kept for API)
+     * @return bool True if the password matches
      */
     public static function passwordVerify( $scheme, $pwhash, $pwplain, $user )
     {
-        $cmd = "echo " . escapeshellarg( $pwplain ) . " | "
-            . self::checkOptions() . ' -s ' . escapeshellarg( $scheme ) . ' -u ' . escapeshellarg( $user ) 
-            . ' -t ' . escapeshellarg( "{{$scheme}}{$pwhash}" );
-            
-        $a = exec( $cmd, $output, $retval );
-        
-        return $retval == 0;
+        if( !is_string( $pwhash ) || $pwhash === '' )
+            return false;
+
+        // bcrypt: password_verify handles $2y$/$2a$/$2b$.
+        if( strncmp( $pwhash, '$2', 2 ) === 0 )
+            return password_verify( $pwplain, $pwhash );
+
+        // $5$ (SHA-256) / $6$ (SHA-512): re-crypt with the stored hash as the
+        // salt template and compare in constant time.
+        return hash_equals( $pwhash, (string) crypt( $pwplain, $pwhash ) );
     }
 
     /**
-     * Verify and return the Dovecot adm binary
-     * 
-     * @param  array $options Zend_Config - application.ini 
-     * @return string         Path to binary
+     * Generate a 16-char base64-ish salt for the $5$/$6$ crypt families.
+     *
+     * @return string
      */
-    public static function checkOptions( $options = null )
+    private static function _cryptSalt()
     {
-        // binary should be available from options in the registry
-        if( $options === null )
-            $options = Zend_Registry::get( 'options' );
-        
-        if( !isset( $options['defaults']['mailbox']['dovecot_pw_binary'] ) )
-            throw new ViMbAdmin_Exception( sprintf( _( 'Configuration param "defaults.mailbox.dovecot_pw_binary" not defined' ) ) );
-
-        $cmd = $binary = $options['defaults']['mailbox']['dovecot_pw_binary'];
-        if( strpos( $cmd, ' ' ) )
-            $binary = substr( $cmd, 0, strpos( $cmd, ' ' ) );
-        
-        if( !file_exists( $binary ) || !is_executable( $binary ) )
-            throw new ViMbAdmin_Exception( sprintf( _( 'Dovecot binary [%s] does not exist or is not executable' ), $binary ) );
-        
-        return $cmd;
+        $alphabet = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+        $salt = '';
+        for( $i = 0; $i < 16; $i++ )
+            $salt .= $alphabet[ random_int( 0, strlen( $alphabet ) - 1 ) ];
+        return $salt;
     }
 
 }

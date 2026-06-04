@@ -76,5 +76,40 @@
 
 </div>
 
+<div class="row-fluid">
+    {* ======================= Repair & optimize ALL mailboxes ======================= *}
+    <div class="span12">
+        <div class="well">
+            <h3>Repair &amp; optimize all mailboxes</h3>
+            <div class="alert alert-error">
+                <strong>Heavy operation.</strong> This queues a repair/optimize
+                job (force-resync + index + purge + quota recalc) for
+                <strong>every active mailbox</strong>
+                ({$activeMailboxCount} mailbox(es)). On a large server this is a
+                lot of Dovecot work — run it <em>only if absolutely necessary</em>
+                (e.g. after index corruption or a storage migration). The jobs are
+                queued and processed gradually in the background, not all at once.
+            </div>
+
+            {if isset( $confirmRepairAll )}
+                <form method="post" action="{genUrl controller='maintenance' action='repair-all'}"
+                      onsubmit="return confirm('Queue repair/optimize for ALL {$activeMailboxCount} active mailboxes?');">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <input type="hidden" name="confirm" value="1" />
+                    <button class="btn btn-danger" type="submit">
+                        Yes, queue {$activeMailboxCount} repair task(s)
+                    </button>
+                    <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
+                </form>
+            {else}
+                <form method="post" action="{genUrl controller='maintenance' action='repair-all'}">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <button class="btn btn-warning" type="submit">Repair &amp; optimize all mailboxes…</button>
+                </form>
+            {/if}
+        </div>
+    </div>
+</div>
+
 </div>
 {tmplinclude file="footer.phtml"}

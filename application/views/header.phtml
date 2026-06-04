@@ -70,6 +70,9 @@
                                     <li {if $controller eq 'maintenance'}class="active"{/if}>
                                         <a href="{genUrl controller='maintenance'}">Maintenance</a>
                                     </li>
+                                    <li {if $controller eq 'queue'}class="active"{/if}>
+                                        <a href="{genUrl controller='queue'}">Queue</a>
+                                    </li>
                                 {/if}
 
                                     {* <li {if $controller == 'shared-calendar' && $module == "davical" }class="active"{/if}>

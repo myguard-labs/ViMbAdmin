@@ -330,8 +330,6 @@ class AuthController extends ViMbAdmin_Controller_Action
                                 'pwhash' => $this->_options['defaults']['mailbox']['password_scheme'],
                                 'pwsalt' => isset( $this->_options['defaults']['mailbox']['password_salt'] )
                                                 ? $this->_options['defaults']['mailbox']['password_salt'] : null, 
-                                'pwdovecot' => isset( $this->_options['defaults']['mailbox']['dovecot_pw_binary'] )
-                                                ? $this->_options['defaults']['mailbox']['dovecot_pw_binary'] : null,
                                 'username' => $form->getValue( 'username' )
                             ]
                         )
@@ -344,8 +342,6 @@ class AuthController extends ViMbAdmin_Controller_Action
                                 'pwhash' => $this->_options['defaults']['mailbox']['password_scheme'],
                                 'pwsalt' => isset( $this->_options['defaults']['mailbox']['password_salt'] )
                                                 ? $this->_options['defaults']['mailbox']['password_salt'] : null, 
-                                'pwdovecot' => isset( $this->_options['defaults']['mailbox']['dovecot_pw_binary'] )
-                                                ? $this->_options['defaults']['mailbox']['dovecot_pw_binary'] : null,
                                  'username' => $form->getValue( 'username' )
 
                             ]

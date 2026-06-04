@@ -148,13 +148,8 @@ defaults.mailbox.min_password_length = 8
 
 defaults.mailbox.password_scheme = "md5.salted"
 
-; The path to (and initial option(s) if necessary) the Dovecot password generator. Typical
-; values may be something like:
-;
-; "/usr/bin/doveadm pw"
-; "/usr/bin/dovecotpw"
-
-defaults.mailbox.dovecot_pw_binary = "/usr/bin/doveadm pw"
+; NOTE: "dovecot:" password hashes are generated natively in PHP; no external
+; doveadm binary is required (dovecot_pw_binary has been removed).
 
 
 
@@ -182,6 +177,15 @@ binary.path.bunzip2_q = "/bin/bunzip2 -q"
 binary.path.rm_rf     = "/bin/rm -rf"
 
 archive.path = "/srv/archives"
+
+; doveadm HTTP API + mailbox-task queue (see application.ini.dist for docs).
+doveadm.http.url         = "http://dovecot:8081/doveadm/v1"
+doveadm.http.api_key     = ""
+doveadm.http.timeout     = 900
+doveadm.backup.dest      = "maildir:/srv/vmail-backup/%d/%u"
+queue.runner.max_per_run = 5
+queue.runner.key         = ""
+queue.runner.allowed_ips = ""
 
 
 

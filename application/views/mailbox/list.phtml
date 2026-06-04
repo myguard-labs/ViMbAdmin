@@ -98,10 +98,13 @@
                     <a class="btn btn-mini have-tooltip" id="modal-dialog-mailbox_settings_{$mbox.id}" title="Send Settings" href="{genUrl controller='mailbox' action='email-settings' mid=$mbox.id}">
                         <i class="icon-envelope"></i>
                     </a>
-                    <a class="btn btn-mini have-tooltip" id="archive_{$mbox.id}" title="Archive" href="{genUrl controller='archive' action='add' mid=$mbox.id}">
+                    <a class="btn btn-mini have-tooltip" id="repair_{$mbox.id}" title="Repair / optimize (queued, via doveadm)" href="{genUrl controller='mailbox' action='queue-repair' mid=$mbox.id csrf=$csrfToken}">
+                        <i class="icon-wrench"></i>
+                    </a>
+                    <a class="btn btn-mini have-tooltip" id="archive_{$mbox.id}" title="Archive (queued: backup + empty mailbox, keep account)" href="{genUrl controller='mailbox' action='queue-archive' mid=$mbox.id csrf=$csrfToken}" onclick="return confirm('Archive {$mbox.username}? Backs up + empties the mailbox, keeps the account.');">
                         <i class="icon-inbox"></i>
                     </a>
-                    <a class="btn btn-mini have-tooltip" id="purge_{$mbox.id}" title="Purge" href="{genUrl controller='mailbox' action='purge' mid=$mbox.id csrf=$csrfToken}">
+                    <a class="btn btn-mini have-tooltip btn-danger" id="delete_{$mbox.id}" title="Delete (queued: backup, then remove mailbox + account)" href="{genUrl controller='mailbox' action='queue-delete' mid=$mbox.id csrf=$csrfToken}" onclick="return confirm('DELETE {$mbox.username}? Backs up, then removes the mail AND the account. This cannot be undone from here.');">
                         <i class="icon-trash"></i>
                     </a>
                     {if isset( $action_list_menu)}

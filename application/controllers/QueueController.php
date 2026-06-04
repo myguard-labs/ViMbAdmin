@@ -274,7 +274,7 @@ class QueueController extends ViMbAdmin_Controller_Action
     {
         $max = (int) ( $this->_options['queue']['runner']['max_per_run'] ?? 5 );
         $n   = $this->_drain( $max );
-        if( $this->getParam( 'verbose' ) )
+        if( $this->getParam( 'verbose' ) && $n >= 0 )
             echo "Processed {$n} task(s).\n";
     }
 

@@ -37,7 +37,11 @@ class Alias extends EntityRepository
         if( !$ima )
             $qb->andWhere( 'a.address != a.goto' );
 
-        if( !$admin->isSuper() )
+        // $admin === null is trusted system context (CLI / queue runner): no
+        // per-admin domain scoping, same as a super-admin. Guard the null
+        // before calling isSuper() or the queue delete crashes with
+        // "Call to a member function isSuper() on null".
+        if( $admin !== null && !$admin->isSuper() )
         {
             $qb->leftJoin( 'a.Domain', 'd' )
                 ->leftJoin( 'd.Admins', 'd2a' )
@@ -78,7 +82,8 @@ class Alias extends EntityRepository
             ->setParameter( 3, '%,' . $mailbox->getUsername())
             ->setParameter( 4, $mailbox->getUsername() . ',%');
 
-        if( !$admin->isSuper() )
+        // null admin = trusted system context (queue runner); no scoping.
+        if( $admin !== null && !$admin->isSuper() )
         {
             $qb->leftJoin( 'a.Domain', 'd' )
                 ->leftJoin( 'd.Admins', 'd2a' )

@@ -50,10 +50,8 @@ $(document).ready( function() {
         'aoColumns': [
             null,
             null,
-            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
             { 'sType': 'num-html' },
-            {/if}
-            { 'sType': 'num-html' },
+            { "bSearchable": false },
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
             null,
             {/if}
@@ -128,10 +126,8 @@ function toggleActive(elid, id) {
                                    oDataTable.fnAddData([
                                         row.username,
                                         row.name,
-                                        {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                                            formatMdirsize( row.id, row.quota, row.quota_bytes, row.quota_messages ),
-                                        {/if}
-                                        formatQuotaLimit( row.quota ),
+                                        formatUsedQuota( row.id, row.quota_bytes, row.quota ),
+                                        formatLastLogin( row.last_login ),
                                         row.domain,
                                         formatActive( row.id, row.active ),
                                         formatControlls( row.id )
@@ -241,30 +237,39 @@ function toggleActive(elid, id) {
         
     }
 
-    {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-    function formatMdirsize( id, quota, quota_bytes, quota_messages )
+    // bytes -> human-readable size (binary units); 0/null shown by caller.
+    function fmtBytes( v )
     {
-        // Live usage from Dovecot quota-clone (the limit is a separate column).
-        if( quota_bytes !== undefined && quota_bytes !== null ){
-            var used_msgs = ( quota_messages !== undefined && quota_messages !== null ) ? quota_messages : '';
-            var mdir_size = quota_bytes / {$multiplier};
-            return '<a href="#" data-sizes="'+ quota_bytes + '|{$multiplier}|{$size_multiplier}|' + quota + '|' + used_msgs + '" id="dir-size-' + id + '">' + mdir_size.toFixed(1) + '</a>';
-        }
-        else
-            return "0";
-    }
-    {/if}
-
-    // Configured quota limit (bytes) -> human-readable; 0 = unlimited.
-    function formatQuotaLimit( q )
-    {
-        var b = parseFloat( q );
-        if( !b || b <= 0 )
-            return '<span class="muted" title="Unlimited">&infin;</span>';
+        var b = parseFloat( v );
+        if( !b || b <= 0 ) return '0 B';
         var units = [ 'B', 'KB', 'MB', 'GB', 'TB', 'PB' ], i = 0;
         while( b >= 1024 && i < units.length - 1 ) { b /= 1024; i++; }
         var r = Math.round( b * 10 ) / 10;
         return ( r === Math.floor( r ) ? r.toString() : r.toFixed( 1 ) ) + ' ' + units[ i ];
+    }
+
+    // "Used / Quota" cell, click -> mailbox edit. quota 0/null = unlimited.
+    function formatUsedQuota( id, quota_bytes, quota )
+    {
+        var used  = ( quota_bytes !== undefined && quota_bytes !== null && parseFloat( quota_bytes ) > 0 )
+                  ? fmtBytes( quota_bytes ) : '0 B';
+        var limit = ( quota && parseFloat( quota ) > 0 )
+                  ? fmtBytes( quota )
+                  : '<span class="muted" title="Unlimited">&infin;</span>';
+        return '<a href="{genUrl controller="mailbox" action="edit"}/mid/' + id
+             + '" title="Edit mailbox / quota">' + used + ' / ' + limit + '</a>';
+    }
+
+    // Unix timestamp -> "YYYY-MM-DD HH:MM"; null/0 = never.
+    function formatLastLogin( ts )
+    {
+        var t = parseInt( ts, 10 );
+        if( !t || t <= 0 )
+            return '<span class="muted">never</span>';
+        var d = new Date( t * 1000 );
+        function p( n ){ return ( n < 10 ? '0' : '' ) + n; }
+        return d.getFullYear() + '-' + p( d.getMonth() + 1 ) + '-' + p( d.getDate() )
+             + ' ' + p( d.getHours() ) + ':' + p( d.getMinutes() );
     }
 
 {/if}

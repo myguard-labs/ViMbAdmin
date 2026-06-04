@@ -34,10 +34,8 @@
         <tr>
             <th>Email</th>
             <th>Name</th>
-            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                <th>Used ({$size_multiplier})</th>
-            {/if}
-            <th>Quota</th>
+            <th>Used / Quota</th>
+            <th>Last login</th>
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
                 <th>Domain</th>
             {/if}
@@ -50,20 +48,18 @@
         <tr>
             <td>{$mbox.username}</td>
             <td>{$mbox.name}</td>
-            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                <td>
-                    {* Live usage from Dovecot quota-clone (quota_bytes). *}
-                    {if $mbox.quota_bytes}
-                        {assign var=mdir_size value=($mbox.quota_bytes/$multiplier)|string_format:"%.2f"}
-                        <a href="#" data-sizes="{$mbox.quota_bytes}|{$multiplier}|{$size_multiplier}|{$mbox.quota}|{$mbox.quota_messages}" id="dir-size-{$mbox.id}">{$mdir_size}</a>
-                    {else}
-                        0
-                    {/if}
-                </td>
-            {/if}
             <td>
-                {* Configured quota limit (bytes in DB, 0 = unlimited). *}
-                {if $mbox.quota}{$mbox.quota|filesize}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
+                {* Used (live Dovecot quota-clone, bytes) / Quota limit (bytes,
+                   0 = unlimited). Both human-readable; click -> mailbox edit. *}
+                <a href="{genUrl controller='mailbox' action='edit' mid=$mbox.id}" title="Edit mailbox / quota">
+                    {if $mbox.quota_bytes}{$mbox.quota_bytes|filesize}{else}0 B{/if}
+                    /
+                    {if $mbox.quota}{$mbox.quota|filesize}{else}<span class="muted" title="Unlimited">&infin;</span>{/if}
+                </a>
+            </td>
+            <td>
+                {* Last login (Dovecot last_login plugin, unix ts; null = never). *}
+                {if $mbox.last_login}{$mbox.last_login|unixdate}{else}<span class="muted">never</span>{/if}
             </td>
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
                 <td>{$mbox.domain}</td>

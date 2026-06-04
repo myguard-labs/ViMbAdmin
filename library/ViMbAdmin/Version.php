@@ -59,12 +59,12 @@ final class ViMbAdmin_Version
     /**
      * Database schema version
      */
-    const DBVERSION = 4;
+    const DBVERSION = 5;
 
     /**
      * Database schema version name
      */
-    const DBVERSION_NAME = 'MCP token per-domain allowlist';
+    const DBVERSION_NAME = 'Dovecot last_login table';
 
     /**
      * The latest stable version Zend Framework available

@@ -96,11 +96,25 @@ class Mailbox extends EntityRepository
         foreach( $quotas as $q )
             $byUser[ $q['username'] ] = $q;
 
+        // Last-login (Dovecot last_login plugin -> dovecot_last_login table,
+        // unix timestamp). Batch-load and graft alongside the quota usage.
+        $logins = $this->getEntityManager()->createQueryBuilder()
+            ->select( 'l.username as username, l.last_login as last_login' )
+            ->from( '\\Entities\\LastLogin', 'l' )
+            ->where( 'l.username IN ( :usernames )' )
+            ->setParameter( 'usernames', $usernames )
+            ->getQuery()->getArrayResult();
+
+        $loginByUser = [];
+        foreach( $logins as $l )
+            $loginByUser[ $l['username'] ] = (int) $l['last_login'];
+
         foreach( $rows as &$row )
         {
             $u = $row['username'];
             $row['quota_bytes']    = isset( $byUser[$u] ) ? $byUser[$u]['bytes']    : null;
             $row['quota_messages'] = isset( $byUser[$u] ) ? $byUser[$u]['messages'] : null;
+            $row['last_login']     = ( isset( $loginByUser[$u] ) && $loginByUser[$u] > 0 ) ? $loginByUser[$u] : null;
         }
         unset( $row );
 

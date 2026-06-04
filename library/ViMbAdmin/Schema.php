@@ -75,8 +75,8 @@ class ViMbAdmin_Schema
      * Hand-written migration statements that Doctrine's schema-tool cannot
      * generate (FKs on read-only/unassociated tables, collation alignment).
      * Returned only when not yet applied, so they integrate with the normal
-     * pending-count / apply flow. Mirror of
-     * contrib/migrations/2026-06-quota-lastlogin-fk-cascade.sql.
+     * pending-count / apply flow. Mirror of the FK/collation steps in
+     * contrib/migrations/2026-06-fork-schema.sql.
      *
      * @return string[]
      */

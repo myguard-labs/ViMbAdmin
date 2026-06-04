@@ -256,28 +256,34 @@ your database in line in one of two ways:
 ```
 
 ```sh
-# B) apply a specific hand-written migration from contrib/migrations/
-mysql -u<user> -p <database> < contrib/migrations/2026-06-mailbox-username-unique.sql
+# B) apply the consolidated fork-schema migration from contrib/migrations/
+mysql -u<user> -p <database> < contrib/migrations/2026-06-fork-schema.sql
 ```
 
-`contrib/migrations/` holds idempotent, targeted SQL for changes that warrant a
-note (each file documents *why* and any pre-checks). The current one adds the
-**`UNIQUE` index on `mailbox.username`** — Postfix and Dovecot query that column
-on every delivery and login, so without the index they full-scan the mailbox
-table. Fresh installs (`orm:schema-tool:create`) already include it; only DBs
-created from the older SQL dumps need the migration. Always back up first; the
-index is `UNIQUE`, so dedupe any duplicate usernames before applying:
+`contrib/migrations/` holds one idempotent, consolidated SQL file —
+[`2026-06-fork-schema.sql`](contrib/migrations/2026-06-fork-schema.sql) — the
+standalone mirror of everything the fork adds above upstream (DBVERSION 3). It
+is the hand-written equivalent of `orm:schema-tool:update --force` plus the
+FK/collation steps the schema-tool can't express, and is safe to re-run. In
+dependency order it covers: (1) the **`dovecot_quota`** table + retirement of
+the legacy maildir-scan columns; (2) the **`UNIQUE` index on `mailbox.username`**
+(Postfix/Dovecot look that up on every delivery and login, and it is the FK
+target in step 3); (3) **`ON DELETE CASCADE` FKs** `dovecot_quota` /
+`dovecot_last_login` → `mailbox(username)` plus the collation alignment they
+need; (4) the **`archive.autoprune`** column. Fresh installs build all of this
+automatically; only DBs seeded from older dumps need the file. Always back up
+first; step 2's index is `UNIQUE`, so dedupe any duplicate usernames before
+applying:
 
 ```sh
 SELECT username, COUNT(*) c FROM mailbox GROUP BY username HAVING c > 1;
 ```
 
-There is also a **`dovecot_quota` table** migration
-([`2026-06-quota-clone-table.sql`](contrib/migrations/2026-06-quota-clone-table.sql)).
-This fork has retired the old nightly maildir-scan (`mailbox.cli-get-sizes`) and
-gets **live** mailbox usage straight from Dovecot's quota-clone plugin instead.
-The migration creates the `dovecot_quota` table, seeds it from the old
-`maildir_size` values, then drops the retired `maildir_size` / `homedir_size` /
+The **`dovecot_quota`** part of that migration lets this fork retire the old
+nightly maildir-scan (`mailbox.cli-get-sizes`) and get **live** mailbox usage
+straight from Dovecot's quota-clone plugin instead: it creates the
+`dovecot_quota` table, seeds it from the old `maildir_size` values, then drops
+the retired `maildir_size` / `homedir_size` /
 `size_at` columns. See
 [Live quota usage (Dovecot quota-clone)](#live-quota-usage-dovecot-quota-clone)
 for the Dovecot config.
@@ -458,10 +464,10 @@ authority and replaces the row on every change). A mailbox shows `0` until
 Dovecot writes its first figure.
 
 The table is created on fresh installs by the entity mapping
-(`orm:schema-tool:create`); existing DBs apply
-[`contrib/migrations/2026-06-quota-clone-table.sql`](contrib/migrations/2026-06-quota-clone-table.sql)
-(it creates `dovecot_quota`, seeds it from the old `maildir_size`, and drops the
-retired `maildir_size` / `homedir_size` / `size_at` columns).
+(`orm:schema-tool:create`); existing DBs apply the consolidated
+[`contrib/migrations/2026-06-fork-schema.sql`](contrib/migrations/2026-06-fork-schema.sql)
+(its step 1 creates `dovecot_quota`, seeds it from the old `maildir_size`, and
+drops the retired `maildir_size` / `homedir_size` / `size_at` columns).
 
 #### Dovecot config (on the mail host, not the panel)
 

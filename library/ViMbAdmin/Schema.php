@@ -58,7 +58,76 @@ class ViMbAdmin_Schema
             return !preg_match( '/\bALTER\s+TABLE\s+`?dovecot_(quota|last_login)`?\b/i', $stmt );
         } ) );
 
+        // Append migrations the Doctrine schema-tool can't express, because the
+        // Dovecot-owned tables are mapped read-only with NO association (the
+        // Mailbox PK is `id`, not `username`, so an owning assoc would collide
+        // with quota-clone's writes). We still want the rows to die with their
+        // mailbox, so add ON DELETE CASCADE FKs at the DB layer. Each statement
+        // is introspection-guarded — it appears here only while actually
+        // missing, so it counts as "pending" exactly once and is a no-op after.
+        foreach( $this->extraSql() as $stmt )
+            $sql[] = $stmt;
+
         return $sql;
+    }
+
+    /**
+     * Hand-written migration statements that Doctrine's schema-tool cannot
+     * generate (FKs on read-only/unassociated tables, collation alignment).
+     * Returned only when not yet applied, so they integrate with the normal
+     * pending-count / apply flow. Mirror of
+     * contrib/migrations/2026-06-quota-lastlogin-fk-cascade.sql.
+     *
+     * @return string[]
+     */
+    public function extraSql()
+    {
+        $conn = $this->_em->getConnection();
+        $db   = $conn->getDatabase();
+        $out  = [];
+
+        // The two Dovecot-owned tables that should cascade-delete with mailbox.
+        $fks = [
+            'dovecot_quota'      => 'FK_dovecot_quota_mailbox',
+            'dovecot_last_login' => 'FK_dovecot_last_login_mailbox',
+        ];
+
+        try
+        {
+            // 1) dovecot_quota.username collation must match mailbox.username
+            //    (utf8mb3_unicode_ci) or the FK fails with errno 150.
+            $coll = $conn->fetchOne(
+                'SELECT COLLATION_NAME FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                [ $db, 'dovecot_quota', 'username' ] );
+            if( $coll !== false && $coll !== null && $coll !== 'utf8mb3_unicode_ci' )
+                $out[] = 'ALTER TABLE `dovecot_quota` MODIFY `username` '
+                       . 'VARCHAR(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL';
+
+            // 2) the cascade FKs themselves (only if absent).
+            foreach( $fks as $table => $name )
+            {
+                $have = (int) $conn->fetchOne(
+                    'SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+                      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?',
+                    [ $db, $table, $name ] );
+                if( $have === 0 )
+                    $out[] = sprintf(
+                        'ALTER TABLE `%s` ADD CONSTRAINT `%s` '
+                        . 'FOREIGN KEY (`username`) REFERENCES `mailbox` (`username`) '
+                        . 'ON DELETE CASCADE ON UPDATE CASCADE',
+                        $table, $name );
+            }
+        }
+        catch( \Throwable $e )
+        {
+            // Introspection failed (e.g. a table not present yet on a brand-new
+            // install before schema-tool created it). Skip — the next run picks
+            // it up once the base tables exist.
+            return [];
+        }
+
+        return $out;
     }
 
     /**

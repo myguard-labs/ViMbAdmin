@@ -68,19 +68,27 @@ final class ViMbAdmin_Version
     /**
      * Database schema version
      */
-    const DBVERSION = 3;
+    const DBVERSION = 4;
 
     /**
      * Database schema version name
      *
-     * Single consolidated fork schema step above upstream's v2 ("Earth"):
+     * v3 — single consolidated fork schema step above upstream's v2 ("Earth"):
      * covers the mailbox-task queue (mailbox_task), admin last_login, the MCP
      * token table incl. allowed_domains, the Dovecot quota-clone table
      * (dovecot_quota) and the Dovecot last-login table (dovecot_last_login).
-     * Doctrine SchemaTool applies the whole diff in one pass on a fresh DB, so
-     * these never needed separate version steps.
+     * Doctrine SchemaTool applies the whole diff in one pass on a fresh DB.
+     *
+     * v4 — ON DELETE CASCADE FKs on the two Dovecot-owned, read-only,
+     * unassociated tables (dovecot_quota / dovecot_last_login) → mailbox
+     * (username), plus a collation alignment of dovecot_quota.username. These
+     * can't be expressed by the schema-tool (no Doctrine association — the
+     * Mailbox PK is `id`, not `username`), so ViMbAdmin_Schema::extraSql()
+     * adds them, introspection-guarded. Deleting a mailbox now cascade-deletes
+     * its quota + last-login rows at the DB layer. Mirror:
+     * contrib/migrations/2026-06-quota-lastlogin-fk-cascade.sql.
      */
-    const DBVERSION_NAME = 'ViMbAdmin fork schema (queue, MCP, Dovecot dicts)';
+    const DBVERSION_NAME = 'Dovecot dict cascade FKs (quota + last-login)';
 
     /**
      * The latest stable version Zend Framework available

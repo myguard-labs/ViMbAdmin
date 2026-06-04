@@ -82,6 +82,14 @@
                         <button class="btn btn-mini btn-warning" type="submit">Cancel</button>
                     </form>
                 {/if}
+                {if $task->getStatus() eq 'FAILED'}
+                    <form method="post" action="{genUrl controller='queue' action='retry'}" style="display:inline"
+                          onsubmit="return confirm('Retry task #{$task->getId()}?');">
+                        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                        <input type="hidden" name="id" value="{$task->getId()}" />
+                        <button class="btn btn-mini btn-success" type="submit">Retry</button>
+                    </form>
+                {/if}
                 {if $task->getStatus() neq 'RUNNING'}
                     <form method="post" action="{genUrl controller='queue' action='delete'}" style="display:inline"
                           onsubmit="return confirm('Delete task #{$task->getId()}?');">

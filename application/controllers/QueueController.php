@@ -157,6 +157,34 @@ class QueueController extends ViMbAdmin_Controller_Action
     }
 
     /**
+     * Retry a FAILED task: reset it to PENDING so the runner picks it up again.
+     * CSRF + POST guarded.
+     */
+    public function retryAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'queue/index' );
+
+        $task = $this->getD2EM()->getRepository( '\\Entities\\MailboxTask' )
+            ->find( (int) $this->getParam( 'id', 0 ) );
+
+        if( $task && $task->getStatus() === \Entities\MailboxTask::STATUS_FAILED )
+        {
+            $task->setStatus( \Entities\MailboxTask::STATUS_PENDING )
+                 ->setFinishedAt( null )
+                 ->appendLog( 'retry queued by ' . $this->getAdmin()->getFormattedName() );
+            $this->getD2EM()->flush();
+            $this->addMessage( _( 'Task re-queued.' ), OSS_Message::SUCCESS );
+        }
+        else
+        {
+            $this->addMessage( _( 'Task not found or not in a failed state.' ), OSS_Message::ERROR );
+        }
+        $this->redirect( 'queue/index' );
+    }
+
+    /**
      * Cancel a PENDING task.
      */
     public function cancelAction()

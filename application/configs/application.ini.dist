@@ -185,19 +185,17 @@ mailboxAliases = 1
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; See: https://github.com/opensolutions/ViMbAdmin/wiki/Archiving-Mailboxes
+;; Misc / legacy
+;; (Archiving in this fork is queue-driven — see the doveadm/queue section below
+;;  and the Archives + Maintenance tabs; there is no tar/bzip2 archive.path.)
 
 server_id = 1
 
-;;Archive options
-binary.path.chown_R   = "/bin/chown -R"
-binary.path.tar_cf    = "/bin/tar -cf"
-binary.path.tar_xf    = "/bin/tar -xf"
-binary.path.bzip2_q   = "/bin/bzip2 -q"
-binary.path.bunzip2_q = "/bin/bunzip2 -q"
+; rm binary for the optional CLI on-disk mailbox purge (mailbox_deletion_fs_*).
+; This is a SEPARATE, default-off legacy feature that shells out on a host with
+; direct maildir access — NOT the queue archive/delete flow (that backs up via
+; doveadm and prunes via the Archives/Maintenance tabs, no local shell tools).
 binary.path.rm_rf     = "/bin/rm -rf"
-
-archive.path = "/srv/archives"
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

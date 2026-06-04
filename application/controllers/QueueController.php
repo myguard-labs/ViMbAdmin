@@ -492,6 +492,26 @@ class QueueController extends ViMbAdmin_Controller_Action
         if( $q )
             $origSize = $q->getBytes();
 
+        // Capture the full mailbox attributes (incl the password HASH) while the
+        // row still exists, so a later restore of a DELETE'd account can recreate
+        // it losslessly. ARCHIVE keeps the account, so this is belt-and-braces
+        // there; for DELETE it's the only record of the mailbox.
+        $mbData = null;
+        $mb = $em->getRepository( '\\Entities\\Mailbox' )->findOneBy( [ 'username' => $user ] );
+        if( $mb )
+            $mbData = [
+                'username'   => $mb->getUsername(),
+                'local_part' => $mb->getLocalPart(),
+                'name'       => $mb->getName(),
+                'password'   => $mb->getPassword(),
+                'quota'      => $mb->getQuota(),
+                'homedir'    => $mb->getHomedir(),
+                'maildir'    => $mb->getMaildir(),
+                'uid'        => $mb->getUid(),
+                'gid'        => $mb->getGid(),
+                'active'     => $mb->getActive(),
+            ];
+
         $archive->setStatus( \Entities\Archive::STATUS_ARCHIVED )
                 ->setArchivedAt( $now )
                 ->setStatusChangedAt( $now )
@@ -507,6 +527,7 @@ class QueueController extends ViMbAdmin_Controller_Action
                     'type'     => $task->getType(),
                     'task_id'  => $task->getId(),
                     'dest'     => $dest,
+                    'mailbox'  => $mbData,
                 ] ) );
 
         $em->persist( $archive );

@@ -41,30 +41,27 @@
             <td>{if $archive.autoprune}<span class="label label-warning">On</span>{else}<span class="label">Off</span>{/if}</td>
             <td>
                 <div class="btn-group">
-                    {if $archive.status|in_array:$allowCancel}
-                        <a class="btn btn-mini have-tooltip" id="cancel-archive-{$archive.id}" title="Cancel pending" href="{genUrl controller='archive' action='cancel' arid=$archive.id csrf=$csrfToken}">
-                            <i class="icon-remove"></i>
-                        </a>
-                    {/if}
-                    {if $archive.status == "ARCHIVED"|in_array:$allowRestore}
-                        <a class="btn btn-mini have-tooltip" id="restore-archive-{$archive.id}" title="Restore" href="{genUrl controller='archive' action='restore' arid=$archive.id csrf=$csrfToken}">
+                    {if $archive.status|in_array:$allowRestore}
+                        <a class="btn btn-mini have-tooltip" id="restore-archive-{$archive.id}" title="Restore mail back into the mailbox" href="{genUrl controller='archive' action='restore' arid=$archive.id csrf=$csrfToken}"
+                           onclick="return confirm('Restore {$archive.username|escape}? Recreates the mailbox if it was deleted, syncs the backed-up mail back, then removes the backup.');">
                             <i class="icon-retweet"></i>
                         </a>
                     {/if}
                     {if $archive.status|in_array:$allowDelete}
-                        <a class="btn btn-mini have-tooltip" id="delete-archive-{$archive.id}" title="Delete archive" href="{genUrl controller='archive' action='delete' arid=$archive.id csrf=$csrfToken}">
+                        <a class="btn btn-mini btn-danger have-tooltip" id="delete-archive-{$archive.id}" title="Delete backup permanently" href="{genUrl controller='archive' action='delete' arid=$archive.id csrf=$csrfToken}"
+                           onclick="return confirm('Permanently delete the backup for {$archive.username|escape}? This removes the /backups maildir and cannot be undone.');">
                             <i class="icon-trash"></i>
                         </a>
                     {/if}
                     {if $archive.autoprune}
                         <a class="btn btn-mini have-tooltip" id="autoprune-archive-{$archive.id}" title="Disable autoprune" href="{genUrl controller='archive' action='toggle-autoprune' arid=$archive.id csrf=$csrfToken}"
                            onclick="return confirm('Disable autoprune for {$archive.username|escape}? Its backup will no longer expire automatically.');">
-                            <i class="icon-off"></i> Autoprune off
+                            <i class="icon-off"></i>
                         </a>
                     {else}
                         <a class="btn btn-mini btn-warning have-tooltip" id="autoprune-archive-{$archive.id}" title="Enable autoprune (resets archived date to now)" href="{genUrl controller='archive' action='toggle-autoprune' arid=$archive.id csrf=$csrfToken}"
                            onclick="return confirm('Enable autoprune for {$archive.username|escape}? This resets its archived date to now, so the prune window restarts.');">
-                            <i class="icon-time"></i> Autoprune on
+                            <i class="icon-time"></i>
                         </a>
                     {/if}
                 </div>
@@ -78,35 +75,6 @@
 <br />
 
 <script type="text/javascript">{tmplinclude file='archive/js/list.js'}</script>
-
-
-<div id="cancel_dialog" class="modal hide fade">
-    <div class="modal-header">
-        <a href="#" class="close" data-dismiss="modal">&times;</a>
-        <h3>Are you sure?</h3>
-    </div>
-    <div class="modal-body" id="cbody">
-        Are you sure you want to cancel pending status?
-    </div>
-    <div id="cfooter" class="modal-footer">
-        <a href="#" class="btn btn-primary" id="cancel_dialog_confirm">Confirm</a>
-        <button id="cancel_dialog_cancel" class="btn">Cancel</button>
-    </div>
-</div>
-
-<div id="delete_dialog" class="modal hide fade">
-    <div class="modal-header">
-        <a href="#" class="close" data-dismiss="modal">&times;</a>
-        <h3>Are you sure?</h3>
-    </div>
-    <div class="modal-body" id="dbody">
-        Are you want to delete this archive?
-    </div>
-    <div id="dfooter" class="modal-footer">
-        <a href="#" class="btn btn-danger" id="delete_dialog_delete">Delete</a>
-        <button id="delete_dialog_cancel" class="btn">Cancel</button>
-    </div>
-</div>
 
 </div>
 

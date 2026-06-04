@@ -410,24 +410,41 @@ The panel is light, but two things keep it snappy:
 
 ## Archiving, quotas & disk deletion
 
-Two features touch the **mail filesystem** (the maildirs), so they run shell
-tools (`tar`/`bzip2`/`rm`) and must execute **where the mail lives — the
-Dovecot host — not the web panel**:
+Archive and delete are **queue-driven over the doveadm HTTP API** — no tarballs,
+no shell tools, no mail-host checkout. The web panel never touches the mail
+filesystem; it writes a `mailbox_task` row and the queue runner does the work on
+the Dovecot side:
 
-- **Archive** — flagging a mailbox in the UI queues a DB row and purges it from
-  the live tables; the actual tarball is produced by the
-  `archive.cli-*-pendings` cron.
-- **On-disk deletion** (`mailbox_deletion_fs_enabled`, default off).
+- **Archive** (keeps the account) — `doveadm backup` copies the store to a
+  zstd-compressed maildir under `doveadm.backup.dest` (e.g. `/backups/%d/%u`),
+  then the live store is emptied. An `archive` row (status *Archived*) appears on
+  the **Archives** tab.
+- **Delete** (removes the account) — same backup, then the mailbox + account row
+  are removed. The archive row is flagged **autoprune**, so the backup is pruned
+  automatically after `queue.autoprune.days` (default 90;
+  `queue.autoprune.days = 0` means *instant* — delete takes **no** backup and
+  removes the mailbox immediately).
 
-Example mail-host script + crontab, with their requirements documented inline,
-are in [`contrib/cron/`](contrib/cron/) (`vimbadmin-archive.sh`,
-`crontab.example`). They need a checkout + PHP CLI + an
-`application.ini` pointing at the **same database** as the panel, plus read
-access to the maildirs. Without them, the Archive button just queues rows that
-are never tarred — by design; ignore it if you don't archive.
+On the **Archives** tab each backup shows when it was archived, whether the
+account still exists, and its autoprune state (toggle per-row). From there you
+can **restore** it (recreates the mailbox from a stored snapshot — original
+password hash included — then `doveadm sync`s the mail back from the backup) or
+**delete** the backup (`doveadm fs delete` removes the `/backups` maildir). The
+**Maintenance** tab has *Run autoprune now (expired)* and *Delete all autoprune
+backups* buttons; a cron can call the same `maintenance.prune-expired` action.
 
-Mailbox **usage** in the panel is *not* in this list — it no longer needs a
-maildir scan. See below.
+`doveadm fs delete` needs a `fs posix { driver = posix }` filter in the Dovecot
+config (the prune removes a backup maildir over the HTTP API rather than sharing
+the filesystem with the panel). The queue runner itself just needs a periodic
+`vimbtool.php -a queue.cli-run` — see [`contrib/cron/`](contrib/cron/).
+
+A separate, default-off **CLI on-disk purge** (`mailbox_deletion_fs_enabled`,
+`binary.path.rm_rf`) still exists for direct maildir removal on a host that can
+see the mail; it is unrelated to the queue archive/delete flow above and the
+hardened Docker image deliberately can't use it.
+
+Mailbox **usage** in the panel does *not* need a maildir scan — it is fed live
+by Dovecot's quota-clone plugin. See below.
 
 ### Live quota usage (Dovecot quota-clone)
 

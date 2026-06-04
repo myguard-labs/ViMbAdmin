@@ -1,24 +1,30 @@
 # =====================================================================
-#  ViMbAdmin filesystem maintenance  --  EXAMPLE crontab for the MAIL HOST
+#  ViMbAdmin queue runner  --  EXAMPLE crontab
 # =====================================================================
-#  Install as /etc/cron.d/vimbadmin on the Dovecot/Postfix host (the box that
-#  actually stores the maildirs). These jobs do NOT belong on the web/panel
-#  host -- the panel only flags work in the DB; the mail host carries it out.
+#  ViMbAdmin's repair / optimize / archive / delete actions are queued in the
+#  database (mailbox_task) and carried out by a queue runner that talks to
+#  Dovecot over the doveadm HTTP API. The runner must be invoked periodically.
 #
-#  See the header of each script for full requirements. In short: a ViMbAdmin
-#  checkout + PHP CLI + an application.ini pointing at the SAME MariaDB as the
-#  panel, plus read/write access to the maildirs and archive.path, and the
-#  tar/bzip2/chown/rm binaries.
+#  It can run wherever the ViMbAdmin code + an application.ini pointing at the
+#  panel's database live — typically inside the ViMbAdmin container itself. No
+#  shell tools, no maildir access and no mail-host checkout are required: the
+#  actual mail work (doveadm backup / mailbox delete / fs delete / sync) happens
+#  on the Dovecot side over the HTTP API.
 #
-#  Adjust VIMBADMIN_DIR, the run-as user (here `vmail`), and paths to taste.
+#  Adjust VIMBADMIN_DIR / the invocation to taste. Dockerised deployments
+#  usually run this from the HOST crontab as a `docker exec`, e.g.:
+#    */2 * * * *  root  docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
 # =====================================================================
 
 SHELL=/bin/sh
 MAILTO=postmaster@example.com
 VIMBADMIN_DIR=/opt/vimbadmin
 
-# Process the archive / restore / delete queue every 5 minutes.
-*/5 *  * * *   vmail   /usr/local/sbin/vimbadmin-archive.sh
+# Drain the mailbox-task queue every 2 minutes (caps load via
+# queue.runner.max_per_run in application.ini).
+*/2 * * * *   root   php ${VIMBADMIN_DIR}/bin/vimbtool.php -a queue.cli-run
 
-# NOTE: mailbox usage for the panel's quota column is now fed live by Dovecot's
-# quota-clone plugin (see the main README) -- no nightly maildir-scan job.
+# NOTE: mailbox usage for the panel's quota column is fed live by Dovecot's
+# quota-clone plugin (see the main README) — no nightly maildir-scan job. There
+# is no longer any tar/bzip2 archive cron: archive/delete backups are written by
+# the queue (doveadm backup → zstd maildir) and pruned via the Maintenance tab.

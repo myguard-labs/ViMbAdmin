@@ -195,10 +195,13 @@ function toggleActive(elid, id) {
                 <a class="btn btn-mini have-tooltip" id="modal-dialog-mailbox_settings_' + id + '" title="Send Settings" href="{genUrl controller="mailbox" action="email-settings"}/mid/' + id + '">\
                     <i class="icon-envelope"></i>\
                 </a>\
-                <a class="btn btn-mini have-tooltip" id="archive_' + id + '" title="Archive" href="{genUrl controller="archive" action="add"}/mid/' + id + '">\
+                <a class="btn btn-mini have-tooltip" id="repair_' + id + '" title="Repair / optimize (queued)" href="{genUrl controller="mailbox" action="queue-repair"}/mid/' + id + '/csrf/{$csrfToken}">\
+                    <i class="icon-wrench"></i>\
+                </a>\
+                <a class="btn btn-mini have-tooltip" id="archive_' + id + '" title="Archive (queued: backup + empty mailbox, keep account)" href="{genUrl controller="mailbox" action="queue-archive"}/mid/' + id + '/csrf/{$csrfToken}">\
                     <i class="icon-inbox"></i>\
                 </a>\
-                <a class="btn btn-mini have-tooltip" id="purge_' + id + '" title="Purge" href="{genUrl controller="mailbox" action="purge"}/mid/' + id + '">\
+                <a class="btn btn-mini have-tooltip btn-danger" id="delete_' + id + '" title="Delete (queued: backup, then remove mailbox + account)" href="{genUrl controller="mailbox" action="queue-delete"}/mid/' + id + '/csrf/{$csrfToken}">\
                     <i class="icon-trash"></i>\
                 </a>';
                 

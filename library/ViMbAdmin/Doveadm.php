@@ -292,6 +292,26 @@ class ViMbAdmin_Doveadm
     }
 
     /**
+     * Restore a backup into a user's live store: `doveadm sync -u <user> <src>`.
+     * This is the inverse of backup() — it merges the mail at $src (the
+     * `maildir:/backups/...` dest a prior backup wrote) back into the user's
+     * mailbox. sync is additive (a merge), so it will not delete mail the user
+     * already has; restoring into a freshly (re)created empty account brings the
+     * whole archive back.
+     *
+     * @param string $user  the live user to restore INTO (must exist in userdb)
+     * @param string $src   the backup source location (maildir:/backups/...)
+     * @return array
+     */
+    public function restoreFrom( $user, $src )
+    {
+        return $this->run( 'sync', [
+            'user'        => $user,
+            'destination' => [ $src ],
+        ] );
+    }
+
+    /**
      * Flush Dovecot's authentication cache. With no users, flushes the whole
      * cache; pass user(s) to flush only those entries. Non-destructive — forces
      * the next auth to re-read from the userdb/passdb (e.g. after a password or

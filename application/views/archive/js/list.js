@@ -1,6 +1,4 @@
 var oDataTable;
-var deleteDialog;
-
 
 $(document).ready( function()
 {
@@ -16,7 +14,11 @@ $(document).ready( function()
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
         "sDom": "<'row'<'span6'l><'span6'f>r>t<'row'<'span6'i><'span6'p>>",
         "sPaginationType": "bootstrap",
+        // Username, Status, Domain, Archived, User exists, Autoprune, Actions
         'aoColumns': [
+            null,
+            null,
+            null,
             null,
             null,
             null,
@@ -24,50 +26,7 @@ $(document).ready( function()
         ]
     });
 
-    $( "a[id|='delete-archive']" ).bind( 'click', deleteArchive );
-    $( "a[id|='cancel-archive']" ).bind( 'click', cancelArchive );
+    // Restore / delete / autoprune-toggle are plain links guarded by an inline
+    // confirm() in the view — no modal wiring needed here.
 
 }); // document onready
-
-
-function deleteArchive( event ){
-    event.preventDefault();
-
-    delDialog = $( '#delete_dialog' ).modal({
-        backdrop: true,
-        keyboard: true,
-        show: true
-    });
-
-    if( $( event.target ).is( "i" ) )
-        element = $( event.target ).parent();
-    else
-        element = $( event.target );
-
-    $( '#delete_dialog_delete' ).attr( 'href', element.attr( 'href' ) );
-
-    $( '#delete_dialog_cancel' ).click( function(){
-        delDialog.modal('hide');
-    });
-};
-
-function cancelArchive( event ){
-    event.preventDefault();
-
-    cancelDialog = $( '#cancel_dialog' ).modal({
-        backdrop: true,
-        keyboard: true,
-        show: true
-    });
-
-    if( $( event.target ).is( "i" ) )
-        element = $( event.target ).parent();
-    else
-        element = $( event.target );
-
-    $( '#cancel_dialog_confirm' ).attr( 'href', element.attr( 'href' ) );
-
-    $( '#cancel_dialog_cancel' ).click( function(){
-        cancelDialog.modal('hide');
-    });
-};

@@ -46,6 +46,7 @@
             <th style="color:#0b1220">#</th>
             <th style="color:#0b1220">Type</th>
             <th style="color:#0b1220">Mailbox</th>
+            <th style="color:#0b1220">Initiated by</th>
             <th style="color:#0b1220">Status</th>
             <th style="color:#0b1220">Created</th>
             <th style="color:#0b1220">Finished</th>
@@ -58,6 +59,7 @@
             <td>{$task->getId()}</td>
             <td>{$task->getTypeLabel()|escape}</td>
             <td>{$task->getUsername()|escape}</td>
+            <td>{if $task->getRequestedBy()}{$task->getRequestedBy()->getUsername()|escape}{else}&mdash;{/if}</td>
             <td>
                 {if $task->getStatus() eq 'FAILED'}<span class="label label-important">{$task->getStatusLabel()|escape}</span>
                 {elseif $task->getStatus() eq 'DONE'}<span class="label label-success">{$task->getStatusLabel()|escape}</span>
@@ -107,7 +109,7 @@
             </td>
         </tr>
     {foreachelse}
-        <tr><td colspan="7"><em>No tasks.</em></td></tr>
+        <tr><td colspan="8"><em>No tasks.</em></td></tr>
     {/foreach}
     </tbody>
 </table>

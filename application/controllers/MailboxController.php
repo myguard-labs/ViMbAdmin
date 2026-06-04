@@ -518,7 +518,7 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
             return $this->forward( 'list' );
 
         $username = $this->getMailbox()->getUsername();
-        $task = QueueController::enqueue(
+        $task = ViMbAdmin_MailboxQueue::enqueue(
             $this->getD2EM(), $this->getMailbox(), $type, $this->getAdmin() );
         $this->getD2EM()->flush();
 

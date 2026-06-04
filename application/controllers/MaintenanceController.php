@@ -19,7 +19,12 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
 {
     public function preDispatch()
     {
-        // Every maintenance action requires a super admin.
+        // The CLI schema migrator runs from vimbtool (container bootstrap), with
+        // no web session — skip the super-admin gate for it. Everything else is
+        // super-admin-only.
+        if( $this->getRequest()->getActionName() === 'cli-schema-update' )
+            return;
+
         $this->authorise( true );
     }
 
@@ -28,6 +33,18 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         $this->view->stats = $this->_inactiveStats();
         $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
             'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();
+        $this->_schemaVersionToView();
+    }
+
+    /**
+     * Expose deployed vs code DB schema version + pending-statement count.
+     */
+    private function _schemaVersionToView()
+    {
+        $schema = new ViMbAdmin_Schema( $this->getD2EM() );
+        $this->view->dbVersionApplied = $schema->currentVersion();
+        $this->view->dbVersionCode    = $schema->codeVersion();
+        $this->view->dbPending        = count( $schema->pendingSql() );
     }
 
     /**
@@ -50,6 +67,7 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
             $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
                 'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();
             $this->view->confirmRepairAll   = true;
+            $this->_schemaVersionToView();
             return $this->render( 'index' );
         }
 
@@ -59,7 +77,7 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         $queued = 0;
         foreach( $mailboxes as $mailbox )
         {
-            $task = QueueController::enqueue( $em, $mailbox, \Entities\MailboxTask::TYPE_REPAIR, $this->getAdmin() );
+            $task = ViMbAdmin_MailboxQueue::enqueue( $em, $mailbox, \Entities\MailboxTask::TYPE_REPAIR, $this->getAdmin() );
             if( $task )
                 $queued++;
         }
@@ -146,17 +164,13 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         if( !$this->getRequest()->isPost() )
             $this->redirect( 'maintenance/index' );
 
-        $em   = $this->getD2EM();
-        $tool = new \Doctrine\ORM\Tools\SchemaTool( $em );
-        $meta = $em->getMetadataFactory()->getAllMetadata();
-
-        // saveMode=true -> additive/altering SQL only (no DROP TABLE for tables
-        // Doctrine doesn't know about). Still emits DROP COLUMN / DROP INDEX
-        // where mappings changed, so we always show the SQL before running it.
-        $sql = $tool->getUpdateSchemaSql( $meta, true );
+        $schema = new ViMbAdmin_Schema( $this->getD2EM() );
+        $sql    = $schema->pendingSql();
 
         if( count( $sql ) === 0 )
         {
+            // Still record the version so the UI reflects a clean deploy.
+            $schema->recordVersion();
             $this->addMessage( _( 'Database schema is already up to date — nothing to do.' ), OSS_Message::SUCCESS );
             $this->redirect( 'maintenance/index' );
         }
@@ -166,36 +180,73 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         {
             $this->view->stats     = $this->_inactiveStats();
             $this->view->schemaSql = $sql;
+            $this->view->activeMailboxCount = (int) $this->getD2EM()->createQuery(
+                'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.active = 1' )->getSingleScalarResult();
+            $this->_schemaVersionToView();
             return $this->render( 'index' );
         }
 
-        // Confirmed: execute, transactionally.
-        $conn = $em->getConnection();
-        $conn->beginTransaction();
+        // Confirmed: apply. DDL auto-commits in MySQL/MariaDB, so the helper
+        // runs each statement on its own (NO surrounding transaction — wrapping
+        // it threw "no active transaction" on commit) and records the version.
         try
         {
-            foreach( $sql as $stmt )
-                $conn->executeStatement( $stmt );
-            $conn->commit();
+            $applied = $schema->apply( $sql );
+            $schema->recordVersion();
         }
         catch( \Throwable $e )
         {
-            $conn->rollBack();
             $this->getLogger()->err( 'Maintenance schema-update: ' . $e->getMessage() );
-            $this->addMessage( _( 'Schema update failed (rolled back): ' ) . $e->getMessage(), OSS_Message::ERROR );
+            $this->addMessage( _( 'Schema update failed: ' ) . $e->getMessage(), OSS_Message::ERROR );
             $this->redirect( 'maintenance/index' );
         }
 
         $this->log(
             \Entities\Log::ACTION_MAINTENANCE,
-            "{$this->getAdmin()->getFormattedName()} applied schema update (" . count( $sql ) . ' statement(s))'
+            "{$this->getAdmin()->getFormattedName()} applied schema update ({$applied} statement(s))"
         );
-        $em->flush();
 
         $this->addMessage(
-            sprintf( _( 'Schema updated successfully — %d statement(s) executed.' ), count( $sql ) ),
+            sprintf( _( 'Schema updated successfully — %d statement(s) executed.' ), $applied ),
             OSS_Message::SUCCESS
         );
         $this->redirect( 'maintenance/index' );
+    }
+
+    /**
+     * CLI schema auto-migrator — run from the container bootstrap on every
+     * start (vimbtool.php -a maintenance.cli-schema-update). Applies pending
+     * additive schema SQL and records the version. Idempotent + non-interactive.
+     * Safe to run on every boot: no pending SQL == no-op.
+     */
+    public function cliSchemaUpdateAction()
+    {
+        $verbose = $this->getParam( 'verbose' );
+        $schema  = new ViMbAdmin_Schema( $this->getD2EM() );
+
+        try
+        {
+            $res = $schema->migrate();
+        }
+        catch( \Throwable $e )
+        {
+            echo 'ERROR: schema update failed: ' . $e->getMessage() . "\n";
+            return;
+        }
+
+        if( $verbose )
+        {
+            if( $res['applied'] )
+            {
+                echo "Applied {$res['applied']} schema statement(s):\n";
+                foreach( $res['statements'] as $s )
+                    echo '  ' . $s . "\n";
+            }
+            else
+            {
+                echo "Schema already up to date.\n";
+            }
+            echo 'DB version: ' . ( $res['version'] ?? '?' ) . "\n";
+        }
     }
 }

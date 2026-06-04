@@ -50,6 +50,18 @@
                 Sync the database to the current Doctrine mappings. This shows
                 the pending SQL first — nothing is applied until you confirm.
             </p>
+            <p>
+                Schema version:
+                <strong>{if $dbVersionApplied !== null}{$dbVersionApplied}{else}—{/if}</strong>
+                applied / <strong>{if $dbVersionCode !== null}{$dbVersionCode}{else}—{/if}</strong> expected by code.
+                {if $dbPending > 0}
+                    <span class="label label-warning">{$dbPending} pending statement(s)</span>
+                {else}
+                    <span class="label label-success">up to date</span>
+                {/if}
+                <br/>
+                <small class="muted">Schema is applied automatically on container start; this button is a manual fallback.</small>
+            </p>
 
             {if isset( $schemaSql )}
                 <div class="alert alert-warning">

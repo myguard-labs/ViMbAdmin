@@ -552,25 +552,35 @@ class QueueController extends ViMbAdmin_Controller_Action
             $archive->setUsername( $user );
         }
 
-        // Pre-empty LOGICAL store size (bytes) from the Dovecot quota-clone
-        // mirror, if present — the mailbox's uncompressed size, kept as
-        // maildir_orig_size for reference.
-        $origSize = null;
-        $q = $em->getRepository( '\\Entities\\Quota' )->findOneBy( [ 'username' => $user ] );
-        if( $q )
-            $origSize = $q->getBytes();
-
-        // Actual ON-DISK size of the backup we just wrote (the maildir is
-        // zstd-compressed by Dovecot's mail_compress, so this is the compressed
-        // footprint). Best-effort: null on any doveadm error -> UI shows "—".
-        $diskSize = null;
+        // Mailbox SIZE (bytes). We run this BEFORE the store is emptied. The
+        // doveadm HTTP API can't `fs stat` the backup dir (the fs driver isn't
+        // HTTP-callable), so we use the Dovecot quota instead: force a quota
+        // recalc so the figure is current, then read the quota-clone mirror
+        // (dovecot_quota -> Quota entity). This is the logical mail size; the
+        // backup on disk is smaller because mail_compress zstd-compresses it.
+        // Best-effort: a recalc failure just leaves the last known quota.
         try
         {
-            $diskSize = ViMbAdmin_Doveadm::fromOptions( $this->_options )->fsDirSize( $dest );
+            ViMbAdmin_Doveadm::fromOptions( $this->_options )->quotaRecalc( $user );
         }
         catch( \Throwable $e )
         {
-            $this->getLogger()->err( "QueueController::_recordArchive fsDirSize {$user}: " . $e->getMessage() );
+            $this->getLogger()->err( "QueueController::_recordArchive quotaRecalc {$user}: " . $e->getMessage() );
+        }
+
+        // Re-read the quota-clone after the recalc. Use raw DBAL so we get the
+        // fresh row, not a stale identity-map copy from earlier in the request.
+        $size = null;
+        try
+        {
+            $bytes = $em->getConnection()->fetchOne(
+                'SELECT bytes FROM dovecot_quota WHERE username = ?', [ $user ] );
+            if( $bytes !== false && $bytes !== null )
+                $size = (int) $bytes;
+        }
+        catch( \Throwable $e )
+        {
+            // table/row absent -> leave size null (UI shows "—").
         }
 
         // Capture the full mailbox attributes (incl the password HASH) while the
@@ -600,8 +610,8 @@ class QueueController extends ViMbAdmin_Controller_Action
                 ->setDomain( $task->getDomain() )
                 ->setMaildirServer( (string) ( $this->_options['doveadm']['http']['url'] ?? '' ) )
                 ->setMaildirFile( $dest )
-                ->setMaildirOrigSize( $origSize )
-                ->setMaildirSize( $diskSize !== null ? $diskSize : $origSize )
+                ->setMaildirOrigSize( $size )
+                ->setMaildirSize( $size )
                 ->setAutoprune( $autoprune )
                 ->setData( json_encode( [
                     'username' => $user,

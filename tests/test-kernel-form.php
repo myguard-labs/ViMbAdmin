@@ -137,6 +137,21 @@ $xform->bind(['q' => '"><script>x</script>']);
 $xout = $renderer->render($xform, '/x');
 check('render: value is HTML-escaped',        str_contains($xout, '&quot;&gt;&lt;script&gt;') && !str_contains($xout, '<script>x'));
 
+// select field + in-array rule (assign-domain dropdown)
+$opts = [3 => 'three.example', 7 => 'seven.example (inactive)'];
+$selform = new Form();
+$selform->add((new Field('domain', 'Domain', 'select', [Validators::required(), Validators::inArray($opts)]))->setOptions($opts));
+$selout = $renderer->render($selform, '/admin/assign-domain/aid/1');
+check('render: select element emitted',       str_contains($selout, '<select name="domain"'));
+check('render: option value+label',           str_contains($selout, '<option value="7"') && str_contains($selout, 'seven.example (inactive)</option>'));
+$ok = new Form(); $ok->add((new Field('domain', 'D', 'select', [Validators::inArray($opts)]))->setOptions($opts));
+check('inArray: offered value valid',         $ok->isValid(['domain' => '7']));
+$bad = new Form(); $bad->add((new Field('domain', 'D', 'select', [Validators::inArray($opts)]))->setOptions($opts));
+check('inArray: forged value rejected',       !$bad->isValid(['domain' => '999']));
+$selform->bind(['domain' => '7']);
+$selsel = $renderer->render($selform, '/x');
+check('render: selected option marked',       str_contains($selsel, 'value="7" selected="selected"'));
+
 // readonly field (edit forms render the domain name read-only)
 $roform = new Form();
 $roform->add((new Field('domain', 'Domain', 'text'))->setReadonly());

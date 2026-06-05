@@ -25,10 +25,10 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * seeds over the same session key the ZF1 `_assertCsrf()` reads — so those links
  * keep validating against the legacy actions that still serve them.
  *
- * Migrated: list, add, the ajax toggles, purge, password, domains and
- * remove-domain. The remaining actions (assign-domain/two-factor/cli-*) stay on
- * ZF1 via the dispatcher fallback. The legacy controller is untouched — with
- * VIMBADMIN_NATIVE_KERNEL off ZF1 serves the whole controller unchanged.
+ * Migrated: list, add, the ajax toggles, purge, password, domains,
+ * remove-domain and assign-domain. The remaining actions (two-factor/cli-*)
+ * stay on ZF1 via the dispatcher fallback. The legacy controller is untouched —
+ * with VIMBADMIN_NATIVE_KERNEL off ZF1 serves the whole controller unchanged.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -338,6 +338,83 @@ final class AdminController extends AbstractController
 
         $this->flash('You have successfully removed the admin from domain ' . $domain->getDomain());
         return $this->redirect('admin/domains/aid/' . $target->getId());
+    }
+
+    /**
+     * GET|POST /admin/assign-domain/aid/<id> — assign a domain to an admin (super
+     * only). The select offers only the domains NOT already assigned
+     * (`Repositories\Domain::getNotAssignedForAdmin`), and an in-array rule
+     * rejects any value that was not offered — the framework-free equivalent of
+     * the ZF1 form's register-in-array validator, so a forged domain id cannot be
+     * assigned. On a valid POST the assignment runs through the Phase-1
+     * ViMbAdmin_Service_Admin::assignDomain (whose duplicate guard is surfaced as
+     * an error flash), then redirects to the admin's domains page. When there are
+     * no domains left to assign, an info flash is shown on the (empty) form.
+     */
+    public function assignDomainAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+
+        if ($target === null) {
+            $this->flash('Invalid or missing admin id.', FlashMessages::ERROR);
+            return $this->redirect('admin/list');
+        }
+
+        $remaining = $this->em()->getRepository('\\Entities\\Domain')->getNotAssignedForAdmin($target);
+        $form      = $this->buildAssignDomainForm($remaining);
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $domain = $this->em()->getRepository('\\Entities\\Domain')->find((int) $form->values()['domain']);
+
+            if ($domain !== null) {
+                try {
+                    (new \ViMbAdmin_Service_Admin($this->em()))->assignDomain($target, $domain, $admin);
+                    $this->flash('You have successfully assigned a domain to the admin.');
+                } catch (\ViMbAdmin_Service_Exception $e) {
+                    $this->flash($e->getMessage(), FlashMessages::ERROR);
+                }
+            }
+
+            return $this->redirect('admin/domains/aid/' . $target->getId());
+        }
+
+        if (count($remaining) === 0) {
+            $this->flash('There are no domains to assign to this administrator.', FlashMessages::INFO);
+        }
+
+        return $this->view('admin/native-assign-domain.phtml', [
+            'targetAdmin' => $target,
+            'formHtml'    => (new FormRenderer())->render(
+                $form,
+                '/admin/assign-domain/aid/' . $target->getId(),
+                'Save'
+            ),
+        ]);
+    }
+
+    /**
+     * The native assign-domain form: a single select of the domains not yet
+     * assigned to the admin, required and in-array validated against that exact
+     * list, CSRF-guarded over the session.
+     *
+     * @param array<int|string,string> $remaining domain id → name (incl. "(inactive)")
+     */
+    private function buildAssignDomainForm(array $remaining): Form
+    {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+        $form->add((new Field('domain', 'Domain', 'select', [
+            Validators::required(),
+            Validators::inArray($remaining),
+        ]))->setOptions($remaining));
+
+        return $form;
     }
 
     /**

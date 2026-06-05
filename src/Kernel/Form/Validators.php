@@ -72,6 +72,28 @@ final class Validators
     }
 
     /**
+     * The value must be one of an allowed set (compared as strings) — the
+     * framework-free equivalent of a select element's in-array validator, so a
+     * forged option that was never offered is rejected. Empty passes (combine
+     * with required()).
+     *
+     * @param array<int|string,mixed> $allowed values OR a value→label map (keys
+     *        are the allowed values, matching how a select's options are keyed)
+     */
+    public static function inArray(array $allowed, string $message = 'Please select a valid option.'): callable
+    {
+        $set = array_map('strval', array_keys($allowed) === range(0, count($allowed) - 1) ? $allowed : array_keys($allowed));
+
+        return static function (mixed $value) use ($set, $message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            return in_array((string) $value, $set, true) ? null : $message;
+        };
+    }
+
+    /**
      * The value must equal another field's value (e.g. password confirmation).
      * The other value is resolved lazily so it reads the bound data at validate
      * time.

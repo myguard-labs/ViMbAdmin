@@ -90,6 +90,13 @@ final class FormRenderer
             return '<input type="checkbox" name="' . $name . '" id="' . $name . '" value="1"' . $checked . ' />';
         }
 
+        if ($field->type === 'textarea') {
+            $value = $field->value();
+            $value = $value === null ? '' : (string) $value;
+
+            return '<textarea name="' . $name . '" id="' . $name . '" rows="3">' . $this->esc($value) . '</textarea>';
+        }
+
         $type  = in_array($field->type, ['text', 'password', 'email', 'hidden'], true) ? $field->type : 'text';
         $value = $field->value();
         $value = $value === null ? '' : (string) $value;

@@ -192,6 +192,30 @@ the XSS footgun that comes with it.
 3. Delete the ZF1 front-controller fallback.
 4. Remove `shardj/zf1-future` from `composer.json`. Done.
 
+> **Ordering correction: the session foundation is a prerequisite, not the last
+> step.** Building Phase 2b/3/4 revealed that all three transitively need a
+> framework-free session:
+> - the Phase 3 `AbstractController` shim must supply `getAdmin()` / `authorise()`
+>   / `getSessionNamespace()` / `_assertCsrf()` before any real controller can move;
+> - a full Phase 4 form replacement needs a **session-backed CSRF token** (today's
+>   forms use the ZF1 hash element; `_assertCsrf()` uses a session token), plus a
+>   replacement for the `{addJSValidator}` client-side validation generated from
+>   the ZF1 form.
+>
+> So the practical sequence is **0 → 1 → 2a → (session + CSRF foundation) → 2b
+> skeleton → 3 → 4 → rest of 5**. The pieces below are being landed first, small
+> and inert (nothing wired yet, zero behaviour change), exactly like the Router:
+> - [`src/Kernel/Session/SessionStorage.php`](../src/Kernel/Session/SessionStorage.php)
+>   — a narrow session port (has/get/set/remove) so security/auth services are
+>   unit-testable with an in-memory fake; [`NativeSessionStorage`](../src/Kernel/Session/NativeSessionStorage.php)
+>   is the namespaced `$_SESSION` implementation for production.
+> - [`src/Kernel/Security/Csrf.php`](../src/Kernel/Security/Csrf.php) — one
+>   framework-free CSRF service over that port (stable per-session token,
+>   constant-time `hash_equals`, `rotate()` for post-login hygiene), preserving
+>   `_assertCsrf()` semantics. Replaces both the controller token guard and the
+>   form hash element when wired in Phase 3/4. Tested with no DB in
+>   [`tests/test-kernel-csrf.php`](../tests/test-kernel-csrf.php) (the `unit` job).
+
 ## Guardrails
 
 - Every step is an independent PR with green CI.

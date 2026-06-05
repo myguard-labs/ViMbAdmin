@@ -83,6 +83,18 @@ final class Container
     }
 
     /**
+     * The application session namespace (the ZF1 `getSessionNamespace()` =
+     * `getResource('namespace')`), where per-session UI state lives (e.g. the
+     * selected `domain` filter). Returned as a bare `object` accessed through its
+     * magic properties, so the kernel never names the framework. Templates read
+     * it as the `$session` view variable.
+     */
+    public function session(): object
+    {
+        return $this->getResource('namespace');
+    }
+
+    /**
      * A pre-computed chrome view variable (e.g. `skinCss`), or null if absent.
      */
     public function chrome(string $key): mixed

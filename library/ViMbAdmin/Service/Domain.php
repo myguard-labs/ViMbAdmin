@@ -124,6 +124,27 @@ class ViMbAdmin_Service_Domain
     }
 
     /**
+     * Persist a new (or edited) domain: persist on add, log the add/edit against
+     * the actor + domain, and flush. The caller has already populated the entity
+     * fields from the submitted form.
+     */
+    public function save(\Entities\Domain $domain, \Entities\Admin $actor, bool $isEdit): void
+    {
+        if (!$isEdit) {
+            $this->em->persist( $domain );
+        }
+
+        $this->log(
+            $actor,
+            $domain,
+            $isEdit ? \Entities\Log::ACTION_DOMAIN_EDIT : \Entities\Log::ACTION_DOMAIN_ADD,
+            "{$actor->getFormattedName()} " . ( $isEdit ? 'edited' : 'added' ) . " domain {$domain->getDomain()}"
+        );
+
+        $this->em->flush();
+    }
+
+    /**
      * Write a Log row against the acting admin and domain, and persist it (no
      * flush — the caller flushes once). Same shape as the controller's
      * protected log(), kept framework-free here.

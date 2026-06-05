@@ -88,6 +88,67 @@ class ViMbAdmin_Service_Mailbox
     }
 
     /**
+     * Purge a mailbox (and its dependent aliases), threading the plugin hooks.
+     *
+     * Order matches the legacy `MailboxController::purgeAction` POST branch:
+     *   1. `$preRemove` fires FIRST; if it returns false (a plugin veto) nothing
+     *      changes and false is returned (the caller skips its success notice);
+     *   2. the repository `purgeMailbox()` clears the mailbox's preferences and
+     *      dependent aliases, and the purge is logged;
+     *   3. `$preFlush` fires; then, depending on `$deleteFiles`, the mailbox is
+     *      either marked delete-pending + inactive (so the maildir is reaped
+     *      out-of-band) or removed outright; then the single flush, then
+     *      `$postFlush`.
+     *
+     * `purgeMailbox()`'s third argument is `$removeMailbox = !$deleteFiles`,
+     * mirroring the ZF1 call exactly.
+     *
+     * @param callable():bool|null $preRemove veto hook (false aborts the purge)
+     * @param callable():void|null $preFlush  fires after the purge, before flush
+     * @param callable():void|null $postFlush fires after flush
+     * @return bool true when purged, false when a plugin vetoed
+     */
+    public function purge(
+        \Entities\Mailbox $mailbox,
+        \Entities\Admin $actor,
+        bool $deleteFiles,
+        ?callable $preRemove = null,
+        ?callable $preFlush = null,
+        ?callable $postFlush = null
+    ): bool {
+        if ($preRemove !== null && $preRemove() === false) {
+            return false;
+        }
+
+        $this->em->getRepository('\\Entities\\Mailbox')->purgeMailbox($mailbox, $actor, !$deleteFiles);
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_MAILBOX_PURGE,
+            "{$actor->getFormattedName()} purged mailbox {$mailbox->getUsername()}"
+        );
+
+        if ($preFlush !== null) {
+            $preFlush();
+        }
+
+        if ($deleteFiles) {
+            $mailbox->setDeletePending(true);
+            $mailbox->setActive(false);
+        } else {
+            $this->em->remove($mailbox);
+        }
+
+        $this->em->flush();
+
+        if ($postFlush !== null) {
+            $postFlush();
+        }
+
+        return true;
+    }
+
+    /**
      * Write a Log row for an action (persist only; the caller's flush commits it).
      */
     private function log(\Entities\Admin $actor, string $action, string $message, ?\Entities\Domain $domain = null): void

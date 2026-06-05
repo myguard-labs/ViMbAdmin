@@ -215,6 +215,20 @@ the XSS footgun that comes with it.
 >   `_assertCsrf()` semantics. Replaces both the controller token guard and the
 >   form hash element when wired in Phase 3/4. Tested with no DB in
 >   [`tests/test-kernel-csrf.php`](../tests/test-kernel-csrf.php) (the `unit` job).
+> - [`src/Kernel/Flash/FlashMessages.php`](../src/Kernel/Flash/FlashMessages.php)
+>   (+ [`FlashMessage`](../src/Kernel/Flash/FlashMessage.php)) — a flash-message
+>   queue over the same port, replacing the controller `addMessage()` trait that
+>   pushes OSS_Message objects onto a ZF1 session namespace. Levels match the
+>   OSS_Message constants (`success`/`error`/`info`/`warning`) so the message
+>   templates render unchanged; `drain()` is the one-shot post-redirect read. The
+>   Phase 3 shim needs this for a migrated controller to flash across a redirect.
+>   Tested in [`tests/test-kernel-flash.php`](../tests/test-kernel-flash.php).
+>
+> Still framework-bound, to wire next (each is the first step needing the running
+> app, so validated against a local image build, not unit tests): a SessionStorage
+> adapter over the live ZF1 session; routing the controllers' `_assertCsrf()` /
+> `addMessage()` through these services; then the Auth service (`getAdmin()` /
+> `authorise()`).
 
 ## Guardrails
 

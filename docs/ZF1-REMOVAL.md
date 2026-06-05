@@ -224,11 +224,21 @@ the XSS footgun that comes with it.
 >   Phase 3 shim needs this for a migrated controller to flash across a redirect.
 >   Tested in [`tests/test-kernel-flash.php`](../tests/test-kernel-flash.php).
 >
-> Still framework-bound, to wire next (each is the first step needing the running
-> app, so validated against a local image build, not unit tests): a SessionStorage
-> adapter over the live ZF1 session; routing the controllers' `_assertCsrf()` /
-> `addMessage()` through these services; then the Auth service (`getAdmin()` /
-> `authorise()`).
+> **First wiring (done):** the base controller's link-CSRF
+> (`_getCsrfToken()` / `_assertCsrf()` in `library/ViMbAdmin/Controller/Action.php`)
+> now delegates to the `Csrf` service over
+> [`src/Kernel/Session/MagicPropertyStorage.php`](../src/Kernel/Session/MagicPropertyStorage.php)
+> — a SessionStorage adapter that bridges any magic-property object (the ZF1
+> session namespace `getSessionNamespace()` returns) without naming the framework,
+> so it stays in the zero-`Zend_` `src/` tree. The token lives under the same
+> `csrfToken` session key, so tokens minted by the old code keep validating across
+> the upgrade. Verified by unit tests (adapter + Csrf, 29 assertions) and against a
+> local image build: the app boots and the kernel CSRF classes autoload and
+> round-trip in the image runtime.
+>
+> Still framework-bound, to wire next (validated against the local image build):
+> routing `addMessage()` through `FlashMessages`; then the Auth service
+> (`getAdmin()` / `authorise()`); then the Phase 2b kernel skeleton.
 
 ## Guardrails
 

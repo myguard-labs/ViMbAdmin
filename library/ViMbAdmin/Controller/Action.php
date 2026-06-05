@@ -192,12 +192,23 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
      */
     protected function _getCsrfToken()
     {
-        $ns = $this->getSessionNamespace();
+        return $this->_csrf()->token();
+    }
 
-        if( !isset( $ns->csrfToken ) || !$ns->csrfToken )
-            $ns->csrfToken = OSS_String::random( 40, true, true, true, '', '' );
 
-        return $ns->csrfToken;
+    /**
+     * Build the framework-free CSRF service over the current ZF1 session
+     * namespace (Phase 5, docs/ZF1-REMOVAL.md). The service stores its token
+     * under the same `csrfToken` key this controller always used, so tokens
+     * minted by the old code keep validating across the upgrade.
+     *
+     * @return \ViMbAdmin\Kernel\Security\Csrf
+     */
+    private function _csrf()
+    {
+        return new \ViMbAdmin\Kernel\Security\Csrf(
+            new \ViMbAdmin\Kernel\Session\MagicPropertyStorage( $this->getSessionNamespace() )
+        );
     }
 
 
@@ -211,9 +222,7 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
      */
     protected function _assertCsrf()
     {
-        $given = (string) $this->getParam( 'csrf', '' );
-
-        if( $given === '' || !hash_equals( $this->_getCsrfToken(), $given ) )
+        if( !$this->_csrf()->isValid( (string) $this->getParam( 'csrf', '' ) ) )
         {
             $this->getResponse()->setHttpResponseCode( 403 );
             $this->addMessage( _( 'Invalid or missing security token. Please retry from the list page.' ), OSS_Message::ERROR );

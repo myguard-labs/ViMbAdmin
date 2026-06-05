@@ -71,6 +71,9 @@ jobs:
       - name: ViMbAdmin\Kernel\Flash\FlashMessages
         run: php tests/test-kernel-flash.php
 
+      - name: ViMbAdmin\Kernel\Session\MagicPropertyStorage
+        run: php tests/test-kernel-session-adapter.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

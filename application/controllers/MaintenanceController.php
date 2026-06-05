@@ -94,7 +94,7 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         {
             $res = ViMbAdmin_Version::releaseUpdateAvailable();
             if( $res === null )
-                $this->addMessage( _( 'Could not reach GitHub to check for a newer release.' ), OSS_Message::ERROR );
+                $this->addMessage( _( 'Could not reach GitHub right now — please try again in a moment.' ), OSS_Message::WARNING );
             elseif( $res === false )
                 $this->addMessage( sprintf( _( 'You are on the latest release (%s).' ), ViMbAdmin_Version::VERSION ), OSS_Message::SUCCESS );
             else
@@ -104,7 +104,7 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         {
             $res = ViMbAdmin_Version::commitUpdateAvailable();
             if( $res === null )
-                $this->addMessage( _( 'Could not check commits (no network, or this build has no recorded commit).' ), OSS_Message::ERROR );
+                $this->addMessage( _( 'Could not reach GitHub right now — please try again in a moment.' ), OSS_Message::WARNING );
             elseif( $res === false )
                 $this->addMessage( _( 'This image is built from the latest commit.' ), OSS_Message::SUCCESS );
             else

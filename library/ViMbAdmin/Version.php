@@ -187,11 +187,32 @@ final class ViMbAdmin_Version
             'header'        => "Accept: application/vnd.github+json\r\n"
                              . 'User-Agent: ViMbAdmin/' . self::VERSION . "\r\n",
         ] ] );
-        $body = @file_get_contents( $url, false, $ctx );
-        if( $body === false )
-            return null;
-        $json = json_decode( $body, true );
-        return is_array( $json ) ? $json : null;
+
+        // Retry once on a transient failure (network blip, a momentary non-2xx)
+        // so a single hiccup doesn't surface a scary "couldn't reach GitHub".
+        for( $attempt = 0; $attempt < 2; $attempt++ )
+        {
+            if( $attempt > 0 )
+                usleep( 400000 );   // 0.4s backoff before the single retry
+
+            $body = @file_get_contents( $url, false, $ctx );
+            if( $body === false )
+                continue;
+
+            // Only accept a 2xx response; a 403 (rate limit) / 5xx is retried.
+            $ok = false;
+            if( isset( $http_response_header[0] )
+                && preg_match( '#\s(\d{3})\s#', $http_response_header[0], $m ) )
+                $ok = ( (int) $m[1] >= 200 && (int) $m[1] < 300 );
+            if( !$ok )
+                continue;
+
+            $json = json_decode( $body, true );
+            if( is_array( $json ) )
+                return $json;
+        }
+
+        return null;
     }
 
     /**

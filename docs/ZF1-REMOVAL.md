@@ -88,13 +88,16 @@ For each controller, one at a time:
 After Phase 1 the business logic is framework-free and tested; ZF1 only does HTTP
 plumbing.
 
-> **Progress.** The pattern is established and the first controller is migrated:
-> `DomainController` (toggle-active, assign/remove admin, purge) now delegates to
-> [`library/ViMbAdmin/Service/Domain.php`](../library/ViMbAdmin/Service/Domain.php),
-> a plain class that depends only on `Doctrine\Persistence\ObjectManager` (the
-> minimal port — persist / flush / getRepository) and throws
-> `ViMbAdmin_Service_Exception` on a business-rule violation. It is unit-tested
-> with no database in [`tests/test-service-domain.php`](../tests/test-service-domain.php)
+> **Progress.** The pattern is established and migrated controllers so far:
+> - `DomainController` → [`library/ViMbAdmin/Service/Domain.php`](../library/ViMbAdmin/Service/Domain.php)
+>   (toggle-active, assign/remove admin, purge).
+> - `AdminController` → [`library/ViMbAdmin/Service/Admin.php`](../library/ViMbAdmin/Service/Admin.php)
+>   (toggle-active, toggle-super, assign/remove domain, purge).
+>
+> Each service depends only on `Doctrine\Persistence\ObjectManager` (the minimal
+> port — persist / remove / flush / getRepository) and throws
+> `ViMbAdmin_Service_Exception` on a business-rule violation. They are unit-tested
+> with no database (`tests/test-service-domain.php`, `tests/test-service-admin.php`)
 > via an in-memory `ObjectManager` fake + plain-PHP `\Entities\*` objects, run by
 > the `unit` job of `.github/workflows/regression.yml`.
 >

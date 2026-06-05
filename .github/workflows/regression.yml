@@ -77,6 +77,9 @@ jobs:
       - name: ViMbAdmin\Kernel\Http\Kernel
         run: php tests/test-kernel-http.php
 
+      - name: ViMbAdmin\Kernel\Security\Auth
+        run: php tests/test-kernel-auth.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

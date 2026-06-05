@@ -160,17 +160,34 @@ plumbing.
 > job). `src/` is PSR-4 (`ViMbAdmin\Kernel\`) and is held to a **zero-`Zend_`**
 > rule by the Phase 0 guard (no allowlist — it is all new replacement code).
 >
-> **2b — Container / Dispatcher / AbstractController shim / new `index.php`
-> (deferred, needs validation against a running instance).** These boot Doctrine,
-> Smarty, Auth/Session and replace the application's entry point. They cannot be
-> meaningfully validated without running the app (and this is a production mail
-> admin), so they are NOT written blind. When tackled: the Container should
-> **reuse** the existing ZF1 bootstrap to obtain the already-wired EM / view /
-> auth rather than re-implement `application.ini`; the new `index.php` should be
-> gated behind an env flag (default off = byte-identical to today's ZF1 path) and
-> flipped on only after the first native route is verified in staging. fast-route
-> + php-di + nyholm/psr7(-server) + laminas-httphandlerrunner are added with this
-> part, where they are actually used.
+> **2b — kernel skeleton (DONE) + Container/Dispatcher (later).** The entry-point
+> skeleton is landed and proven against a local image build:
+> - [`src/Kernel/Http/Kernel.php`](../src/Kernel/Http/Kernel.php) +
+>   [`Response`](../src/Kernel/Http/Response.php) — `handle(path): ?Response`
+>   decodes via the Router and serves only controllers on the native allowlist
+>   that have a handler here, else returns null (→ ZF1 fallback). Pure, no output.
+> - `public/index.php` gained an **opt-in gate** `VIMBADMIN_NATIVE_KERNEL=1`.
+>   **Default (unset) = the historical ZF1 path, byte for byte.** When on, the
+>   kernel serves its routes and every other URL falls through to ZF1, so old and
+>   new run side by side.
+> - One native route ships: `kernel-health` (no auth, no DB, no view) to prove
+>   path-decode → native dispatch → emit → ZF1-fallback end to end without pulling
+>   in Doctrine/Smarty. Unit-tested ([`tests/test-kernel-http.php`](../tests/test-kernel-http.php));
+>   verified in the image: gate off → `/auth/setup` 200 (ZF1) & `/kernel-health`
+>   404; gate on → `/kernel-health` serves natively, `/auth/setup` + `/domain/list`
+>   fall back to ZF1.
+> - **Angie caveat:** the deployment vhost (`dockerized/src/vimbadmin/angie.conf`)
+>   runs a positive-security route allowlist, so a genuinely NEW native URL must be
+>   added there too (that is why `kernel-health` is angie-404'd today — it is a
+>   synthetic probe). Phase 3 migrates EXISTING controllers, whose URLs are already
+>   allowlisted, so no vhost change is needed for the real migration.
+>
+> Still to do in this area (needs the container, when a real route is migrated):
+> the **Container** — reusing the existing ZF1 bootstrap to obtain the
+> already-wired EM / view / auth rather than re-implementing `application.ini` —
+> and the **Dispatcher** that renders a migrated controller's Smarty view into a
+> Response. `php-di` + `nyholm/psr7`(-server) + `laminas-httphandlerrunner` are
+> added with that part, where they are actually used.
 
 ### Phase 3 — migrate controllers to the shim (one at a time)
 Per controller: change `extends ViMbAdmin_Controller_PluginAction` to

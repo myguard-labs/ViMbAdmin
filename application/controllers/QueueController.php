@@ -50,7 +50,7 @@ class QueueController extends ViMbAdmin_Controller_Action
         $action = $this->getRequest()->getActionName();
 
         // The remote trigger and the CLI runner are NOT session-authenticated.
-        if( in_array( $action, [ 'trigger', 'cli-run' ], true ) )
+        if( in_array( $action, [ 'trigger', 'cli-run', 'cli-set-size', 'cli-list-unsized' ], true ) )
         {
             $this->_helper->viewRenderer->setNoRender( true );
             try { $this->_helper->layout()->disableLayout(); } catch( \Exception $e ) {}
@@ -276,6 +276,64 @@ class QueueController extends ViMbAdmin_Controller_Action
         $n   = $this->_drain( $max );
         if( $this->getParam( 'verbose' ) && $n >= 0 )
             echo "Processed {$n} task(s).\n";
+    }
+
+    /**
+     * CLI: record the REAL on-disk (compressed) size of an archive backup.
+     *
+     * The compressed footprint can only be read with `du` on the Dovecot
+     * filesystem (the doveadm HTTP API exposes no recursive-size command). The
+     * host cron (contrib/cron/vimbadmin-archive-size.sh) does the `du` inside
+     * the dovecot container, then calls this to persist it — vimbadmin owns the
+     * DB, dovecot owns the filesystem, neither needs the other's access.
+     *
+     *   vimbtool.php -a queue.cli-set-size --id=<archiveId> --bytes=<n>
+     *
+     * @return void
+     */
+    public function cliSetSizeAction()
+    {
+        $id    = (int) $this->getParam( 'id', 0 );
+        $bytes = $this->getParam( 'bytes', null );
+
+        if( $id <= 0 || $bytes === null || !ctype_digit( (string) $bytes ) )
+        {
+            echo "ERROR: --id=<archiveId> and --bytes=<n> are required.\n";
+            return;
+        }
+
+        $archive = $this->getD2EM()->getRepository( '\\Entities\\Archive' )->find( $id );
+        if( !$archive )
+        {
+            echo "ERROR: archive {$id} not found.\n";
+            return;
+        }
+
+        $archive->setMaildirSize( (int) $bytes );
+        $this->getD2EM()->flush();
+
+        if( $this->getParam( 'verbose' ) )
+            echo "archive {$id}: maildir_size = {$bytes}\n";
+    }
+
+    /**
+     * CLI: list archives whose real on-disk size hasn't been measured yet, as
+     * `<id><TAB><maildir_file>` lines, for the host size-cron to `du` + persist.
+     * "Not measured" = maildir_size is NULL or still equals the logical
+     * maildir_orig_size fallback. Session-exempt (CLI only).
+     *
+     *   vimbtool.php -a queue.cli-list-unsized
+     *
+     * @return void
+     */
+    public function cliListUnsizedAction()
+    {
+        $rows = $this->getD2EM()->getConnection()->fetchAllAssociative(
+            'SELECT id, maildir_file FROM archive
+              WHERE maildir_file IS NOT NULL AND maildir_file <> \'\'
+                AND ( maildir_size IS NULL OR maildir_size = maildir_orig_size )' );
+        foreach( $rows as $r )
+            echo $r['id'] . "\t" . $r['maildir_file'] . "\n";
     }
 
     // =====================================================================
@@ -570,21 +628,13 @@ class QueueController extends ViMbAdmin_Controller_Action
             $this->getLogger()->err( "QueueController::_recordArchive quota {$user}: " . $e->getMessage() );
         }
 
-        // ACTUAL on-disk size of the backup we just wrote — the COMPRESSED
-        // footprint (mail_compress zstd). Measured entirely via the doveadm
-        // REST API (fsIter/fsIterDirs/fsStat). Falls back to the logical size
-        // if the walk fails. This is what the Archives "Size" column shows.
-        $size = null;
-        try
-        {
-            $size = $doveadm->fsDirSize( $dest );
-        }
-        catch( \Throwable $e )
-        {
-            $this->getLogger()->err( "QueueController::_recordArchive fsDirSize {$user}: " . $e->getMessage() );
-        }
-        if( $size === null || $size <= 0 )
-            $size = $origSize;
+        // maildir_size is seeded with the logical size now (instant), then the
+        // host size-cron (contrib/cron/vimbadmin-archive-size.sh) replaces it
+        // with the REAL on-disk COMPRESSED footprint via `du` on the Dovecot
+        // box — the doveadm HTTP API has no fast recursive-size command, so we
+        // don't block the archive task on it. Until the cron runs, the column
+        // shows the logical size (a safe over-estimate).
+        $size = $origSize;
 
         // Capture the full mailbox attributes (incl the password HASH) while the
         // row still exists, so a later restore of a DELETE'd account can recreate

@@ -7,6 +7,8 @@ namespace ViMbAdmin\Kernel\Mvc;
 use ViMbAdmin\Kernel\Container;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\RouteMatch;
+use ViMbAdmin\Kernel\Security\Csrf;
+use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 
 /**
  * Base class for natively-dispatched controllers (Phase 3, docs/ZF1-REMOVAL.md).
@@ -134,9 +136,18 @@ abstract class AbstractController
         $view->action      = $this->route->action;
         $view->hasIdentity = $admin !== null;
         $view->user        = $admin;
+        $view->identity    = $this->container->auth()->identity();
         $view->options     = $this->container->options();
         $view->skinCss     = $this->container->chrome('skinCss') ?? '';
         $view->session     = $this->container->session();
+
+        // The per-session CSRF token guarding state-changing GET links — set only
+        // for an authed page, exactly as the ZF1 base controller did, over the
+        // same session key (`csrfToken`) so links minted here validate against
+        // the ZF1 _assertCsrf() that still serves those actions.
+        if ($admin !== null) {
+            $view->csrfToken = (new Csrf(new MagicPropertyStorage($this->container->session())))->token();
+        }
 
         foreach ($vars as $key => $value) {
             $view->{$key} = $value;

@@ -292,6 +292,104 @@ class ViMbAdmin_Doveadm
     }
 
     /**
+     * Recursive ON-DISK byte size of a directory, entirely via the doveadm
+     * REST API. The maildir is zstd-compressed by Dovecot's mail_compress, so
+     * this is the COMPRESSED footprint. Used by the low-priority MEASURE_SIZE
+     * queue task that runs after an archive backup.
+     *
+     * doveadm `fs` over HTTP:
+     *   - `fsIter`     lists FILES in a dir (NOT subdirectories);
+     *   - `fsIterDirs` lists the SUBDIRECTORIES;
+     *   - `fsStat`     gives a file's byte size.
+     *   - for all three the `path` param must be a STRING (an array crashes the
+     *     worker -> empty reply). `fsDelete` differs (it takes an array).
+     * One `fsStat` per file, so this is slow (~1 min for a large mailbox) --
+     * fine for a background queue task. null on error.
+     *
+     * @param string $path    filesystem path or `<driver>:<path>` dest URI
+     * @param string $filter  the fs filter name (default "posix")
+     * @return int|null
+     */
+    public function fsDirSize( $path, $filter = 'posix' )
+    {
+        if( preg_match( '#^[a-z0-9]+:(/.*)$#i', $path, $m ) )
+            $path = $m[1];
+        $path = rtrim( $path, '/' );
+
+        try
+        {
+            return $this->_fsDirSize( $path, $filter, 0 );
+        }
+        catch( \Throwable $e )
+        {
+            return null;
+        }
+    }
+
+    /**
+     * List one directory level via a doveadm fs command (bare entry names).
+     *
+     * @param string $cmd     'fsIter' (files) or 'fsIterDirs' (subdirs)
+     * @param string $dir
+     * @param string $filter
+     * @return string[]
+     */
+    private function _fsList( $cmd, $dir, $filter )
+    {
+        $rows = $this->run( $cmd, [ 'filterName' => $filter, 'path' => $dir . '/' ] );
+        $out  = [];
+        if( is_array( $rows ) )
+        {
+            foreach( $rows as $r )
+            {
+                $name = is_array( $r ) ? ( $r['path'] ?? null ) : $r;
+                if( $name !== null && $name !== '' && $name !== '.' && $name !== '..' )
+                    $out[] = (string) $name;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param string $dir
+     * @param string $filter
+     * @param int    $depth
+     * @return int
+     */
+    private function _fsDirSize( $dir, $filter, $depth )
+    {
+        if( $depth > 16 )
+            return 0;
+
+        $total = 0;
+
+        // Files -> sum their stat sizes.
+        foreach( $this->_fsList( 'fsIter', $dir, $filter ) as $name )
+        {
+            $child = $dir . '/' . ltrim( $name, '/' );
+            try
+            {
+                $st = $this->run( 'fsStat', [ 'filterName' => $filter, 'path' => $child ] );
+                if( is_array( $st ) && isset( $st[0]['size'] ) )
+                    $total += (int) $st[0]['size'];
+                elseif( is_array( $st ) && isset( $st['size'] ) )
+                    $total += (int) $st['size'];
+            }
+            catch( \Throwable $e ) { /* file vanished mid-walk */ }
+        }
+
+        // Subdirectories -> recurse.
+        foreach( $this->_fsList( 'fsIterDirs', $dir, $filter ) as $name )
+        {
+            $child = $dir . '/' . ltrim( $name, '/' );
+            try { $total += $this->_fsDirSize( $child, $filter, $depth + 1 ); }
+            catch( \Throwable $e ) { /* skip unreadable subtree */ }
+        }
+
+        return $total;
+    }
+
+    /**
      * Restore a backup into a user's live store: `doveadm sync -u <user> <src>`.
      * This is the inverse of backup() — it merges the mail at $src (the
      * `maildir:/backups/...` dest a prior backup wrote) back into the user's

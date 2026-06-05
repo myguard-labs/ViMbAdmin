@@ -29,6 +29,13 @@ class MailboxTask
     /** doveadm quota recalc only (non-destructive; refresh quota usage). */
     const TYPE_QUOTA_RECALC = "QUOTA_RECALC";
 
+    /**
+     * Measure the real on-disk (zstd-compressed) size of an archive backup via
+     * the doveadm REST fs-walk and store it on the archive row. Enqueued at low
+     * priority after an ARCHIVE/DELETE backup; runs in the background.
+     */
+    const TYPE_MEASURE_SIZE = "MEASURE_SIZE";
+
     public static $TYPES = [
         self::TYPE_REPAIR       => "Repair / optimize",
         self::TYPE_OPTIMIZE     => "Repair / optimize",

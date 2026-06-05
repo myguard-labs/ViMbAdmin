@@ -50,7 +50,7 @@ class QueueController extends ViMbAdmin_Controller_Action
         $action = $this->getRequest()->getActionName();
 
         // The remote trigger and the CLI runner are NOT session-authenticated.
-        if( in_array( $action, [ 'trigger', 'cli-run', 'cli-set-size', 'cli-list-unsized' ], true ) )
+        if( in_array( $action, [ 'trigger', 'cli-run' ], true ) )
         {
             $this->_helper->viewRenderer->setNoRender( true );
             try { $this->_helper->layout()->disableLayout(); } catch( \Exception $e ) {}
@@ -278,64 +278,6 @@ class QueueController extends ViMbAdmin_Controller_Action
             echo "Processed {$n} task(s).\n";
     }
 
-    /**
-     * CLI: record the REAL on-disk (compressed) size of an archive backup.
-     *
-     * The compressed footprint can only be read with `du` on the Dovecot
-     * filesystem (the doveadm HTTP API exposes no recursive-size command). The
-     * host cron (contrib/cron/vimbadmin-archive-size.sh) does the `du` inside
-     * the dovecot container, then calls this to persist it — vimbadmin owns the
-     * DB, dovecot owns the filesystem, neither needs the other's access.
-     *
-     *   vimbtool.php -a queue.cli-set-size --id=<archiveId> --bytes=<n>
-     *
-     * @return void
-     */
-    public function cliSetSizeAction()
-    {
-        $id    = (int) $this->getParam( 'id', 0 );
-        $bytes = $this->getParam( 'bytes', null );
-
-        if( $id <= 0 || $bytes === null || !ctype_digit( (string) $bytes ) )
-        {
-            echo "ERROR: --id=<archiveId> and --bytes=<n> are required.\n";
-            return;
-        }
-
-        $archive = $this->getD2EM()->getRepository( '\\Entities\\Archive' )->find( $id );
-        if( !$archive )
-        {
-            echo "ERROR: archive {$id} not found.\n";
-            return;
-        }
-
-        $archive->setMaildirSize( (int) $bytes );
-        $this->getD2EM()->flush();
-
-        if( $this->getParam( 'verbose' ) )
-            echo "archive {$id}: maildir_size = {$bytes}\n";
-    }
-
-    /**
-     * CLI: list archives whose real on-disk size hasn't been measured yet, as
-     * `<id><TAB><maildir_file>` lines, for the host size-cron to `du` + persist.
-     * "Not measured" = maildir_size is NULL or still equals the logical
-     * maildir_orig_size fallback. Session-exempt (CLI only).
-     *
-     *   vimbtool.php -a queue.cli-list-unsized
-     *
-     * @return void
-     */
-    public function cliListUnsizedAction()
-    {
-        $rows = $this->getD2EM()->getConnection()->fetchAllAssociative(
-            'SELECT id, maildir_file FROM archive
-              WHERE maildir_file IS NOT NULL AND maildir_file <> \'\'
-                AND ( maildir_size IS NULL OR maildir_size = maildir_orig_size )' );
-        foreach( $rows as $r )
-            echo $r['id'] . "\t" . $r['maildir_file'] . "\n";
-    }
-
     // =====================================================================
     //  Remote trigger (off-box cron) — key + IP gated
     // =====================================================================
@@ -475,6 +417,29 @@ class QueueController extends ViMbAdmin_Controller_Action
                 $task->appendLog( 'quota recalc' );   $doveadm->quotaRecalc( $user );
                 break;
 
+            case \Entities\MailboxTask::TYPE_MEASURE_SIZE:
+                // Measure the real compressed on-disk size of this user's
+                // archive backup (doveadm fs-walk) and store it on the archive
+                // row. Low-priority background follow-up to an archive backup.
+                $archive = $this->getD2EM()->getRepository( '\\Entities\\Archive' )
+                                ->findOneBy( [ 'username' => $user ] );
+                if( !$archive || !$archive->getMaildirFile() )
+                {
+                    $task->appendLog( 'measure-size: no archive/dest — nothing to do' );
+                    break;
+                }
+                $task->appendLog( 'measure-size: fs-walk ' . $archive->getMaildirFile() );
+                $bytes = $doveadm->fsDirSize( $archive->getMaildirFile() );
+                if( $bytes !== null && $bytes > 0 )
+                {
+                    $archive->setMaildirSize( (int) $bytes );
+                    $this->getD2EM()->persist( $archive );
+                    $task->appendLog( 'measure-size: ' . $bytes . ' bytes' );
+                }
+                else
+                    $task->appendLog( 'measure-size: walk returned no size (kept logical)' );
+                break;
+
             case \Entities\MailboxTask::TYPE_ARCHIVE:
                 // backup first; only empty the store if the backup succeeded.
                 // An explicit archive is kept indefinitely (autoprune off) — the
@@ -610,14 +575,17 @@ class QueueController extends ViMbAdmin_Controller_Action
             $archive->setUsername( $user );
         }
 
-        $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
-
         // LOGICAL mailbox size (uncompressed) from the Dovecot quota-clone,
-        // refreshed so it's current — kept as maildir_orig_size for reference.
+        // refreshed so it's current — stored as maildir_orig_size (reference)
+        // and seeded into maildir_size so the column shows SOMETHING instantly.
+        // The real COMPRESSED on-disk size is filled in shortly after by a
+        // low-priority MEASURE_SIZE queue task (enqueued at the end of this
+        // method) — the doveadm fs-walk that measures it is slow, so we don't
+        // block the archive on it.
         $origSize = null;
         try
         {
-            $doveadm->quotaRecalc( $user );
+            ViMbAdmin_Doveadm::fromOptions( $this->_options )->quotaRecalc( $user );
             $bytes = $em->getConnection()->fetchOne(
                 'SELECT bytes FROM dovecot_quota WHERE username = ?', [ $user ] );
             if( $bytes !== false && $bytes !== null )
@@ -628,12 +596,6 @@ class QueueController extends ViMbAdmin_Controller_Action
             $this->getLogger()->err( "QueueController::_recordArchive quota {$user}: " . $e->getMessage() );
         }
 
-        // maildir_size is seeded with the logical size now (instant), then the
-        // host size-cron (contrib/cron/vimbadmin-archive-size.sh) replaces it
-        // with the REAL on-disk COMPRESSED footprint via `du` on the Dovecot
-        // box — the doveadm HTTP API has no fast recursive-size command, so we
-        // don't block the archive task on it. Until the cron runs, the column
-        // shows the logical size (a safe over-estimate).
         $size = $origSize;
 
         // Capture the full mailbox attributes (incl the password HASH) while the
@@ -675,6 +637,33 @@ class QueueController extends ViMbAdmin_Controller_Action
                 ] ) );
 
         $em->persist( $archive );
+
+        // Enqueue a LOW-PRIORITY MEASURE_SIZE task so a (future) runner fills in
+        // the real compressed on-disk size in the background, without blocking
+        // this archive. No live Mailbox is needed (the account may be DELETE'd),
+        // so insert the task directly. Dedup: skip if one is already open for
+        // this user. priority -10 => picked after all normal work.
+        $open = $em->createQuery(
+            'SELECT COUNT(t.id) FROM \Entities\MailboxTask t
+              WHERE t.username = :u AND t.type = :t
+                AND t.status IN (:open)' )
+            ->setParameter( 'u', $user )
+            ->setParameter( 't', \Entities\MailboxTask::TYPE_MEASURE_SIZE )
+            ->setParameter( 'open', [ \Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING ] )
+            ->getSingleScalarResult();
+        if( (int) $open === 0 )
+        {
+            $mt = new \Entities\MailboxTask();
+            $mt->setType( \Entities\MailboxTask::TYPE_MEASURE_SIZE )
+               ->setUsername( $user )
+               ->setStatus( \Entities\MailboxTask::STATUS_PENDING )
+               ->setPriority( -10 )
+               ->setCreatedAt( new \DateTime() )
+               ->setDomain( $task->getDomain() )
+               ->setRequestedBy( $task->getRequestedBy() )
+               ->setData( json_encode( [ 'dest' => $dest ] ) );
+            $em->persist( $mt );
+        }
         // flushed by _drain() after _execute returns.
     }
 

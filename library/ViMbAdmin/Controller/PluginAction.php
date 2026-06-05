@@ -161,10 +161,10 @@ class ViMbAdmin_Controller_PluginAction extends ViMbAdmin_Controller_Action impl
      * @param string $controller The controller name (e.g. 'mailbox', 'alias', etc
      * @param string $action The action name (e.g. 'add', 'edit', etc)
      * @param string $hook The name of the hook to add (e.g. 'preSave')
-     * @param OSS_Controller_Action $controllerObject The controller object
+     * @param object $controllerObject The controller object (or a native plugin context)
      * @param object $params An optional anonymous object ( http://www.barryodonovan.com/index.php/2012/07/05/anonymous-objects-in-php )
      */
-    public function notify( $controller, $action, $hook, OSS_Controller_Action $controllerObject, $params = null )
+    public function notify( $controller, $action, $hook, object $controllerObject, $params = null )
     {
         foreach( $this->observers as $o ) {
             if( $o->update( $controller, $action, $hook, $controllerObject, $params ) === false ) {

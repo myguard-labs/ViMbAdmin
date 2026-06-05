@@ -49,6 +49,6 @@ interface OSS_Plugin_Observable
 
     function attach( OSS_Plugin_Observer $observer );
     function detach( OSS_Plugin_Observer $observer );
-    function notify( $controller, $action, $hook, OSS_Controller_Action $controllerObject, $params = null );
+    function notify( $controller, $action, $hook, object $controllerObject, $params = null );
         
 }

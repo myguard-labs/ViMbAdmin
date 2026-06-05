@@ -41,7 +41,7 @@
 class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plugin_Observer
 {
 
-    public function __construct( OSS_Controller_Action $controller )
+    public function __construct( object $controller )
     {
         parent::__construct( $controller, get_class( $this ) );
         

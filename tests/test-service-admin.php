@@ -32,6 +32,11 @@ spl_autoload_register(static function (string $class): void {
 
 require __DIR__ . '/../library/ViMbAdmin/Service/Exception.php';
 require __DIR__ . '/../library/ViMbAdmin/Service/Admin.php';
+// changePassword() hashes through OSS_Auth_Password; crypt:sha512 needs only
+// these two helpers (no bcrypt/mcrypt class), so the hash path runs host-side.
+require __DIR__ . '/../library/OSS/Exception.php';
+require __DIR__ . '/../library/OSS/String.php';
+require __DIR__ . '/../library/OSS/Auth/Password.php';
 
 use Doctrine\Common\Collections\ArrayCollection;
 
@@ -184,6 +189,29 @@ check('purge flushed once',                      $em->flushes === 1);
 check('purge logged ADMIN_PURGE',                $em->lastLog() && $em->lastLog()->getAction() === \Entities\Log::ACTION_ADMIN_PURGE);
 check('purge Log binds NO domain',               $em->lastLog() && $em->lastLog()->getDomain() === null);
 check('purge Log binds actor not victim',        $em->lastLog() && $em->lastLog()->getAdmin() === $actor);
+
+// ---- changePassword: self (no log) -------------------------------------- //
+$authOpts = ['pwhash' => 'crypt:sha512'];
+$em  = new FakeObjectManager();
+$me  = makeAdmin('me@example.com');
+$me->setPassword(OSS_Auth_Password::hash('OldPass123', $authOpts));
+$old = $me->getPassword();
+(new ViMbAdmin_Service_Admin($em))->changePassword($me, 'NewPass456', $me, true, $authOpts);
+check('changePassword(self) flushed once',        $em->flushes === 1);
+check('changePassword(self) wrote NO log',         $em->lastLog() === null);
+check('changePassword(self) changed the hash',     $me->getPassword() !== $old);
+check('changePassword(self) new password verifies', OSS_Auth_Password::verify('NewPass456', $me->getPassword(), $authOpts));
+
+// ---- changePassword: super for another (logs PW_CHANGE) ----------------- //
+$em  = new FakeObjectManager();
+$tgt = makeAdmin('target@example.com');
+$tgt->setPassword(OSS_Auth_Password::hash('Whatever11', $authOpts));
+(new ViMbAdmin_Service_Admin($em))->changePassword($tgt, 'ForcedPass9', $actor, false, $authOpts);
+check('changePassword(other) flushed once',        $em->flushes === 1);
+check('changePassword(other) logged PW_CHANGE',    $em->lastLog() && $em->lastLog()->getAction() === \Entities\Log::ACTION_ADMIN_PW_CHANGE);
+check('changePassword(other) log binds actor',     $em->lastLog() && $em->lastLog()->getAdmin() === $actor);
+check('changePassword(other) log binds NO domain', $em->lastLog() && $em->lastLog()->getDomain() === null);
+check('changePassword(other) new password verifies', OSS_Auth_Password::verify('ForcedPass9', $tgt->getPassword(), $authOpts));
 
 echo "\n";
 if ($failures === 0) {

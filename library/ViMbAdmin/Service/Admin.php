@@ -186,6 +186,31 @@ class ViMbAdmin_Service_Admin
     }
 
     /**
+     * Change an administrator's password: hash the supplied plaintext with the
+     * configured auth options and flush. A change made by a super-admin for
+     * SOMEONE ELSE is logged (ACTION_ADMIN_PW_CHANGE); a self-change is not
+     * logged — mirroring the ZF1 `passwordAction` exactly. The caller is
+     * responsible for the privilege check and (for a self-change) verifying the
+     * current password first.
+     *
+     * @param array $authOptions the `resources.auth.oss` config OSS_Auth_Password needs
+     */
+    public function changePassword(\Entities\Admin $target, string $plainPassword, \Entities\Admin $actor, bool $isSelf, array $authOptions): void
+    {
+        $target->setPassword( OSS_Auth_Password::hash( $plainPassword, $authOptions ) );
+
+        if (!$isSelf) {
+            $this->log(
+                $actor,
+                \Entities\Log::ACTION_ADMIN_PW_CHANGE,
+                "{$actor->getFormattedName()} changed password for admin {$target->getFormattedName()}"
+            );
+        }
+
+        $this->em->flush();
+    }
+
+    /**
      * Write a Log row against the acting admin (and optionally a domain) and
      * persist it; the caller flushes. Same shape as the controller's protected
      * log(), which only binds a domain when one is in context.

@@ -25,10 +25,10 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * seeds over the same session key the ZF1 `_assertCsrf()` reads — so those links
  * keep validating against the legacy actions that still serve them.
  *
- * Only `listAction` is migrated; every other action (add/edit/purge/password/
- * two-factor/domains/toggle/cli-*) stays on ZF1 via the dispatcher fallback. The
- * legacy controller is untouched — with VIMBADMIN_NATIVE_KERNEL off ZF1 serves
- * the whole controller unchanged.
+ * Migrated: list, add, the ajax toggles, purge and password. The remaining
+ * actions (two-factor/domains/cli-*) stay on ZF1 via the dispatcher fallback.
+ * The legacy controller is untouched — with VIMBADMIN_NATIVE_KERNEL off ZF1
+ * serves the whole controller unchanged.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -143,6 +143,133 @@ final class AdminController extends AbstractController
         $form->add(new Field('username', 'Username (email)', 'text', [Validators::required(), Validators::email()]))
              ->add(new Field('password', 'Password', 'password', [Validators::required(), Validators::minLength(6)]))
              ->add(new Field('super', 'Super administrator', 'checkbox'));
+
+        return $form;
+    }
+
+    /**
+     * GET|POST /admin/password/aid/<id> — change an administrator's password.
+     *
+     * Faithful port of the ZF1 `passwordAction`, preserving every gate in order:
+     * the target admin must exist (else flash + redirect), the demo account is
+     * locked, and the caller must be a super-admin OR the target themselves. A
+     * SELF change uses the ChangePassword form (current-password verified before
+     * the change); a super changing SOMEONE ELSE uses the Password form (no
+     * current-password, the change is logged). The mutation + log + flush run
+     * through the framework-free ViMbAdmin_Service_Admin::changePassword.
+     *
+     * Differences from ZF1, both deliberate: the optional "email the new password"
+     * side-feature is dropped (the native kernel has no mailer, as with the
+     * native login's remember-me), and the insufficient-privilege attempt is not
+     * written to the logger (the security behaviour — refuse + redirect — is
+     * preserved). An invalid/missing aid is handled natively here (flash +
+     * redirect), so the action never falls through to ZF1.
+     */
+    public function passwordAction(): ?Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $redirectUrl = $admin->isSuper() ? 'admin/list' : 'domain/list';
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+
+        if ($target === null) {
+            $this->flash('Invalid or non-existent admin.', FlashMessages::ERROR);
+            return $this->redirect($redirectUrl);
+        }
+
+        // The demo account's password is fixed (advertised on the login page);
+        // nobody — not even a super-admin — may change it.
+        if (\ViMbAdmin_Demo::isLocked($this->container->options(), $target->getUsername())) {
+            $this->flash('Password changes are disabled for the demo account.', FlashMessages::ERROR);
+            return $this->redirect($redirectUrl);
+        }
+
+        $self = $target->getId() === $admin->getId();
+
+        // Non-super admins may only change their own password.
+        if (!$self && !$admin->isSuper()) {
+            $this->flash('You have insufficient privileges for this task.', FlashMessages::ERROR);
+            return $this->redirect($redirectUrl);
+        }
+
+        $authOptions = $this->container->options()['resources']['auth']['oss'];
+        $form        = $this->buildPasswordForm($self, $target, $authOptions);
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            (new \ViMbAdmin_Service_Admin($this->em()))->changePassword(
+                $target,
+                (string) $form->values()['password'],
+                $admin,
+                $self,
+                $authOptions
+            );
+
+            $this->flash($self
+                ? 'You have successfully changed your password.'
+                : "You have successfully changed the user's password.");
+
+            return $this->redirect($redirectUrl);
+        }
+
+        return $this->view('admin/native-password.phtml', [
+            'targetAdmin' => $target,
+            'formHtml'    => (new FormRenderer())->render(
+                $form,
+                '/admin/password/aid/' . $target->getId(),
+                'Change Password'
+            ),
+        ]);
+    }
+
+    /**
+     * The native change-password form. A self-change requires the current
+     * password (verified as a field rule against the stored hash, so a wrong one
+     * re-renders with an inline error exactly like the ZF1 form) plus a new
+     * password and a matching confirmation. A super changing another admin only
+     * supplies the new password (shown as text, as the ZF1 Password form does).
+     * Both enforce the 8-char minimum the ZF1 validators set.
+     *
+     * @param array $authOptions the `resources.auth.oss` config OSS_Auth_Password needs
+     */
+    private function buildPasswordForm(bool $self, \Entities\Admin $target, array $authOptions): Form
+    {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+
+        if ($self) {
+            $verify = static function (mixed $value) use ($target, $authOptions): ?string {
+                if ($value === null || $value === '') {
+                    return null; // required() reports the empty case
+                }
+
+                return \OSS_Auth_Password::verify((string) $value, $target->getPassword(), $authOptions)
+                    ? null
+                    : 'Invalid password.';
+            };
+
+            $form->add(new Field('current_password', 'Current password', 'password', [
+                Validators::required(), Validators::minLength(8), $verify,
+            ]));
+            $form->add(new Field('password', 'New password', 'password', [
+                Validators::required(), Validators::minLength(8),
+            ]));
+            $form->add(new Field('confirm_password', 'Confirm new password', 'password', [
+                Validators::required(),
+                Validators::matches(
+                    static fn() => $form->field('password')?->value(),
+                    'The confirmation password is required and must match the new password'
+                ),
+            ]));
+        } else {
+            $form->add(new Field('password', 'New password', 'text', [
+                Validators::required(), Validators::minLength(8),
+            ]));
+        }
 
         return $form;
     }

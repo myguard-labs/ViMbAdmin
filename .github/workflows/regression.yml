@@ -27,6 +27,9 @@ jobs:
       - name: Smarty 5 JS-template escaping (alias [+] button regression)
         run: bash tests/lint-template-escaping.sh
 
+      - name: ZF1 surface must not grow (Phase 0 guard, docs/ZF1-REMOVAL.md)
+        run: bash tests/lint-no-new-zend.sh
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

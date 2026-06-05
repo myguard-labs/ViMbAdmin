@@ -1,10 +1,10 @@
 # ZF1 removal roadmap
 
-> **Status: design only — not started.** This is the agreed strategy for
-> *eventually* removing Zend Framework 1, not work in progress. The app runs on
-> ZF1 today (via `shardj/zf1-future`) and that is fully supported; this document
-> exists so that, if and when we remove it, we follow an incremental plan that
-> never breaks the application.
+> **Status: Phase 0 done; Phases 1–5 not started.** This is the agreed strategy
+> for incrementally removing Zend Framework 1. The app runs on ZF1 today (via
+> `shardj/zf1-future`) and that is fully supported; the only landed work so far
+> is the Phase 0 CI guard that stops the ZF1 surface from growing. The remaining
+> phases are followed opportunistically so the application never breaks.
 
 ## Principle
 
@@ -63,10 +63,16 @@ if ever desired — the same path, just a later stopping point.
 Each step is its own pull request with green CI; the application is fully working
 at every commit.
 
-### Phase 0 — stop the bleeding (do first, cheap)
+### Phase 0 — stop the bleeding (do first, cheap) — **DONE**
 - **CI guard:** a lint that fails if any *new* file under `library/ViMbAdmin/`
   (outside `Controller/` and `Form/`) introduces a `Zend_` reference. This locks
   in "new code is framework-free" — already true for `Mcp/*`.
+  Implemented as [`tests/lint-no-new-zend.sh`](../tests/lint-no-new-zend.sh),
+  wired into the `static` job of `.github/workflows/regression.yml`. It carries a
+  baseline allowlist of the three existing legacy-glue files (`Plugin.php`,
+  `Doveadm.php`, `Form.php`) and fails the build if any other in-scope file —
+  new or previously clean — grows a `Zend_` reference; it also flags a baseline
+  entry that has lost its last `Zend_` (the list may only shrink).
 - **Rule:** every new feature ships as a `ViMbAdmin\` PSR-4 class with constructor
   dependency injection and no `Zend_`. Controllers/forms remain only as the
   thinnest possible ZF1 glue.

@@ -4,6 +4,7 @@ parameters:
         - application
         - library
         - public
+        - src
     excludePaths:
         # Generated Doctrine proxies (built at image time, gitignored). They
         # mirror the entities; analysing them only re-reports entity findings.

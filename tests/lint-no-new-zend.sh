@@ -66,6 +66,22 @@ while IFS= read -r -d '' f; do
 done < <(find library/ViMbAdmin -type d \( -name Controller -o -name Form \) -prune -o \
              -name '*.php' -type f -print0)
 
+# The framework-free kernel (Phase 2, docs/ZF1-REMOVAL.md) lives under src/ and
+# is held to a stricter rule than library/: ZERO Zend_ references, no allowlist.
+# Everything here is new code written to replace ZF1, so a Zend_ token is always
+# a mistake.
+if [ -d src ]; then
+    while IFS= read -r -d '' f; do
+        rel="${f#./}"
+        if grep -q "Zend_" "$f"; then
+            echo "  $rel:"
+            grep -nE "Zend_[A-Za-z0-9_]*" "$f" | sed 's/^/    /'
+            echo "    -> src/ is the framework-free kernel; it must never reference Zend_."
+            fail=1
+        fi
+    done < <(find src -name '*.php' -type f -print0)
+fi
+
 # Catch an allowlist that no longer reflects reality: an entry whose file has
 # lost its last Zend_ reference (good!) or was deleted. Such entries should be
 # removed so the list keeps shrinking; flag them so the win is recorded.

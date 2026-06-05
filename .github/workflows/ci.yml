@@ -37,7 +37,7 @@ jobs:
 
       - name: PHP syntax check
         run: |
-          find application library public bin -name '*.php' -print0 \
+          find application library public bin src -name '*.php' -print0 \
             | xargs -0 -r -n1 -P"$(nproc)" php -l > /dev/null
 
   audit:

@@ -314,23 +314,25 @@ class AliasController extends ViMbAdmin_Controller_PluginAction
     public function ajaxToggleActiveAction()
     {
         if( !$this->getAlias() )
+        {
             print 'ko';
-
-        if($this->notify( 'alias', 'toggleActive', 'preToggle', $this, [ 'active' => $this->getAlias()->getActive() ]) === true) {
-            $this->getAlias()->setActive( !$this->getAlias()->getActive() );
-            $this->getAlias()->setModified( new \DateTime() );
-
-            $this->log(
-                $this->getAlias()->getActive() ? \Entities\Log::ACTION_ALIAS_ACTIVATE : \Entities\Log::ACTION_ALIAS_DEACTIVATE,
-                "{$this->getAdmin()->getFormattedName()} " . ( $this->getAlias()->getActive() ? 'activated' : 'deactivated' ) . " alias {$this->getAlias()->getAddress()}"
-            );
-            $this->notify( 'alias', 'toggleActive', 'preflush', $this, [ 'active' => $this->getAlias()->getActive() ] );
-            $this->getD2EM()->flush();
-            $this->notify( 'alias', 'toggleActive', 'postflush', $this, [ 'active' => $this->getAlias()->getActive() ] );
-            print 'ok';
-        } else {
-            print 'ko';
+            return;
         }
+
+        // Entity change + log + single flush live in the framework-free
+        // ViMbAdmin_Service_Alias; the plugin notify() hooks (which need this ZF1
+        // controller as their context) are threaded in as callables, preserving
+        // the exact preToggle/preflush/postflush ordering. A preToggle veto leaves
+        // the alias unchanged.
+        $result = ( new ViMbAdmin_Service_Alias( $this->getD2EM() ) )->toggleActive(
+            $this->getAlias(),
+            $this->getAdmin(),
+            fn() => $this->notify( 'alias', 'toggleActive', 'preToggle', $this, [ 'active' => $this->getAlias()->getActive() ] ) === true,
+            fn() => $this->notify( 'alias', 'toggleActive', 'preflush', $this, [ 'active' => $this->getAlias()->getActive() ] ),
+            fn() => $this->notify( 'alias', 'toggleActive', 'postflush', $this, [ 'active' => $this->getAlias()->getActive() ] )
+        );
+
+        print $result === null ? 'ko' : 'ok';
     }
 
 

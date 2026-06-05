@@ -68,6 +68,9 @@ jobs:
       - name: ViMbAdmin\Kernel\Security\Csrf
         run: php tests/test-kernel-csrf.php
 
+      - name: ViMbAdmin\Kernel\Flash\FlashMessages
+        run: php tests/test-kernel-flash.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

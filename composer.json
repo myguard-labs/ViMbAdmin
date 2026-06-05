@@ -49,6 +49,9 @@
         "psr-0": {
             "OSS_": "library/",
             "Twitter_": "library"
+        },
+        "psr-4": {
+            "ViMbAdmin\\Kernel\\": "src/Kernel/"
         }
     },
     "include-path": [

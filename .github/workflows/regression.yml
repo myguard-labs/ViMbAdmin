@@ -62,6 +62,9 @@ jobs:
       - name: ViMbAdmin_Service_Admin
         run: php tests/test-service-admin.php
 
+      - name: ViMbAdmin\Kernel\Router
+        run: php tests/test-kernel-router.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

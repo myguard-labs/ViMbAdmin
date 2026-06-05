@@ -143,6 +143,35 @@ plumbing.
    The dispatcher falls back to the ZF1 front controller for any route not yet
    migrated, so old and new run side by side.
 
+> **Split into 2a (landed) and 2b (needs a live instance).** The kernel pieces
+> have very different risk profiles, so Phase 2 is delivered in two parts.
+>
+> **2a — Router (DONE).** [`src/Kernel/Router.php`](../src/Kernel/Router.php) +
+> [`RouteMatch`](../src/Kernel/RouteMatch.php) decode a path with ZF1's exact
+> scheme (`/{controller}/{action}/{k}/{v}…`, both defaulting to `index`) and
+> inflect to the same `FooController::barAction()` ZF1 produced, so URLs are
+> preserved. It is **dependency-free** (no fast-route: ViMbAdmin has one generic
+> pattern with a variable-length key/value tail that fast-route can't express
+> natively, and a hand parser is clearer + unit-testable with no framework).
+> Migration is opt-in via a "native controllers" allowlist that **starts empty**,
+> so `match()` returns `null` for everything and every request still goes to ZF1 —
+> zero behaviour change. Fully tested with no DB in
+> [`tests/test-kernel-router.php`](../tests/test-kernel-router.php) (the `unit`
+> job). `src/` is PSR-4 (`ViMbAdmin\Kernel\`) and is held to a **zero-`Zend_`**
+> rule by the Phase 0 guard (no allowlist — it is all new replacement code).
+>
+> **2b — Container / Dispatcher / AbstractController shim / new `index.php`
+> (deferred, needs validation against a running instance).** These boot Doctrine,
+> Smarty, Auth/Session and replace the application's entry point. They cannot be
+> meaningfully validated without running the app (and this is a production mail
+> admin), so they are NOT written blind. When tackled: the Container should
+> **reuse** the existing ZF1 bootstrap to obtain the already-wired EM / view /
+> auth rather than re-implement `application.ini`; the new `index.php` should be
+> gated behind an env flag (default off = byte-identical to today's ZF1 path) and
+> flipped on only after the first native route is verified in staging. fast-route
+> + php-di + nyholm/psr7(-server) + laminas-httphandlerrunner are added with this
+> part, where they are actually used.
+
 ### Phase 3 — migrate controllers to the shim (one at a time)
 Per controller: change `extends ViMbAdmin_Controller_PluginAction` to
 `extends AbstractController` and rename the handful of accessor calls. The body

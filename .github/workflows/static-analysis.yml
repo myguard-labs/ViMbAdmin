@@ -36,5 +36,10 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
+      # Proxies are gitignored + built at image time; generate them here so this
+      # job also verifies bin/generate-proxies.php keeps working (no DB needed).
+      - name: Generate Doctrine proxies
+        run: php bin/generate-proxies.php
+
       - name: Run PHPStan
         run: phpstan analyse --no-progress --error-format=github

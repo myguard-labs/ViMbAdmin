@@ -13,6 +13,9 @@ var/log/vimbadmin.log*
 var/templates_c/[a-zA-Z0-9%]*
 var/session/sess_*
 var/tmp
+# Doctrine proxies are generated build artifacts (bin/generate-proxies.php runs
+# at image build). Do not commit them — they silently drift from the entities.
+application/Proxies/__CG__*.php
 library/Minify/
 *~
 vendor/[a-zA-Z0-9]*

@@ -67,7 +67,8 @@ try
             'scope=s'       => 'MCP: token scope, e.g. "read" or "read write" (default: read).',
             'ip=s'          => 'MCP: token IP/CIDR allowlist (space/comma separated; default: any).',
             'days=i'        => 'MCP: token validity in days (default: no expiry).',
-            'id=i'          => 'MCP: token id (mcp.cli-token-revoke).'
+            'id=i'          => 'Action-specific: row id (mcp.cli-token-revoke, queue.cli-set-size).',
+            'bytes=i'       => 'Action-specific: byte size (queue.cli-set-size).'
         )
     );
 
@@ -140,7 +141,7 @@ if( isset( $opts->a ) )
 
         // Forward action-specific named options to the request so controllers
         // can read them via $this->getRequest()->getParam( ... ).
-        foreach( array( 'username', 'all', 'name', 'scope', 'ip', 'days', 'id' ) as $__opt )
+        foreach( array( 'username', 'all', 'name', 'scope', 'ip', 'days', 'id', 'bytes' ) as $__opt )
             if( isset( $opts->$__opt ) )
                 $front->getRequest()->setParam( $__opt, $opts->$__opt );
 

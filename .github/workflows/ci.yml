@@ -53,7 +53,8 @@ jobs:
           coverage: none
           tools: composer:v2
 
-      # Reads composer.lock directly; abandoned packages are ignored via
-      # the composer.json `config.audit.abandoned` setting.
+      # --locked reads composer.lock directly (no composer install needed in
+      # this job); abandoned packages are ignored via the composer.json
+      # `config.audit.abandoned` setting.
       - name: composer audit
-        run: composer audit
+        run: composer audit --locked

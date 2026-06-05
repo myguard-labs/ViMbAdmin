@@ -106,8 +106,10 @@ final class FormRenderer
             $value = '';
         }
 
+        $readonly = $field->isReadonly() ? ' readonly="readonly"' : '';
+
         return '<input type="' . $type . '" name="' . $name . '" id="' . $name
-            . '" value="' . $this->esc($value) . '" />';
+            . '" value="' . $this->esc($value) . '"' . $readonly . ' />';
     }
 
     private function esc(string $value): string

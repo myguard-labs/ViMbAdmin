@@ -25,6 +25,7 @@ final class Field
 {
     private mixed $value = null;
     private ?string $error = null;
+    private bool $readonly = false;
 
     /**
      * @param array<int,callable(mixed):?string> $rules
@@ -48,6 +49,23 @@ final class Field
     public function setValue(mixed $value): void
     {
         $this->value = $value;
+    }
+
+    /**
+     * Mark the field read-only (rendered with a `readonly` attribute). Used by
+     * edit forms where a value is shown but cannot be changed — e.g. a domain
+     * name on the edit-domain form, mirroring the ZF1 `setAttrib('readonly')`.
+     */
+    public function setReadonly(bool $readonly = true): self
+    {
+        $this->readonly = $readonly;
+
+        return $this;
+    }
+
+    public function isReadonly(): bool
+    {
+        return $this->readonly;
     }
 
     public function value(): mixed

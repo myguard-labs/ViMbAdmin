@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\Mvc\AbstractController;
 
@@ -42,6 +43,48 @@ final class AdminController extends AbstractController
         $admins = $this->em()->getRepository('\\Entities\\Admin')->findAll();
 
         return $this->view('admin/list.phtml', ['admins' => $admins]);
+    }
+
+    /**
+     * GET /admin/purge/aid/<id>/csrf/<token> — permanently delete an admin.
+     *
+     * The full state-changing path natively: CSRF-guarded (the link the native
+     * admin/list mints carries the session token), super-only, refuses a missing
+     * target or self-purge with a flashed error, otherwise purges via the
+     * framework-free ViMbAdmin_Service_Admin and flashes success — each followed
+     * by a redirect to admin/list, where the {OSS_Message} renderer shows the
+     * flash. Mirrors the legacy AdminController::purgeAction.
+     */
+    public function purgeAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        if (!$this->csrfValid()) {
+            $this->flash('Invalid or missing security token. Please retry from the list page.', FlashMessages::ERROR);
+            return $this->redirect('admin/list');
+        }
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+
+        if (!$target) {
+            $this->flash('Invalid or non-existent admin.', FlashMessages::ERROR);
+            return $this->redirect('admin/list');
+        }
+
+        if ($admin->getId() == $target->getId()) {
+            $this->flash('You cannot purge yourself.', FlashMessages::ERROR);
+            return $this->redirect('admin/list');
+        }
+
+        (new \ViMbAdmin_Service_Admin($this->em()))->purge($target, $admin);
+
+        $this->flash('You have successfully purged the admin record.', FlashMessages::SUCCESS);
+        return $this->redirect('admin/list');
     }
 
     /**

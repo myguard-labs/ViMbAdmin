@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\Mvc;
 
 use ViMbAdmin\Kernel\Container;
+use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\RouteMatch;
 use ViMbAdmin\Kernel\Security\Csrf;
@@ -104,6 +105,33 @@ abstract class AbstractController
         return new Response('', 302, 'text/html; charset=utf-8', [
             'Location' => '/' . ltrim($path, '/'),
         ]);
+    }
+
+    /**
+     * Queue a flash message for the next page (the native `addMessage()`).
+     *
+     * Writes to the framework-free {@see FlashMessages} queue over the session
+     * namespace; the `{OSS_Message}` Smarty renderer drains it and emits the same
+     * alert markup as a legacy OSS_Message, so a native action can flash a notice
+     * that shows on the next page whether that page is rendered natively or by
+     * ZF1. Levels match the OSS_Message classes (success/error/info/warning).
+     */
+    protected function flash(string $text, string $level = FlashMessages::SUCCESS): void
+    {
+        (new FlashMessages(new MagicPropertyStorage($this->container->session())))->add($text, $level);
+    }
+
+    /**
+     * Whether the request carries a valid CSRF token (`?csrf=...`) for the
+     * current session — the native equivalent of the ZF1 `_assertCsrf()` check
+     * (over the same session token, via the {@see Csrf} service). The caller
+     * decides the failure response (flash + redirect), mirroring how the ZF1
+     * action aborted to a safe listing.
+     */
+    protected function csrfValid(): bool
+    {
+        return (new Csrf(new MagicPropertyStorage($this->container->session())))
+            ->isValid((string) $this->param('csrf', ''));
     }
 
     /**

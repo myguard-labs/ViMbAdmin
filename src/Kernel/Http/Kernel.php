@@ -6,6 +6,7 @@ namespace ViMbAdmin\Kernel\Http;
 
 use ViMbAdmin\Kernel\Controller\AdditionalInfoController;
 use ViMbAdmin\Kernel\Controller\AdminController;
+use ViMbAdmin\Kernel\Controller\AuthController;
 use ViMbAdmin\Kernel\Controller\AliasController;
 use ViMbAdmin\Kernel\Controller\ArchiveController;
 use ViMbAdmin\Kernel\Controller\DomainController;
@@ -55,6 +56,7 @@ final class Kernel
      */
     public const NATIVE_CONTROLLERS = [
         'additionalinfo' => AdditionalInfoController::class,
+        'auth'           => AuthController::class,
         'index'          => IndexController::class,
         'log'            => LogController::class,
         'admin'          => AdminController::class,

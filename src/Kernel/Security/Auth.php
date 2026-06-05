@@ -84,6 +84,38 @@ final class Auth
     }
 
     /**
+     * Establish a session for an authenticated admin: write the identity array
+     * (the same `['username','user','id']` shape the legacy auth layer stored)
+     * into the session storage this service reads, and reset the per-request
+     * cache so a subsequent {@see admin()} reflects the new identity.
+     *
+     * The caller is responsible for any session-id regeneration BEFORE calling
+     * this (fixation defence). The service performs no HTTP.
+     */
+    public function establish(object $admin): void
+    {
+        $this->session->set($this->identityKey, [
+            'username' => $admin->getUsername(),
+            'user'     => $admin,
+            'id'       => $admin->getId(),
+        ]);
+
+        $this->loaded = false;
+        $this->admin  = null;
+    }
+
+    /**
+     * Drop the identity (log out) and reset the cache.
+     */
+    public function clear(): void
+    {
+        $this->session->remove($this->identityKey);
+
+        $this->loaded = false;
+        $this->admin  = null;
+    }
+
+    /**
      * Whether the logged-in admin is a super admin.
      */
     public function isSuper(): bool

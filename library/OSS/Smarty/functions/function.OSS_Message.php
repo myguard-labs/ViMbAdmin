@@ -70,7 +70,9 @@
             unset($_SESSION['Application']['OSS_Messages']);
         }
 
-        if ( $ossms == array() ) return '';
+        // NB: no early return when $ossms is empty — a natively-dispatched
+        // controller may have queued framework-free flash messages (drained at
+        // the end of this function) with no legacy OSS_Messages present.
 
         $count = 0;
         $message = '';
@@ -148,6 +150,35 @@ END_MESSAGE;
 
             $count++;
         } // end foreach()
+
+
+        // Phase 3 (docs/ZF1-REMOVAL.md): also drain the framework-free flash
+        // queue that natively-dispatched controllers write
+        // (ViMbAdmin\Kernel\Flash\FlashMessages over the 'Application' session
+        // namespace, key 'flashMessages'), rendering each entry as the same plain
+        // alert the legacy OSS_Message path produces above. Append-only — the
+        // legacy OSS_Messages handling is untouched, so existing flashes are
+        // unaffected and a page can carry both.
+        if( isset( $_SESSION['Application']['flashMessages'] ) && is_array( $_SESSION['Application']['flashMessages'] ) )
+        {
+            foreach( $_SESSION['Application']['flashMessages'] as $fm )
+            {
+                $fmClass = isset( $fm['level'] ) ? $fm['level'] : 'success';
+                $fmText  = isset( $fm['text'] )  ? $fm['text']  : '';
+
+                $message .= <<<END_MESSAGE
+
+        <div class="alert alert-{$fmClass} fade in" id="oss-message-{$count}">
+            <a class="close" href="#" data-dismiss="alert">×</a>
+            {$fmText}
+        </div>
+
+END_MESSAGE;
+                $count++;
+            }
+
+            unset( $_SESSION['Application']['flashMessages'] );
+        }
 
 
         return $message;

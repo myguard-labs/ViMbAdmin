@@ -88,6 +88,28 @@ For each controller, one at a time:
 After Phase 1 the business logic is framework-free and tested; ZF1 only does HTTP
 plumbing.
 
+> **Progress.** The pattern is established and the first controller is migrated:
+> `DomainController` (toggle-active, assign/remove admin, purge) now delegates to
+> [`library/ViMbAdmin/Service/Domain.php`](../library/ViMbAdmin/Service/Domain.php),
+> a plain class that depends only on `Doctrine\Persistence\ObjectManager` (the
+> minimal port — persist / flush / getRepository) and throws
+> `ViMbAdmin_Service_Exception` on a business-rule violation. It is unit-tested
+> with no database in [`tests/test-service-domain.php`](../tests/test-service-domain.php)
+> via an in-memory `ObjectManager` fake + plain-PHP `\Entities\*` objects, run by
+> the `unit` job of `.github/workflows/regression.yml`.
+>
+> Conventions for the remaining controllers:
+> - Services are PSR-0 underscore classes (`ViMbAdmin_Service_Foo`) under
+>   `library/ViMbAdmin/Service/`, matching the existing `ViMbAdmin_Mcp_*`
+>   precedent. The backslash PSR-4 rename happens later, in Phase 5.
+> - Depend on the **narrowest** Doctrine interface that works (`ObjectManager`),
+>   not the full `EntityManagerInterface`, so the unit test needs no DB.
+> - The service owns its full side effect, including writing its own
+>   `\Entities\Log` rows and a single `flush()`; the controller keeps only the
+>   HTTP glue (param/entity resolution, `authorise()`, plugin `notify()` hooks,
+>   `addMessage()`, `redirect()`).
+> - Form handling (`Zend_Form`) stays in the controller for now — it is Phase 4.
+
 ### Phase 2 — build the framework-free kernel alongside ZF1
 1. Add the libraries above via Composer.
 2. Write four small kernel pieces (roughly 250 lines total) under `src/Kernel/`:

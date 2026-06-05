@@ -28,6 +28,7 @@ final class AdminFake
 {
     public function __construct(private int $id, private bool $super) {}
     public function getId(): int { return $this->id; }
+    public function getUsername(): string { return "u{$this->id}@x"; }
     public function getSuper(): bool { return $this->super; }
 }
 
@@ -88,6 +89,18 @@ check('no id -> not authenticated',     $m->isAuthenticated() === false);
 // --- custom identity key ---------------------------------------------- //
 $c = new Auth(new ArraySession(['Zend_Auth' => ['id' => 5]]), loaderFor([5 => $normal], $calls), 'Zend_Auth');
 check('custom identity key honoured',   $c->isAuthenticated() && $c->admin() === $normal);
+
+// --- establish() / clear() (login / logout) --------------------------- //
+$sess = new ArraySession([]);
+$e = new Auth($sess, loaderFor([5 => $normal], $calls));
+check('anonymous before establish',     $e->isAuthenticated() === false && $e->admin() === null);
+$e->establish($normal);
+check('establish writes the identity',  $sess->get('identity') === ['username' => 'u5@x', 'user' => $normal, 'id' => 5]);
+check('establish -> authenticated',     $e->isAuthenticated() === true);
+check('establish -> admin() resolves',  $e->admin() === $normal);
+$e->clear();
+check('clear removes the identity',     $sess->get('identity') === null);
+check('clear -> anonymous',             $e->isAuthenticated() === false && $e->admin() === null);
 
 echo "\n";
 if ($failures === 0) {

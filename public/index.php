@@ -67,6 +67,12 @@ if (getenv('VIMBADMIN_NATIVE_KERNEL') === '1') {
     $options = $bootstrap->getOptions();
     Zend_Registry::set( 'options', $options );
     Zend_Registry::set( 'bootstrap', $bootstrap );
+    // Some native-served code paths reuse legacy helpers that fetch the entity
+    // manager from the registry (e.g. ViMbAdmin_TwoFactor / OSS WithPreferences
+    // via Zend_Registry::get('d2em')['default']); the ZF1 Doctrine2 trait
+    // registers it lazily as a connection-keyed array on first getD2EM(), which a
+    // native request never calls. Register the same shape here.
+    Zend_Registry::set( 'd2em', [ 'default' => $em ] );
 
     // Pre-compute the chrome view vars a native page render needs that depend on
     // the ZF1 front controller (here: the skin stylesheet URL — mirrors

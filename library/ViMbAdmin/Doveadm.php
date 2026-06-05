@@ -291,6 +291,7 @@ class ViMbAdmin_Doveadm
         ] );
     }
 
+
     /**
      * Restore a backup into a user's live store: `doveadm sync -u <user> <src>`.
      * This is the inverse of backup() — it merges the mail at $src (the

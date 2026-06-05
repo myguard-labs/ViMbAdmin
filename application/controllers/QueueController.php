@@ -552,27 +552,18 @@ class QueueController extends ViMbAdmin_Controller_Action
             $archive->setUsername( $user );
         }
 
-        // Mailbox SIZE (bytes). We run this BEFORE the store is emptied. The
-        // doveadm HTTP API can't `fs stat` the backup dir (the fs driver isn't
-        // HTTP-callable), so we use the Dovecot quota instead: force a quota
-        // recalc so the figure is current, then read the quota-clone mirror
-        // (dovecot_quota -> Quota entity). This is the logical mail size; the
-        // backup on disk is smaller because mail_compress zstd-compresses it.
-        // Best-effort: a recalc failure just leaves the last known quota.
-        try
-        {
-            ViMbAdmin_Doveadm::fromOptions( $this->_options )->quotaRecalc( $user );
-        }
-        catch( \Throwable $e )
-        {
-            $this->getLogger()->err( "QueueController::_recordArchive quotaRecalc {$user}: " . $e->getMessage() );
-        }
-
-        // Re-read the quota-clone after the recalc. Use raw DBAL so we get the
-        // fresh row, not a stale identity-map copy from earlier in the request.
+        // Mailbox SIZE (bytes), captured BEFORE the store is emptied. We use
+        // the Dovecot quota (logical mail size): force a quota recalc so it's
+        // current, then read the quota-clone mirror (dovecot_quota) by raw DBAL
+        // for the fresh value. NOTE: the true *compressed* on-disk backup size
+        // is not obtainable here — `doveadm fs iter` over the HTTP API lists
+        // FILES only, not subdirectories, so a maildir tree (cur/, .Folder/cur/)
+        // can't be walked without hardcoding its layout. The logical size is
+        // the reliable figure. Best-effort: null -> UI shows "—".
         $size = null;
         try
         {
+            ViMbAdmin_Doveadm::fromOptions( $this->_options )->quotaRecalc( $user );
             $bytes = $em->getConnection()->fetchOne(
                 'SELECT bytes FROM dovecot_quota WHERE username = ?', [ $user ] );
             if( $bytes !== false && $bytes !== null )
@@ -580,7 +571,7 @@ class QueueController extends ViMbAdmin_Controller_Action
         }
         catch( \Throwable $e )
         {
-            // table/row absent -> leave size null (UI shows "—").
+            $this->getLogger()->err( "QueueController::_recordArchive quota {$user}: " . $e->getMessage() );
         }
 
         // Capture the full mailbox attributes (incl the password HASH) while the

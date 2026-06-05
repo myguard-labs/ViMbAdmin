@@ -72,7 +72,7 @@ class ViMbAdmin_Controller_PluginAction extends ViMbAdmin_Controller_Action impl
     public function __construct(
         Zend_Controller_Request_Abstract  $request,
         Zend_Controller_Response_Abstract $response,
-        array $invokeArgs = null )
+        ?array $invokeArgs = null )
     {
         // call the parent's version where all the Zend magic happens
         parent::__construct( $request, $response, $invokeArgs );

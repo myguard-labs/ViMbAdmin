@@ -71,7 +71,7 @@ class OSS_Controller_CliAction extends OSS_Controller_Action
     public function __construct(
                 Zend_Controller_Request_Abstract $request,
                 Zend_Controller_Response_Abstract $response,
-                array $invokeArgs = null )
+                ?array $invokeArgs = null )
     {
         // call the parent's version where all the Zend magic happens
         parent::__construct( $request, $response, $invokeArgs );

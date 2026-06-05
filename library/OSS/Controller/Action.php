@@ -106,7 +106,7 @@ class OSS_Controller_Action extends Zend_Controller_Action
     public function __construct(
         Zend_Controller_Request_Abstract  $request,
         Zend_Controller_Response_Abstract $response,
-        array $invokeArgs = null )
+        ?array $invokeArgs = null )
     {
         // get the bootstrap object and set it in the registry
         $this->setBootstrap( $invokeArgs['bootstrap'] );

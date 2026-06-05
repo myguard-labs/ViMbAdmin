@@ -1,0 +1,40 @@
+name: Static analysis
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phpstan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phpstan:
+    name: PHPStan
+    runs-on: ubuntu-latest
+    # Legacy ZF1-future / PSR-0 codebase: PHPStan surfaces real issues but is
+    # not allowed to block the build until a baseline is committed. Drop the
+    # continue-on-error once `phpstan.neon` carries a clean baseline.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          extensions: ctype, dom, gettext, iconv, intl, json, mbstring, pdo, pdo_mysql, sodium
+          tools: composer:v2, phpstan
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run PHPStan
+        run: phpstan analyse --no-progress --error-format=github

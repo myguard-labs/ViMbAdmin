@@ -25,10 +25,10 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * seeds over the same session key the ZF1 `_assertCsrf()` reads — so those links
  * keep validating against the legacy actions that still serve them.
  *
- * Migrated: list, add, the ajax toggles, purge and password. The remaining
- * actions (two-factor/domains/cli-*) stay on ZF1 via the dispatcher fallback.
- * The legacy controller is untouched — with VIMBADMIN_NATIVE_KERNEL off ZF1
- * serves the whole controller unchanged.
+ * Migrated: list, add, the ajax toggles, purge, password, domains and
+ * remove-domain. The remaining actions (assign-domain/two-factor/cli-*) stay on
+ * ZF1 via the dispatcher fallback. The legacy controller is untouched — with
+ * VIMBADMIN_NATIVE_KERNEL off ZF1 serves the whole controller unchanged.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -272,6 +272,72 @@ final class AdminController extends AbstractController
         }
 
         return $form;
+    }
+
+    /**
+     * GET /admin/domains/aid/<id> — the domains assigned to an admin (super only).
+     *
+     * Reuses the existing `admin/domains.phtml` template byte-for-byte (it loops
+     * `$targetAdmin->getDomains()` and renders the assign/remove links); only the
+     * super gate + target lookup are reproduced natively. ZF1's `preDispatch`
+     * requires super-admin for every AdminController action except password/
+     * two-factor, so the gate is unconditional here.
+     */
+    public function domainsAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+
+        if ($target === null) {
+            $this->flash('Invalid or non-existent admin.', FlashMessages::ERROR);
+            return $this->redirect('admin/list');
+        }
+
+        return $this->view('admin/domains.phtml', ['targetAdmin' => $target]);
+    }
+
+    /**
+     * GET /admin/remove-domain/aid/<id>/did/<id> — unassign a domain from an admin
+     * (super only). Faithful port: a missing admin or domain flashes + redirects
+     * (to admin/list and the admin's domains page respectively); otherwise the
+     * detach + log + flush run through the Phase-1 ViMbAdmin_Service_Admin::
+     * removeDomain. Like ZF1 this carries no CSRF token (super-gated GET link).
+     */
+    public function removeDomainAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+
+        if ($target === null) {
+            $this->flash('Invalid or missing admin id.', FlashMessages::ERROR);
+            return $this->redirect('admin/list');
+        }
+
+        $domain = ($did = $this->param('did'))
+            ? $this->em()->getRepository('\\Entities\\Domain')->find((int) $did)
+            : null;
+
+        if ($domain === null) {
+            $this->flash('Invalid or missing domain id.', FlashMessages::ERROR);
+            return $this->redirect('admin/domains/aid/' . $target->getId());
+        }
+
+        (new \ViMbAdmin_Service_Admin($this->em()))->removeDomain($target, $domain, $admin);
+
+        $this->flash('You have successfully removed the admin from domain ' . $domain->getDomain());
+        return $this->redirect('admin/domains/aid/' . $target->getId());
     }
 
     /**

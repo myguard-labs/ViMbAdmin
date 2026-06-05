@@ -30,8 +30,12 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * 4c), so the MailboxAutomaticAliases pre/post-toggle logic runs natively and a
  * pre-toggle veto still aborts the change.
  *
- * The remaining form/CRUD actions stay on ZF1 via the dispatcher fallback. The
- * legacy controller is untouched.
+ * `purge` reproduces the ZF1 CSRF-guarded confirm-then-purge flow natively,
+ * running the mutation through the extracted `ViMbAdmin_Service_Mailbox::purge`
+ * with the same plugin hooks over the PluginHost.
+ *
+ * The remaining form actions (add/edit) stay on ZF1 via the dispatcher
+ * fallback. The legacy controller is untouched.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -137,5 +141,79 @@ final class MailboxController extends AbstractController
         );
 
         return new Response($result === null ? 'ko' : 'ok');
+    }
+
+    /**
+     * GET|POST /mailbox/purge/mid/<id>/csrf/<token> — purge a mailbox.
+     *
+     * Faithful port of the ZF1 `purgeAction`: the CSRF token (carried in the URL,
+     * the same one the list's purge link mints) is asserted FIRST on both the
+     * GET confirmation and the POST — an invalid/missing token flashes + bounces
+     * to the list. A missing mailbox (or a domain the admin cannot manage)
+     * redirects to the list. The GET renders the existing `mailbox/purge.phtml`
+     * confirmation byte-for-byte (the mailbox plus its dependent + containing
+     * aliases). The POST (`purge=purge`) runs the mutation through the extracted
+     * `ViMbAdmin_Service_Mailbox::purge` with the plugin pre-remove/pre-flush/
+     * post-flush hooks threaded over the native PluginHost; a pre-remove veto
+     * leaves the mailbox untouched and suppresses the success flash.
+     */
+    public function purgeAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        // _assertCsrf(): the token is in the URL on both the GET and the POST.
+        if (!$this->csrfValid()) {
+            $this->flash('Invalid or missing security token. Please retry from the list page.', FlashMessages::ERROR);
+            return $this->redirect('mailbox/list');
+        }
+
+        $mailbox = ($mid = $this->param('mid'))
+            ? $this->em()->getRepository('\\Entities\\Mailbox')->find((int) $mid)
+            : null;
+
+        // loadMailbox() authorises a non-super admin against the mailbox's domain.
+        if (!$mailbox || (!$admin->isSuper() && !$admin->canManageDomain($mailbox->getDomain()))) {
+            return $this->redirect('mailbox/list');
+        }
+
+        $aliasRepo = $this->em()->getRepository('\\Entities\\Alias');
+
+        if ($this->isPost() && (($this->postData()['purge'] ?? null) === 'purge')) {
+            $deleteFiles = (bool) $this->param('delete_files', false);
+
+            $context = new MailboxContext(
+                $this->em(),
+                $admin,
+                $mailbox->getDomain(),
+                $mailbox,
+                $this->container->options(),
+                new FlashMessages(new MagicPropertyStorage($this->session())),
+            );
+            $host = new PluginHost($context);
+
+            $purged = (new \ViMbAdmin_Service_Mailbox($this->em()))->purge(
+                $mailbox,
+                $admin,
+                $deleteFiles,
+                fn() => $host->notify('mailbox', 'purge', 'preRemove', $context) !== false,
+                fn() => $host->notify('mailbox', 'purge', 'preFlush', $context),
+                fn() => $host->notify('mailbox', 'purge', 'postFlush', $context),
+            );
+
+            if ($purged) {
+                $this->flash('You have successfully purged the mailbox.');
+            }
+
+            return $this->redirect('mailbox/list');
+        }
+
+        return $this->view('mailbox/purge.phtml', [
+            'mailbox'   => $mailbox,
+            'aliases'   => $aliasRepo->loadForMailbox($mailbox, $admin),
+            'inAliases' => $aliasRepo->loadWithMailbox($mailbox, $admin),
+        ]);
     }
 }

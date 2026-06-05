@@ -63,7 +63,7 @@ class OSS_Controller_AuthRequiredAction extends OSS_Controller_Action
     public function __construct(
         Zend_Controller_Request_Abstract  $request,
         Zend_Controller_Response_Abstract $response,
-        array $invokeArgs = null )
+        ?array $invokeArgs = null )
     {
         parent::__construct( $request, $response, $invokeArgs );
     }

@@ -4,6 +4,10 @@ parameters:
         - application
         - library
         - public
+    excludePaths:
+        # Generated Doctrine proxies (built at image time, gitignored). They
+        # mirror the entities; analysing them only re-reports entity findings.
+        - application/Proxies/__CG__*.php
     bootstrapFiles:
         - vendor/autoload.php
     # ZF1-future and the legacy Zend autoloader register classes outside

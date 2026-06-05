@@ -17,6 +17,34 @@ set_include_path(implode(PATH_SEPARATOR, array(
     get_include_path(),
 )));
 
+// ---------------------------------------------------------------------------
+// Phase 2b (docs/ZF1-REMOVAL.md): optional framework-free kernel, opt-in via
+// the VIMBADMIN_NATIVE_KERNEL env flag. DEFAULT (unset / not "1") = the
+// historical ZF1 path below, byte for byte. When enabled, the kernel serves
+// only the routes it has been given (currently just the no-auth health probe);
+// every other URL returns null from handle() and falls through to ZF1, so old
+// and new dispatch run side by side.
+// ---------------------------------------------------------------------------
+if (getenv('VIMBADMIN_NATIVE_KERNEL') === '1') {
+    $kernel = new \ViMbAdmin\Kernel\Http\Kernel(
+        new \ViMbAdmin\Kernel\Router(\ViMbAdmin\Kernel\Http\Kernel::nativeControllers())
+    );
+
+    $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    $response = $kernel->handle(is_string($path) ? $path : '/');
+
+    if ($response !== null) {
+        http_response_code($response->status);
+        header('Content-Type: ' . $response->contentType);
+        foreach ($response->headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
+        echo $response->body;
+        return; // request fully served by the native kernel
+    }
+    // else: not a native route — fall through to the ZF1 front controller.
+}
+
 /** Zend_Application */
 require_once 'Zend/Application.php';
 

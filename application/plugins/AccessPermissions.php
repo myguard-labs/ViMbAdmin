@@ -45,7 +45,7 @@
  * @package ViMbAdmin
  * @subpackage Plugins
  */
-class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_Plugin_Observer
+class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_Plugin_Observer, ViMbAdmin_Plugin_MailboxFormExtension
 {
 
     public function __construct( object $controller )
@@ -77,7 +77,7 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
     public function mailbox_add_addPostvalidate( $controller, $params )
     {
         $subform = $controller->getMailboxForm()->getSubform( 'pluginsf_AccessPermissions' );
-        
+
         if( $subform->getElement( 'plugin_accessPermissions' )->isChecked() )
         {
             $controller->getMailbox()->setAccessRestriction( $subform->getSelectedAccessPermissions() );
@@ -85,9 +85,80 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
         else
             $controller->getMailbox()->setAccessRestriction( 'ALL' );
     }
-    
-    
-    
-  
+
+
+    // -- Native form extension (Phase 4f) ------------------------------------
+    //
+    // The same access-restriction section the Zend hooks above build, expressed
+    // as framework-free native Fields so the native mailbox form can render,
+    // validate and persist it without Zend_Form.
+
+    /**
+     * The configured permission types (e.g. SMTP/IMAP/POP3/SIEVE) as a name=>label
+     * map, or an empty array when the plugin is not configured.
+     */
+    private function _types( array $options ): array
+    {
+        return $options['vimbadmin_plugins']['AccessPermissions']['type'] ?? [];
+    }
+
+    public function nativeMailboxFields( ?\Entities\Mailbox $mailbox, array $options ): array
+    {
+        $types      = $this->_types( $options );
+        $restricted = $mailbox !== null && $mailbox->getAccessRestriction() !== null
+            && $mailbox->getAccessRestriction() !== 'ALL';
+        $selected   = $restricted ? explode( ',', (string) $mailbox->getAccessRestriction() ) : [];
+
+        $fields = [];
+
+        $master = new \ViMbAdmin\Kernel\Form\Field(
+            'plugin_accessPermissions',
+            _( 'Set specific access permissions for this mailbox' ),
+            'checkbox'
+        );
+        $master->setValue( $restricted );
+        $fields[] = $master;
+
+        foreach( $types as $name => $label )
+        {
+            $field = new \ViMbAdmin\Kernel\Form\Field(
+                "plugin_accessPermission_{$name}",
+                _( $label ),
+                'checkbox'
+            );
+            $field->setValue( in_array( (string) $name, $selected, true ) );
+            $fields[] = $field;
+        }
+
+        return $fields;
+    }
+
+    public function nativeMailboxValidate( array $values, array $options ): ?string
+    {
+        if( empty( $values['plugin_accessPermissions'] ) )
+            return null;
+
+        foreach( array_keys( $this->_types( $options ) ) as $name )
+            if( !empty( $values["plugin_accessPermission_{$name}"] ) )
+                return null; // at least one service selected
+
+        return _( 'You must select which services the user can access if you are choosing to apply specific access permissions' );
+    }
+
+    public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options ): void
+    {
+        if( empty( $values['plugin_accessPermissions'] ) )
+        {
+            $mailbox->setAccessRestriction( 'ALL' );
+            return;
+        }
+
+        $selected = [];
+        foreach( array_keys( $this->_types( $options ) ) as $name )
+            if( !empty( $values["plugin_accessPermission_{$name}"] ) )
+                $selected[] = $name;
+
+        $mailbox->setAccessRestriction( $selected === [] ? 'ALL' : implode( ',', $selected ) );
+    }
 }
 

@@ -376,14 +376,37 @@ class ViMbAdmin_Doveadm
     {
         $names = $this->mailboxList( $user );
 
-        // Delete every non-INBOX box first (fatal on error), INBOX last.
+        // Sort DEEPEST-FIRST so children are deleted before their parents.
+        // We delete recursively (-r), so deleting a parent also removes its
+        // children; if the loop then reached an already-removed child it would
+        // get "Mailbox doesn't exist" (doveadm exit 68) and abort the whole
+        // delete (this broke accounts with nested folders like
+        // INBOX.Foo + INBOX.Foo.2020). Deepest-first minimises that, and
+        // _isAlreadyGone() below tolerates it when it still happens.
+        usort( $names, function( $a, $b ) {
+            return substr_count( $b, '.' ) <=> substr_count( $a, '.' );
+        } );
+
+        // Delete every non-INBOX box first, INBOX last (INBOX == maildir root,
+        // can't be deleted as a box but the expunge already emptied the store).
         $inboxLast = [];
         foreach( $names as $name )
         {
             if( strcasecmp( $name, 'INBOX' ) === 0 )
+            {
                 $inboxLast[] = $name;
-            else
+                continue;
+            }
+            try
+            {
                 $this->_mailboxDeleteOne( $user, $name );
+            }
+            catch( ViMbAdmin_Exception $e )
+            {
+                // Already removed by a recursive parent delete -> not an error.
+                if( !self::_isAlreadyGone( $e ) )
+                    throw $e;
+            }
         }
 
         foreach( $inboxLast as $name )
@@ -394,14 +417,30 @@ class ViMbAdmin_Doveadm
             }
             catch( ViMbAdmin_Exception $e )
             {
-                // Expected: INBOX (== maildir root) cannot be deleted as a box,
-                // but the recursive expunge already emptied the store. Swallow
-                // only this case; the mail is gone and the dir is GC'd.
+                // INBOX can't be deleted as a box (exit 65), or it's already
+                // gone (exit 68) — both fine, the mail is already expunged.
                 if( stripos( $e->getMessage(), 'inbox' ) === false
-                    && stripos( $e->getMessage(), 'exit 65' ) === false )
+                    && stripos( $e->getMessage(), 'exit 65' ) === false
+                    && !self::_isAlreadyGone( $e ) )
                     throw $e;
             }
         }
+    }
+
+    /**
+     * Did a mailbox-delete fail only because the box was already removed (by a
+     * recursive parent delete)? doveadm reports "Mailbox doesn't exist" with
+     * exit code 68. That's a no-op success for our purpose (emptying the store).
+     *
+     * @param \Throwable $e
+     * @return bool
+     */
+    private static function _isAlreadyGone( \Throwable $e )
+    {
+        $m = $e->getMessage();
+        return stripos( $m, "doesn't exist" ) !== false
+            || stripos( $m, 'not exist' ) !== false
+            || stripos( $m, 'exit 68' ) !== false;
     }
 
     /**

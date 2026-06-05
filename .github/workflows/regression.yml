@@ -31,6 +31,38 @@ jobs:
         run: bash tests/lint-no-new-zend.sh
 
   # ------------------------------------------------------------------ #
+  # Framework-free service unit tests (Phase 1 of docs/ZF1-REMOVAL.md).#
+  # No DB: the services depend on the minimal ObjectManager port and   #
+  # are exercised against an in-memory fake + plain-PHP entities.      #
+  # ------------------------------------------------------------------ #
+  unit:
+    name: Service unit tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          extensions: ctype, dom, intl, json, mbstring
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist --no-dev
+
+      - name: ViMbAdmin_Service_Domain
+        run: php tests/test-service-domain.php
+
+      - name: ViMbAdmin_Service_Admin
+        run: php tests/test-service-admin.php
+
+  # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #
   # Runs on the two PHP versions that matter: 8.4 (floor) + 8.5 (prod).#

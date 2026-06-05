@@ -88,6 +88,45 @@ For each controller, one at a time:
 After Phase 1 the business logic is framework-free and tested; ZF1 only does HTTP
 plumbing.
 
+> **Progress.** The pattern is established and migrated controllers so far:
+> - `DomainController` → [`library/ViMbAdmin/Service/Domain.php`](../library/ViMbAdmin/Service/Domain.php)
+>   (toggle-active, assign/remove admin, purge).
+> - `AdminController` → [`library/ViMbAdmin/Service/Admin.php`](../library/ViMbAdmin/Service/Admin.php)
+>   (toggle-active, toggle-super, assign/remove domain, purge).
+>
+> Each service depends only on `Doctrine\Persistence\ObjectManager` (the minimal
+> port — persist / remove / flush / getRepository) and throws
+> `ViMbAdmin_Service_Exception` on a business-rule violation. They are unit-tested
+> with no database (`tests/test-service-domain.php`, `tests/test-service-admin.php`)
+> via an in-memory `ObjectManager` fake + plain-PHP `\Entities\*` objects, run by
+> the `unit` job of `.github/workflows/regression.yml`.
+>
+> Conventions for the remaining controllers:
+> - Services are PSR-0 underscore classes (`ViMbAdmin_Service_Foo`) under
+>   `library/ViMbAdmin/Service/`, matching the existing `ViMbAdmin_Mcp_*`
+>   precedent. The backslash PSR-4 rename happens later, in Phase 5.
+> - Depend on the **narrowest** Doctrine interface that works (`ObjectManager`),
+>   not the full `EntityManagerInterface`, so the unit test needs no DB.
+> - The service owns its full side effect, including writing its own
+>   `\Entities\Log` rows and a single `flush()`; the controller keeps only the
+>   HTTP glue (param/entity resolution, `authorise()`, plugin `notify()` hooks,
+>   `addMessage()`, `redirect()`).
+> - Form handling (`Zend_Form`) stays in the controller for now — it is Phase 4.
+>
+> **Notify-interleaved actions (Alias, Mailbox) need a no-flush variant.** Unlike
+> Domain/Admin, several `AliasController` / `MailboxController` actions fire plugin
+> `notify()` hooks *between* the mutation and the flush — e.g. toggle-active does
+> `setActive → log → notify('…preflush', ['active'=>NEW state]) → flush →
+> notify('…postflush')`. A service that owns its flush cannot preserve this: the
+> `preflush` plugin must observe the post-mutation state and run immediately
+> before the flush. So for these controllers the service method does the pure
+> entity work (mutate + persist its Log row) and **returns without flushing**; the
+> controller keeps the `notify()` ordering and the single `flush()`. Likewise
+> `delete` actions gate the removal behind `notify('preRemove') !== false`, so the
+> gate stays controller-side and the service exposes only the removal/decrement/log
+> body. These are lower-value, higher-risk than Domain/Admin and are best done
+> after Phase 4 thins the form coupling — left intentionally for later.
+
 ### Phase 2 — build the framework-free kernel alongside ZF1
 1. Add the libraries above via Composer.
 2. Write four small kernel pieces (roughly 250 lines total) under `src/Kernel/`:

@@ -58,6 +58,17 @@ class AuthController extends ViMbAdmin_Controller_Action
         $this->view->demoAccount  = ViMbAdmin_Demo::account( $this->_options );
         $this->view->demoPassword = ViMbAdmin_Demo::password( $this->_options );
 
+        // In demo mode, INVITE search engines to index the login page (the
+        // public face of the demo). A normal ViMbAdmin deploy is a private
+        // admin panel and should NOT be indexed, so this only happens when the
+        // demo lock is active. The view also emits a <meta name="robots"> for
+        // crawlers that read HTML rather than the header.
+        if( ViMbAdmin_Demo::enabled( $this->_options ) )
+        {
+            $this->view->demoIndexable = true;
+            $this->getResponse()->setHeader( 'X-Robots-Tag', 'index, follow', true );
+        }
+
         // Brute-force gate: refuse locked-out sources, then count this POST as
         // a pending attempt. A fully-successful login clears the counter (in
         // _postLoginChecks / totpAction); anything else leaves it standing, so

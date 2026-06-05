@@ -7,10 +7,12 @@ namespace ViMbAdmin\Kernel\Http;
 use ViMbAdmin\Kernel\Controller\AdditionalInfoController;
 use ViMbAdmin\Kernel\Controller\AdminController;
 use ViMbAdmin\Kernel\Controller\AliasController;
+use ViMbAdmin\Kernel\Controller\ArchiveController;
 use ViMbAdmin\Kernel\Controller\DomainController;
 use ViMbAdmin\Kernel\Controller\IndexController;
 use ViMbAdmin\Kernel\Controller\LogController;
 use ViMbAdmin\Kernel\Controller\MailboxController;
+use ViMbAdmin\Kernel\Controller\QueueController;
 use ViMbAdmin\Kernel\Mvc\Dispatcher;
 use ViMbAdmin\Kernel\Router;
 use ViMbAdmin\Kernel\RouteMatch;
@@ -59,6 +61,8 @@ final class Kernel
         'domain'         => DomainController::class,
         'alias'          => AliasController::class,
         'mailbox'        => MailboxController::class,
+        'archive'        => ArchiveController::class,
+        'queue'          => QueueController::class,
     ];
 
     /**

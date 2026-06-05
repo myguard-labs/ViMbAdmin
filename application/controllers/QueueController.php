@@ -568,6 +568,7 @@ class QueueController extends ViMbAdmin_Controller_Action
                 {
                     $task->appendLog( 'autoprune.days=0 — instant delete, no backup' );
                     $doveadm->mailboxDelete( $user );
+                    $this->_removeMaildirHome( $task, $doveadm, $user );
                     $task->appendLog( 'removing ViMbAdmin mailbox row' );
                     $this->_removeMailboxRow( $user );
                     $this->_logAudit( $task, \Entities\Log::ACTION_MAILBOX_PURGE,
@@ -585,6 +586,7 @@ class QueueController extends ViMbAdmin_Controller_Action
                 $this->_recordArchive( $task, $dest, true );
                 $task->appendLog( 'mailbox delete (empty store)' );
                 $doveadm->mailboxDelete( $user );
+                $this->_removeMaildirHome( $task, $doveadm, $user );
                 $task->appendLog( 'removing ViMbAdmin mailbox row' );
                 $this->_removeMailboxRow( $user );
                 $this->_logAudit( $task, \Entities\Log::ACTION_MAILBOX_PURGE,
@@ -680,6 +682,35 @@ class QueueController extends ViMbAdmin_Controller_Action
      * @param ViMbAdmin_Doveadm $doveadm
      * @return void
      */
+    /**
+     * After a DELETE has emptied the store, remove the now-empty maildir HOME
+     * dir too (cur/new/tmp + the dovecot index/cache skeleton). `mailbox
+     * delete` only expunges messages; it leaves the directory behind, which
+     * would otherwise show up as an "unmanaged maildir" in the orphan scan.
+     * Best-effort: a failure here is non-fatal (the account is already gone).
+     *
+     * @param \Entities\MailboxTask $task
+     * @param ViMbAdmin_Doveadm $doveadm
+     * @param string $user
+     * @return void
+     */
+    private function _removeMaildirHome( \Entities\MailboxTask $task, $doveadm, $user )
+    {
+        $root = isset( $this->_options['doveadm']['maildir_root'] )
+            ? rtrim( (string) $this->_options['doveadm']['maildir_root'], '/' )
+            : '/opt/myguard/dovecot/maildir';
+        $home = $root . '/' . $user;
+        try
+        {
+            $task->appendLog( 'remove empty maildir home ' . $home );
+            $doveadm->fsDelete( $home );
+        }
+        catch( \Throwable $e )
+        {
+            $task->appendLog( 'remove maildir home warning: ' . $e->getMessage() );
+        }
+    }
+
     private function _backupOrphan( \Entities\MailboxTask $task, $doveadm )
     {
         $em   = $this->getD2EM();

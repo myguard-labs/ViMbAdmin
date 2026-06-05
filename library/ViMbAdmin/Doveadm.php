@@ -292,6 +292,47 @@ class ViMbAdmin_Doveadm
     }
 
     /**
+     * Does a maildir actually CONTAIN mail (not just the empty cur/new/tmp +
+     * index skeleton a DELETE leaves behind)? True if cur/ or new/ has any
+     * file, or there is at least one IMAP sub-folder (.Foldername). REST-only,
+     * cheap (a couple of fs iter calls). Used to keep emptied maildirs out of
+     * the orphan scan.
+     *
+     * @param string $maildir  the maildir root path (no trailing slash needed)
+     * @param string $filter
+     * @return bool
+     */
+    public function maildirHasMail( $maildir, $filter = 'posix' )
+    {
+        if( preg_match( '#^[a-z0-9]+:(/.*)$#i', $maildir, $m ) )
+            $maildir = $m[1];
+        $maildir = rtrim( $maildir, '/' );
+
+        // Files directly in cur/ or new/.
+        foreach( [ 'cur', 'new' ] as $box )
+        {
+            $files = $this->run( 'fsIter', [ 'filterName' => $filter, 'path' => $maildir . '/' . $box . '/' ] );
+            if( is_array( $files ) && count( $files ) > 0 )
+                return true;
+        }
+
+        // Any IMAP sub-folder (maildir++ uses .Folder dirs) with content.
+        foreach( $this->fsListDirs( $maildir ) as $d )
+        {
+            if( strlen( $d ) > 0 && $d[0] === '.' )    // .INBOX.Foo / .Sent / ...
+            {
+                foreach( [ 'cur', 'new' ] as $box )
+                {
+                    $files = $this->run( 'fsIter', [ 'filterName' => $filter, 'path' => $maildir . '/' . $d . '/' . $box . '/' ] );
+                    if( is_array( $files ) && count( $files ) > 0 )
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * List the immediate subdirectory NAMES of a path via `fs iter-dirs`
      * (REST). Used to enumerate the per-user maildirs under the mail-home root
      * for the orphan scan. `path` must be a STRING (array crashes the worker).

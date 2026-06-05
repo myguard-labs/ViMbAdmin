@@ -536,9 +536,10 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         {
             if( isset( $known[ strtolower( $name ) ] ) )
                 continue;
-            // Looks like a maildir? (has a cur/ subdir). Skip stray dirs.
-            $sub = $doveadm->fsListDirs( $root . '/' . $name );
-            if( in_array( 'cur', $sub, true ) )
+            // Only flag a maildir that actually CONTAINS mail — skip the empty
+            // cur/new/tmp + index skeleton a DELETE leaves behind (that's not an
+            // orphan, just leftover scaffolding). Skip stray non-maildir dirs.
+            if( $doveadm->maildirHasMail( $root . '/' . $name ) )
                 $orphans[] = $name;
         }
         sort( $orphans );

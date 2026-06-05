@@ -6,6 +6,7 @@ namespace ViMbAdmin\Kernel\Http;
 
 use ViMbAdmin\Kernel\Controller\AdditionalInfoController;
 use ViMbAdmin\Kernel\Controller\AdminController;
+use ViMbAdmin\Kernel\Controller\DomainController;
 use ViMbAdmin\Kernel\Controller\IndexController;
 use ViMbAdmin\Kernel\Controller\LogController;
 use ViMbAdmin\Kernel\Mvc\Dispatcher;
@@ -53,6 +54,7 @@ final class Kernel
         'index'          => IndexController::class,
         'log'            => LogController::class,
         'admin'          => AdminController::class,
+        'domain'         => DomainController::class,
     ];
 
     /**

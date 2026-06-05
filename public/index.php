@@ -58,7 +58,31 @@ if (getenv('VIMBADMIN_NATIVE_KERNEL') === '1') {
         'storage'
     );
 
-    $container  = new \ViMbAdmin\Kernel\Container( $bootstrap, $auth );
+    // The ZF1 base controller registers these in Zend_Registry on construction
+    // (OSS_Controller_Action), and view helpers such as genUrl read them
+    // (Zend_Registry::get('options')). A native render never constructs a ZF1
+    // controller, so register them here once before dispatch — same keys, same
+    // values — or the chrome templates fatal with "No entry registered for
+    // key 'options'".
+    $options = $bootstrap->getOptions();
+    Zend_Registry::set( 'options', $options );
+    Zend_Registry::set( 'bootstrap', $bootstrap );
+
+    // Pre-compute the chrome view vars a native page render needs that depend on
+    // the ZF1 front controller (here: the skin stylesheet URL — mirrors
+    // ViMbAdmin_Controller_Action::_skinCssUrl()). Done in this ZF1 zone and
+    // injected so AbstractController::view() stays framework-free.
+    $skin    = isset( $options['resources']['smarty']['skin'] )
+        ? trim( (string) $options['resources']['smarty']['skin'] ) : '';
+    $skinCss = '';
+    if ( $skin !== '' && preg_match( '/^[A-Za-z0-9_-]+$/', $skin ) ) {
+        $rel = 'css/_skins/' . $skin . '/skin.css';
+        if ( is_readable( APPLICATION_PATH . '/../public/' . $rel ) ) {
+            $skinCss = rtrim( (string) Zend_Controller_Front::getInstance()->getBaseUrl(), '/' ) . '/' . $rel;
+        }
+    }
+
+    $container  = new \ViMbAdmin\Kernel\Container( $bootstrap, $auth, [ 'skinCss' => $skinCss ] );
     $dispatcher = new \ViMbAdmin\Kernel\Mvc\Dispatcher( $container, \ViMbAdmin\Kernel\Http\Kernel::NATIVE_CONTROLLERS );
     $kernel     = new \ViMbAdmin\Kernel\Http\Kernel(
         new \ViMbAdmin\Kernel\Router( \ViMbAdmin\Kernel\Http\Kernel::nativeControllers() ),

@@ -82,4 +82,44 @@ abstract class AbstractController
             'application/json; charset=utf-8',
         );
     }
+
+    /**
+     * Render a Smarty page template into an HTML {@see Response} (the native
+     * equivalent of ZF1's viewRenderer auto-rendering `{controller}/{action}`).
+     *
+     * Reuses the SAME `smarty` view resource the ZF1 controllers render through,
+     * so the page templates (and the `header.phtml` / `footer.phtml` chrome they
+     * `{tmplinclude}`) resolve and render identically — `{genUrl}` and
+     * `{OSS_Message}` keep working because they read the front-controller base
+     * URL and the session, both live after the shared bootstrap.
+     *
+     * It seeds exactly the chrome variables those templates consume, mirroring
+     * the ZF1 `OSS_Controller_Action_Trait_Smarty` setup plus the ViMbAdmin base
+     * controller: `controller`/`action` (nav highlighting), `hasIdentity`/`user`
+     * (auth-gated menu + version string), `options` (footer/asset flags), and the
+     * pre-computed `skinCss` (skin stylesheet URL). Per-action variables are
+     * passed in `$vars`.
+     *
+     * @param string              $script template path, e.g. "index/about.phtml"
+     * @param array<string,mixed> $vars   per-action view variables
+     */
+    protected function view(string $script, array $vars = [], int $status = 200): Response
+    {
+        $view  = $this->container->getResource('smarty');
+        $admin = $this->admin();
+
+        // Chrome variables header.phtml / footer.phtml expect.
+        $view->controller  = $this->route->controller;
+        $view->action      = $this->route->action;
+        $view->hasIdentity = $admin !== null;
+        $view->user        = $admin;
+        $view->options     = $this->container->options();
+        $view->skinCss     = $this->container->chrome('skinCss') ?? '';
+
+        foreach ($vars as $key => $value) {
+            $view->{$key} = $value;
+        }
+
+        return new Response((string) $view->render($script), $status);
+    }
 }

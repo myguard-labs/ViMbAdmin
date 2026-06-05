@@ -700,6 +700,26 @@ class QueueController extends ViMbAdmin_Controller_Action
             ? rtrim( (string) $this->_options['doveadm']['maildir_root'], '/' )
             : '/opt/myguard/dovecot/maildir';
         $home = $root . '/' . $user;
+
+        // SAFETY: only remove the home if it is genuinely empty (skeleton). If
+        // mail is still present the preceding backup/empty step must have
+        // FAILED — never delete mail we didn't safely back up. Keep the dir so
+        // the failure is visible (it'll resurface in the orphan scan).
+        try
+        {
+            if( $doveadm->maildirHasMail( $home ) )
+            {
+                $task->appendLog( 'KEEP maildir home — still contains mail (empty/backup step failed?): ' . $home );
+                return;
+            }
+        }
+        catch( \Throwable $e )
+        {
+            // can't verify emptiness -> be conservative, keep the dir.
+            $task->appendLog( 'KEEP maildir home — could not verify it is empty: ' . $e->getMessage() );
+            return;
+        }
+
         try
         {
             $task->appendLog( 'remove empty maildir home ' . $home );
@@ -772,23 +792,42 @@ class QueueController extends ViMbAdmin_Controller_Action
             // 2) make the userdb see it.
             $doveadm->authCacheFlush();
 
-            // 3) repair the maildir (force-resync rebuilds indexes; index; purge).
-            $task->appendLog( 'backup-orphan: repair (force-resync/index/purge)' );
+            // 3) repair the maildir (force-resync rebuilds indexes; index; purge)
+            //    so the mail count below is accurate.
+            $task->appendLog( 'orphan: repair (force-resync/index/purge)' );
             try { $doveadm->forceResync( $user ); $doveadm->index( $user ); $doveadm->purge( $user ); }
-            catch( \Throwable $e ) { $task->appendLog( 'backup-orphan: repair warning: ' . $e->getMessage() ); }
+            catch( \Throwable $e ) { $task->appendLog( 'orphan: repair warning: ' . $e->getMessage() ); }
 
-            // 4) back it up (zstd via mail_compress).
-            $dest = $this->_backupDest( $task );
-            $task->appendLog( "backup-orphan: backup -> {$dest}" );
-            $doveadm->backup( $user, $dest );
+            // 4) decide: real mail -> back up + delete; empty skeleton -> delete.
+            if( $doveadm->maildirHasMail( $home ) )
+            {
+                $dest = $this->_backupDest( $task );
+                $task->appendLog( "orphan: has mail — backup -> {$dest}" );
+                $doveadm->backup( $user, $dest );
 
-            // 5) record an archive row (autoprune OFF — rescue, keep it). This
-            //    enqueues a MEASURE_SIZE follow-up like a normal archive.
-            $task->appendLog( 'backup-orphan: recording archive row' );
-            $this->_recordArchive( $task, $dest, false );
+                // record an archive row (autoprune OFF — rescue, keep it);
+                // enqueues a MEASURE_SIZE follow-up like a normal archive.
+                $task->appendLog( 'orphan: recording archive row' );
+                $this->_recordArchive( $task, $dest, false );
 
-            $this->_logAudit( $task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
-                "backed up ORPHAN maildir for {$user} (no mailbox row)" );
+                // mail is safely in the archive now — remove the source maildir.
+                $task->appendLog( 'orphan: empty store + remove maildir home' );
+                try { $doveadm->mailboxDelete( $user ); } catch( \Throwable $e ) { $task->appendLog( 'orphan: mailboxDelete warning: ' . $e->getMessage() ); }
+                $this->_removeMaildirHome( $task, $doveadm, $user );
+
+                $this->_logAudit( $task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                    "imported ORPHAN maildir for {$user}: backed up + removed (had mail)" );
+            }
+            else
+            {
+                // Empty cur/new/tmp skeleton (e.g. left by an old DELETE). No
+                // backup needed — just remove the leftover directory.
+                $task->appendLog( 'orphan: empty skeleton — removing maildir home (no backup)' );
+                $this->_removeMaildirHome( $task, $doveadm, $user );
+
+                $this->_logAudit( $task, \Entities\Log::ACTION_MAILBOX_PURGE,
+                    "removed empty ORPHAN maildir skeleton for {$user} (no mail)" );
+            }
         }
         finally
         {

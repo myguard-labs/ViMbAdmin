@@ -536,10 +536,13 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         {
             if( isset( $known[ strtolower( $name ) ] ) )
                 continue;
-            // Only flag a maildir that actually CONTAINS mail — skip the empty
-            // cur/new/tmp + index skeleton a DELETE leaves behind (that's not an
-            // orphan, just leftover scaffolding). Skip stray non-maildir dirs.
-            if( $doveadm->maildirHasMail( $root . '/' . $name ) )
+            // Every on-disk maildir with no mailbox row is an orphan — INCLUDING
+            // empty cur/new/tmp skeletons a DELETE left behind. The import task
+            // decides per dir: if it still holds mail -> back it up then delete;
+            // if it's an empty skeleton -> just delete it. Skip stray dirs that
+            // aren't maildirs at all (no cur/).
+            $sub = $doveadm->fsListDirs( $root . '/' . $name );
+            if( in_array( 'cur', $sub, true ) )
                 $orphans[] = $name;
         }
         sort( $orphans );
@@ -593,8 +596,21 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
             $this->redirect( 'maintenance/index' );
         }
 
-        if( (int) $this->getParam( 'confirm', 0 ) !== 1 )
+        // Single maildir: ?username=... imports just that one (must be a real
+        // orphan from the fresh scan — no confirm needed for one).
+        $one = (string) $this->getParam( 'username', '' );
+        if( $one !== '' )
         {
+            if( !in_array( $one, $orphans, true ) )
+            {
+                $this->addMessage( _( 'That maildir is no longer an unmanaged orphan.' ), OSS_Message::INFO );
+                $this->redirect( 'maintenance/index' );
+            }
+            $orphans = [ $one ];
+        }
+        elseif( (int) $this->getParam( 'confirm', 0 ) !== 1 )
+        {
+            // "import all" is two-step.
             $this->view->orphans            = $orphans;
             $this->view->confirmBackupOrphans = true;
             $this->indexAction();
@@ -629,9 +645,9 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         $em->flush();
 
         $this->log( \Entities\Log::ACTION_MAINTENANCE,
-            "{$this->getAdmin()->getFormattedName()} queued orphan-maildir backup for {$queued} unmanaged maildir(s)" );
+            "{$this->getAdmin()->getFormattedName()} queued orphan-maildir import for {$queued} unmanaged maildir(s)" );
         $this->addMessage(
-            sprintf( _( 'Queued backup of %d unmanaged maildir(s). The runner will process them in the background.' ), $queued ),
+            sprintf( _( 'Queued import of %d unmanaged maildir(s). The runner backs up any with mail and removes empty ones, in the background.' ), $queued ),
             OSS_Message::SUCCESS );
         $this->redirect( 'queue/index' );
     }

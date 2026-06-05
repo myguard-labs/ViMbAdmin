@@ -292,31 +292,49 @@
             <p>
                 Scan the mail store for <strong>orphan maildirs</strong> — mail
                 on disk that has <strong>no ViMbAdmin mailbox</strong> (e.g. an
-                account deleted in the panel but its mail left behind). You can
-                then back them up: a background task briefly creates a temporary
-                user so Dovecot can read the maildir, repairs + backs it up to
-                the archive (kept, not auto-pruned), then removes the temp user.
+                account deleted in the panel but its mail left behind).
+                Importing one runs a background task: it briefly creates a
+                temporary user so Dovecot can read the maildir, repairs it, then
+                — if it still holds mail — backs it up to the archive (kept, not
+                auto-pruned) and removes the source; if it is just an empty
+                leftover skeleton, it is removed without a backup.
             </p>
 
             {if isset( $orphans )}
                 {if $orphans|@count > 0}
                     <div class="alert alert-warning">
-                        Found <strong>{$orphans|@count}</strong> unmanaged maildir(s):
+                        Found <strong>{$orphans|@count}</strong> unmanaged maildir(s).
                     </div>
-                    <pre style="max-height:14em;overflow:auto;">{foreach from=$orphans item=o}{$o|escape}
-{/foreach}</pre>
+                    <table class="table table-striped table-bordered">
+                        <thead><tr><th>Maildir</th><th width="120"></th></tr></thead>
+                        <tbody>
+                        {foreach from=$orphans item=o}
+                            <tr>
+                                <td>{$o|escape}</td>
+                                <td>
+                                    <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}"
+                                          onsubmit="return confirm('Import {$o|escape}? Mail is backed up then the source maildir is removed (empty leftovers are just removed).');">
+                                        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                                        <input type="hidden" name="username" value="{$o|escape}" />
+                                        <button class="btn btn-mini btn-primary" type="submit">Import</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        {/foreach}
+                        </tbody>
+                    </table>
 
                     {if isset( $confirmBackupOrphans ) and $confirmBackupOrphans}
-                        <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}">
+                        <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}" style="display:inline;">
                             <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
                             <input type="hidden" name="confirm" value="1" />
-                            <button class="btn btn-danger" type="submit">Queue backup of {$orphans|@count} maildir(s)</button>
+                            <button class="btn btn-danger" type="submit">Queue import of all {$orphans|@count} maildir(s)</button>
                             <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
                         </form>
                     {else}
                         <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}" style="display:inline;">
                             <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
-                            <button class="btn btn-primary" type="submit">Back up these {$orphans|@count} maildir(s)</button>
+                            <button class="btn btn-primary" type="submit">Import all {$orphans|@count}</button>
                         </form>
                         <form method="post" action="{genUrl controller='maintenance' action='scan-orphans'}" style="display:inline;">
                             <input type="hidden" name="csrf" value="{$csrfToken|escape}" />

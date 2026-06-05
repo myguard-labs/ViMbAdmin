@@ -57,6 +57,26 @@ abstract class AbstractController
     }
 
     /**
+     * Whether the request is a POST (form submission). The kernel is the HTTP
+     * boundary, so reading the superglobal here is acceptable; a Request value
+     * object can replace it later.
+     */
+    protected function isPost(): bool
+    {
+        return ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
+    }
+
+    /**
+     * The submitted form body ($_POST), for binding a {@see \ViMbAdmin\Kernel\Form\Form}.
+     *
+     * @return array<string,mixed>
+     */
+    protected function postData(): array
+    {
+        return $_POST;
+    }
+
+    /**
      * The Doctrine entity manager (the ZF1 `getD2EM()` equivalent).
      */
     protected function em(): object

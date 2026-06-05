@@ -25,11 +25,28 @@ spl_autoload_register(static function (string $class): void {
 
 require __DIR__ . '/../library/ViMbAdmin/Service/Mailbox.php';
 
+/**
+ * Records purgeMailbox() calls so the service's orchestration can be asserted
+ * without the real (DB-backed) repository.
+ */
+final class FakeMailboxRepo
+{
+    /** @var array<int,array{mailbox:object,admin:?object,removeMailbox:bool}> */
+    public array $purges = [];
+
+    public function purgeMailbox($mailbox, $admin, $removeMailbox = true)
+    {
+        $this->purges[] = ['mailbox' => $mailbox, 'admin' => $admin, 'removeMailbox' => $removeMailbox];
+        return true;
+    }
+}
+
 final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
 {
     /** @var object[] */ public array $persisted = [];
     /** @var object[] */ public array $removed = [];
     public int $flushes = 0;
+    public ?FakeMailboxRepo $mailboxRepo = null;
 
     public function persist(object $object): void { $this->persisted[] = $object; }
     public function remove(object $object): void { $this->removed[] = $object; }
@@ -38,7 +55,12 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     public function clear(): void {}
     public function detach(object $object): void {}
     public function refresh(object $object): void {}
-    public function getRepository(string $className) { throw new \RuntimeException('not used'); }
+    public function getRepository(string $className) {
+        if ($this->mailboxRepo !== null && str_contains($className, 'Mailbox')) {
+            return $this->mailboxRepo;
+        }
+        throw new \RuntimeException('not used');
+    }
     public function getClassMetadata(string $className) { throw new \RuntimeException('not used'); }
     public function getMetadataFactory() { throw new \RuntimeException('not used'); }
     public function initializeObject(object $obj): void {}
@@ -118,6 +140,51 @@ check('veto returns null',                    $vetoed === null);
 check('veto leaves mailbox unchanged',        (bool) $mb3->getActive() === true);
 check('veto does NOT flush',                  $em3->flushes === 0);
 check('veto writes no log',                   $em3->lastLog() === null);
+
+// --- purge: no delete_files (remove the mailbox) ---------------------- //
+$emP = new FakeObjectManager();
+$emP->mailboxRepo = new FakeMailboxRepo();
+$mbP = $mkMailbox(true);
+$orderP = [];
+$rp = (new ViMbAdmin_Service_Mailbox($emP))->purge(
+    $mbP, $actor, false,
+    function () use (&$orderP): bool { $orderP[] = 'preRemove'; return true; },
+    function () use (&$orderP): void { $orderP[] = 'preFlush'; },
+    function () use (&$orderP): void { $orderP[] = 'postFlush'; },
+);
+check('purge returns true',                   $rp === true);
+check('purge called purgeMailbox',            count($emP->mailboxRepo->purges) === 1);
+check('purge removeMailbox=true (!delete)',   $emP->mailboxRepo->purges[0]['removeMailbox'] === true);
+check('purge removed the mailbox entity',     in_array($mbP, $emP->removed, true));
+check('purge did NOT mark delete-pending',    (bool) $mbP->getDeletePending() === false);
+check('purge logged ACTION_MAILBOX_PURGE',    $emP->lastLog()?->getAction() === \Entities\Log::ACTION_MAILBOX_PURGE);
+check('purge flushed once',                   $emP->flushes === 1);
+check('purge hook order',                     $orderP === ['preRemove', 'preFlush', 'postFlush']);
+
+// --- purge: delete_files (mark pending, keep the row) ----------------- //
+$emD = new FakeObjectManager();
+$emD->mailboxRepo = new FakeMailboxRepo();
+$mbD = $mkMailbox(true);
+(new ViMbAdmin_Service_Mailbox($emD))->purge($mbD, $actor, true);
+check('delete_files removeMailbox=false',     $emD->mailboxRepo->purges[0]['removeMailbox'] === false);
+check('delete_files marks delete-pending',    (bool) $mbD->getDeletePending() === true);
+check('delete_files deactivates',             (bool) $mbD->getActive() === false);
+check('delete_files does NOT remove row',     $emD->removed === []);
+check('delete_files flushed once',            $emD->flushes === 1);
+
+// --- purge veto ------------------------------------------------------- //
+$emV = new FakeObjectManager();
+$emV->mailboxRepo = new FakeMailboxRepo();
+$mbV = $mkMailbox(true);
+$rv = (new ViMbAdmin_Service_Mailbox($emV))->purge(
+    $mbV, $actor, false,
+    static fn(): bool => false,
+    static function (): void { throw new \RuntimeException('preFlush must not run on veto'); },
+);
+check('purge veto returns false',             $rv === false);
+check('purge veto did NOT purgeMailbox',      $emV->mailboxRepo->purges === []);
+check('purge veto did NOT flush',             $emV->flushes === 0);
+check('purge veto wrote no log',              $emV->lastLog() === null);
 
 echo "\n";
 if ($failures === 0) {

@@ -163,15 +163,9 @@ class AdminController extends ViMbAdmin_Controller_Action
         if( !$this->getTargetAdmin() || $this->getAdmin()->getId() == $this->getTargetAdmin()->getId() )
             { print "ko"; return; }
 
-        $this->getTargetAdmin()->setActive( !$this->getTargetAdmin()->getActive() );
-        $this->getTargetAdmin()->setModified( new \DateTime() );
+        ( new ViMbAdmin_Service_Admin( $this->getD2EM() ) )
+            ->toggleActive( $this->getTargetAdmin(), $this->getAdmin() );
 
-        $this->log(
-            $this->getTargetAdmin()->getActive() ? \Entities\Log::ACTION_ADMIN_ACTIVATE : \Entities\Log::ACTION_ADMIN_DEACTIVATE,
-            "{$this->getAdmin()->getFormattedName()} " . ( $this->getTargetAdmin()->getActive() ? 'activated' : 'deactivated' ) . " admin {$this->getTargetAdmin()->getFormattedName()}"
-        );
-
-        $this->getD2EM()->flush();
         print 'ok';
     }
 
@@ -184,15 +178,9 @@ class AdminController extends ViMbAdmin_Controller_Action
         if( !$this->getTargetAdmin() || $this->getAdmin()->getId() == $this->getTargetAdmin()->getId() )
             { print "ko"; return; }
 
-        $this->getTargetAdmin()->setSuper( !$this->getTargetAdmin()->getSuper() );
-        $this->getTargetAdmin()->setModified( new \DateTime() );
+        ( new ViMbAdmin_Service_Admin( $this->getD2EM() ) )
+            ->toggleSuper( $this->getTargetAdmin(), $this->getAdmin() );
 
-        $this->log(
-            $this->getTargetAdmin()->getSuper() ? \Entities\Log::ACTION_ADMIN_SUPER : \Entities\Log::ACTION_ADMIN_NORMAL,
-            "{$this->getAdmin()->getFormattedName()} set admin {$this->getTargetAdmin()->getFormattedName()} as " .( $this->getTargetAdmin()->getSuper() ? 'super' : 'normal' )
-        );
-
-        $this->getD2EM()->flush();
         print 'ok';
     }
 
@@ -318,25 +306,8 @@ class AdminController extends ViMbAdmin_Controller_Action
            $this->redirect( 'admin/list' );
         }
  
-        foreach( $this->getTargetAdmin()->getPreferences() as $pref )
-            $this->getD2EM()->remove( $pref );
-
-        foreach( $this->getTargetAdmin()->getLogs() as $log )
-            $this->getD2EM()->remove( $log );
-
-        foreach( $this->getTargetAdmin()->getRememberMes() as $rememberMe )
-            $this->getD2EM()->remove( $rememberMe );
-
-        foreach( $this->getTargetAdmin()->getDomains() as $domain )
-            $domain->removeAdmin( $this->getTargetAdmin() );
-
-        $this->getD2EM()->remove( $this->getTargetAdmin() );
-        
-        $this->log(
-            \Entities\Log::ACTION_ADMIN_PURGE,
-            "{$this->getAdmin()->getFormattedName()} purged admin {$this->getTargetAdmin()->getFormattedName()}"
-        );
-        $this->getD2EM()->flush();
+        ( new ViMbAdmin_Service_Admin( $this->getD2EM() ) )
+            ->purge( $this->getTargetAdmin(), $this->getAdmin() );
 
         $this->addMessage( 'You have successfully purged the admin record.', OSS_Message::SUCCESS );
         $this->redirect( 'admin/list' );
@@ -378,17 +349,15 @@ class AdminController extends ViMbAdmin_Controller_Action
         {
             $this->_domain = $this->loadDomain( $form->getValue( 'domain' ) );
 
-            if( $this->getTargetAdmin()->getDomains()->contains( $this->getDomain() ) )
-                $this->addMessage( _( 'This domain is already assigned to the admin.' ), OSS_Message::ERROR );
-            else
+            try
             {
-                $this->getTargetAdmin()->addDomain( $this->getDomain() );
-                $this->log(
-                    \Entities\Log::ACTION_ADMIN_TO_DOMAIN_ADD,
-                    "{$this->getAdmin()->getFormattedName()} added admin {$this->getTargetAdmin()->getFormattedName()} to domain {$this->getDomain()->getDomain()}"
-                );
-                $this->getD2EM()->flush();
+                ( new ViMbAdmin_Service_Admin( $this->getD2EM() ) )
+                    ->assignDomain( $this->getTargetAdmin(), $this->getDomain(), $this->getAdmin() );
                 $this->addMessage(  'You have successfully assigned a domain to the admin.', OSS_Message::SUCCESS );
+            }
+            catch( ViMbAdmin_Service_Exception $e )
+            {
+                $this->addMessage( _( $e->getMessage() ), OSS_Message::ERROR );
             }
 
             $this->redirect( 'admin/domains/aid/' . $this->getTargetAdmin()->getId() );
@@ -416,13 +385,9 @@ class AdminController extends ViMbAdmin_Controller_Action
             $this->redirect( 'admin/domains/aid/' . $this->getTargetAdmin()->getId() );
         }
 
-        $this->getTargetAdmin()->removeDomain( $this->getDomain() );        
-        $this->log(
-            \Entities\Log::ACTION_ADMIN_TO_DOMAIN_REMOVE,
-            "{$this->getAdmin()->getFormattedName()} removed admin {$this->getTargetAdmin()->getFormattedName()} from domain {$this->getDomain()->getDomain()}"
-        );
+        ( new ViMbAdmin_Service_Admin( $this->getD2EM() ) )
+            ->removeDomain( $this->getTargetAdmin(), $this->getDomain(), $this->getAdmin() );
 
-        $this->getD2EM()->flush();
         $this->addMessage( 'You have successfully removed the admin from domain '. $this->getDomain()->getDomain(), OSS_Message::SUCCESS );
         $this->redirect( 'admin/domains/aid/' . $this->getTargetAdmin()->getId() );
     }

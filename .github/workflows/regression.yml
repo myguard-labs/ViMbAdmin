@@ -59,6 +59,9 @@ jobs:
       - name: ViMbAdmin_Service_Domain
         run: php tests/test-service-domain.php
 
+      - name: ViMbAdmin_Service_Admin
+        run: php tests/test-service-admin.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

@@ -6,6 +6,7 @@ namespace ViMbAdmin\Kernel\Http;
 
 use ViMbAdmin\Kernel\Controller\AdditionalInfoController;
 use ViMbAdmin\Kernel\Controller\IndexController;
+use ViMbAdmin\Kernel\Controller\LogController;
 use ViMbAdmin\Kernel\Mvc\Dispatcher;
 use ViMbAdmin\Kernel\Router;
 use ViMbAdmin\Kernel\RouteMatch;
@@ -49,6 +50,7 @@ final class Kernel
     public const NATIVE_CONTROLLERS = [
         'additionalinfo' => AdditionalInfoController::class,
         'index'          => IndexController::class,
+        'log'            => LogController::class,
     ];
 
     /**

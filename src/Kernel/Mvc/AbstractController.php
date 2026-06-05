@@ -71,6 +71,15 @@ abstract class AbstractController
     }
 
     /**
+     * The application session namespace (the ZF1 `getSessionNamespace()`
+     * equivalent), for per-session UI state read/written via magic properties.
+     */
+    protected function session(): object
+    {
+        return $this->container->session();
+    }
+
+    /**
      * Build a JSON response (the native equivalent of the ZF1 idiom
      * `removeHelper('viewRenderer'); echo json_encode(...)`).
      */
@@ -81,6 +90,18 @@ abstract class AbstractController
             $status,
             'application/json; charset=utf-8',
         );
+    }
+
+    /**
+     * A 302 redirect to an application path (the native equivalent of the ZF1
+     * `_redirect()` / `redirectAndEnsureDie()`). The path is taken relative to
+     * the site root, matching ZF1's empty base URL in the container deployment.
+     */
+    protected function redirect(string $path): Response
+    {
+        return new Response('', 302, 'text/html; charset=utf-8', [
+            'Location' => '/' . ltrim($path, '/'),
+        ]);
     }
 
     /**
@@ -115,6 +136,7 @@ abstract class AbstractController
         $view->user        = $admin;
         $view->options     = $this->container->options();
         $view->skinCss     = $this->container->chrome('skinCss') ?? '';
+        $view->session     = $this->container->session();
 
         foreach ($vars as $key => $value) {
             $view->{$key} = $value;

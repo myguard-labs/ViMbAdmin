@@ -541,6 +541,10 @@ class QueueController extends ViMbAdmin_Controller_Action
                     "autopruned expired archive backup for {$user}" );
                 break;
 
+            case \Entities\MailboxTask::TYPE_BACKUP_ORPHAN:
+                $this->_backupOrphan( $task, $doveadm );
+                break;
+
             case \Entities\MailboxTask::TYPE_ARCHIVE:
                 // backup first; only empty the store if the backup succeeded.
                 // An explicit archive is kept indefinitely (autoprune off) — the
@@ -660,6 +664,111 @@ class QueueController extends ViMbAdmin_Controller_Action
         catch( \Throwable $e )
         {
             $this->getLogger()->err( 'QueueController::_logAudit: ' . $e->getMessage() );
+        }
+    }
+
+    /**
+     * Back up an ORPHAN maildir — mail on disk with no ViMbAdmin mailbox row.
+     * doveadm can only back up a user it can resolve (userdb = the mailbox
+     * table), so we briefly insert a TEMP, INACTIVE mailbox row pointing at the
+     * on-disk maildir, flush the auth cache, repair + back the mail up, record
+     * an archive row (autoprune OFF — this is a rescue, keep it), then ALWAYS
+     * remove the temp row (finally). The temp row is active=0 with a junk
+     * password so it can't be logged into during the brief window.
+     *
+     * @param \Entities\MailboxTask $task
+     * @param ViMbAdmin_Doveadm $doveadm
+     * @return void
+     */
+    private function _backupOrphan( \Entities\MailboxTask $task, $doveadm )
+    {
+        $em   = $this->getD2EM();
+        $user = $task->getUsername();
+        $conn = $em->getConnection();
+
+        // Re-check it's STILL an orphan (a real account may have been created
+        // since the scan).
+        $exists = (int) $em->createQuery(
+            'SELECT COUNT(m.id) FROM \Entities\Mailbox m WHERE m.username = :u' )
+            ->setParameter( 'u', $user )->getSingleScalarResult();
+        if( $exists > 0 )
+        {
+            $task->appendLog( 'backup-orphan: a real mailbox now exists — skipping' );
+            return;
+        }
+
+        // Resolve the domain (must exist for the FK).
+        $domainPart = strstr( $user, '@' ) ? substr( strrchr( $user, '@' ), 1 ) : null;
+        $domain = $domainPart
+            ? $em->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $domainPart ] )
+            : null;
+        if( !$domain )
+        {
+            $task->appendLog( "backup-orphan: domain '{$domainPart}' not in ViMbAdmin — cannot create temp user" );
+            return;
+        }
+
+        $root      = isset( $this->_options['doveadm']['maildir_root'] )
+            ? rtrim( (string) $this->_options['doveadm']['maildir_root'], '/' )
+            : '/opt/myguard/dovecot/maildir';
+        $home      = $root . '/' . $user;
+        $maildir   = 'maildir:' . $home;
+        $localPart = strstr( $user, '@', true ) ?: $user;
+        $tempId    = null;
+
+        try
+        {
+            // 1) temp inactive userdb row (junk password, active=0).
+            $conn->insert( 'mailbox', [
+                'username'   => $user,
+                'password'   => '{PLAIN}!orphan-backup-no-login!',
+                'local_part' => $localPart,
+                'quota'      => 0,
+                'active'     => 0,
+                'created'    => ( new \DateTime() )->format( 'Y-m-d H:i:s' ),
+                'homedir'    => $home,
+                'maildir'    => $maildir,
+                'uid'        => 5000,
+                'gid'        => 5000,
+                'Domain_id'  => $domain->getId(),
+            ] );
+            $tempId = (int) $conn->lastInsertId();
+            $task->appendLog( "backup-orphan: temp user row #{$tempId} created" );
+
+            // _backupDest + _recordArchive read the task's Domain — set it now.
+            $task->setDomain( $domain );
+
+            // 2) make the userdb see it.
+            $doveadm->authCacheFlush();
+
+            // 3) repair the maildir (force-resync rebuilds indexes; index; purge).
+            $task->appendLog( 'backup-orphan: repair (force-resync/index/purge)' );
+            try { $doveadm->forceResync( $user ); $doveadm->index( $user ); $doveadm->purge( $user ); }
+            catch( \Throwable $e ) { $task->appendLog( 'backup-orphan: repair warning: ' . $e->getMessage() ); }
+
+            // 4) back it up (zstd via mail_compress).
+            $dest = $this->_backupDest( $task );
+            $task->appendLog( "backup-orphan: backup -> {$dest}" );
+            $doveadm->backup( $user, $dest );
+
+            // 5) record an archive row (autoprune OFF — rescue, keep it). This
+            //    enqueues a MEASURE_SIZE follow-up like a normal archive.
+            $task->appendLog( 'backup-orphan: recording archive row' );
+            $this->_recordArchive( $task, $dest, false );
+
+            $this->_logAudit( $task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                "backed up ORPHAN maildir for {$user} (no mailbox row)" );
+        }
+        finally
+        {
+            // 6) ALWAYS remove the temp userdb row.
+            if( $tempId !== null )
+            {
+                try { $conn->delete( 'mailbox', [ 'id' => $tempId ] ); }
+                catch( \Throwable $e ) { $this->getLogger()->err( "backup-orphan temp-row cleanup {$user}: " . $e->getMessage() ); }
+                $task->appendLog( 'backup-orphan: temp user row removed' );
+            }
+            try { $doveadm->authCacheFlush(); } catch( \Throwable $e ) {}
         }
     }
 

@@ -292,6 +292,35 @@ class ViMbAdmin_Doveadm
     }
 
     /**
+     * List the immediate subdirectory NAMES of a path via `fs iter-dirs`
+     * (REST). Used to enumerate the per-user maildirs under the mail-home root
+     * for the orphan scan. `path` must be a STRING (array crashes the worker).
+     *
+     * @param string $path
+     * @param string $filter
+     * @return string[]
+     */
+    public function fsListDirs( $path, $filter = 'posix' )
+    {
+        if( preg_match( '#^[a-z0-9]+:(/.*)$#i', $path, $m ) )
+            $path = $m[1];
+        $path = rtrim( $path, '/' );
+
+        $rows = $this->run( 'fsIterDirs', [ 'filterName' => $filter, 'path' => $path . '/' ] );
+        $out  = [];
+        if( is_array( $rows ) )
+        {
+            foreach( $rows as $r )
+            {
+                $name = is_array( $r ) ? ( $r['path'] ?? null ) : $r;
+                if( $name !== null && $name !== '' && $name !== '.' && $name !== '..' )
+                    $out[] = (string) $name;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Recursive ON-DISK byte size of a directory, entirely via the doveadm
      * REST API. The maildir is zstd-compressed by Dovecot's mail_compress, so
      * this is the COMPRESSED footprint. Used by the low-priority MEASURE_SIZE

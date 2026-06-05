@@ -284,5 +284,57 @@
     </div>
 </div>
 
+{* ============================ Unmanaged (orphan) maildirs ============================ *}
+<div class="row-fluid">
+    <div class="span12">
+        <div class="well">
+            <h3>Unmanaged maildirs</h3>
+            <p>
+                Scan the mail store for <strong>orphan maildirs</strong> — mail
+                on disk that has <strong>no ViMbAdmin mailbox</strong> (e.g. an
+                account deleted in the panel but its mail left behind). You can
+                then back them up: a background task briefly creates a temporary
+                user so Dovecot can read the maildir, repairs + backs it up to
+                the archive (kept, not auto-pruned), then removes the temp user.
+            </p>
+
+            {if isset( $orphans )}
+                {if $orphans|@count > 0}
+                    <div class="alert alert-warning">
+                        Found <strong>{$orphans|@count}</strong> unmanaged maildir(s):
+                    </div>
+                    <pre style="max-height:14em;overflow:auto;">{foreach from=$orphans item=o}{$o|escape}
+{/foreach}</pre>
+
+                    {if isset( $confirmBackupOrphans ) and $confirmBackupOrphans}
+                        <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}">
+                            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                            <input type="hidden" name="confirm" value="1" />
+                            <button class="btn btn-danger" type="submit">Queue backup of {$orphans|@count} maildir(s)</button>
+                            <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
+                        </form>
+                    {else}
+                        <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}" style="display:inline;">
+                            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                            <button class="btn btn-primary" type="submit">Back up these {$orphans|@count} maildir(s)</button>
+                        </form>
+                        <form method="post" action="{genUrl controller='maintenance' action='scan-orphans'}" style="display:inline;">
+                            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                            <button class="btn" type="submit">Re-scan</button>
+                        </form>
+                    {/if}
+                {else}
+                    <div class="alert alert-success">No orphan maildirs — every maildir on disk has a mailbox.</div>
+                {/if}
+            {else}
+                <form method="post" action="{genUrl controller='maintenance' action='scan-orphans'}">
+                    <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                    <button class="btn btn-primary" type="submit">Scan for unmanaged maildirs</button>
+                </form>
+            {/if}
+        </div>
+    </div>
+</div>
+
 </div>
 {tmplinclude file="footer.phtml"}

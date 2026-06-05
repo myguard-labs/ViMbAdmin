@@ -43,6 +43,16 @@ class MailboxTask
      */
     const TYPE_PRUNE = "PRUNE";
 
+    /**
+     * Back up ONE ORPHAN maildir — mail on disk with no ViMbAdmin mailbox row
+     * (e.g. an account deleted in the panel but its mail left behind). The
+     * runner briefly inserts a temp (inactive) mailbox row so doveadm can
+     * resolve the user, repairs + backs the maildir up, records an archive row
+     * (autoprune off), then removes the temp row. Enqueued by the Maintenance
+     * "scan for unmanaged maildirs" action; low priority.
+     */
+    const TYPE_BACKUP_ORPHAN = "BACKUP_ORPHAN";
+
     public static $TYPES = [
         self::TYPE_REPAIR       => "Repair / optimize",
         self::TYPE_OPTIMIZE     => "Repair / optimize",

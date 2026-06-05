@@ -492,4 +492,146 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
             echo 'DB version: ' . ( $res['version'] ?? '?' ) . "\n";
         }
     }
+
+    /**
+     * The mail-home root that holds the per-user maildirs (dovecot
+     * `mail_home = <root>/%{user}`). Configurable via
+     * doveadm.maildir_root in application.ini.
+     *
+     * @return string
+     */
+    private function _maildirRoot()
+    {
+        $root = isset( $this->_options['doveadm']['maildir_root'] )
+            ? trim( (string) $this->_options['doveadm']['maildir_root'] ) : '';
+        return $root !== '' ? rtrim( $root, '/' ) : '/opt/myguard/dovecot/maildir';
+    }
+
+    /**
+     * Scan the mail-home root for ORPHAN maildirs: per-user directories on disk
+     * that have NO ViMbAdmin mailbox row (account deleted in the panel but the
+     * mail left behind, or mail that pre-dates the panel). REST-only — lists
+     * the dirs via `doveadm fs iter-dirs`, then subtracts the known mailbox
+     * usernames. Only counts dirs that look like maildirs (contain `cur`).
+     *
+     * @return string[]  orphan usernames (the directory names)
+     */
+    private function _scanOrphans()
+    {
+        $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
+        $root    = $this->_maildirRoot();
+
+        $dirs = $doveadm->fsListDirs( $root );          // user dir names
+        if( !$dirs )
+            return [];
+
+        // Known mailbox usernames (lower-cased set).
+        $known = [];
+        foreach( $this->getD2EM()->createQuery(
+            'SELECT m.username FROM \Entities\Mailbox m' )->getArrayResult() as $r )
+            $known[ strtolower( $r['username'] ) ] = true;
+
+        $orphans = [];
+        foreach( $dirs as $name )
+        {
+            if( isset( $known[ strtolower( $name ) ] ) )
+                continue;
+            // Looks like a maildir? (has a cur/ subdir). Skip stray dirs.
+            $sub = $doveadm->fsListDirs( $root . '/' . $name );
+            if( in_array( 'cur', $sub, true ) )
+                $orphans[] = $name;
+        }
+        sort( $orphans );
+        return $orphans;
+    }
+
+    /**
+     * Maintenance action: scan for orphan maildirs and show them (count +
+     * names) on the tab. No side effects.
+     */
+    public function scanOrphansAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        try
+        {
+            $this->view->orphans = $this->_scanOrphans();
+        }
+        catch( \Throwable $e )
+        {
+            $this->getLogger()->err( 'Maintenance scan-orphans: ' . $e->getMessage() );
+            $this->addMessage( _( 'Orphan scan failed: ' ) . $e->getMessage(), OSS_Message::ERROR );
+            $this->redirect( 'maintenance/index' );
+        }
+
+        $this->indexAction();
+        return $this->render( 'index' );
+    }
+
+    /**
+     * Maintenance action: enqueue a low-priority BACKUP_ORPHAN task for every
+     * orphan maildir found by the scan. The queue runner does the actual
+     * temp-account backup + repair in the background. Two-step (confirm=1).
+     */
+    public function backupOrphansAction()
+    {
+        $this->_assertCsrf();
+        if( !$this->getRequest()->isPost() )
+            $this->redirect( 'maintenance/index' );
+
+        try
+        {
+            $orphans = $this->_scanOrphans();
+        }
+        catch( \Throwable $e )
+        {
+            $this->getLogger()->err( 'Maintenance backup-orphans scan: ' . $e->getMessage() );
+            $this->addMessage( _( 'Orphan scan failed: ' ) . $e->getMessage(), OSS_Message::ERROR );
+            $this->redirect( 'maintenance/index' );
+        }
+
+        if( (int) $this->getParam( 'confirm', 0 ) !== 1 )
+        {
+            $this->view->orphans            = $orphans;
+            $this->view->confirmBackupOrphans = true;
+            $this->indexAction();
+            return $this->render( 'index' );
+        }
+
+        $em = $this->getD2EM();
+        $queued = 0;
+        foreach( $orphans as $user )
+        {
+            // Dedup: skip if a BACKUP_ORPHAN is already open for this user.
+            $open = (int) $em->createQuery(
+                'SELECT COUNT(t.id) FROM \Entities\MailboxTask t
+                  WHERE t.username = :u AND t.type = :t AND t.status IN (:open)' )
+                ->setParameter( 'u', $user )
+                ->setParameter( 't', \Entities\MailboxTask::TYPE_BACKUP_ORPHAN )
+                ->setParameter( 'open', [ \Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING ] )
+                ->getSingleScalarResult();
+            if( $open > 0 )
+                continue;
+
+            $mt = new \Entities\MailboxTask();
+            $mt->setType( \Entities\MailboxTask::TYPE_BACKUP_ORPHAN )
+               ->setUsername( $user )
+               ->setStatus( \Entities\MailboxTask::STATUS_PENDING )
+               ->setPriority( -15 )                  // below normal, around MEASURE_SIZE
+               ->setCreatedAt( new \DateTime() )
+               ->setRequestedBy( $this->getAdmin() );
+            $em->persist( $mt );
+            $queued++;
+        }
+        $em->flush();
+
+        $this->log( \Entities\Log::ACTION_MAINTENANCE,
+            "{$this->getAdmin()->getFormattedName()} queued orphan-maildir backup for {$queued} unmanaged maildir(s)" );
+        $this->addMessage(
+            sprintf( _( 'Queued backup of %d unmanaged maildir(s). The runner will process them in the background.' ), $queued ),
+            OSS_Message::SUCCESS );
+        $this->redirect( 'queue/index' );
+    }
 }

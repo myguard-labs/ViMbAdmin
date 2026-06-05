@@ -39,7 +39,7 @@
  * @package ViMbAdmin
  * @subpackage Controllers`
  */
-class MailboxController extends ViMbAdmin_Controller_PluginAction
+class MailboxController extends ViMbAdmin_Controller_PluginAction implements ViMbAdmin_Plugin_MailboxContext
 {
 
     /**

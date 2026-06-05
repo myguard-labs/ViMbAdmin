@@ -72,7 +72,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
     /** @var array<string, string> */
     private $defaultMapping;
 
-    public function __construct( OSS_Controller_Action $controller )
+    public function __construct( object $controller )
     {
         parent::__construct( $controller, get_class( $this ) );
 
@@ -87,10 +87,10 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
     /**
      * Create automatic aliases after a mailbox was created
      *
-     * @param MailboxController $controller
+     * @param ViMbAdmin_Plugin_MailboxContext $controller
      * @param array|null $options
      */
-    public function mailbox_add_addPostflush( MailboxController $controller, $options )
+    public function mailbox_add_addPostflush( ViMbAdmin_Plugin_MailboxContext $controller, $options )
     {
         $domain = $controller->getDomain()->getDomain();
         $mailbox = $controller->getMailbox()->getUsername();
@@ -120,11 +120,11 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
      * Checks whether a mailbox is an automatic alias' goto mailbox and
      * prevents its deletion
      *
-     * @param MailboxController $controller
+     * @param ViMbAdmin_Plugin_MailboxContext $controller
      * @param array|null $options
      * @return bool
      */
-    public function mailbox_purge_preRemove( MailboxController $controller, $options )
+    public function mailbox_purge_preRemove( ViMbAdmin_Plugin_MailboxContext $controller, $options )
     {
         $domain = $controller->getDomain()->getDomain();
         $mailbox = $controller->getMailbox()->getUserName();
@@ -155,11 +155,11 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
      * Checks whether a mailbox is an automatic alias' goto mailbox and
      * prevents disabling the mailbox
      *
-     * @param MailboxController $controller
+     * @param ViMbAdmin_Plugin_MailboxContext $controller
      * @param array|null $options
      * @return bool
      */
-    public function mailbox_toggleActive_preToggle( MailboxController $controller, $options )
+    public function mailbox_toggleActive_preToggle( ViMbAdmin_Plugin_MailboxContext $controller, $options )
     {
         $domain = $controller->getDomain()->getDomain();
         $mailbox = $controller->getMailbox()->getUserName();
@@ -189,10 +189,10 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
     /**
      * Create automatic aliases after an alias was created
      *
-     * @param AliasController $controller
+     * @param ViMbAdmin_Plugin_AliasContext $controller
      * @param array|null $options
      */
-    public function alias_add_addPostflush( AliasController $controller, $options )
+    public function alias_add_addPostflush( ViMbAdmin_Plugin_AliasContext $controller, $options )
     {
         $domain = $controller->getDomain()->getDomain();
         $aliasAddress = $controller->getAlias()->getAddress();
@@ -223,11 +223,11 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
      * Checks whether an alias is an automatic alias or an automatic alias'
      * goto alias, and prevents its deletion
      *
-     * @param AliasController $controller
+     * @param ViMbAdmin_Plugin_AliasContext $controller
      * @param array|null $options
      * @return bool
      */
-    public function alias_delete_preRemove( AliasController $controller, $options )
+    public function alias_delete_preRemove( ViMbAdmin_Plugin_AliasContext $controller, $options )
     {
         $domain = $controller->getDomain()->getDomain();
         $aliasAddress = $controller->getAlias()->getAddress();
@@ -282,11 +282,11 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
      * Checks whether an alias is an automatic alias or an automatic alias'
      * goto alias, and prevents disabling the alias
      *
-     * @param AliasController $controller
+     * @param ViMbAdmin_Plugin_AliasContext $controller
      * @param array|null $options
      * @return bool
      */
-    public function alias_toggleActive_preToggle( AliasController $controller, $options )
+    public function alias_toggleActive_preToggle( ViMbAdmin_Plugin_AliasContext $controller, $options )
     {
         $domain = $controller->getDomain()->getDomain();
         $aliasAddress = $controller->getAlias()->getAddress();
@@ -340,11 +340,11 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
     /**
      * Returns an alias' entity
      *
-     * @param OSS_Controller_Action $controller
+     * @param ViMbAdmin_Plugin_MutationContext $controller
      * @param string $alias
      * @return array|null
      */
-    private function getAlias( OSS_Controller_Action $controller, $alias )
+    private function getAlias( ViMbAdmin_Plugin_MutationContext $controller, $alias )
     {
         $aliasList = $controller->getD2EM()->getRepository( "\\Entities\\Alias" )
             ->filterForAliasList( $alias, $controller->getAdmin(), $controller->getDomain()->getId(), true );
@@ -354,10 +354,10 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
     /**
      * Checks whether a domain alias exists and is active
      *
-     * @param OSS_Controller_Action $controller
+     * @param ViMbAdmin_Plugin_MutationContext $controller
      * @return bool
      */
-    private function hasActiveDomainAlias( OSS_Controller_Action $controller )
+    private function hasActiveDomainAlias( ViMbAdmin_Plugin_MutationContext $controller )
     {
         $alias = $this->getAlias( $controller, '@' . $controller->getDomain()->getDomain() );
         return $alias !== null && $alias['active'];
@@ -366,12 +366,12 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
     /**
      * Creates a new alias
      *
-     * @param OSS_Controller_Action $controller
+     * @param ViMbAdmin_Plugin_MutationContext $controller
      * @param string $item
      * @param string $goto
      * @return \Entities\Alias|null
      */
-    private function createAutomaticAlias( OSS_Controller_Action $controller, $item, $goto )
+    private function createAutomaticAlias( ViMbAdmin_Plugin_MutationContext $controller, $item, $goto )
     {
         $domain = $controller->getDomain()->getDomain();
 

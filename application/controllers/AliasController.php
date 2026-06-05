@@ -39,7 +39,7 @@
  * @package ViMbAdmin
  * @subpackage Controllers
  */
-class AliasController extends ViMbAdmin_Controller_PluginAction
+class AliasController extends ViMbAdmin_Controller_PluginAction implements ViMbAdmin_Plugin_AliasContext
 {
 
     /**

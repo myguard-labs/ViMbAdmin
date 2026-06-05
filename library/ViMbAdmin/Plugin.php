@@ -50,7 +50,7 @@ class ViMbAdmin_Plugin
      */
     private $name = null;
 
-    public function __construct( OSS_Controller_Action $controller, $classname )
+    public function __construct( object $controller, $classname )
     {
         // set the plugin name
         $this->name = strtolower( substr( $classname, 16 ) );
@@ -62,9 +62,9 @@ class ViMbAdmin_Plugin
      * @param string $controller
      * @param string $action
      * @param string $hook
-     * @param OSS_Controller_Action $controllerObject
+     * @param object $controllerObject the ZF1 controller or a native plugin context
      */
-    public function update( $controller, $action, $hook, OSS_Controller_Action $controllerObject, $params = null )
+    public function update( $controller, $action, $hook, object $controllerObject, $params = null )
     {
         // typically the update() function will be pretty simple
         $hookfn = "{$controller}_{$action}_{$hook}";

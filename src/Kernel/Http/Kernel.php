@@ -6,6 +6,7 @@ namespace ViMbAdmin\Kernel\Http;
 
 use ViMbAdmin\Kernel\Controller\AdditionalInfoController;
 use ViMbAdmin\Kernel\Controller\AdminController;
+use ViMbAdmin\Kernel\Controller\AliasController;
 use ViMbAdmin\Kernel\Controller\DomainController;
 use ViMbAdmin\Kernel\Controller\IndexController;
 use ViMbAdmin\Kernel\Controller\LogController;
@@ -56,6 +57,7 @@ final class Kernel
         'log'            => LogController::class,
         'admin'          => AdminController::class,
         'domain'         => DomainController::class,
+        'alias'          => AliasController::class,
         'mailbox'        => MailboxController::class,
     ];
 

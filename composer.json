@@ -4,7 +4,7 @@
     "type": "project",
     "keywords": ["vimbadmin", "postfix", "postfixadmin", "dovecot"],
     "homepage": "http://www.vimbadmin.net/",
-    "license": "GPL-3.0+",
+    "license": "GPL-3.0-or-later",
     "authors": [
         {
             "name": "Barry O'Donovan",

@@ -1,0 +1,87 @@
+<?php
+
+declare(strict_types=1);
+
+namespace ViMbAdmin\Kernel\Form;
+
+/**
+ * Factory for the common field validation rules (Phase 4, docs/ZF1-REMOVAL.md).
+ *
+ * Each method returns a `callable(mixed $value): ?string` — null when the value
+ * passes, otherwise the error message. These are the framework-free
+ * replacements for the handful of ZF1 validators the ViMbAdmin forms
+ * actually use (NotEmpty, EmailAddress, StringLength, Regex, Identical, …); add
+ * more here as forms are migrated rather than reaching for a validator library.
+ *
+ * @package ViMbAdmin
+ * @subpackage Kernel
+ */
+final class Validators
+{
+    /** The value must be present (non-empty after trimming strings). */
+    public static function required(string $message = 'This field is required.'): callable
+    {
+        return static function (mixed $value) use ($message): ?string {
+            if ($value === null || $value === '' || $value === []) {
+                return $message;
+            }
+            if (is_string($value) && trim($value) === '') {
+                return $message;
+            }
+
+            return null;
+        };
+    }
+
+    /** A syntactically valid email address (empty passes — combine with required()). */
+    public static function email(string $message = 'Please enter a valid email address.'): callable
+    {
+        return static function (mixed $value) use ($message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            return filter_var((string) $value, FILTER_VALIDATE_EMAIL) === false ? $message : null;
+        };
+    }
+
+    /** At least $min characters (empty passes — combine with required()). */
+    public static function minLength(int $min, ?string $message = null): callable
+    {
+        $message ??= "Must be at least {$min} characters.";
+
+        return static function (mixed $value) use ($min, $message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            return strlen((string) $value) < $min ? $message : null;
+        };
+    }
+
+    /** Match a PCRE pattern (empty passes — combine with required()). */
+    public static function regex(string $pattern, string $message = 'Invalid value.'): callable
+    {
+        return static function (mixed $value) use ($pattern, $message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            return preg_match($pattern, (string) $value) === 1 ? null : $message;
+        };
+    }
+
+    /**
+     * The value must equal another field's value (e.g. password confirmation).
+     * The other value is resolved lazily so it reads the bound data at validate
+     * time.
+     *
+     * @param callable():mixed $other
+     */
+    public static function matches(callable $other, string $message = 'Values do not match.'): callable
+    {
+        return static function (mixed $value) use ($other, $message): ?string {
+            return $value === $other() ? null : $message;
+        };
+    }
+}

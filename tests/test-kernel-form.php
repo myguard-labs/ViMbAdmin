@@ -12,9 +12,11 @@ require __DIR__ . '/../src/Kernel/Security/Csrf.php';
 require __DIR__ . '/../src/Kernel/Form/Field.php';
 require __DIR__ . '/../src/Kernel/Form/Validators.php';
 require __DIR__ . '/../src/Kernel/Form/Form.php';
+require __DIR__ . '/../src/Kernel/Form/FormRenderer.php';
 
 use ViMbAdmin\Kernel\Form\Field;
 use ViMbAdmin\Kernel\Form\Form;
+use ViMbAdmin\Kernel\Form\FormRenderer;
 use ViMbAdmin\Kernel\Form\Validators;
 use ViMbAdmin\Kernel\Security\Csrf;
 use ViMbAdmin\Kernel\Session\SessionStorage;
@@ -102,6 +104,38 @@ check('csrf: missing token -> invalid',
     $cform->isValid(['name' => 'x']) === false);
 check('csrfToken() returns the session token',
     $cform->csrfToken() === $token);
+
+// --- renderer --------------------------------------------------------- //
+$rcsrf = new Csrf(new ArraySession());
+$rtok  = $rcsrf->token();
+$rform = new Form($rcsrf);
+$rform->add(new Field('username', 'Username', 'text', [Validators::required(), Validators::email()]))
+      ->add(new Field('password', 'Password', 'password', [Validators::required()]))
+      ->add(new Field('super', 'Super admin', 'checkbox'));
+
+$renderer = new FormRenderer();
+
+// invalid submission so we can assert error markup + value repopulation
+$rform->isValid(['username' => 'bad', 'password' => '', 'super' => '1', 'csrf' => $rtok]);
+$out = $renderer->render($rform, '/admin/add', 'Add');
+
+check('render: form posts to the action',     str_contains($out, 'action="/admin/add"'));
+check('render: text input for username',      str_contains($out, 'name="username"') && str_contains($out, 'type="text"'));
+check('render: label rendered',               str_contains($out, '>Username</label>'));
+check('render: invalid field gets .error',    str_contains($out, 'control-group error'));
+check('render: inline error shown',           str_contains($out, 'help-inline'));
+check('render: username value repopulated',   str_contains($out, 'value="bad"'));
+check('render: password value NOT echoed',    !str_contains($out, 'value="secret"'));
+check('render: checkbox checked from submit',  str_contains($out, 'type="checkbox"') && str_contains($out, 'checked="checked"'));
+check('render: hidden csrf token present',     str_contains($out, 'name="csrf"') && str_contains($out, 'value="' . $rtok . '"'));
+check('render: submit button label',          str_contains($out, '>Add</button>'));
+
+// escaping
+$xform = new Form();
+$xform->add(new Field('q', 'Q', 'text'));
+$xform->bind(['q' => '"><script>x</script>']);
+$xout = $renderer->render($xform, '/x');
+check('render: value is HTML-escaped',        str_contains($xout, '&quot;&gt;&lt;script&gt;') && !str_contains($xout, '<script>x'));
 
 echo "\n";
 if ($failures === 0) {

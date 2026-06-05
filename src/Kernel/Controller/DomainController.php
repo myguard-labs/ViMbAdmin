@@ -26,8 +26,9 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * framework-free `ViMbAdmin_Service_Domain`, refusing a domain the admin cannot
  * manage — mirroring the ZF1 `loadDomain()` authorisation.
  *
- * Only these two actions are migrated; the form/CRUD actions (add/edit/purge/…)
- * stay on ZF1 via the dispatcher fallback. The legacy controller is untouched.
+ * The list/toggle actions plus the native add/edit forms are migrated; the
+ * remaining CRUD actions (purge/admins/…) stay on ZF1 via the dispatcher
+ * fallback. The legacy controller is untouched.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -76,11 +77,12 @@ final class DomainController extends AbstractController
     /**
      * GET|POST /domain/add — create a new domain (super admins only).
      *
-     * Add only: an edit (a `did` in the URL) returns null so the ZF1 controller
-     * still serves it (the edit path prepopulates + reverse-converts quotas, not
-     * yet ported). The legacy domain add fires no plugin hooks (no `domain_add_*`
-     * listeners exist), so nothing is lost by serving it natively. Quota fields
-     * are converted to bytes with the SAME OSS_Filter_FileSize the ZF1 form used.
+     * Add only: an edit via the `/domain/add/did/N` URL returns null so the ZF1
+     * controller still serves that legacy alias; the linked edit URL
+     * (`/domain/edit/did/N`) is served natively by {@see editAction}. The legacy
+     * domain add fires no plugin hooks (no `domain_add_*` listeners exist), so
+     * nothing is lost by serving it natively. Quota fields are converted to bytes
+     * with the SAME OSS_Filter_FileSize the ZF1 form used.
      */
     public function addAction(): ?Response
     {
@@ -106,14 +108,7 @@ final class DomainController extends AbstractController
             $domain->setMailboxCount(0);
             $domain->setCreated(new \DateTime());
             $domain->setDomain((string) $v['domain']);
-            $domain->setDescription((string) $v['description']);
-            $domain->setTransport((string) $v['transport']);
-            $domain->setBackupmx($v['backupmx'] ? 1 : 0);
-            $domain->setActive($v['active'] ? 1 : 0);
-            $domain->setMaxAliases((int) $v['max_aliases']);
-            $domain->setMaxMailboxes((int) $v['max_mailboxes']);
-            $domain->setQuota((int) $filter->filter((string) $v['quota']));
-            $domain->setMaxQuota((int) $filter->filter((string) $v['max_quota']));
+            $this->applyFormFields($domain, $v, $filter);
 
             (new \ViMbAdmin_Service_Domain($this->em()))->save($domain, $admin, false);
 
@@ -124,6 +119,124 @@ final class DomainController extends AbstractController
         return $this->view('domain/native-add.phtml', [
             'formHtml' => (new FormRenderer())->render($form, '/domain/add', 'Add Domain'),
         ]);
+    }
+
+    /**
+     * GET|POST /domain/edit/did/<id> — edit an existing domain (super admins
+     * only). This is the URL the domain-list edit button links to (the ZF1
+     * `editAction` simply forwards to `add`).
+     *
+     * A missing/invalid `did` returns null so the ZF1 controller still serves it
+     * (it flashes "Invalid or non-existent domain." and redirects). The domain
+     * name is read-only on edit, so its value is never re-assigned. The quota
+     * fields are PREPOPULATED as human strings via `OSS_Filter_FileSize::unfilter()`
+     * — the same reverse conversion the ZF1 form did at render time (its FileSize
+     * filter detects the `render()` call-stack and unfilters bytes → "512MB") —
+     * and re-parsed to bytes on submit by the identical forward filter. domain/add
+     * and domain/edit fire no plugin hooks, so nothing is lost serving natively.
+     */
+    public function editAction(): ?Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $domain = ($did = $this->param('did'))
+            ? $this->em()->getRepository('\\Entities\\Domain')->find((int) $did)
+            : null;
+
+        if ($domain === null) {
+            return null; // invalid/missing → ZF1 fallback (flash + redirect)
+        }
+
+        $options = $this->container->options();
+        $mult    = $options['defaults']['quota']['multiplier'] ?? \OSS_Filter_FileSize::SIZE_KILOBYTES;
+        $form    = $this->buildDomainEditForm();
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $v      = $form->values();
+            $filter = new \OSS_Filter_FileSize($mult);
+
+            // The domain name is read-only on edit — keep the entity's value.
+            $this->applyFormFields($domain, $v, $filter);
+            $domain->setModified(new \DateTime());
+
+            (new \ViMbAdmin_Service_Domain($this->em()))->save($domain, $admin, true);
+
+            $this->flash('You have successfully edited the domain record.');
+            return $this->redirect('domain/list');
+        }
+
+        // First render (GET) seeds the form from the entity; an invalid POST
+        // re-renders with the submitted values + errors instead.
+        if (!$this->isPost()) {
+            $this->populateDomainForm($form, $domain);
+        }
+
+        return $this->view('domain/native-add.phtml', [
+            'pageTitle' => 'Edit Domain: ' . $domain->getDomain(),
+            'formHtml'  => (new FormRenderer())->render(
+                $form,
+                '/domain/edit/did/' . $domain->getId(),
+                'Save'
+            ),
+        ]);
+    }
+
+    /**
+     * Map the validated form values onto a domain entity (the fields common to
+     * add and edit; the domain name and add-only counters are set by the caller).
+     */
+    private function applyFormFields(\Entities\Domain $domain, array $v, \OSS_Filter_FileSize $filter): void
+    {
+        $domain->setDescription((string) $v['description']);
+        $domain->setTransport((string) $v['transport']);
+        $domain->setBackupmx($v['backupmx'] ? 1 : 0);
+        $domain->setActive($v['active'] ? 1 : 0);
+        $domain->setMaxAliases((int) $v['max_aliases']);
+        $domain->setMaxMailboxes((int) $v['max_mailboxes']);
+        $domain->setQuota((int) $filter->filter((string) $v['quota']));
+        $domain->setMaxQuota((int) $filter->filter((string) $v['max_quota']));
+    }
+
+    /**
+     * The native edit-domain form: same fields as add, but the domain name is
+     * read-only (cannot be renamed) and carries no uniqueness rule, mirroring the
+     * ZF1 edit which sets `readonly`, `setRequired(false)` and drops the
+     * uniqueness validator.
+     */
+    private function buildDomainEditForm(): Form
+    {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+        $form->add((new Field('domain', 'Domain', 'text'))->setReadonly());
+        $form->add(new Field('description', 'Description', 'textarea'));
+        $form->add(new Field('transport', 'Transport', 'text', [Validators::required()]));
+        $form->add(new Field('backupmx', 'Backup MX', 'checkbox'));
+        $form->add(new Field('active', 'Active', 'checkbox'));
+        $form->add(new Field('max_aliases', 'Max aliases', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]));
+        $form->add(new Field('max_mailboxes', 'Max mailboxes', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]));
+        $form->add(new Field('max_quota', 'Max quota', 'text'));
+        $form->add(new Field('quota', 'Quota', 'text'));
+
+        return $form;
+    }
+
+    /**
+     * Seed the edit form from the entity. Quota fields are unfiltered to human
+     * strings ("512MB"), matching what the ZF1 render path displayed.
+     */
+    private function populateDomainForm(Form $form, \Entities\Domain $domain): void
+    {
+        $form->field('domain')->setValue($domain->getDomain());
+        $form->field('description')->setValue($domain->getDescription());
+        $form->field('transport')->setValue($domain->getTransport());
+        $form->field('backupmx')->setValue((bool) $domain->getBackupmx());
+        $form->field('active')->setValue((bool) $domain->getActive());
+        $form->field('max_aliases')->setValue((string) $domain->getMaxAliases());
+        $form->field('max_mailboxes')->setValue((string) $domain->getMaxMailboxes());
+        $form->field('max_quota')->setValue((string) \OSS_Filter_FileSize::unfilter((int) $domain->getMaxQuota()));
+        $form->field('quota')->setValue((string) \OSS_Filter_FileSize::unfilter((int) $domain->getQuota()));
     }
 
     /**

@@ -253,9 +253,25 @@ the XSS footgun that comes with it.
 > local image build: the app boots and the kernel CSRF classes autoload and
 > round-trip in the image runtime.
 >
+> - [`src/Kernel/Security/Auth.php`](../src/Kernel/Security/Auth.php) — the
+>   framework-free `getAdmin()` / `authorise()` the Phase 3 shim needs. Depends on
+>   the session port (where the identity array lives — the ZF1 auth layer stores
+>   an array carrying the admin's `id`) plus an admin-loader callable
+>   `fn(int $id): ?object` (so it is Doctrine-free and unit-testable). Answers
+>   `identity()` / `isAuthenticated()` / `admin()` / `isSuper()` /
+>   `isAuthorised(superRequired)` and performs no HTTP — the controller keeps the
+>   redirect-to-login. Tested with no DB in
+>   [`tests/test-kernel-auth.php`](../tests/test-kernel-auth.php) (20 assertions:
+>   normal/super/anonymous/stale-session/malformed-identity/custom-key). Inert
+>   until wired in Phase 3, where the loader becomes the Doctrine repository and
+>   the session is keyed to the live auth storage, validated against the running
+>   app.
+>
 > Still framework-bound, to wire next (validated against the local image build):
-> routing `addMessage()` through `FlashMessages`; then the Auth service
-> (`getAdmin()` / `authorise()`); then the Phase 2b kernel skeleton.
+> routing `addMessage()` through `FlashMessages` (two-sided — the producer trait
+> and the `{OSS_Message}` renderer drain switch together); wiring `getAdmin()` /
+> `authorise()` onto the `Auth` service; then the Container + Dispatcher behind the
+> Phase 2b kernel to serve the first real controller natively.
 
 ## Guardrails
 

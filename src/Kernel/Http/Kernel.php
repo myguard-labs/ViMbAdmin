@@ -9,6 +9,7 @@ use ViMbAdmin\Kernel\Controller\AdminController;
 use ViMbAdmin\Kernel\Controller\DomainController;
 use ViMbAdmin\Kernel\Controller\IndexController;
 use ViMbAdmin\Kernel\Controller\LogController;
+use ViMbAdmin\Kernel\Controller\MailboxController;
 use ViMbAdmin\Kernel\Mvc\Dispatcher;
 use ViMbAdmin\Kernel\Router;
 use ViMbAdmin\Kernel\RouteMatch;
@@ -55,6 +56,7 @@ final class Kernel
         'log'            => LogController::class,
         'admin'          => AdminController::class,
         'domain'         => DomainController::class,
+        'mailbox'        => MailboxController::class,
     ];
 
     /**

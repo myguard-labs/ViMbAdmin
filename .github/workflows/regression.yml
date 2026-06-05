@@ -62,6 +62,9 @@ jobs:
       - name: ViMbAdmin_Service_Admin
         run: php tests/test-service-admin.php
 
+      - name: ViMbAdmin_Service_Mailbox
+        run: php tests/test-service-mailbox.php
+
       - name: ViMbAdmin\Kernel\Router
         run: php tests/test-kernel-router.php
 

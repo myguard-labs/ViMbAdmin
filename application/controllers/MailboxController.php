@@ -441,24 +441,25 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
     public function ajaxToggleActiveAction()
     {
         if( !$this->getMailbox() )
+        {
             print 'ko';
-
-        if($this->notify( 'mailbox', 'toggleActive', 'preToggle', $this, [ 'active' => $this->getMailbox()->getActive() ]) === true) {
-            $this->getMailbox()->setActive( !$this->getMailbox()->getActive() );
-            $this->getMailbox()->setModified( new \DateTime() );
-
-            $this->log(
-                $this->getMailbox()->getActive() ? \Entities\Log::ACTION_MAILBOX_ACTIVATE : \Entities\Log::ACTION_MAILBOX_DEACTIVATE,
-                "{$this->getAdmin()->getFormattedName()} " . ( $this->getMailbox()->getActive() ? 'activated' : 'deactivated' ) . " mailbox {$this->getMailbox()->getUsername()}"
-            );
-
-            $this->notify( 'mailbox', 'toggleActive', 'preflush', $this, [ 'active' => $this->getMailbox()->getActive() ] );
-            $this->getD2EM()->flush();
-            $this->notify( 'mailbox', 'toggleActive', 'postflush', $this, [ 'active' => $this->getMailbox()->getActive() ] );
-            print 'ok';
-        } else {
-            print 'ko';
+            return;
         }
+
+        // The entity change + log + single flush live in the framework-free
+        // ViMbAdmin_Service_Mailbox; the plugin notify() hooks (which need this
+        // ZF1 controller as their context) are threaded in as callables, so the
+        // exact preToggle/preflush/postflush ordering is preserved. A preToggle
+        // veto (any observer returning false) leaves the mailbox unchanged.
+        $result = ( new ViMbAdmin_Service_Mailbox( $this->getD2EM() ) )->toggleActive(
+            $this->getMailbox(),
+            $this->getAdmin(),
+            fn() => $this->notify( 'mailbox', 'toggleActive', 'preToggle', $this, [ 'active' => $this->getMailbox()->getActive() ] ) === true,
+            fn() => $this->notify( 'mailbox', 'toggleActive', 'preflush', $this, [ 'active' => $this->getMailbox()->getActive() ] ),
+            fn() => $this->notify( 'mailbox', 'toggleActive', 'postflush', $this, [ 'active' => $this->getMailbox()->getActive() ] )
+        );
+
+        print $result === null ? 'ko' : 'ok';
     }
 
 

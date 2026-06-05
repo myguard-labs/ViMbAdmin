@@ -32,11 +32,11 @@
         "ext-pdo_mysql": "*",
         "ext-sodium": "*",
         "bacon/bacon-qr-code": "^3.0",
-        "doctrine/orm": "^2.20",
+        "doctrine/orm": "^3.6",
         "robthree/twofactorauth": "^3.0",
         "shardj/zf1-future": "^1.25",
         "smarty/smarty": "^5.0",
-        "symfony/cache": "^6.4 || ^7.0"
+        "symfony/cache": "^8.1.0"
     },
     "require-dev": {
         "opensolutions/minify": "1.*"

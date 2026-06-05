@@ -678,11 +678,15 @@ resources.session.remember_me_seconds = 3600
 resources.session.name = 'VIMBADMIN3'
 ;; Cookie / fixation hardening. cookie_secure REQUIRES the panel be served over
 ;; HTTPS (set it to false only for a plain-HTTP dev box, or the session cookie
-;; is never sent and login loops). use_strict_mode rejects attacker-seeded SIDs.
+;; is never sent and login loops).
+;; NOTE: session.use_strict_mode (rejects attacker-seeded SIDs) is enforced at
+;; the PHP level by the FPM pool (contrib/php-fpm/vimbadmin.conf) — it is NOT a
+;; resources.session.* key, because shardj/zf1-future's Zend_Session does not
+;; whitelist it and throws "Unknown option: use_strict_mode" (a 500 on every
+;; request) if set here. Do not re-add it to this file.
 resources.session.cookie_httponly = true
 resources.session.cookie_secure   = true
 resources.session.cookie_samesite = "Lax"
-resources.session.use_strict_mode = true
 
 ondemand_resources.logger.writers.stream.path    = APPLICATION_PATH "/../var/log"
 ondemand_resources.logger.writers.stream.owner   = www-data

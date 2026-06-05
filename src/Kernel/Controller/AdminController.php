@@ -5,8 +5,14 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\Controller;
 
 use ViMbAdmin\Kernel\Flash\FlashMessages;
+use ViMbAdmin\Kernel\Form\Field;
+use ViMbAdmin\Kernel\Form\Form;
+use ViMbAdmin\Kernel\Form\FormRenderer;
+use ViMbAdmin\Kernel\Form\Validators;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\Mvc\AbstractController;
+use ViMbAdmin\Kernel\Security\Csrf;
+use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 
 /**
  * Native port of `AdminController::list` (docs/ZF1-REMOVAL.md) — a super-admin
@@ -85,6 +91,60 @@ final class AdminController extends AbstractController
 
         $this->flash('You have successfully purged the admin record.', FlashMessages::SUCCESS);
         return $this->redirect('admin/list');
+    }
+
+    /**
+     * GET|POST /admin/add — create a new administrator (super admins only).
+     *
+     * The first native form (docs/ZF1-REMOVAL.md): GET renders the native form,
+     * POST validates it (CSRF + fields) and, when valid, creates the admin via
+     * the framework-free ViMbAdmin_Service_Admin, flashes success and redirects
+     * to admin/list; an invalid POST re-renders with errors and repopulated
+     * values. (The legacy welcome-email option is not carried over in this first
+     * cut.)
+     */
+    public function addAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $form = $this->buildAddForm();
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $values = $form->values();
+
+            (new \ViMbAdmin_Service_Admin($this->em()))->create(
+                (string) $values['username'],
+                (string) $values['password'],
+                (bool) $values['super'],
+                $admin,
+                $this->container->options()['resources']['auth']['oss']
+            );
+
+            $this->flash('You have successfully added a new administrator to the system.');
+            return $this->redirect('admin/list');
+        }
+
+        return $this->view('admin/native-add.phtml', [
+            'formHtml' => (new FormRenderer())->render($form, '/admin/add', 'Add Administrator'),
+        ]);
+    }
+
+    /**
+     * The native add-admin form: username (email) + password + super flag,
+     * CSRF-guarded over the session.
+     */
+    private function buildAddForm(): Form
+    {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+
+        $form->add(new Field('username', 'Username (email)', 'text', [Validators::required(), Validators::email()]))
+             ->add(new Field('password', 'Password', 'password', [Validators::required(), Validators::minLength(6)]))
+             ->add(new Field('super', 'Super administrator', 'checkbox'));
+
+        return $form;
     }
 
     /**

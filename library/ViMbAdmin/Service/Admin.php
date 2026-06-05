@@ -157,6 +157,35 @@ class ViMbAdmin_Service_Admin
     }
 
     /**
+     * Create a new administrator: hash the supplied plaintext password with the
+     * configured auth options, persist the admin, log the action against the
+     * actor, and flush. Returns the new admin.
+     *
+     * @param array $authOptions the `resources.auth.oss` config OSS_Auth_Password needs
+     */
+    public function create(string $username, string $plainPassword, bool $super, \Entities\Admin $actor, array $authOptions): \Entities\Admin
+    {
+        $admin = new \Entities\Admin();
+        $admin->setUsername( $username );
+        $admin->setPassword( OSS_Auth_Password::hash( $plainPassword, $authOptions ) );
+        $admin->setSuper( $super ? 1 : 0 );
+        $admin->setActive( 1 );
+        $admin->setCreated( new \DateTime() );
+
+        $this->em->persist( $admin );
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_ADMIN_ADD,
+            "{$actor->getFormattedName()} added admin {$admin->getFormattedName()}"
+        );
+
+        $this->em->flush();
+
+        return $admin;
+    }
+
+    /**
      * Write a Log row against the acting admin (and optionally a domain) and
      * persist it; the caller flushes. Same shape as the controller's protected
      * log(), which only binds a domain when one is in context.

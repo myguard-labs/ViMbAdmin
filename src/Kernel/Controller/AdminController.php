@@ -43,4 +43,50 @@ final class AdminController extends AbstractController
 
         return $this->view('admin/list.phtml', ['admins' => $admins]);
     }
+
+    /**
+     * GET /admin/ajax-toggle-active/aid/<id> — flip an admin's active flag.
+     * Mirrors the ZF1 action: prints "ko" when the target is missing or is the
+     * caller themselves, otherwise toggles via the framework-free
+     * ViMbAdmin_Service_Admin and prints "ok". Like the ZF1 ajax toggles it
+     * carries no CSRF token (it is super-gated and self-toggle is refused); the
+     * JS reads the bare ok/ko body.
+     */
+    public function ajaxToggleActiveAction(): Response
+    {
+        return $this->toggle('toggleActive');
+    }
+
+    /**
+     * GET /admin/ajax-toggle-super/aid/<id> — flip an admin's super flag.
+     */
+    public function ajaxToggleSuperAction(): Response
+    {
+        return $this->toggle('toggleSuper');
+    }
+
+    /**
+     * Shared body of the two ajax toggles: super gate, resolve the target admin
+     * from `aid`, refuse a missing target or self-toggle, then call the named
+     * ViMbAdmin_Service_Admin mutator (which owns its log write + flush).
+     */
+    private function toggle(string $method): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+
+        if (!$target || $admin->getId() == $target->getId()) {
+            return new Response('ko');
+        }
+
+        (new \ViMbAdmin_Service_Admin($this->em()))->{$method}($target, $admin);
+
+        return new Response('ok');
+    }
 }

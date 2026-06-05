@@ -1,0 +1,13 @@
+parameters:
+    level: 1
+    paths:
+        - application
+        - library
+        - public
+    bootstrapFiles:
+        - vendor/autoload.php
+    # ZF1-future and the legacy Zend autoloader register classes outside
+    # Composer's PSR-0 map; ignore the unavoidable unknown-symbol noise so the
+    # report focuses on real defects. Tighten as the codebase is modernised.
+    reportUnmatchedIgnoredErrors: false
+    treatPhpDocTypesAsCertain: false

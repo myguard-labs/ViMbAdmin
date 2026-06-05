@@ -31,12 +31,20 @@ use ViMbAdmin\Kernel\Security\Auth;
 final class Container
 {
     /**
-     * @param object $bootstrap anything exposing `getResource(string): mixed`
-     *                          (the ZF1 application bootstrap in production)
+     * @param object               $bootstrap anything exposing
+     *                             `getResource(string): mixed` and `getOptions(): array`
+     *                             (the ZF1 application bootstrap in production)
+     * @param array<string,mixed>  $chrome  view variables a native controller's
+     *                             page templates need that can only be computed in
+     *                             a ZF1 zone (currently `skinCss` — the skin
+     *                             stylesheet URL, which needs the front-controller
+     *                             base URL). Built once at the entry point and
+     *                             injected so the kernel tree stays framework-free.
      */
     public function __construct(
         private readonly object $bootstrap,
         private readonly Auth $auth,
+        private readonly array $chrome = [],
     ) {
     }
 
@@ -60,6 +68,26 @@ final class Container
     public function auth(): Auth
     {
         return $this->auth;
+    }
+
+    /**
+     * The merged application options (the ZF1 `application.ini` array) the page
+     * templates read as `$options` (e.g. `$options.footer.hide`,
+     * `$options.resources.smarty.skin`).
+     *
+     * @return array<string,mixed>
+     */
+    public function options(): array
+    {
+        return $this->bootstrap->getOptions();
+    }
+
+    /**
+     * A pre-computed chrome view variable (e.g. `skinCss`), or null if absent.
+     */
+    public function chrome(string $key): mixed
+    {
+        return $this->chrome[$key] ?? null;
     }
 
     /**

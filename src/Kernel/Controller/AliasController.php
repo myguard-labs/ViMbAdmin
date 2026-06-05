@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\Mvc\AbstractController;
+use ViMbAdmin\Kernel\Plugin\AliasContext;
+use ViMbAdmin\Kernel\Plugin\PluginHost;
+use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 
 /**
- * Native port of `AliasController::list` (docs/ZF1-REMOVAL.md).
+ * Native port of `AliasController::list` + `ajaxToggleActive`
+ * (docs/ZF1-REMOVAL.md).
  *
  * Reproduces the legacy `preDispatch` (for the list actions) + `listAction`: the
  * remembered/`did` domain scope is resolved into the session (`unset` clears
@@ -18,8 +23,14 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  * pagination is configured). Unlike the mailbox list, the alias `listAction`
  * DOES expose the current `domain` view variable, so this port sets it too.
  *
- * Only `listAction` is migrated; the form/CRUD actions stay on ZF1 via the
- * dispatcher fallback. The legacy controller is untouched.
+ * `ajaxToggleActive` flips an alias's active flag through the framework-free
+ * `ViMbAdmin_Service_Alias` (#31) while firing the same plugin hooks the ZF1
+ * action did — via the native {@see PluginHost} + {@see AliasContext} (Phase
+ * 4c), so the MailboxAutomaticAliases pre/post-toggle logic runs natively and a
+ * pre-toggle veto still aborts the change.
+ *
+ * The remaining form/CRUD actions stay on ZF1 via the dispatcher fallback. The
+ * legacy controller is untouched.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -71,5 +82,52 @@ final class AliasController extends AbstractController
             'domain'  => $domain,
             'aliases' => $aliases,
         ]);
+    }
+
+    /**
+     * GET /alias/ajax-toggle-active/alid/<id> — flip an alias's active flag.
+     *
+     * Mirrors the ZF1 action: resolve the alias from `alid`, refuse a missing one
+     * or a domain the admin cannot manage (`loadAlias` authorisation), then toggle
+     * via `ViMbAdmin_Service_Alias` with the plugin pre/pre-flush/post-flush hooks
+     * threaded in as callables over the native PluginHost. A pre-toggle veto (any
+     * observer returning false) leaves the alias unchanged and yields "ko". Prints
+     * the bare ok/ko body the JS reads.
+     */
+    public function ajaxToggleActiveAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $alias = ($alid = $this->param('alid'))
+            ? $this->em()->getRepository('\\Entities\\Alias')->find((int) $alid)
+            : null;
+
+        // loadAlias() authorises a non-super admin against the alias's domain.
+        if (!$alias || (!$admin->isSuper() && !$admin->canManageDomain($alias->getDomain()))) {
+            return new Response('ko');
+        }
+
+        $context = new AliasContext(
+            $this->em(),
+            $admin,
+            $alias->getDomain(),
+            $alias,
+            $this->container->options(),
+            new FlashMessages(new MagicPropertyStorage($this->session())),
+        );
+        $host = new PluginHost($context);
+
+        $result = (new \ViMbAdmin_Service_Alias($this->em()))->toggleActive(
+            $alias,
+            $admin,
+            fn() => $host->notify('alias', 'toggleActive', 'preToggle', $context, ['active' => $alias->getActive()]) === true,
+            fn() => $host->notify('alias', 'toggleActive', 'preflush', $context, ['active' => $alias->getActive()]),
+            fn() => $host->notify('alias', 'toggleActive', 'postflush', $context, ['active' => $alias->getActive()]),
+        );
+
+        return new Response($result === null ? 'ko' : 'ok');
     }
 }

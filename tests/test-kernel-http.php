@@ -41,7 +41,7 @@ check('health with action still routes',  $kernel->handle('/kernel-health/index'
 
 // Phase 3: the migrated controllers join the allowlist (health stays first).
 check('nativeControllers includes the migrated controllers',
-    Kernel::nativeControllers() === ['kernel-health', 'additionalinfo', 'index', 'log', 'admin']);
+    Kernel::nativeControllers() === ['kernel-health', 'additionalinfo', 'index', 'log', 'admin', 'domain']);
 
 // A container-backed native controller routed through a Kernel built WITHOUT a
 // dispatcher (as here) still returns null → ZF1 fallback, never a fatal.

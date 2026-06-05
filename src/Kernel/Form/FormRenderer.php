@@ -97,6 +97,21 @@ final class FormRenderer
             return '<textarea name="' . $name . '" id="' . $name . '" rows="3">' . $this->esc($value) . '</textarea>';
         }
 
+        if ($field->type === 'select') {
+            $current = $field->value();
+            $current = $current === null ? '' : (string) $current;
+
+            $html = '<select name="' . $name . '" id="' . $name . '">' . "\n";
+            foreach ($field->options() as $optValue => $optLabel) {
+                $selected = ((string) $optValue === $current) ? ' selected="selected"' : '';
+                $html .= '                <option value="' . $this->esc((string) $optValue) . '"' . $selected . '>'
+                    . $this->esc($optLabel) . '</option>' . "\n";
+            }
+            $html .= '            </select>';
+
+            return $html;
+        }
+
         $type  = in_array($field->type, ['text', 'password', 'email', 'hidden'], true) ? $field->type : 'text';
         $value = $field->value();
         $value = $value === null ? '' : (string) $value;

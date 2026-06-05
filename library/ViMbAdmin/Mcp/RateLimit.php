@@ -47,12 +47,21 @@ class ViMbAdmin_Mcp_RateLimit
         // flock on the state file for the entire check+record.
         $fh = @fopen( $file, 'c+' );
         if( $fh === false )
-            return;  // fail-open on FS error (limiter is best-effort)
+        {
+            // fail-open on FS error (limiter is best-effort), but make the noise
+            // visible — a silently-uncapped destructive limiter is a security
+            // gap, not a quiet degradation.
+            error_log( "ViMbAdmin_Mcp_RateLimit: cannot open state file {$file} — destructive rate limit NOT enforced for token {$tokenId}" );
+            return;
+        }
 
         try
         {
             if( !flock( $fh, LOCK_EX ) )
+            {
+                error_log( "ViMbAdmin_Mcp_RateLimit: cannot lock {$file} — destructive rate limit NOT enforced for token {$tokenId}" );
                 return;
+            }
 
             $raw  = stream_get_contents( $fh );
             $hits = json_decode( (string) $raw, true );

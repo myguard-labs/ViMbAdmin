@@ -739,7 +739,7 @@ class MailboxController extends ViMbAdmin_Controller_PluginAction
 
             foreach( [ $maildir, $homedir ] as $dir )
             {
-                $command = sprintf( "%s %s", $this->_options['binary']['path']['rm_rf'], $dir );
+                $command = sprintf( "%s %s", $this->_options['binary']['path']['rm_rf'], escapeshellarg( $dir ) );
                 if( file_exists( $dir ) )
                 {
                     exec( $command, $output, $result );

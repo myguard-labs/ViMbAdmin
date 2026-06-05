@@ -175,6 +175,9 @@ class McpController extends ViMbAdmin_Controller_Action
     private function _domainCreate( array $params )
     {
         $name = $this->_str( $params, 'domain', true );
+        // Bind the per-token domain allowlist to creation too: a token scoped to
+        // specific domains must not be able to create one outside that list.
+        $this->_assertDomainAllowed( $name );
         if( $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] ) )
             throw new ViMbAdmin_Mcp_Exception( 'domain already exists' );
 

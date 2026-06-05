@@ -347,18 +347,7 @@ class ViMbAdmin_Doveadm
             $path = $m[1];
         $path = rtrim( $path, '/' );
 
-        $rows = $this->run( 'fsIterDirs', [ 'filterName' => $filter, 'path' => $path . '/' ] );
-        $out  = [];
-        if( is_array( $rows ) )
-        {
-            foreach( $rows as $r )
-            {
-                $name = is_array( $r ) ? ( $r['path'] ?? null ) : $r;
-                if( $name !== null && $name !== '' && $name !== '.' && $name !== '..' )
-                    $out[] = (string) $name;
-            }
-        }
-        return $out;
+        return $this->_fsList( 'fsIterDirs', $path, $filter );
     }
 
     /**

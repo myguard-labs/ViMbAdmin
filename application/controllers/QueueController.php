@@ -334,6 +334,73 @@ class QueueController extends ViMbAdmin_Controller_Action
      * @param int $max
      * @return int
      */
+    /**
+     * Once every 8h (gated by a setting marker), enqueue a low-priority PRUNE
+     * task for every EXPIRED autoprune backup (archived_at older than
+     * queue.autoprune.days). One task per maildir. Idempotent + cheap: the
+     * enqueue dedups on open PRUNE tasks, and the 8h gate keeps the sweep off
+     * the hot path. This is what replaces the pruning cron.
+     *
+     * @return void
+     */
+    private function _autopruneSweep()
+    {
+        $em = $this->getD2EM();
+
+        // 8h gate.
+        $last = ViMbAdmin_Setting::get( $em, ViMbAdmin_Setting::LAST_PRUNE_SWEEP );
+        if( $last !== null )
+        {
+            $lastTs = strtotime( (string) $last );
+            if( $lastTs !== false && ( time() - $lastTs ) < 8 * 3600 )
+                return;     // swept recently
+        }
+
+        // Stamp first so a slow sweep / a second runner doesn't double-enqueue.
+        ViMbAdmin_Setting::set( $em, ViMbAdmin_Setting::LAST_PRUNE_SWEEP,
+            ( new \DateTime() )->format( 'c' ) );
+
+        try
+        {
+            $days = max( 0, (int) ( $this->_options['queue']['autoprune']['days'] ?? 90 ) );
+            // days=0 = instant policy; the cutoff is "now" (prunes anything
+            // already flagged). Otherwise everything older than N days.
+            $cutoff = ( new \DateTime() )->modify( '-' . $days . ' days' );
+            $expired = $em->getRepository( '\\Entities\\Archive' )->findAutoprune( $cutoff );
+
+            foreach( $expired as $archive )
+            {
+                $user = $archive->getUsername();
+
+                // Dedup: skip if a PRUNE is already open for this user.
+                $open = (int) $em->createQuery(
+                    'SELECT COUNT(t.id) FROM \Entities\MailboxTask t
+                      WHERE t.username = :u AND t.type = :t AND t.status IN (:open)' )
+                    ->setParameter( 'u', $user )
+                    ->setParameter( 't', \Entities\MailboxTask::TYPE_PRUNE )
+                    ->setParameter( 'open', [ \Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING ] )
+                    ->getSingleScalarResult();
+                if( $open > 0 )
+                    continue;
+
+                $mt = new \Entities\MailboxTask();
+                $mt->setType( \Entities\MailboxTask::TYPE_PRUNE )
+                   ->setUsername( $user )
+                   ->setStatus( \Entities\MailboxTask::STATUS_PENDING )
+                   ->setPriority( -20 )                 // below MEASURE_SIZE (-10)
+                   ->setCreatedAt( new \DateTime() )
+                   ->setDomain( $archive->getDomain() )
+                   ->setData( json_encode( [ 'dest' => $archive->getMaildirFile() ] ) );
+                $em->persist( $mt );
+            }
+            $em->flush();
+        }
+        catch( \Throwable $e )
+        {
+            $this->getLogger()->err( 'QueueController::_autopruneSweep: ' . $e->getMessage() );
+        }
+    }
+
     private function _drain( $max )
     {
         $max  = max( 1, (int) $max );
@@ -350,6 +417,11 @@ class QueueController extends ViMbAdmin_Controller_Action
                 echo "All runner slots busy (queue.runner.max_concurrent) — skipping.\n";
             return -1;
         }
+
+        // Periodic autoprune sweep: at most once every 8h, enqueue a (low
+        // priority) PRUNE task for each EXPIRED autoprune backup. Replaces the
+        // pruning cron — the queue runner gates itself on a last-sweep marker.
+        $this->_autopruneSweep();
 
         $processed = 0;
         try
@@ -438,6 +510,35 @@ class QueueController extends ViMbAdmin_Controller_Action
                 }
                 else
                     $task->appendLog( 'measure-size: walk returned no size (kept logical)' );
+                break;
+
+            case \Entities\MailboxTask::TYPE_PRUNE:
+                // Prune ONE expired autoprune backup: remove the /backups
+                // maildir + the archive row. (The autoprune sweep enqueued this;
+                // re-check the row still exists + is still autoprune-on.)
+                $archive = $this->getD2EM()->getRepository( '\\Entities\\Archive' )
+                                ->findOneBy( [ 'username' => $user ] );
+                if( !$archive )
+                {
+                    $task->appendLog( 'prune: archive already gone — nothing to do' );
+                    break;
+                }
+                if( !$archive->getAutoprune() )
+                {
+                    $task->appendLog( 'prune: autoprune turned off — skipping' );
+                    break;
+                }
+                $dest = $archive->getMaildirFile();
+                if( $dest )
+                {
+                    $task->appendLog( 'prune: fs delete ' . $dest );
+                    $doveadm->fsDelete( $dest );
+                }
+                $this->getD2EM()->remove( $archive );
+                ViMbAdmin_Setting::stampNow( $this->getD2EM(), ViMbAdmin_Setting::LAST_PRUNE );
+                $task->appendLog( 'prune: archive removed' );
+                $this->_logAudit( $task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                    "autopruned expired archive backup for {$user}" );
                 break;
 
             case \Entities\MailboxTask::TYPE_ARCHIVE:

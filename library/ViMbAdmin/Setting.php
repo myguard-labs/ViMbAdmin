@@ -16,8 +16,9 @@
  */
 class ViMbAdmin_Setting
 {
-    const LAST_QUEUERUN = 'last_queuerun_at';
-    const LAST_PRUNE    = 'last_prune_at';
+    const LAST_QUEUERUN   = 'last_queuerun_at';
+    const LAST_PRUNE      = 'last_prune_at';
+    const LAST_PRUNE_SWEEP = 'last_prune_sweep_at';   // when the runner last enqueued autoprune tasks
 
     /**
      * Read a setting value, or $default if absent / on any error.

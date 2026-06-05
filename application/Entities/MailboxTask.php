@@ -36,6 +36,13 @@ class MailboxTask
      */
     const TYPE_MEASURE_SIZE = "MEASURE_SIZE";
 
+    /**
+     * Prune ONE expired autoprune archive: remove its /backups maildir (doveadm
+     * fs delete) and its archive row. Enqueued (one per expired backup) by the
+     * queue runner's periodic autoprune sweep; lowest priority.
+     */
+    const TYPE_PRUNE = "PRUNE";
+
     public static $TYPES = [
         self::TYPE_REPAIR       => "Repair / optimize",
         self::TYPE_OPTIMIZE     => "Repair / optimize",

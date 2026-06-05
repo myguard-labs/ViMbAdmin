@@ -324,22 +324,16 @@
                         </tbody>
                     </table>
 
-                    {if isset( $confirmBackupOrphans ) and $confirmBackupOrphans}
-                        <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}" style="display:inline;">
-                            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
-                            <input type="hidden" name="confirm" value="1" />
-                            <button class="btn btn-danger" type="submit">Queue import of all {$orphans|@count} maildir(s)</button>
-                            <a class="btn" href="{genUrl controller='maintenance' action='index'}">Cancel</a>
-                        </form>
-                    {else}
-                        <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}" style="display:inline;">
-                            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
-                            <button class="btn btn-primary" type="submit">Import all {$orphans|@count}</button>
-                        </form>
-                        <form method="post" action="{genUrl controller='maintenance' action='scan-orphans'}" style="display:inline;">
-                            <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
-                            <button class="btn" type="submit">Re-scan</button>
-                        </form>
+                    <form method="post" action="{genUrl controller='maintenance' action='backup-orphans'}" style="display:inline;"
+                          onsubmit="return confirm('Import all {$orphans|@count} unmanaged maildir(s)? Each is backed up to the archive (if it holds mail) then its source maildir is removed; empty leftovers are just removed.');">
+                        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                        <input type="hidden" name="confirm" value="1" />
+                        <button class="btn btn-primary" type="submit">Import all {$orphans|@count}</button>
+                    </form>
+                    <form method="post" action="{genUrl controller='maintenance' action='scan-orphans'}" style="display:inline;">
+                        <input type="hidden" name="csrf" value="{$csrfToken|escape}" />
+                        <button class="btn" type="submit">Re-scan</button>
+                    </form>
                     {/if}
                 {else}
                     <div class="alert alert-success">No orphan maildirs — every maildir on disk has a mailbox.</div>

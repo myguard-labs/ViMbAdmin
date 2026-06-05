@@ -610,11 +610,11 @@ class MaintenanceController extends ViMbAdmin_Controller_Action
         }
         elseif( (int) $this->getParam( 'confirm', 0 ) !== 1 )
         {
-            // "import all" is two-step.
-            $this->view->orphans            = $orphans;
-            $this->view->confirmBackupOrphans = true;
-            $this->indexAction();
-            return $this->render( 'index' );
+            // "import all" requires confirm=1 (the view's Import-all button
+            // sends it with a JS confirm). A bare POST is a stale/replayed
+            // form — bounce back to the tab rather than silently doing nothing.
+            $this->addMessage( _( 'Re-scan and use "Import all" to import every unmanaged maildir.' ), OSS_Message::INFO );
+            $this->redirect( 'maintenance/index' );
         }
 
         $em = $this->getD2EM();

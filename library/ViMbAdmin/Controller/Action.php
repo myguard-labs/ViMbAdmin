@@ -288,7 +288,39 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
      */
     public function getAdmin()
     {
-        return $this->getUser();
+        // Delegate the identity->admin resolution to the framework-free Auth
+        // service (Phase 5, docs/ZF1-REMOVAL.md). Falls back to the legacy
+        // getUser() path when the service yields nothing, preserving the old
+        // semantics (including its die-on-missing) for the no-identity edge.
+        return $this->_nativeAuth()->admin() ?? $this->getUser();
+    }
+
+
+    /**
+     * Build the framework-free authentication/authorisation service over the
+     * live ZF1 auth storage (Phase 5, docs/ZF1-REMOVAL.md).
+     *
+     * The identity array Zend_Auth writes lives in its default storage —
+     * `Zend_Session_Namespace('Zend_Auth')->storage` — so the same tested
+     * MagicPropertyStorage adapter used for link-CSRF bridges it without naming
+     * the framework inside the zero-`Zend_` `src/` tree. `identityKey = 'storage'`
+     * points the service at that member. The admin loader is the Doctrine Admin
+     * repository, keeping the service itself Doctrine-free. Identities minted by
+     * the old login flow keep resolving across the upgrade.
+     *
+     * @return \ViMbAdmin\Kernel\Security\Auth
+     */
+    private function _nativeAuth()
+    {
+        $em = $this->getD2EM();
+
+        return new \ViMbAdmin\Kernel\Security\Auth(
+            new \ViMbAdmin\Kernel\Session\MagicPropertyStorage( new Zend_Session_Namespace( 'Zend_Auth' ) ),
+            function( int $id ) use ( $em ) {
+                return $em->getRepository( '\\Entities\\Admin' )->find( $id );
+            },
+            'storage'
+        );
     }
 
     /**
@@ -527,7 +559,7 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
      */
     protected function authorise( $super = false, $domain = null, $redirect = true )
     {
-        if( !$this->getAuth()->hasIdentity() )
+        if( !$this->_nativeAuth()->isAuthenticated() )
         {
             if( $redirect )
             {
@@ -538,7 +570,7 @@ class ViMbAdmin_Controller_Action extends OSS_Controller_Action
             return false;
         }
 
-        if( $this->getAdmin()->isSuper() )
+        if( $this->_nativeAuth()->isSuper() )
         {
             return true; // a superadmin can do everything
         }

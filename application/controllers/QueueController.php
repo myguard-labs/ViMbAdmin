@@ -429,6 +429,8 @@ class QueueController extends ViMbAdmin_Controller_Action
                 $task->appendLog( 'mailbox delete (empty store, keep account)' );
                 $doveadm->mailboxDelete( $user );
                 // Account row is intentionally KEPT.
+                $this->_logAudit( $task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                    "archived {$user} (backup {$dest}, store emptied, account kept)" );
                 break;
 
             case \Entities\MailboxTask::TYPE_DELETE:
@@ -440,6 +442,8 @@ class QueueController extends ViMbAdmin_Controller_Action
                     $doveadm->mailboxDelete( $user );
                     $task->appendLog( 'removing ViMbAdmin mailbox row' );
                     $this->_removeMailboxRow( $user );
+                    $this->_logAudit( $task, \Entities\Log::ACTION_MAILBOX_PURGE,
+                        "deleted {$user} (instant, autoprune.days=0 — no backup)" );
                     break;
                 }
 
@@ -455,6 +459,8 @@ class QueueController extends ViMbAdmin_Controller_Action
                 $doveadm->mailboxDelete( $user );
                 $task->appendLog( 'removing ViMbAdmin mailbox row' );
                 $this->_removeMailboxRow( $user );
+                $this->_logAudit( $task, \Entities\Log::ACTION_MAILBOX_PURGE,
+                    "deleted {$user} (backup {$dest}, autoprune on — prunes after queue.autoprune.days)" );
                 break;
 
             default:
@@ -500,6 +506,39 @@ class QueueController extends ViMbAdmin_Controller_Action
      * @param bool   $autoprune whether this backup expires automatically
      * @return void
      */
+    /**
+     * Write an audit row to the Log table from the queue runner. The runner is
+     * CLI (no web session), so we attribute the action to the admin who queued
+     * the task (task.requestedBy), which may be null for system/MCP-initiated
+     * work. Best-effort: a logging failure must never abort the task.
+     *
+     * @param \Entities\MailboxTask $task
+     * @param string $action  a \Entities\Log::ACTION_* constant
+     * @param string $message
+     * @return void
+     */
+    private function _logAudit( \Entities\MailboxTask $task, $action, $message )
+    {
+        try
+        {
+            $em  = $this->getD2EM();
+            $log = new \Entities\Log();
+            $log->setAction( $action )
+                ->setData( $message )
+                ->setTimestamp( new \DateTime() );
+            if( method_exists( $task, 'getRequestedBy' ) && $task->getRequestedBy() )
+                $log->setAdmin( $task->getRequestedBy() );
+            if( method_exists( $task, 'getDomain' ) && $task->getDomain() )
+                $log->setDomain( $task->getDomain() );
+            $em->persist( $log );
+            $em->flush();
+        }
+        catch( \Throwable $e )
+        {
+            $this->getLogger()->err( 'QueueController::_logAudit: ' . $e->getMessage() );
+        }
+    }
+
     private function _recordArchive( \Entities\MailboxTask $task, $dest, $autoprune )
     {
         $em   = $this->getD2EM();
@@ -513,12 +552,26 @@ class QueueController extends ViMbAdmin_Controller_Action
             $archive->setUsername( $user );
         }
 
-        // Pre-empty store size (bytes) from the Dovecot quota-clone mirror, if
-        // present — best-effort, purely informational on the Archives page.
+        // Pre-empty LOGICAL store size (bytes) from the Dovecot quota-clone
+        // mirror, if present — the mailbox's uncompressed size, kept as
+        // maildir_orig_size for reference.
         $origSize = null;
         $q = $em->getRepository( '\\Entities\\Quota' )->findOneBy( [ 'username' => $user ] );
         if( $q )
             $origSize = $q->getBytes();
+
+        // Actual ON-DISK size of the backup we just wrote (the maildir is
+        // zstd-compressed by Dovecot's mail_compress, so this is the compressed
+        // footprint). Best-effort: null on any doveadm error -> UI shows "—".
+        $diskSize = null;
+        try
+        {
+            $diskSize = ViMbAdmin_Doveadm::fromOptions( $this->_options )->fsDirSize( $dest );
+        }
+        catch( \Throwable $e )
+        {
+            $this->getLogger()->err( "QueueController::_recordArchive fsDirSize {$user}: " . $e->getMessage() );
+        }
 
         // Capture the full mailbox attributes (incl the password HASH) while the
         // row still exists, so a later restore of a DELETE'd account can recreate
@@ -548,7 +601,7 @@ class QueueController extends ViMbAdmin_Controller_Action
                 ->setMaildirServer( (string) ( $this->_options['doveadm']['http']['url'] ?? '' ) )
                 ->setMaildirFile( $dest )
                 ->setMaildirOrigSize( $origSize )
-                ->setMaildirSize( $origSize )
+                ->setMaildirSize( $diskSize !== null ? $diskSize : $origSize )
                 ->setAutoprune( $autoprune )
                 ->setData( json_encode( [
                     'username' => $user,

@@ -199,9 +199,34 @@ class ArchiveController extends ViMbAdmin_Controller_PluginAction
         $em->remove( $archive );
         $em->flush();
 
+        // Queue a REPAIR (force-resync + index + purge + quota recalc) for the
+        // restored mailbox: doveadm sync merged the backup in, so rebuild the
+        // indexes and refresh the quota so the account is fully consistent.
+        // Non-blocking — the cron drains it.
+        $repairQueued = false;
+        if( $mailbox )
+        {
+            try
+            {
+                if( ViMbAdmin_MailboxQueue::enqueue( $em, $mailbox, \Entities\MailboxTask::TYPE_REPAIR, $this->getAdmin() ) )
+                {
+                    $em->flush();
+                    $repairQueued = true;
+                }
+            }
+            catch( \Throwable $e )
+            {
+                $this->getLogger()->err( "ArchiveController::restoreAction enqueue repair {$user}: " . $e->getMessage() );
+            }
+        }
+
         $this->log( \Entities\Log::ACTION_ARCHIVE_RESTORE,
-            "{$this->getAdmin()->getFormattedName()} restored archive for {$user}" );
-        $this->addMessage( sprintf( "Archive for %s restored into the live mailbox.", $user ), OSS_Message::SUCCESS );
+            "{$this->getAdmin()->getFormattedName()} restored archive for {$user}"
+            . ( $repairQueued ? ' (repair queued)' : '' ) );
+        $this->addMessage(
+            sprintf( "Archive for %s restored into the live mailbox.%s", $user,
+                $repairQueued ? _( ' A repair/optimize was queued and will run in the background.' ) : '' ),
+            OSS_Message::SUCCESS );
         $this->redirect( 'archive/list' );
     }
 

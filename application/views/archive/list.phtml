@@ -24,6 +24,7 @@
             <th>Username</th>
             <th>Status</th>
             <th>Domain</th>
+            <th>Size</th>
             <th>Archived</th>
             <th>User exists</th>
             <th>Autoprune</th>
@@ -36,6 +37,7 @@
             <td>{$archive.username}</td>
             <td>{$statuses[$archive.status]}</td>
             <td>{$archive.domain}</td>
+            <td>{if $archive.maildir_size}{$archive.maildir_size|filesize}{else}&mdash;{/if}</td>
             <td>{if $archive.archived_at}{$archive.archived_at->format('Y-m-d H:i')}{else}&mdash;{/if}</td>
             <td>{if $archive.user_exists}<span class="label label-success">Yes</span>{else}<span class="label">No</span>{/if}</td>
             <td>{if $archive.autoprune}<span class="label label-warning">On</span>{else}<span class="label">Off</span>{/if}</td>

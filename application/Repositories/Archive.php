@@ -26,6 +26,7 @@ class Archive extends EntityRepository
         $qb = $this->getEntityManager()->createQueryBuilder()
             ->select( 'a.id as id , a.username as username, a.status as status, '
                     . 'a.archived_at as archived_at, a.autoprune as autoprune, '
+                    . 'a.maildir_size as maildir_size, '
                     . 'd.domain as domain, '
                     . '(CASE WHEN m.id IS NULL THEN 0 ELSE 1 END) as user_exists' )
             ->from( '\\Entities\\Archive', 'a' )

@@ -112,6 +112,20 @@ plumbing.
 >   HTTP glue (param/entity resolution, `authorise()`, plugin `notify()` hooks,
 >   `addMessage()`, `redirect()`).
 > - Form handling (`Zend_Form`) stays in the controller for now — it is Phase 4.
+>
+> **Notify-interleaved actions (Alias, Mailbox) need a no-flush variant.** Unlike
+> Domain/Admin, several `AliasController` / `MailboxController` actions fire plugin
+> `notify()` hooks *between* the mutation and the flush — e.g. toggle-active does
+> `setActive → log → notify('…preflush', ['active'=>NEW state]) → flush →
+> notify('…postflush')`. A service that owns its flush cannot preserve this: the
+> `preflush` plugin must observe the post-mutation state and run immediately
+> before the flush. So for these controllers the service method does the pure
+> entity work (mutate + persist its Log row) and **returns without flushing**; the
+> controller keeps the `notify()` ordering and the single `flush()`. Likewise
+> `delete` actions gate the removal behind `notify('preRemove') !== false`, so the
+> gate stays controller-side and the service exposes only the removal/decrement/log
+> body. These are lower-value, higher-risk than Domain/Admin and are best done
+> after Phase 4 thins the form coupling — left intentionally for later.
 
 ### Phase 2 — build the framework-free kernel alongside ZF1
 1. Add the libraries above via Composer.

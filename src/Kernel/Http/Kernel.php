@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\Http;
 
 use ViMbAdmin\Kernel\Controller\AdditionalInfoController;
+use ViMbAdmin\Kernel\Controller\AdminController;
 use ViMbAdmin\Kernel\Controller\IndexController;
 use ViMbAdmin\Kernel\Controller\LogController;
 use ViMbAdmin\Kernel\Mvc\Dispatcher;
@@ -51,6 +52,7 @@ final class Kernel
         'additionalinfo' => AdditionalInfoController::class,
         'index'          => IndexController::class,
         'log'            => LogController::class,
+        'admin'          => AdminController::class,
     ];
 
     /**

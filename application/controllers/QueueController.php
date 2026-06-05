@@ -552,27 +552,39 @@ class QueueController extends ViMbAdmin_Controller_Action
             $archive->setUsername( $user );
         }
 
-        // Mailbox SIZE (bytes), captured BEFORE the store is emptied. We use
-        // the Dovecot quota (logical mail size): force a quota recalc so it's
-        // current, then read the quota-clone mirror (dovecot_quota) by raw DBAL
-        // for the fresh value. NOTE: the true *compressed* on-disk backup size
-        // is not obtainable here — `doveadm fs iter` over the HTTP API lists
-        // FILES only, not subdirectories, so a maildir tree (cur/, .Folder/cur/)
-        // can't be walked without hardcoding its layout. The logical size is
-        // the reliable figure. Best-effort: null -> UI shows "—".
-        $size = null;
+        $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
+
+        // LOGICAL mailbox size (uncompressed) from the Dovecot quota-clone,
+        // refreshed so it's current — kept as maildir_orig_size for reference.
+        $origSize = null;
         try
         {
-            ViMbAdmin_Doveadm::fromOptions( $this->_options )->quotaRecalc( $user );
+            $doveadm->quotaRecalc( $user );
             $bytes = $em->getConnection()->fetchOne(
                 'SELECT bytes FROM dovecot_quota WHERE username = ?', [ $user ] );
             if( $bytes !== false && $bytes !== null )
-                $size = (int) $bytes;
+                $origSize = (int) $bytes;
         }
         catch( \Throwable $e )
         {
             $this->getLogger()->err( "QueueController::_recordArchive quota {$user}: " . $e->getMessage() );
         }
+
+        // ACTUAL on-disk size of the backup we just wrote — the COMPRESSED
+        // footprint (mail_compress zstd). Measured entirely via the doveadm
+        // REST API (fsIter/fsIterDirs/fsStat). Falls back to the logical size
+        // if the walk fails. This is what the Archives "Size" column shows.
+        $size = null;
+        try
+        {
+            $size = $doveadm->fsDirSize( $dest );
+        }
+        catch( \Throwable $e )
+        {
+            $this->getLogger()->err( "QueueController::_recordArchive fsDirSize {$user}: " . $e->getMessage() );
+        }
+        if( $size === null || $size <= 0 )
+            $size = $origSize;
 
         // Capture the full mailbox attributes (incl the password HASH) while the
         // row still exists, so a later restore of a DELETE'd account can recreate
@@ -601,7 +613,7 @@ class QueueController extends ViMbAdmin_Controller_Action
                 ->setDomain( $task->getDomain() )
                 ->setMaildirServer( (string) ( $this->_options['doveadm']['http']['url'] ?? '' ) )
                 ->setMaildirFile( $dest )
-                ->setMaildirOrigSize( $size )
+                ->setMaildirOrigSize( $origSize )
                 ->setMaildirSize( $size )
                 ->setAutoprune( $autoprune )
                 ->setData( json_encode( [

@@ -291,6 +291,122 @@ class ViMbAdmin_Doveadm
         ] );
     }
 
+    /**
+     * Recursive ON-DISK byte size of a directory, entirely via the doveadm
+     * REST API (no shared filesystem). The maildir is zstd-compressed by
+     * Dovecot's mail_compress, so this is the COMPRESSED footprint.
+     *
+     * doveadm `fs` over HTTP, learned the hard way:
+     *   - `fsIter`     lists FILES in a dir (NOT subdirectories);
+     *   - `fsIterDirs` lists the SUBDIRECTORIES;
+     *   - `fsStat`     gives a file's byte size.
+     *   - for all three, `path` must be a STRING (an array crashes the worker
+     *     -> empty reply). This differs from `fsDelete`, which takes an array.
+     * So we sum `fsStat` over `fsIter` at each level and recurse into
+     * `fsIterDirs`. Best-effort + depth-capped; null on error.
+     *
+     * @param string $path    filesystem path or `<driver>:<path>` dest URI
+     * @param string $filter  the fs filter name (default "posix")
+     * @return int|null  total bytes, or null on error
+     */
+    public function fsDirSize( $path, $filter = 'posix' )
+    {
+        if( preg_match( '#^[a-z0-9]+:(/.*)$#i', $path, $m ) )
+            $path = $m[1];
+        $path = rtrim( $path, '/' );
+
+        // One fsStat HTTP round-trip per file, so a huge mailbox could run for
+        // minutes. Bound it with a wall-clock budget; if we blow it, give up
+        // and let the caller fall back to the logical (quota) size. Plenty for
+        // normal mailboxes; a safety net for pathological ones.
+        $this->_fsDeadline = microtime( true ) + 45.0;
+
+        try
+        {
+            return $this->_fsDirSize( $path, $filter, 0 );
+        }
+        catch( \Throwable $e )
+        {
+            // Over budget or any fs error -> null, caller falls back to quota.
+            return null;
+        }
+    }
+
+    /** @var float unix time after which fsDirSize aborts */
+    private $_fsDeadline = 0.0;
+
+    /**
+     * List the entries of one directory level via a doveadm fs command.
+     * Returns the bare names (the `path` field of each row), or [].
+     *
+     * @param string $cmd     'fsIter' (files) or 'fsIterDirs' (subdirs)
+     * @param string $dir
+     * @param string $filter
+     * @return string[]
+     */
+    private function _fsList( $cmd, $dir, $filter )
+    {
+        $rows = $this->run( $cmd, [
+            'filterName' => $filter,
+            'path'       => $dir . '/',          // STRING path, trailing slash
+        ] );
+        $out = [];
+        if( is_array( $rows ) )
+        {
+            foreach( $rows as $r )
+            {
+                $name = is_array( $r ) ? ( $r['path'] ?? null ) : $r;
+                if( $name !== null && $name !== '' && $name !== '.' && $name !== '..' )
+                    $out[] = (string) $name;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param string $dir
+     * @param string $filter
+     * @param int    $depth
+     * @return int
+     */
+    private function _fsDirSize( $dir, $filter, $depth )
+    {
+        if( $depth > 16 )                        // safety against a loop
+            return 0;
+        if( $this->_fsDeadline > 0 && microtime( true ) > $this->_fsDeadline )
+            throw new \RuntimeException( 'fsDirSize time budget exceeded' );
+
+        $total = 0;
+
+        // Files in this directory -> sum their stat sizes.
+        foreach( $this->_fsList( 'fsIter', $dir, $filter ) as $name )
+        {
+            $child = $dir . '/' . ltrim( $name, '/' );
+            try
+            {
+                $st = $this->run( 'fsStat', [ 'filterName' => $filter, 'path' => $child ] );
+                if( is_array( $st ) && isset( $st[0]['size'] ) )
+                    $total += (int) $st[0]['size'];
+                elseif( is_array( $st ) && isset( $st['size'] ) )
+                    $total += (int) $st['size'];
+            }
+            catch( \Throwable $e )
+            {
+                // a file that vanished mid-walk -> skip.
+            }
+        }
+
+        // Subdirectories -> recurse.
+        foreach( $this->_fsList( 'fsIterDirs', $dir, $filter ) as $name )
+        {
+            $child = $dir . '/' . ltrim( $name, '/' );
+            try { $total += $this->_fsDirSize( $child, $filter, $depth + 1 ); }
+            catch( \Throwable $e ) { /* skip unreadable subtree */ }
+        }
+
+        return $total;
+    }
+
 
     /**
      * Restore a backup into a user's live store: `doveadm sync -u <user> <src>`.

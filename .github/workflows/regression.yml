@@ -118,7 +118,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          extensions: apcu, ctype, dom, intl, json, mbstring, pdo, pdo_mysql, sodium
+          extensions: apcu, ctype, dom, intl, json, mbstring, pdo, pdo_mysql, simplexml, sodium
           ini-values: apc.enable_cli=1
           tools: composer:v2
 
@@ -137,6 +137,9 @@ jobs:
 
       - name: Cache + ORM bootstrap smoke
         run: php -d apc.enable_cli=1 tests/test-cache-bootstrap.php
+
+      - name: Native Doctrine EM factory (WALL #2)
+        run: php tests/test-kernel-em-factory.php
 
   # ------------------------------------------------------------------ #
   # Schema drift — loads the shipped SQL into a real MariaDB and proves #

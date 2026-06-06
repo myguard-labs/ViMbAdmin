@@ -214,9 +214,10 @@ final class AliasController extends AbstractController
      */
     public function addAction(): ?Response
     {
-        // Edit (alid in URL) stays on ZF1 via the dispatcher fallback.
-        if ($this->param('alid')) {
-            return null;
+        // Edit is served natively by editAction; redirect the legacy
+        // add-with-alid alias there rather than punting to ZF1.
+        if ($alid = $this->param('alid')) {
+            return $this->redirect('alias/edit/alid/' . (int) $alid);
         }
 
         $admin = $this->admin();

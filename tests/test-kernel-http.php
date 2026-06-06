@@ -54,6 +54,14 @@ check('additionalinfo without a dispatcher -> null (ZF1 fallback)',
 $kernel2 = new Kernel(new Router(['kernel-health']));
 check('only kernel-health handled',       $kernel2->handle('/kernel-health') instanceof Response);
 
+// canHandle() — the resource-free servability check the entry point uses to
+// route before opening a session. The built-in (kernel-health) and a
+// non-allowlisted path are decidable without loading any controller; the
+// method_exists branch for real controllers is exercised in the image.
+check('canHandle: built-in kernel-health -> true',  $kernel->canHandle('/kernel-health') === true);
+check('canHandle: kernel-health/index    -> true',  $kernel->canHandle('/kernel-health/index') === true);
+check('canHandle: non-allowlisted path   -> false', $kernel->canHandle('/totally/unknown') === false);
+
 echo "\n";
 if ($failures === 0) {
     echo "OK: all Kernel assertions passed (PHP " . PHP_VERSION . ")\n";

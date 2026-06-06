@@ -295,9 +295,10 @@ final class MailboxController extends AbstractController
      */
     public function addAction(): ?Response
     {
-        // Edit (mid in URL) stays on ZF1 via the dispatcher fallback.
-        if ($this->param('mid')) {
-            return null;
+        // Edit is served natively by editAction; redirect the legacy
+        // add-with-mid alias there rather than punting to ZF1.
+        if ($mid = $this->param('mid')) {
+            return $this->redirect('mailbox/edit/mid/' . (int) $mid);
         }
 
         $admin = $this->admin();

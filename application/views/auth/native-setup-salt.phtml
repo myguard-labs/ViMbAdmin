@@ -1,0 +1,32 @@
+{include file='header.phtml'}
+
+<h1>{t}Welcome to ViMbAdmin{/t}</h1>
+
+<p>
+    {t}Before you can create the first administrator, ViMbAdmin needs its
+    security salts configured.{/t}
+</p>
+
+<div class="well">
+    <h3>Step 1: Security Salts</h3>
+
+    <p>
+        <em>Security salts</em> are used to ensure your passwords are secure, you
+        are authorised to complete the install procedure and for cookie security.
+        To proceed, please set the following <strong>randomly generated</strong>
+        salts at the top of the <code>[user]</code> section of the following file:
+        <code>application/configs/application.ini</code>.
+    </p>
+
+    <pre>securitysalt                       = "{$randomSalt|htmlentities}"
+resources.auth.oss.rememberme.salt = "{$rememberSalt|htmlentities}"
+defaults.mailbox.password_salt     = "{$passwordSalt|htmlentities}"</pre>
+
+    <p>
+        <strong>Please also ensure you have set all the appropriate values in the
+        <code>[user]</code> section before continuing.</strong> Then reload this
+        page to create the first administrator.
+    </p>
+</div>
+
+{include file='footer.phtml'}

@@ -134,8 +134,10 @@ final class DomainController extends AbstractController
      */
     public function addAction(): ?Response
     {
-        if ($this->param('did')) {
-            return null; // edit → ZF1 fallback
+        if ($did = $this->param('did')) {
+            // The edit form is served natively by editAction; redirect the
+            // legacy add-with-did alias there rather than punting to ZF1.
+            return $this->redirect('domain/edit/did/' . (int) $did);
         }
 
         $admin = $this->admin();
@@ -195,7 +197,8 @@ final class DomainController extends AbstractController
             : null;
 
         if ($domain === null) {
-            return null; // invalid/missing → ZF1 fallback (flash + redirect)
+            $this->flash('Invalid or non-existent domain.', FlashMessages::ERROR);
+            return $this->redirect('domain/list');
         }
 
         $options = $this->container->options();

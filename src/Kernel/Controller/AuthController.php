@@ -135,10 +135,15 @@ final class AuthController extends AbstractController
         $options = $this->container->options();
         $salt    = (string) ($options['securitysalt'] ?? '');
 
-        // The salt-not-configured first-run screen has a bespoke view — let ZF1
-        // serve it.
+        // Salt not configured yet (fresh install before the [user] section is
+        // filled in): render the first-run "set your security salts" screen
+        // natively, generating the same three salts the ZF1 screen offered.
         if (strlen($salt) !== 64) {
-            return null;
+            return $this->view('auth/native-setup-salt.phtml', [
+                'randomSalt'   => \OSS_String::salt(64),
+                'rememberSalt' => \OSS_String::salt(64),
+                'passwordSalt' => \OSS_String::salt(64),
+            ]);
         }
 
         $form = $this->buildSetupForm();

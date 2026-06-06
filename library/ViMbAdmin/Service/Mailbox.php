@@ -237,6 +237,48 @@ class ViMbAdmin_Service_Mailbox
     }
 
     /**
+     * Persist an edit to an existing mailbox.
+     *
+     * Mirrors the edit path of the legacy `MailboxController::addAction` (reached
+     * via `editAction`'s `forward('add')`): the caller has already applied the
+     * editable fields (name, quota, alt_email, the plugin writebacks) onto
+     * `$mailbox`. This service stamps `modified`, logs the edit and flushes,
+     * firing the supplied pre/post-flush plugin hooks around the flush (the
+     * native equivalent of the ZF1 `addPreflush`/`addPostflush` notify). The
+     * lighter sibling of {@see create} — no derivation, no auto-alias, no count
+     * bump, since an edit changes none of those.
+     *
+     * @param callable():void|null $preFlush  fires after the log, before flush
+     * @param callable():void|null $postFlush fires after flush
+     */
+    public function update(
+        \Entities\Mailbox $mailbox,
+        \Entities\Admin $actor,
+        ?callable $preFlush = null,
+        ?callable $postFlush = null
+    ): \Entities\Mailbox {
+        $mailbox->setModified(new \DateTime());
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_MAILBOX_EDIT,
+            "{$actor->getFormattedName()} edited mailbox {$mailbox->getUsername()}"
+        );
+
+        if ($preFlush !== null) {
+            $preFlush();
+        }
+
+        $this->em->flush();
+
+        if ($postFlush !== null) {
+            $postFlush();
+        }
+
+        return $mailbox;
+    }
+
+    /**
      * Write a Log row for an action (persist only; the caller's flush commits it).
      */
     private function log(\Entities\Admin $actor, string $action, string $message, ?\Entities\Domain $domain = null): void

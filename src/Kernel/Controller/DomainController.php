@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Form\Field;
 use ViMbAdmin\Kernel\Form\Form;
 use ViMbAdmin\Kernel\Form\FormRenderer;
@@ -26,9 +27,12 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * framework-free `ViMbAdmin_Service_Domain`, refusing a domain the admin cannot
  * manage — mirroring the ZF1 `loadDomain()` authorisation.
  *
- * The list/toggle actions plus the native add/edit forms are migrated; the
- * remaining CRUD actions (purge/admins/…) stay on ZF1 via the dispatcher
- * fallback. The legacy controller is untouched.
+ * The list/toggle actions, the native add/edit forms, and the domain-admin
+ * assignment trio (`admins`/`assign-admin`/`remove-admin`) are migrated — the
+ * symmetric counterpart of the AdminController domain-assignment trio (#40/#41),
+ * over the same already-extracted `ViMbAdmin_Service_Domain` (assignAdmin/
+ * removeAdmin). The remaining CRUD actions (purge/…) stay on ZF1 via the
+ * dispatcher fallback. The legacy controller is untouched.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -182,6 +186,149 @@ final class DomainController extends AbstractController
                 'Save'
             ),
         ]);
+    }
+
+    /**
+     * GET /domain/admins/did/<id> — list a domain's (non-super) administrators.
+     *
+     * Super-only (the ZF1 `authorise(true)`). Reuses the existing
+     * `domain/admins.phtml` view byte-for-byte (the template reads
+     * `$domain->getAdmins()` directly), so this only resolves + authorises the
+     * domain and seeds the `domain` view variable — the symmetric counterpart of
+     * the AdminController `domainsAction` (#40, which reused `admin/domains.phtml`).
+     */
+    public function adminsAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $domain = ($did = $this->param('did'))
+            ? $this->em()->getRepository('\\Entities\\Domain')->find((int) $did)
+            : null;
+
+        if ($domain === null) {
+            $this->flash('Invalid or non-existent domain.', FlashMessages::ERROR);
+            return $this->redirect('domain/list');
+        }
+
+        return $this->view('domain/admins.phtml', ['domain' => $domain]);
+    }
+
+    /**
+     * GET /domain/remove-admin/did/<id>/aid/<id> — detach an admin from a domain.
+     *
+     * Super-only, no CSRF (a super-gated GET link, matching the ZF1 action and the
+     * AdminController `removeDomainAction` #40). Detaches via the framework-free
+     * `ViMbAdmin_Service_Domain::removeAdmin` (detach + log + flush), then flashes
+     * and bounces back to the domain's admins page.
+     */
+    public function removeAdminAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $domain = ($did = $this->param('did'))
+            ? $this->em()->getRepository('\\Entities\\Domain')->find((int) $did)
+            : null;
+
+        if ($domain === null) {
+            $this->flash('Invalid or missing domain id.', FlashMessages::ERROR);
+            return $this->redirect('domain/list');
+        }
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+
+        if ($target === null) {
+            $this->flash('Invalid or missing admin id.', FlashMessages::ERROR);
+            return $this->redirect('domain/admins/did/' . $domain->getId());
+        }
+
+        (new \ViMbAdmin_Service_Domain($this->em()))->removeAdmin($domain, $target, $admin);
+
+        $this->flash('You have successfully removed the domain from admin ' . $target->getUsername());
+        return $this->redirect('domain/admins/did/' . $domain->getId());
+    }
+
+    /**
+     * GET|POST /domain/assign-admin/did/<id> — assign an admin to a domain.
+     *
+     * Super-only. The select offers the admins NOT already assigned
+     * (`Repositories\Admin::getNotAssignedForDomain`, an id→username map). A valid
+     * POST assigns via `ViMbAdmin_Service_Domain::assignAdmin` (which throws a
+     * `ViMbAdmin_Service_Exception` on a duplicate, flashed as an error) and
+     * redirects to the admins page; an empty remaining set flashes an info notice
+     * on the empty form. The symmetric counterpart of the AdminController
+     * `assignDomainAction` (#41).
+     */
+    public function assignAdminAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $domain = ($did = $this->param('did'))
+            ? $this->em()->getRepository('\\Entities\\Domain')->find((int) $did)
+            : null;
+
+        if ($domain === null) {
+            $this->flash('Invalid or missing domain id.', FlashMessages::ERROR);
+            return $this->redirect('domain/list');
+        }
+
+        $remaining = $this->em()->getRepository('\\Entities\\Admin')->getNotAssignedForDomain($domain);
+        $form      = $this->buildAssignAdminForm($remaining);
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $target = $this->em()->getRepository('\\Entities\\Admin')->find((int) $form->values()['admin']);
+
+            if ($target !== null) {
+                try {
+                    (new \ViMbAdmin_Service_Domain($this->em()))->assignAdmin($domain, $target, $admin);
+                    $this->flash('You have successfully assigned a admin to the domain.');
+                } catch (\ViMbAdmin_Service_Exception $e) {
+                    $this->flash($e->getMessage(), FlashMessages::ERROR);
+                }
+            }
+
+            return $this->redirect('domain/admins/did/' . $domain->getId());
+        }
+
+        if (count($remaining) === 0) {
+            $this->flash('There are no administrators to assign to this domain.', FlashMessages::INFO);
+        }
+
+        return $this->view('domain/native-assign-admin.phtml', [
+            'domain'   => $domain,
+            'formHtml' => (new FormRenderer())->render(
+                $form,
+                '/domain/assign-admin/did/' . $domain->getId(),
+                'Save'
+            ),
+        ]);
+    }
+
+    /**
+     * The native assign-admin form: a select of the admins not already on the
+     * domain (id → username), guarded by `inArray` so a forged id is rejected.
+     *
+     * @param array<int|string,string> $remaining admin id → username
+     */
+    private function buildAssignAdminForm(array $remaining): Form
+    {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+        $form->add((new Field('admin', 'Administrator', 'select', [
+            Validators::required(),
+            Validators::inArray($remaining),
+        ]))->setOptions($remaining));
+
+        return $form;
     }
 
     /**

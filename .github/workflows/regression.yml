@@ -98,6 +98,9 @@ jobs:
       - name: ViMbAdmin\Kernel\Config (native INI loader)
         run: php tests/test-kernel-config.php
 
+      - name: ViMbAdmin\Kernel\Session\SessionNamespace (native session)
+        run: php tests/test-kernel-session-namespace.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

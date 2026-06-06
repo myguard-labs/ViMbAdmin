@@ -141,9 +141,40 @@ $m3 = new \Entities\Mailbox();
 $ap->nativeMailboxApply($m3, ['plugin_accessPermissions' => 1], $opts);
 check('AP apply: checked+none -> ALL',      $m3->getAccessRestriction() === 'ALL');
 
+// ============ Part C: AdditionalInfo native adapter =================== //
+require __DIR__ . '/../src/Kernel/Form/Validators.php';
+require __DIR__ . '/../application/plugins/AdditionalInfo.php';
+
+$aiOpts = ['vimbadmin_plugins' => ['AdditionalInfo' => ['elements' => [
+    'ext_no' => ['type' => 'Zend_Form_Element_Text', 'options' => [
+        'label'      => 'Ext No.',
+        'required'   => true,
+        'validators' => ['digits' => ['Digits', true]],
+    ]],
+]]]];
+$ai = new ViMbAdminPlugin_AdditionalInfo((object) ['getOptions' => null]);
+
+// add: one text field built from the configured element
+$aiFields = $ai->nativeMailboxFields(null, $aiOpts);
+check('AI add: one field from config',       count($aiFields) === 1);
+check('AI add: field name is prefixed',      $aiFields[0]->name === 'plugin_additionalInfo_ext_no');
+check('AI add: label from config',           $aiFields[0]->label === 'Ext No.');
+
+// the field's rules: required + Digits
+$f = $aiFields[0];
+$f->setValue('');     check('AI rule: empty fails (required)', $f->validate() !== null);
+$f->setValue('abc');  check('AI rule: non-digits fail',        $f->validate() !== null);
+$f->setValue('1234'); check('AI rule: digits pass',            $f->validate() === null);
+
+// no cross-field validation
+check('AI validate: always null',            $ai->nativeMailboxValidate(['plugin_additionalInfo_ext_no' => '1234'], $aiOpts) === null);
+
+// no configured elements -> no fields
+check('AI add: no elements -> empty',        $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AdditionalInfo' => []]]) === []);
+
 echo "\n";
 if ($failures === 0) {
-    echo "OK: all FormPluginHost + AccessPermissions assertions passed (PHP " . PHP_VERSION . ")\n";
+    echo "OK: all FormPluginHost + AccessPermissions + AdditionalInfo assertions passed (PHP " . PHP_VERSION . ")\n";
     exit(0);
 }
 echo "FAIL: {$failures} assertion(s) failed\n";

@@ -249,6 +249,48 @@ final class QueueController extends AbstractController
     }
 
     /**
+     * GET|POST /queue/trigger — the unauthenticated remote-cron endpoint that
+     * kicks the queue runner. Native port of the ZF1 `triggerAction`: NOT
+     * session-authenticated — it is gated by a Bearer key (compared by SHA-256,
+     * constant-time) and a source-IP allowlist, then spawns a background runner
+     * (non-blocking, via {@see \ViMbAdmin_QueueRunner::triggerCheck}) and returns
+     * JSON immediately. With no `queue.runner.key` configured the endpoint is
+     * disabled (404).
+     */
+    public function triggerAction(): Response
+    {
+        $options = $this->container->options();
+
+        $key = (string) ($options['queue']['runner']['key'] ?? '');
+        if ($key === '') {
+            return $this->json(['error' => 'queue trigger disabled'], 404);
+        }
+
+        $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? '');
+        if (!preg_match('/^Bearer\s+(.+)$/i', $auth, $m)) {
+            return $this->json(['error' => 'missing bearer'], 401);
+        }
+        if (!hash_equals(hash('sha256', $key), hash('sha256', trim($m[1])))) {
+            return $this->json(['error' => 'bad key'], 403);
+        }
+
+        // Proxy-aware client IP + the CIDR allowlist (same resolver/check as ZF1).
+        $proxy = $options['trustedproxy'] ?? [];
+        $ip    = \ViMbAdmin_Net::clientIp(
+            $_SERVER,
+            $proxy['mode'] ?? 'auto',
+            isset($proxy['proxies']) ? (array) $proxy['proxies'] : []
+        );
+
+        if (!\ViMbAdmin_Net::ipInList($ip, (string) ($options['queue']['runner']['allowed_ips'] ?? ''))) {
+            return $this->json(['error' => "source IP {$ip} not allowed"], 403);
+        }
+
+        $spawned = \ViMbAdmin_QueueRunner::triggerCheck($this->em(), $options);
+        return $this->json(['triggered' => $spawned], 200);
+    }
+
+    /**
      * Shared guard for the POST task actions: require a super admin, a POST method
      * and a valid CSRF token (carried in the form's hidden `csrf` field, so it is
      * read from the POST body — not the URL like the GET-link actions). Returns the

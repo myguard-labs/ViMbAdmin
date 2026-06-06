@@ -31,8 +31,9 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * assignment trio (`admins`/`assign-admin`/`remove-admin`) are migrated — the
  * symmetric counterpart of the AdminController domain-assignment trio (#40/#41),
  * over the same already-extracted `ViMbAdmin_Service_Domain` (assignAdmin/
- * removeAdmin). The remaining CRUD actions (purge/…) stay on ZF1 via the
- * dispatcher fallback. The legacy controller is untouched.
+ * removeAdmin), and `purge` (over `Service_Domain::purge`). The remaining actions
+ * (index/list-search) stay on ZF1 via the dispatcher fallback. The legacy
+ * controller is untouched.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -312,6 +313,48 @@ final class DomainController extends AbstractController
                 'Save'
             ),
         ]);
+    }
+
+    /**
+     * GET /domain/purge/did/<id>/csrf/<token> — purge a domain and everything in it.
+     *
+     * Faithful port of the ZF1 `purgeAction`: super-only, the CSRF token (carried
+     * in the URL) is asserted first — an invalid/missing token flashes + bounces to
+     * the list. The mutation runs through the already-extracted
+     * `ViMbAdmin_Service_Domain::purge` (which delegates to the repository purge
+     * that cascades the domain's mailboxes/aliases/archives). No plugin listens to
+     * the `domain_purge_*` hooks the ZF1 action fires, so they are a no-op and are
+     * not replicated here; like the ZF1 action it shows no success flash (the
+     * domain simply disappears from the list). Redirects to the domain list.
+     *
+     * NOTE: this also fixes a latent deployment bug — the `domain/js/list.js` purge
+     * link was built without a `csrf` segment, so the ZF1 `_assertCsrf()` always
+     * failed and domain purge silently bounced; the link now carries `$csrfToken`.
+     */
+    public function purgeAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        // _assertCsrf(): the token is carried in the URL on the purge link.
+        if (!$this->csrfValid()) {
+            $this->flash('Invalid or missing security token. Please retry from the list page.', FlashMessages::ERROR);
+            return $this->redirect('domain/list');
+        }
+
+        $domain = ($did = $this->param('did'))
+            ? $this->em()->getRepository('\\Entities\\Domain')->find((int) $did)
+            : null;
+
+        if ($domain === null) {
+            return $this->redirect('domain/list');
+        }
+
+        (new \ViMbAdmin_Service_Domain($this->em()))->purge($domain);
+
+        return $this->redirect('domain/list');
     }
 
     /**

@@ -107,6 +107,9 @@ jobs:
       - name: ViMbAdmin\Kernel\Mail\Mailer (native mail sender)
         run: php tests/test-kernel-mailer.php
 
+      - name: ViMbAdmin\Kernel\Cli\CliKernel (native CLI dispatcher)
+        run: php tests/test-kernel-cli.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

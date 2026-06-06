@@ -35,6 +35,44 @@ set_include_path( implode( PATH_SEPARATOR,
     )
 );
 
+// ---------------------------------------------------------------------------
+// WALL #2 (docs/ZF1-REMOVAL.md): native CLI path. Commands ported off ZF1
+// (ViMbAdmin\Kernel\Cli\CliKernel) run WITHOUT Zend_Application; anything not yet
+// migrated falls through to the ZF1 path below — the same opt-in strangler the
+// web entry point uses. The native CliKernel boots only config + the Doctrine EM
+// (no session under CLI), so a migrated command skips the full ZF1 bootstrap.
+// ---------------------------------------------------------------------------
+$cliOpts   = getopt( 'a:vdhc', array(
+    'action:', 'verbose', 'debug', 'help', 'copyright',
+    'username:', 'all', 'name:', 'scope:', 'ip:', 'days:', 'id:',
+) );
+$cliAction = isset( $cliOpts['action'] ) ? $cliOpts['action'] : ( isset( $cliOpts['a'] ) ? $cliOpts['a'] : null );
+
+if( is_string( $cliAction ) )
+{
+    $cliKernel = new \ViMbAdmin\Kernel\Cli\CliKernel( APPLICATION_PATH, APPLICATION_ENV );
+    if( $cliKernel->canHandle( $cliAction ) )
+    {
+        // The migrated library classes a native command reuses
+        // (ViMbAdmin_Service_*, OSS_*) are PSR-0 under library/ and NOT in the
+        // composer classmap; the ZF1 path registers Zend_Loader_Autoloader for
+        // them, but the native path runs first. Register a tiny Zend-free PSR-0
+        // autoloader for those two prefixes (library/ is already on include_path).
+        spl_autoload_register( function( $class ) {
+            if( strncmp( $class, 'OSS_', 4 ) !== 0 && strncmp( $class, 'ViMbAdmin_', 10 ) !== 0 )
+                return;
+            $rel = str_replace( '_', DIRECTORY_SEPARATOR, $class ) . '.php';
+            foreach( explode( PATH_SEPARATOR, get_include_path() ) as $base )
+            {
+                $path = rtrim( $base, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR . $rel;
+                if( is_file( $path ) ) { require $path; return; }
+            }
+        } );
+
+        exit( $cliKernel->run( $cliAction, $cliOpts ) );
+    }
+}
+
 /** Zend_Application */
 require_once 'Zend/Application.php';
 

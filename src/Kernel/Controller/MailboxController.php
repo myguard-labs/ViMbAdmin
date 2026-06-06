@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use Symfony\Component\Mime\Address;
+use Symfony\Component\Mime\Email;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Form\Field;
 use ViMbAdmin\Kernel\Form\Form;
@@ -845,5 +847,176 @@ final class MailboxController extends AbstractController
         }
 
         return $form;
+    }
+
+    /**
+     * GET|POST /mailbox/email-settings/mid/<id> — the "send settings" modal.
+     *
+     * Native port of the ZF1 `emailSettingsAction` + `_sendSettingsEmail`, the
+     * last mailer-dependent UI action (WALL #2 slice 6b). It is ajax-loaded into a
+     * modal: a GET returns the chrome-less modal HTML (a `type` select of
+     * username / alt_email / other + an "other" free-text box) and a POST with
+     * `send=1` resolves the recipient(s) and mails the per-user settings,
+     * returning the literal `ok` / `error` the modal JS expects (or re-rendering
+     * the modal with an inline error, which the JS detects by its
+     * `<div class="modal-header">` prefix and swaps back in).
+     *
+     * The mail is sent through the native {@see \ViMbAdmin\Kernel\Mail\Mailer}
+     * (slice 6b-1). The ZF1 `mailbox/sendSettingsEmail/preSetBody` notify hook has
+     * no listeners, so it is not replicated (the optional `vimbadminPlugins`
+     * template var simply stays unset). The welcome-email variant + its `cc` are
+     * dropped, consistent with the other native mailbox actions.
+     */
+    public function emailSettingsAction(): Response
+    {
+        $admin   = $this->admin();
+        $mid     = (int) $this->param('mid', 0);
+        $mailbox = $mid > 0
+            ? $this->em()->getRepository('\\Entities\\Mailbox')->find($mid)
+            : null;
+
+        // loadMailbox() authorisation: a non-super admin must manage the domain.
+        if ($admin === null || !$mailbox || (!$admin->isSuper() && !$admin->canManageDomain($mailbox->getDomain()))) {
+            return new Response('error');
+        }
+
+        // The recipient choices: the mailbox itself, its alternative email (if
+        // set), and a free-text "other".
+        $typeOptions = ['username' => $mailbox->getUsername()];
+        if ($mailbox->getAltEmail()) {
+            $typeOptions['alt_email'] = $mailbox->getAltEmail();
+        }
+        $typeOptions['other'] = 'Other';
+
+        if ($this->isPost() && $this->param('send')) {
+            $post = $this->postData();
+
+            $form = new Form(new Csrf(new MagicPropertyStorage($this->session())));
+            $form->add(new Field('type', 'Email', 'select', [
+                Validators::required(),
+                Validators::inArray(array_keys($typeOptions)),
+            ]));
+            $form->add(new Field('email', 'Other Email(s)', 'text'));
+            $form->field('type')?->setOptions($typeOptions);
+
+            $error      = null;
+            $recipients = [];
+
+            if (!$form->isValid($post)) {
+                $error = $form->errors()['_form'] ?? $form->errors()['type'] ?? 'Invalid submission.';
+            } else {
+                $type = (string) $form->values()['type'];
+
+                if ($type === 'other') {
+                    $raw = trim((string) ($post['email'] ?? ''));
+                    foreach (explode(',', $raw) as $em) {
+                        $em = trim($em);
+                        if ($em === '') {
+                            continue;
+                        }
+                        if (Validators::email()($em) !== null) {
+                            $error = 'Not valid email address(es)';
+                            break;
+                        }
+                        $recipients[] = $em;
+                    }
+                    if ($error === null && $recipients === []) {
+                        $error = 'Other Email(s) is required.';
+                    }
+                } elseif ($type === 'alt_email') {
+                    $recipients[] = (string) $mailbox->getAltEmail();
+                } else {
+                    $recipients[] = (string) $mailbox->getUsername();
+                }
+            }
+
+            if ($error === null && $recipients !== []) {
+                return new Response($this->sendSettingsEmail($mailbox, $recipients) ? 'ok' : 'error');
+            }
+
+            // Re-render the modal with the error: the JS swaps it back in.
+            return new Response($this->renderEmailSettingsModal(
+                $mailbox,
+                $typeOptions,
+                (string) ($post['type'] ?? 'username'),
+                (string) ($post['email'] ?? ''),
+                $error
+            ));
+        }
+
+        return new Response($this->renderEmailSettingsModal($mailbox, $typeOptions, 'username', '', null));
+    }
+
+    /**
+     * Render the chrome-less email-settings modal (header + form + footer + JS).
+     *
+     * @param array<string,string> $typeOptions value => label
+     */
+    private function renderEmailSettingsModal(
+        object $mailbox,
+        array $typeOptions,
+        string $selectedType,
+        string $emailValue,
+        ?string $error
+    ): string {
+        return $this->renderPartial('mailbox/native-email-settings.phtml', [
+            'mailbox'      => $mailbox,
+            'typeOptions'  => $typeOptions,
+            'selectedType' => $selectedType,
+            'emailValue'   => $emailValue,
+            'esError'      => $error,
+            'csrfToken'    => (new Csrf(new MagicPropertyStorage($this->session())))->token(),
+        ]);
+    }
+
+    /**
+     * Build + send the settings email (the native `_sendSettingsEmail`). From is
+     * `server.email.*`; the body is `mailbox/email/settings.phtml` rendered with
+     * the per-user-substituted `server.*` display settings
+     * (`\Entities\Mailbox::substitute`). Returns false on a transport failure
+     * (the action maps that to the `error` the modal JS shows).
+     *
+     * @param list<string> $recipients
+     */
+    private function sendSettingsEmail(object $mailbox, array $recipients): bool
+    {
+        $options = $this->container->options();
+
+        $email = (new Email())
+            ->from(new Address(
+                (string) ($options['server']['email']['address'] ?? 'support@localhost'),
+                (string) ($options['server']['email']['name'] ?? '')
+            ))
+            ->subject(sprintf('Settings for your mailbox on %s', $mailbox->getDomain()->getDomain()));
+
+        foreach ($recipients as $rcpt) {
+            $email->addTo($rcpt);
+        }
+
+        // Substitute %m/%d/%u in each server.* display value for this mailbox.
+        $settings = $options['server'] ?? [];
+        foreach ($settings as $tech => $params) {
+            if (!is_array($params)) {
+                continue;
+            }
+            foreach ($params as $k => $v) {
+                $settings[$tech][$k] = \Entities\Mailbox::substitute($mailbox->getUsername(), (string) $v);
+            }
+        }
+
+        $email->text($this->renderPartial('mailbox/email/settings.phtml', [
+            'mailbox'  => $mailbox,
+            'welcome'  => false,
+            'password' => '',
+            'settings' => $settings,
+        ]));
+
+        try {
+            $this->mailer()->send($email);
+            return true;
+        } catch (\Throwable $e) {
+            error_log('MailboxController::emailSettings send: ' . $e->getMessage());
+            return false;
+        }
     }
 }

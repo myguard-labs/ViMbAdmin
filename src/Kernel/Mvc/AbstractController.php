@@ -166,17 +166,18 @@ abstract class AbstractController
     }
 
     /**
-     * Render a body-only email template to a string through the same `smarty`
-     * view (the native equivalent of `OSS_Controller_Trait_Auth::resolveTemplate()`
-     * for one format). Unlike {@see view()} it seeds NO page chrome — the email
-     * templates under `auth/email/` and `mailbox/email/` are standalone
-     * documents — it only assigns the caller's variables. `{genUrl}` still works
-     * (it reads the front-controller base URL set up at the entry point).
+     * Render a template to a string through the same `smarty` view, seeding NO
+     * page chrome — for standalone fragments: email bodies (`auth/email/`,
+     * `mailbox/email/`, the native equivalent of
+     * `OSS_Controller_Trait_Auth::resolveTemplate()`) and ajax-loaded partials
+     * (e.g. the mailbox email-settings modal). It only assigns the caller's
+     * variables; `{genUrl}` still works (it reads the front-controller base URL
+     * set up at the entry point).
      *
      * @param string              $script template path, e.g. "auth/email/html/lost-password.phtml"
      * @param array<string,mixed> $vars   template variables
      */
-    protected function renderEmail(string $script, array $vars = []): string
+    protected function renderPartial(string $script, array $vars = []): string
     {
         $view = $this->container->getResource('smarty');
 

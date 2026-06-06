@@ -24,8 +24,9 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * All super-gated (the ZF1 `preDispatch` `authorise(true)`); the action POSTs
  * carry the CSRF token as a hidden field (read from the body via {@see postCsrfValid}).
  * `prune-expired` / `prune-all` remove autoprune archive backups via the doveadm
- * HTTP API (two-step confirm). The remaining actions — orphan scan/import and the
- * DDL schema-update / cli-schema-update — stay on ZF1 via the dispatcher fallback.
+ * HTTP API; `scan-orphans` / `backup-orphans` find on-disk maildirs with no
+ * mailbox row and enqueue their import; `schema-update` applies pending Doctrine
+ * DDL (dry-run by default). Only `cli-schema-update` (CLI) stays on ZF1.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -234,6 +235,170 @@ final class MaintenanceController extends AbstractController
         $this->em()->flush();
 
         return $pruned;
+    }
+
+    /**
+     * POST /maintenance/schema-update — apply pending Doctrine schema DDL.
+     *
+     * Dry-run by default: nothing pending → record the version + "up to date";
+     * otherwise (confirm!=1) re-render the dashboard listing the pending
+     * statements; confirm=1 applies them (DDL auto-commits) + records the version.
+     */
+    public function schemaUpdateAction(): Response
+    {
+        $guard = $this->guardSuperPost();
+        if ($guard instanceof Response) {
+            return $guard;
+        }
+
+        $schema = new \ViMbAdmin_Schema($this->em());
+        $sql    = $schema->pendingSql();
+
+        if (count($sql) === 0) {
+            $schema->recordVersion();
+            $this->flash('Database schema is already up to date — nothing to do.');
+            return $this->redirect('maintenance/index');
+        }
+
+        if ((int) ($this->postData()['confirm'] ?? 0) !== 1) {
+            return $this->renderDashboard(['schemaSql' => $sql]);
+        }
+
+        try {
+            $applied = $schema->apply($sql);
+            $schema->recordVersion();
+        } catch (\Throwable $e) {
+            $this->flash('Schema update failed: ' . $e->getMessage(), FlashMessages::ERROR);
+            return $this->redirect('maintenance/index');
+        }
+
+        $this->logMaintenance($guard, "applied schema update ({$applied} statement(s))");
+        $this->flash(sprintf('Schema updated successfully — %d statement(s) executed.', $applied));
+        return $this->redirect('maintenance/index');
+    }
+
+    /**
+     * POST /maintenance/scan-orphans — list on-disk maildirs with no mailbox row.
+     */
+    public function scanOrphansAction(): Response
+    {
+        $guard = $this->guardSuperPost();
+        if ($guard instanceof Response) {
+            return $guard;
+        }
+
+        try {
+            $orphans = $this->scanOrphans();
+        } catch (\Throwable $e) {
+            $this->flash('Orphan scan failed: ' . $e->getMessage(), FlashMessages::ERROR);
+            return $this->redirect('maintenance/index');
+        }
+
+        return $this->renderDashboard(['orphans' => $orphans]);
+    }
+
+    /**
+     * POST /maintenance/backup-orphans — enqueue a BACKUP_ORPHAN import for one
+     * (`?username=`) or, with `confirm=1`, every unmanaged maildir. The runner
+     * (Service_QueueRunner) backs up any with mail and removes empty leftovers.
+     */
+    public function backupOrphansAction(): Response
+    {
+        $guard = $this->guardSuperPost();
+        if ($guard instanceof Response) {
+            return $guard;
+        }
+
+        try {
+            $orphans = $this->scanOrphans();
+        } catch (\Throwable $e) {
+            $this->flash('Orphan scan failed: ' . $e->getMessage(), FlashMessages::ERROR);
+            return $this->redirect('maintenance/index');
+        }
+
+        $one = (string) ($this->postData()['username'] ?? '');
+        if ($one !== '') {
+            if (!in_array($one, $orphans, true)) {
+                $this->flash('That maildir is no longer an unmanaged orphan.', FlashMessages::INFO);
+                return $this->redirect('maintenance/index');
+            }
+            $orphans = [$one];
+        } elseif ((int) ($this->postData()['confirm'] ?? 0) !== 1) {
+            $this->flash('Re-scan and use "Import all" to import every unmanaged maildir.', FlashMessages::INFO);
+            return $this->redirect('maintenance/index');
+        }
+
+        $em     = $this->em();
+        $queued = 0;
+        foreach ($orphans as $user) {
+            $open = (int) $em->createQuery(
+                'SELECT COUNT(t.id) FROM \Entities\MailboxTask t WHERE t.username = :u AND t.type = :t AND t.status IN (:open)')
+                ->setParameter('u', $user)
+                ->setParameter('t', \Entities\MailboxTask::TYPE_BACKUP_ORPHAN)
+                ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
+                ->getSingleScalarResult();
+            if ($open > 0) {
+                continue;
+            }
+
+            $mt = new \Entities\MailboxTask();
+            $mt->setType(\Entities\MailboxTask::TYPE_BACKUP_ORPHAN)
+               ->setUsername($user)
+               ->setStatus(\Entities\MailboxTask::STATUS_PENDING)
+               ->setPriority(-15)
+               ->setCreatedAt(new \DateTime())
+               ->setRequestedBy($guard);
+            $em->persist($mt);
+            $queued++;
+        }
+        $em->flush();
+
+        $this->logMaintenance($guard, "queued orphan-maildir import for {$queued} unmanaged maildir(s)");
+        $this->flash(sprintf('Queued import of %d unmanaged maildir(s). The runner backs up any with mail and removes empty ones, in the background.', $queued));
+        return $this->redirect('queue/index');
+    }
+
+    /**
+     * On-disk maildirs (under the configured maildir root) that have no mailbox
+     * row — the native equivalent of the ZF1 `_scanOrphans`. A dir counts only if
+     * it looks like a maildir (has a `cur/` subdir).
+     *
+     * @return string[]
+     */
+    private function scanOrphans(): array
+    {
+        $doveadm = \ViMbAdmin_Doveadm::fromOptions($this->container->options());
+        $root    = $this->maildirRoot();
+
+        $dirs = $doveadm->fsListDirs($root);
+        if (!$dirs) {
+            return [];
+        }
+
+        $known = [];
+        foreach ($this->em()->createQuery('SELECT m.username FROM \Entities\Mailbox m')->getArrayResult() as $r) {
+            $known[strtolower($r['username'])] = true;
+        }
+
+        $orphans = [];
+        foreach ($dirs as $name) {
+            if (isset($known[strtolower($name)])) {
+                continue;
+            }
+            if (in_array('cur', $doveadm->fsListDirs($root . '/' . $name), true)) {
+                $orphans[] = $name;
+            }
+        }
+        sort($orphans);
+
+        return $orphans;
+    }
+
+    private function maildirRoot(): string
+    {
+        $root = isset($this->container->options()['doveadm']['maildir_root'])
+            ? trim((string) $this->container->options()['doveadm']['maildir_root']) : '';
+        return $root !== '' ? rtrim($root, '/') : '/opt/myguard/dovecot/maildir';
     }
 
     /**

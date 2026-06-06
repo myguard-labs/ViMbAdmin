@@ -13,6 +13,7 @@ use ViMbAdmin\Kernel\Controller\DomainController;
 use ViMbAdmin\Kernel\Controller\IndexController;
 use ViMbAdmin\Kernel\Controller\LogController;
 use ViMbAdmin\Kernel\Controller\MailboxController;
+use ViMbAdmin\Kernel\Controller\MaintenanceController;
 use ViMbAdmin\Kernel\Controller\QueueController;
 use ViMbAdmin\Kernel\Mvc\Dispatcher;
 use ViMbAdmin\Kernel\Router;
@@ -65,6 +66,7 @@ final class Kernel
         'mailbox'        => MailboxController::class,
         'archive'        => ArchiveController::class,
         'queue'          => QueueController::class,
+        'maintenance'    => MaintenanceController::class,
     ];
 
     /**

@@ -68,6 +68,9 @@ jobs:
       - name: ViMbAdmin_Service_Alias
         run: php tests/test-service-alias.php
 
+      - name: ViMbAdmin_Service_Archive
+        run: php tests/test-service-archive.php
+
       - name: ViMbAdmin\Kernel\Router
         run: php tests/test-kernel-router.php
 

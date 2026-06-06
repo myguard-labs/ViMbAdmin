@@ -363,6 +363,140 @@ final class MailboxController extends AbstractController
     }
 
     /**
+     * GET|POST /mailbox/edit/mid/<id> — edit an existing mailbox.
+     *
+     * Native port of the edit path of the ZF1 `MailboxController::addAction`
+     * (`editAction` is a `forward('add')`). Only the editable fields are shown —
+     * name, quota, alt_email, plus the plugin sections ({@see FormPluginHost},
+     * AccessPermissions today) prefilled from the entity. The ZF1 edit form drops
+     * local_part / domain / password, so the native form does too (the address,
+     * its domain and the password are not editable here).
+     *
+     * GET prepopulates from the entity. POST validates the base form + the plugin
+     * sections, writes the editable fields back, clamps the quota to the domain
+     * maximum, applies the plugin writebacks and persists through the extracted
+     * {@see \ViMbAdmin_Service_Mailbox::update} — threading the
+     * `mailbox_add_addPostflush` plugin hook over the native {@see PluginHost} so
+     * MailboxAutomaticAliases re-asserts its RFC2142 aliases (idempotent). A
+     * missing / unmanaged mailbox flashes and bounces to the list (the ZF1
+     * `loadMailbox` redirect).
+     */
+    public function editAction(): ?Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $em      = $this->em();
+        $mailbox = ($mid = $this->param('mid'))
+            ? $em->getRepository('\\Entities\\Mailbox')->find((int) $mid)
+            : null;
+
+        // loadMailbox() authorises a non-super admin against the mailbox's domain.
+        if (!$mailbox || (!$admin->isSuper() && !$admin->canManageDomain($mailbox->getDomain()))) {
+            $this->flash('Mailbox not found.', FlashMessages::ERROR);
+            return $this->redirect('mailbox/list');
+        }
+
+        $options  = $this->container->options();
+        $mult     = $options['defaults']['quota']['multiplier'] ?? \OSS_Filter_FileSize::SIZE_KILOBYTES;
+        $formHost = new FormPluginHost($options);
+        $form     = $this->buildMailboxEditForm($mailbox, $mult, $formHost, $options);
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $v    = $form->values();
+            $pErr = $formHost->validate($v, $options);
+
+            if ($pErr !== null) {
+                $this->flash($pErr, FlashMessages::ERROR);
+            } else {
+                $domain = $mailbox->getDomain();
+
+                $mailbox->setName((string) $v['name']);
+                $mailbox->setAltEmail(($v['alt_email'] ?? '') !== '' ? (string) $v['alt_email'] : null);
+                $mailbox->setQuota((int) (new \OSS_Filter_FileSize($mult))->filter((string) $v['quota']));
+
+                // Clamp the quota to the domain's per-mailbox maximum.
+                if ($domain->getMaxQuota() != 0
+                    && ($mailbox->getQuota() <= 0 || $mailbox->getQuota() > $domain->getMaxQuota())) {
+                    $mailbox->setQuota($domain->getQuota());
+                    $this->flash('Mailbox quota set to ' . $domain->getQuota(), FlashMessages::INFO);
+                }
+
+                $formHost->apply($mailbox, $v, $options);
+
+                $context = new MailboxContext(
+                    $em,
+                    $admin,
+                    $domain,
+                    $mailbox,
+                    $options,
+                    new FlashMessages(new MagicPropertyStorage($this->session())),
+                );
+                $host = new PluginHost($context);
+
+                (new \ViMbAdmin_Service_Mailbox($em))->update(
+                    $mailbox,
+                    $admin,
+                    null,
+                    fn() => $host->notify('mailbox', 'add', 'addPostflush', $context, ['options' => $options]),
+                );
+
+                $this->flash('You have successfully added/edited the mailbox record.');
+                return $this->redirect('mailbox/list');
+            }
+        }
+
+        return $this->view('mailbox/native-add.phtml', [
+            'formHtml'  => (new FormRenderer())->render($form, '/mailbox/edit/mid/' . $mailbox->getId(), 'Save'),
+            'pageTitle' => 'Edit Mailbox: ' . $mailbox->getUsername(),
+        ]);
+    }
+
+    /**
+     * Build the native mailbox EDIT form: only the editable fields (name, quota,
+     * alt_email) + the plugin sections, prefilled from the entity.
+     *
+     * @param array<string,mixed> $options the merged application options
+     */
+    private function buildMailboxEditForm(
+        object $mailbox,
+        string $mult,
+        FormPluginHost $formHost,
+        array $options
+    ): Form {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+
+        $name = new Field('name', 'Name', 'text');
+        $name->setValue((string) $mailbox->getName());
+        $form->add($name);
+
+        $quota = new Field('quota', 'Quota', 'text');
+        $quota->setValue((string) \OSS_Filter_FileSize::unfilter((int) $mailbox->getQuota()));
+        $form->add($quota);
+
+        $altEmail = new Field('alt_email', 'Alternative Email', 'text', [
+            static function (mixed $value): ?string {
+                if ($value === null || $value === '') {
+                    return null; // optional
+                }
+                return Validators::email()($value);
+            },
+        ]);
+        $altEmail->setValue((string) $mailbox->getAltEmail());
+        $form->add($altEmail);
+
+        // Native plugin form sections, prefilled from the entity (AccessPermissions
+        // reads the mailbox's access restriction).
+        foreach ($formHost->fields($mailbox, $options) as $field) {
+            $form->add($field);
+        }
+
+        return $form;
+    }
+
+    /**
      * Build the native mailbox add form: the base fields + the plugin sections.
      *
      * @param array<int|string,string> $choices  domain id → name for the dropdown

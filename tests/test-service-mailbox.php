@@ -305,6 +305,23 @@ $mbE->setPassword('s3cr3t-plaintext');
 check('existing alias: no new auto-alias',    $emE->countPersisted(\Entities\Alias::class) === 0);
 check('existing alias: mailbox still created', $emE->countPersisted(\Entities\Mailbox::class) === 1);
 
+// --- update: stamp modified, log EDIT, single flush, hooks around flush -- //
+$emU = new FakeObjectManager();
+$mbU = new \Entities\Mailbox();
+$mbU->setUsername('edit@example.com');
+$orderU = [];
+$updated = (new ViMbAdmin_Service_Mailbox($emU))->update(
+    $mbU, $actor,
+    function () use (&$orderU, $emU): void { $orderU[] = 'preFlush:' . $emU->flushes; },
+    function () use (&$orderU, $emU): void { $orderU[] = 'postFlush:' . $emU->flushes; },
+);
+check('update returns the mailbox',           $updated === $mbU);
+check('update stamped modified',              $mbU->getModified() instanceof \DateTime);
+check('update logged ACTION_MAILBOX_EDIT',    $emU->lastLog()?->getAction() === \Entities\Log::ACTION_MAILBOX_EDIT);
+check('update did NOT create an alias',       $emU->countPersisted(\Entities\Alias::class) === 0);
+check('update flushed once',                  $emU->flushes === 1);
+check('update hook order around flush',       $orderU === ['preFlush:0', 'postFlush:1']);
+
 echo "\n";
 if ($failures === 0) {
     echo "OK: all Service_Mailbox assertions passed (PHP " . PHP_VERSION . ")\n";

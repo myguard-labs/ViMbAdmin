@@ -1,7 +1,7 @@
 {tmplinclude file="header.phtml"}
 <div class="page-content" >
     <div class="page-header" >
-        <h1>Add Mailbox</h1>
+        <h1>{if isset($pageTitle)}{$pageTitle}{else}Add Mailbox{/if}</h1>
     </div>
     {OSS_Message}
 

@@ -47,7 +47,7 @@
                 </td>
                 <td>
                     <div class="btn-group">
-                        <a class="btn btn-mini have-tooltip" ref="{$alias->getAddress()}" id="delete-alias-{$alias->getId()}" href="{genUrl controller='mailbox' action='delete-alias' mid=$mailbox->getId() alid=$alias->getId()}" title="Remove" >
+                        <a class="btn btn-mini have-tooltip" ref="{$alias->getAddress()}" id="delete-alias-{$alias->getId()}" href="{genUrl controller='mailbox' action='delete-alias' mid=$mailbox->getId() alid=$alias->getId() csrf=$csrfToken}" title="Remove" >
                             <i class="icon-trash"></i>
                         </a>
                     </div>

@@ -466,6 +466,116 @@ final class MailboxController extends AbstractController
     }
 
     /**
+     * GET /mailbox/aliases/mid/<id>[/ima/<0|1>] — list a mailbox's aliases.
+     *
+     * Native port of `MailboxController::aliasesAction`: resolves + authorises the
+     * mailbox and renders `mailbox/aliases.phtml` with the aliases that point at it
+     * (`loadForMailbox`) merged with the ones that contain it among several gotos
+     * (`loadWithMailbox`); the `ima` flag toggles the mailbox-aliases view.
+     */
+    public function aliasesAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $mailbox = ($mid = $this->param('mid'))
+            ? $this->em()->getRepository('\\Entities\\Mailbox')->find((int) $mid)
+            : null;
+
+        if (!$mailbox || (!$admin->isSuper() && !$admin->canManageDomain($mailbox->getDomain()))) {
+            return $this->redirect('mailbox/list');
+        }
+
+        $ima       = (int) $this->param('ima', 0);
+        $aliasRepo = $this->em()->getRepository('\\Entities\\Alias');
+
+        return $this->view('mailbox/aliases.phtml', [
+            'mailbox' => $mailbox,
+            'ima'     => $ima,
+            'aliases' => array_merge(
+                $aliasRepo->loadForMailbox($mailbox, $admin, $ima),
+                $aliasRepo->loadWithMailbox($mailbox, $admin)
+            ),
+        ]);
+    }
+
+    /**
+     * GET /mailbox/delete-alias/mid/<id>/alid/<id>/csrf/<token> — remove a mailbox
+     * from one of its aliases (or delete the alias if this mailbox was its only
+     * destination).
+     *
+     * Faithful port of `MailboxController::deleteAliasAction`: CSRF-gated. If the
+     * alias's only goto is this mailbox, the alias is removed and the domain alias
+     * count decremented; otherwise this mailbox's address is trimmed out of the
+     * comma-separated goto list (leaving the alias for the others). Each path logs
+     * an ALIAS_DELETE. Redirects back to the mailbox's alias list.
+     *
+     * NOTE: also fixes a latent deployment bug — the aliases-page delete link
+     * carried no `csrf` segment, so `_assertCsrf()` always failed; it now carries
+     * `$csrfToken`.
+     */
+    public function deleteAliasAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        if (!$this->csrfValid()) {
+            $this->flash('Invalid or missing security token. Please retry from the list page.', FlashMessages::ERROR);
+            return $this->redirect('mailbox/list');
+        }
+
+        $em      = $this->em();
+        $mailbox = ($mid = $this->param('mid'))
+            ? $em->getRepository('\\Entities\\Mailbox')->find((int) $mid)
+            : null;
+        $alias = ($alid = $this->param('alid'))
+            ? $em->getRepository('\\Entities\\Alias')->find((int) $alid)
+            : null;
+
+        if (!$mailbox || !$alias || (!$admin->isSuper() && !$admin->canManageDomain($alias->getDomain()))) {
+            return $this->redirect('mailbox/list');
+        }
+
+        $user = $mailbox->getUsername();
+
+        if ($user === $alias->getGoto()) {
+            $em->remove($alias);
+            $this->logAlias($admin, "removed alias {$alias->getAddress()}");
+            $alias->getDomain()->setAliasCount($alias->getDomain()->getAliasCount() - 1);
+            $this->flash('You have successfully removed the alias.');
+        } else {
+            $gotos = explode(',', (string) $alias->getGoto());
+            foreach ($gotos as $key => $item) {
+                $gotos[$key] = $item = trim($item);
+                if ($item === $user || $item === '') {
+                    unset($gotos[$key]);
+                }
+            }
+            $alias->setGoto(implode(',', $gotos));
+            $this->logAlias($admin, "removed destination {$user} from alias {$alias->getAddress()}");
+            $this->flash("You have successfully removed {$user} from the alias {$alias->getAddress()}.");
+        }
+
+        $em->flush();
+        return $this->redirect('mailbox/aliases/mid/' . $mailbox->getId());
+    }
+
+    /** Write an ALIAS_DELETE audit row. */
+    private function logAlias(object $admin, string $message): void
+    {
+        $log = new \Entities\Log();
+        $log->setAction(\Entities\Log::ACTION_ALIAS_DELETE)
+            ->setData("{$admin->getFormattedName()} {$message}")
+            ->setAdmin($admin)
+            ->setTimestamp(new \DateTime());
+        $this->em()->persist($log);
+    }
+
+    /**
      * GET /mailbox/queue-repair/mid/<id>/csrf/<token> — enqueue a REPAIR task.
      */
     public function queueRepairAction(): Response

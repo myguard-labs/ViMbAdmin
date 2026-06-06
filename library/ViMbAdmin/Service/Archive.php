@@ -100,6 +100,21 @@ class ViMbAdmin_Service_Archive
     }
 
     /**
+     * Log a completed restore (the archive row is already removed by the caller).
+     * Written + flushed on its own so the audit trail records the recovery.
+     */
+    public function logRestore(\Entities\Admin $actor, string $user, bool $repairQueued): void
+    {
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_ARCHIVE_RESTORE,
+            "{$actor->getFormattedName()} restored archive for {$user}" . ($repairQueued ? ' (repair queued)' : '')
+        );
+
+        $this->em->flush();
+    }
+
+    /**
      * Write a Log row for an action (persist only; the flush above commits it).
      */
     private function log(\Entities\Admin $actor, string $action, string $message): void

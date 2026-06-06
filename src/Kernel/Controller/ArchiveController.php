@@ -154,4 +154,124 @@ final class ArchiveController extends AbstractController
         $this->flash(sprintf('Archive backup for %s deleted.', $user));
         return $this->redirect('archive/list');
     }
+
+    /**
+     * GET /archive/restore/arid/<id>/csrf/<token> — restore a backup into the
+     * live mailbox.
+     *
+     * Faithful port of the ZF1 `restoreAction`: CSRF-gated; only an ARCHIVED
+     * backup can be restored. (1) If the mailbox was DELETEd it is recreated from
+     * the JSON snapshot stored on the archive (original password hash preserved).
+     * (2) The backup is synced back into the live store via the doveadm HTTP API
+     * (`ViMbAdmin_Doveadm::restoreFrom`); a sync failure leaves the recreated
+     * mailbox but aborts with an error (the archive is kept). (3) The backup files
+     * are removed (`fsDelete`; a leftover is non-fatal). (4) The archive row is
+     * dropped and a background REPAIR is enqueued so indexes/quota are rebuilt.
+     * The doveadm client + the queue helper are framework-free, so src/ stays
+     * free of any ZF1 reference.
+     */
+    public function restoreAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        if (!$this->csrfValid()) {
+            $this->flash('Invalid or missing security token. Please retry from the list page.', FlashMessages::ERROR);
+            return $this->redirect('archive/list');
+        }
+
+        $em      = $this->em();
+        $archive = ($arid = $this->param('arid'))
+            ? $em->getRepository('\\Entities\\Archive')->find((int) $arid)
+            : null;
+
+        if (!$archive || (!$admin->isSuper() && !$admin->canManageDomain($archive->getDomain()))) {
+            return $this->redirect('archive/list');
+        }
+
+        if ($archive->getStatus() !== \Entities\Archive::STATUS_ARCHIVED) {
+            $this->flash('Restore can only be performed on an archived backup.', FlashMessages::INFO);
+            return $this->redirect('archive/list');
+        }
+
+        $user    = $archive->getUsername();
+        $dest    = $archive->getMaildirFile();
+        $options = $this->container->options();
+
+        // 1) Recreate the mailbox if it's gone (a DELETE'd account).
+        $mailbox = $em->getRepository('\\Entities\\Mailbox')->findOneBy(['username' => $user]);
+        if (!$mailbox) {
+            $snap = json_decode((string) $archive->getData(), true);
+            $m    = (is_array($snap) && isset($snap['mailbox'])) ? $snap['mailbox'] : null;
+            if (!$m) {
+                $this->flash(sprintf('Cannot restore %s: no mailbox snapshot stored with the archive.', $user), FlashMessages::ERROR);
+                return $this->redirect('archive/list');
+            }
+
+            $mailbox = new \Entities\Mailbox();
+            $mailbox->setUsername($m['username'])
+                    ->setLocalPart($m['local_part'])
+                    ->setName($m['name'])
+                    ->setPassword($m['password'])   // original hash — password preserved
+                    ->setQuota($m['quota'])
+                    ->setHomedir($m['homedir'])
+                    ->setMaildir($m['maildir'])
+                    ->setUid($m['uid'])
+                    ->setGid($m['gid'])
+                    ->setActive($m['active'])
+                    ->setDomain($archive->getDomain())
+                    ->setCreated(new \DateTime());
+            $archive->getDomain()->increaseMailboxCount();
+            $em->persist($mailbox);
+            $em->flush();   // userdb must see the account before doveadm sync
+        }
+
+        // 2) Sync the backup back into the live store.
+        try {
+            if ($dest) {
+                \ViMbAdmin_Doveadm::fromOptions($options)->restoreFrom($user, $dest);
+            }
+        } catch (\Throwable $e) {
+            error_log("ArchiveController::restoreAction sync {$user}: " . $e->getMessage());
+            $this->flash(sprintf('Mailbox %s was recreated, but restoring its mail failed: %s', $user, $e->getMessage()), FlashMessages::ERROR);
+            return $this->redirect('archive/list');
+        }
+
+        // 3) Remove the backup files (a leftover backup dir is non-fatal).
+        try {
+            if ($dest) {
+                \ViMbAdmin_Doveadm::fromOptions($options)->fsDelete($dest);
+            }
+        } catch (\Throwable $e) {
+            error_log("ArchiveController::restoreAction fsDelete {$user}: " . $e->getMessage());
+        }
+
+        $em->remove($archive);
+        $em->flush();
+
+        // 4) Queue a background REPAIR (force-resync + index + quota recalc) so the
+        //    restored account is fully consistent. Non-blocking.
+        $repairQueued = false;
+        if ($mailbox) {
+            try {
+                if (\ViMbAdmin_MailboxQueue::enqueue($em, $mailbox, \Entities\MailboxTask::TYPE_REPAIR, $admin)) {
+                    $em->flush();
+                    $repairQueued = true;
+                }
+            } catch (\Throwable $e) {
+                error_log("ArchiveController::restoreAction enqueue repair {$user}: " . $e->getMessage());
+            }
+        }
+
+        (new \ViMbAdmin_Service_Archive($em))->logRestore($admin, $user, $repairQueued);
+
+        $this->flash(sprintf(
+            'Archive for %s restored into the live mailbox.%s',
+            $user,
+            $repairQueued ? ' A repair/optimize was queued and will run in the background.' : ''
+        ));
+        return $this->redirect('archive/list');
+    }
 }

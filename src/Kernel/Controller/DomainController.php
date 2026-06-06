@@ -40,6 +40,17 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class DomainController extends AbstractController
 {
+
+    /**
+     * GET /domain and /domain/index — the auth-gated landing forwards to the list
+     * (the native equivalent of the ZF1 indexAction `_forward('list')`).
+     */
+    public function indexAction(): Response
+    {
+        return $this->admin() !== null
+            ? $this->redirect('domain/list')
+            : $this->redirect('auth/login');
+    }
     /**
      * GET /domain/list — the domains overview (any authenticated admin).
      */

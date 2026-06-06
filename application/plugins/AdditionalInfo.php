@@ -224,7 +224,7 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
         return null;
     }
 
-    public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options ): void
+    public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null ): void
     {
         foreach( array_keys( $this->_elements( $options ) ) as $name )
         {

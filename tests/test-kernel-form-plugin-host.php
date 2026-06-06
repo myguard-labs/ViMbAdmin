@@ -51,7 +51,7 @@ class ViMbAdminPlugin_Ext implements ViMbAdmin_Plugin_MailboxFormExtension
     public function nativeMailboxValidate(array $v, array $o): ?string {
         return empty($v['x']) ? 'x required' : null;
     }
-    public function nativeMailboxApply(\Entities\Mailbox $m, array $v, array $o): void {
+    public function nativeMailboxApply(\Entities\Mailbox $m, array $v, array $o, ?object $em = null): void {
         $m->setName($v['x'] ? 'EXT' : 'plain');
     }
 }
@@ -172,9 +172,47 @@ check('AI validate: always null',            $ai->nativeMailboxValidate(['plugin
 // no configured elements -> no fields
 check('AI add: no elements -> empty',        $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AdditionalInfo' => []]]) === []);
 
+// ============ Part D: DirectoryEntry native adapter ================== //
+require __DIR__ . '/../application/plugins/DirectoryEntry.php';
+
+$deOpts = [
+    'identity'          => ['orgname' => 'Acme Corp'],
+    'vimbadmin_plugins' => ['DirectoryEntry' => ['disabled_elements' => ['CarLicense' => true]]],
+];
+$de = new ViMbAdminPlugin_DirectoryEntry((object) ['getOptions' => null]);
+
+$deFields = $de->nativeMailboxFields(null, $deOpts);
+$byName   = [];
+foreach ($deFields as $f) { $byName[$f->name] = $f; }
+check('DE add: many fields built',           count($deFields) >= 20);
+check('DE add: disabled CarLicense dropped',  !isset($byName['plugin_directoryEntry_CarLicense']));
+check('DE add: O defaults to orgname',        $byName['plugin_directoryEntry_O']->value() === 'Acme Corp');
+check('DE add: HomePostalAddress is textarea', $byName['plugin_directoryEntry_HomePostalAddress']->type === 'textarea');
+check('DE validate: always null',            $de->nativeMailboxValidate([], $deOpts) === null);
+
+// apply: creates + persists a DirectoryEntry, sets mail + the mapped attributes
+$deEm = new class {
+    public array $persisted = [];
+    public function persist(object $o): void { $this->persisted[] = $o; }
+};
+$mbD = new \Entities\Mailbox();
+$mbD->setUsername('dir@example.com');
+$de->nativeMailboxApply($mbD, [
+    'plugin_directoryEntry_GivenName' => 'Ada',
+    'plugin_directoryEntry_Sn'        => 'Lovelace',
+    'plugin_directoryEntry_O'         => 'Acme Corp',
+], $deOpts, $deEm);
+
+$dent = $mbD->getDirectoryEntry();
+check('DE apply: entity created + linked',    $dent instanceof \Entities\DirectoryEntry && $dent->getMailbox() === $mbD);
+check('DE apply: persisted via em',           in_array($dent, $deEm->persisted, true));
+check('DE apply: mail = username',            $dent->getMail() === 'dir@example.com');
+check('DE apply: GivenName written',          $dent->getGivenName() === 'Ada');
+check('DE apply: Sn written',                 $dent->getSn() === 'Lovelace');
+
 echo "\n";
 if ($failures === 0) {
-    echo "OK: all FormPluginHost + AccessPermissions + AdditionalInfo assertions passed (PHP " . PHP_VERSION . ")\n";
+    echo "OK: all FormPluginHost + AccessPermissions + AdditionalInfo + DirectoryEntry assertions passed (PHP " . PHP_VERSION . ")\n";
     exit(0);
 }
 echo "FAIL: {$failures} assertion(s) failed\n";

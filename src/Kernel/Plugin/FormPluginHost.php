@@ -93,14 +93,16 @@ final class FormPluginHost
     }
 
     /**
-     * Apply every extension's writeback onto the mailbox entity.
+     * Apply every extension's writeback onto the mailbox entity. The entity
+     * manager is passed through for sections that own a separate entity they must
+     * persist themselves (e.g. DirectoryEntry).
      *
      * @param array<string,mixed> $values
      */
-    public function apply(object $mailbox, array $values, array $options): void
+    public function apply(object $mailbox, array $values, array $options, ?object $em = null): void
     {
         foreach ($this->extensions as $ext) {
-            $ext->nativeMailboxApply($mailbox, $values, $options);
+            $ext->nativeMailboxApply($mailbox, $values, $options, $em);
         }
     }
 

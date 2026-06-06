@@ -49,6 +49,11 @@ interface ViMbAdmin_Plugin_MailboxFormExtension
      *
      * @param array<string,mixed> $values the submitted form values
      * @param array $options the merged application options
+     * @param object|null $em the Doctrine entity manager, for a section that owns a
+     *        SEPARATE entity it must persist itself (e.g. DirectoryEntry, whose
+     *        relation is the inverse side and therefore not cascade-persisted via
+     *        the mailbox). Sections that only write columns/preferences on the
+     *        mailbox itself ignore it. The native host always supplies it.
      */
-    public function nativeMailboxApply(\Entities\Mailbox $mailbox, array $values, array $options): void;
+    public function nativeMailboxApply(\Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null): void;
 }

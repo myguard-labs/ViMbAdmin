@@ -324,7 +324,7 @@ final class MailboxController extends AbstractController
 
                     // Plugin form sections write back onto the entity (e.g. the
                     // AccessPermissions access restriction).
-                    $formHost->apply($mailbox, $v, $options);
+                    $formHost->apply($mailbox, $v, $options, $em);
 
                     // Fire the post-flush plugin hook natively so
                     // MailboxAutomaticAliases creates its RFC2142 default aliases.
@@ -424,7 +424,7 @@ final class MailboxController extends AbstractController
                     $this->flash('Mailbox quota set to ' . $domain->getQuota(), FlashMessages::INFO);
                 }
 
-                $formHost->apply($mailbox, $v, $options);
+                $formHost->apply($mailbox, $v, $options, $em);
 
                 $context = new MailboxContext(
                     $em,

@@ -78,6 +78,28 @@ class ViMbAdmin_Service_Archive
     }
 
     /**
+     * Delete an archive row (the DB side of `ArchiveController::deleteAction`).
+     *
+     * The caller has already removed the backup files via doveadm (an I/O concern
+     * that must succeed first, so a failure aborts before the row is dropped). This
+     * just removes the archive, logs the deletion and flushes.
+     */
+    public function delete(\Entities\Archive $archive, \Entities\Admin $actor): void
+    {
+        $user = $archive->getUsername();
+
+        $this->em->remove($archive);
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_ARCHIVE_REQUEST,
+            "{$actor->getFormattedName()} deleted archive backup for {$user}"
+        );
+
+        $this->em->flush();
+    }
+
+    /**
      * Write a Log row for an action (persist only; the flush above commits it).
      */
     private function log(\Entities\Admin $actor, string $action, string $message): void

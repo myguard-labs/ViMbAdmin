@@ -18,10 +18,11 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  * row actions (from the framework-free `Entities\Archive` constants).
  *
  * `toggleAutoprune` flips an archive's autoprune flag through the framework-free
- * `ViMbAdmin_Service_Archive` (no plugin hooks, so no callback threading). The
- * `delete`/`restore` actions stay on ZF1 — they drive doveadm / the filesystem
- * (fsDelete / restoreFrom) and the mailbox-repair queue, which the native kernel
- * does not yet wrap.
+ * `ViMbAdmin_Service_Archive` (no plugin hooks, so no callback threading).
+ * `delete` removes the backup files via the doveadm HTTP API
+ * ({@see \ViMbAdmin_Doveadm}) and then the archive row. `restore` stays on ZF1 —
+ * it recreates the mailbox + doveadm-syncs the backup + enqueues a repair, which
+ * the native kernel does not yet wrap.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -103,6 +104,54 @@ final class ArchiveController extends AbstractController
             ? sprintf('Autoprune enabled for %s; the prune window restarts from now.', $archive->getUsername())
             : sprintf('Autoprune disabled for %s.', $archive->getUsername()));
 
+        return $this->redirect('archive/list');
+    }
+
+    /**
+     * GET /archive/delete/arid/<id>/csrf/<token> — delete a backup permanently.
+     *
+     * Faithful port of the ZF1 `deleteAction`: CSRF-gated, resolve + authorise the
+     * archive, remove the backup files via the doveadm HTTP API FIRST (a failure
+     * aborts with an error flash, before the DB row is touched — matching ZF1), then
+     * drop the archive row + log via `ViMbAdmin_Service_Archive::delete`. Redirects
+     * to the archive list.
+     */
+    public function deleteAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        if (!$this->csrfValid()) {
+            $this->flash('Invalid or missing security token. Please retry from the list page.', FlashMessages::ERROR);
+            return $this->redirect('archive/list');
+        }
+
+        $archive = ($arid = $this->param('arid'))
+            ? $this->em()->getRepository('\\Entities\\Archive')->find((int) $arid)
+            : null;
+
+        if (!$archive || (!$admin->isSuper() && !$admin->canManageDomain($archive->getDomain()))) {
+            return $this->redirect('archive/list');
+        }
+
+        $user = $archive->getUsername();
+        $dest = $archive->getMaildirFile();
+
+        // Remove the backup files first; abort (keeping the row) if doveadm fails.
+        try {
+            if ($dest) {
+                \ViMbAdmin_Doveadm::fromOptions($this->container->options())->fsDelete($dest);
+            }
+        } catch (\Throwable $e) {
+            $this->flash(sprintf('Could not remove the backup files for %s: %s', $user, $e->getMessage()), FlashMessages::ERROR);
+            return $this->redirect('archive/list');
+        }
+
+        (new \ViMbAdmin_Service_Archive($this->em()))->delete($archive, $admin);
+
+        $this->flash(sprintf('Archive backup for %s deleted.', $user));
         return $this->redirect('archive/list');
     }
 }

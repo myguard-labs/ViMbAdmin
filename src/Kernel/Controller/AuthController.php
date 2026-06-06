@@ -32,7 +32,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  *      counter exactly as the ZF1 adapter did;
  *   5. on success, BEFORE granting a session: the 2FA gate — an enabled or
  *      force-enrolled admin is parked (`totp_pending_admin_id`) and redirected to
- *      the ZF1 `auth/totp` / `auth/totp-setup` flow, so 2FA is never bypassed;
+ *      the native `auth/totp` / `auth/totp-setup` flow, so 2FA is never bypassed;
  *   6. otherwise regenerate the session id (fixation defence), grant the identity
  *      via {@see \ViMbAdmin\Kernel\Security\Auth::establish()} (which writes the
  *      same legacy identity slot, so any remaining ZF1 page reads it too), clear
@@ -41,8 +41,9 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * Like the ZF1 login this form carries NO CSRF token (it is credential- and
  * brute-force-gated; a CSRF requirement would only add a session-expiry footgun).
  * Remember-me cookies and login-history are intentionally NOT carried over in
- * this first cut (dropping remember-me is a safe reduction); the rest of the auth
- * surface (totp, setup, lost/reset password, change password) stays on ZF1 via
+ * this first cut (dropping remember-me is a safe reduction). Login, logout, setup
+ * and the 2FA flow (totp / totp-setup) are native; the remaining auth surface
+ * (lost/reset password — mailer-dependent — and change-password) stays on ZF1 via
  * the dispatcher fallback.
  *
  * @package ViMbAdmin
@@ -180,6 +181,127 @@ final class AuthController extends AbstractController
     }
 
     /**
+     * GET|POST /auth/totp — second-factor verification for a parked login.
+     *
+     * Faithful port of the ZF1 `totpAction`. It runs PRE-auth: the native login
+     * (or totp-setup) parked an enabled 2FA admin in `totp_pending_admin_id` and
+     * redirected here; the identity is granted only once a valid TOTP (or a
+     * one-time backup) code is supplied. Both the verification and the secret
+     * handling go through the already-framework-free `ViMbAdmin_TwoFactor`
+     * (robthree/twofactorauth + libsodium), so there is no ZF1 dependency. No CSRF
+     * (pre-auth, gated by the unforgeable pending-session id — same rationale as
+     * the login form). A wrong code is counted against the brute-force gate.
+     */
+    public function totpAction(): Response
+    {
+        if ($this->admin() !== null) {
+            return $this->redirect('');
+        }
+
+        $session   = $this->session();
+        $pendingId = $session->totp_pending_admin_id ?? null;
+        if (!$pendingId) {
+            return $this->redirect('auth/login');
+        }
+
+        $admin = $this->em()->getRepository('\\Entities\\Admin')->find((int) $pendingId);
+        if (!$admin) {
+            unset($session->totp_pending_admin_id);
+            return $this->redirect('auth/login');
+        }
+
+        $options = $this->container->options();
+
+        if ($this->isPost()) {
+            $tfa  = new \ViMbAdmin_TwoFactor('ViMbAdmin', (string) ($options['securitysalt'] ?? ''));
+            $code = trim((string) ($this->postData()['code'] ?? ''));
+            $bf   = $this->bruteForce($options);
+
+            if ($tfa->verifyForAdmin($admin, $code) || $tfa->consumeBackupCode($admin, $code)) {
+                $bf->clear($admin->getUsername(), null);
+                return $this->grantPendingLogin($admin, $session);
+            }
+
+            $bf->record($admin->getUsername(), null);
+            $this->em()->flush();
+            $this->flash('Invalid authentication code. Please try again.', FlashMessages::ERROR);
+        }
+
+        return $this->view('auth/native-totp.phtml', [
+            'formHtml' => (new FormRenderer())->render($this->buildTotpForm(), '/auth/totp', 'Verify'),
+        ]);
+    }
+
+    /**
+     * GET|POST /auth/totp-setup — forced first-time 2FA enrolment for a parked
+     * login. Faithful port of the ZF1 `totpSetupAction`: it mints (and stashes in
+     * the session) an enrolment secret, shows the QR + manual secret, and on a
+     * verifying code enables 2FA (storing the libsodium-encrypted secret + backup
+     * codes on the admin), clears the force flag, grants the identity and shows the
+     * one-time backup codes. The demo account may not enrol. Uses the
+     * framework-free `ViMbAdmin_TwoFactor`; no ZF1.
+     */
+    public function totpSetupAction(): Response
+    {
+        if ($this->admin() !== null) {
+            return $this->redirect('');
+        }
+
+        $session   = $this->session();
+        $pendingId = $session->totp_pending_admin_id ?? null;
+        if (!$pendingId) {
+            return $this->redirect('auth/login');
+        }
+
+        $admin = $this->em()->getRepository('\\Entities\\Admin')->find((int) $pendingId);
+        if (!$admin) {
+            unset($session->totp_pending_admin_id);
+            return $this->redirect('auth/login');
+        }
+
+        $options = $this->container->options();
+
+        if (\ViMbAdmin_Demo::isLocked($options, $admin->getUsername())) {
+            unset($session->totp_pending_admin_id);
+            $this->flash('Two-factor enrolment is disabled for the demo account.', FlashMessages::INFO);
+            return $this->redirect('auth/login');
+        }
+
+        $tfa = new \ViMbAdmin_TwoFactor('ViMbAdmin', (string) ($options['securitysalt'] ?? ''));
+
+        $secret = $session->totp_setup_secret ?? null;
+        if (!$secret) {
+            $secret = $tfa->createSecret();
+            $session->totp_setup_secret = $secret;
+        }
+
+        if ($this->isPost() && trim((string) ($this->postData()['code'] ?? '')) !== '') {
+            if ($tfa->verifyCode($secret, trim((string) $this->postData()['code']))) {
+                $backup = $tfa->enable($admin, $secret);
+                $tfa->clearForce($admin);
+                $this->em()->flush();
+                unset($session->totp_setup_secret);
+
+                $this->bruteForce($options)->clear($admin->getUsername(), null);
+                // Grant the identity, but render the one-time backup codes first.
+                $this->grantPendingLogin($admin, $session);
+
+                return $this->view('auth/totp-setup.phtml', [
+                    'justEnabled' => true,
+                    'backupCodes' => $backup,
+                ]);
+            }
+
+            $this->flash('That code did not verify. Scan the QR and try again.', FlashMessages::ERROR);
+        }
+
+        return $this->view('auth/totp-setup.phtml', [
+            'secret'    => $secret,
+            'qrDataUri' => $tfa->getQrDataUri($admin->getUsername(), $secret),
+        ]);
+    }
+
+    /**
      * GET /auth/logout — drop the identity and the session, then back to login.
      */
     public function logoutAction(): Response
@@ -194,6 +316,46 @@ final class AuthController extends AbstractController
     }
 
     /**
+     * Finish a 2FA-gated login: regenerate the session id, mark 2FA done, grant
+     * the identity (same legacy slot), and stamp last-login. Mirrors the ZF1
+     * `_reauthenticate` + session bookkeeping. Returns the post-auth redirect
+     * (honouring a stashed `postAuthRedirect`).
+     */
+    private function grantPendingLogin(object $admin, object $session): Response
+    {
+        if (session_status() === PHP_SESSION_ACTIVE) {
+            session_regenerate_id(true);
+        }
+
+        $session->totp_verified = true;
+        $session->logged_in_via = $session->totp_pending_via ?? 'auth';
+        unset($session->totp_pending_admin_id);
+        unset($session->totp_pending_via);
+
+        $this->container->auth()->establish($admin);
+
+        $session->timeOfLastAction = time();
+        $admin->setLastLogin(new \DateTime());
+        $this->em()->flush();
+
+        $target = $session->postAuthRedirect ?? '';
+        if ($target !== '') {
+            unset($session->postAuthRedirect);
+        }
+
+        return $this->redirect($target);
+    }
+
+    /** The TOTP code form (no CSRF — pre-auth, gated by the pending-session id). */
+    private function buildTotpForm(): Form
+    {
+        $form = new Form();
+        $form->add(new Field('code', 'Authentication code', 'text', [Validators::required()]));
+
+        return $form;
+    }
+
+    /**
      * Complete a verified login, enforcing the 2FA gate first.
      */
     private function completeLogin(object $admin, object $bf, array $options): Response
@@ -202,7 +364,8 @@ final class AuthController extends AbstractController
         $session = $this->session();
 
         // 2FA gate: an enabled (or force-enrolled) admin is parked and sent to
-        // the ZF1 TOTP flow — the identity is NOT granted here.
+        // the native TOTP flow (totpAction/totpSetupAction) — the identity is NOT
+        // granted here.
         if ($tfa->isEnabled($admin) && !$session->totp_verified) {
             $session->totp_pending_admin_id = $admin->getId();
             $session->totp_pending_via      = 'auth';

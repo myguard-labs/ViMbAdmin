@@ -95,6 +95,9 @@ jobs:
       - name: ViMbAdmin\Kernel\Form (native form core)
         run: php tests/test-kernel-form.php
 
+      - name: ViMbAdmin\Kernel\Config (native INI loader)
+        run: php tests/test-kernel-config.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

@@ -84,6 +84,114 @@ class ViMbAdmin_Service_Alias
     }
 
     /**
+     * Create a new alias.
+     *
+     * Mirrors the create path of the legacy `AliasController::addAction`: the
+     * caller has already resolved `$domain`, parsed the goto list and set the
+     * `address` + `goto` on `$alias` (the form/validation concerns), and run its
+     * own uniqueness / allowance checks. This service sets the domain, marks the
+     * alias active, stamps `created`, persists it, bumps the domain's alias count
+     * (only when the alias is not a plain mailbox self-alias, i.e. address != goto,
+     * matching ZF1), logs the add and flushes — firing the pre/post-flush plugin
+     * hooks around the flush (the native equivalent of the ZF1 `addPreflush`/
+     * `addPostflush` notify).
+     *
+     * @param callable():void|null $preFlush  fires after the log, before flush
+     * @param callable():void|null $postFlush fires after flush
+     */
+    public function create(
+        \Entities\Alias $alias,
+        \Entities\Domain $domain,
+        \Entities\Admin $actor,
+        ?callable $preFlush = null,
+        ?callable $postFlush = null
+    ): \Entities\Alias {
+        $alias->setDomain($domain);
+        $alias->setActive(1);
+        $alias->setCreated(new \DateTime());
+
+        $this->em->persist($alias);
+
+        // A mailbox self-alias (address == goto) does not count against the
+        // domain's alias allowance (ZF1 parity).
+        if ($alias->getAddress() != $alias->getGoto()) {
+            $domain->setAliasCount($domain->getAliasCount() + 1);
+        }
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_ALIAS_ADD,
+            "{$actor->getFormattedName()} added alias {$alias->getAddress()}"
+        );
+
+        if ($preFlush !== null) {
+            $preFlush();
+        }
+
+        $this->em->flush();
+
+        if ($postFlush !== null) {
+            $postFlush();
+        }
+
+        return $alias;
+    }
+
+    /**
+     * Delete an alias.
+     *
+     * Mirrors the legacy `AliasController::deleteAction`: it removes the alias's
+     * preferences, then — unless a `$preRemove` plugin veto returns false —
+     * removes the alias, decrements the domain's alias count (only when
+     * address != goto, ZF1 parity), logs the delete and flushes, firing the
+     * pre/post-flush hooks around the flush. Returns true when the alias was
+     * removed, false when a plugin vetoed (nothing is flushed on a veto).
+     *
+     * @param callable():bool|null $preRemove veto hook (false aborts)
+     * @param callable():void|null $preFlush  fires after the log, before flush
+     * @param callable():void|null $postFlush fires after flush
+     */
+    public function delete(
+        \Entities\Alias $alias,
+        \Entities\Admin $actor,
+        ?callable $preRemove = null,
+        ?callable $preFlush = null,
+        ?callable $postFlush = null
+    ): bool {
+        foreach ($alias->getPreferences() as $pref) {
+            $this->em->remove($pref);
+        }
+
+        if ($preRemove !== null && $preRemove() === false) {
+            return false;
+        }
+
+        $this->em->remove($alias);
+
+        if ($alias->getAddress() != $alias->getGoto()) {
+            $alias->getDomain()->setAliasCount($alias->getDomain()->getAliasCount() - 1);
+        }
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_ALIAS_DELETE,
+            "{$actor->getFormattedName()} removed alias {$alias->getAddress()}"
+        );
+
+        if ($preFlush !== null) {
+            $preFlush();
+        }
+
+        $this->em->flush();
+
+        if ($postFlush !== null) {
+            $postFlush();
+        }
+
+        return true;
+    }
+
+    /**
      * Write a Log row for an action (persist only; the caller's flush commits it).
      */
     private function log(\Entities\Admin $actor, string $action, string $message, ?\Entities\Domain $domain = null): void

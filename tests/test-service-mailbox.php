@@ -25,6 +25,14 @@ spl_autoload_register(static function (string $class): void {
 
 require __DIR__ . '/../library/ViMbAdmin/Service/Mailbox.php';
 
+// OSS_Auth_Password (used by create() to hash the plaintext password). Pull in
+// only its dependencies and exercise it with pwhash=crypt:sha512 — bcrypt fatals
+// on a host CLI without the OSS_Crypt_Bcrypt salt generator, but crypt:sha512
+// needs only PHP's crypt(), so the hash-dependent logic is testable framework-free.
+require __DIR__ . '/../library/OSS/Exception.php';
+require __DIR__ . '/../library/OSS/String.php';
+require __DIR__ . '/../library/OSS/Auth/Password.php';
+
 /**
  * Records purgeMailbox() calls so the service's orchestration can be asserted
  * without the real (DB-backed) repository.
@@ -41,12 +49,28 @@ final class FakeMailboxRepo
     }
 }
 
+/**
+ * Stands in for the Alias repository the auto mailbox-alias check queries: a
+ * configurable findOneBy() result lets the create() test exercise both the
+ * "no clashing alias -> create one" and "alias already exists -> skip" branches.
+ */
+final class FakeAliasRepo
+{
+    public ?object $existing = null;
+
+    public function findOneBy(array $criteria)
+    {
+        return $this->existing;
+    }
+}
+
 final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
 {
     /** @var object[] */ public array $persisted = [];
     /** @var object[] */ public array $removed = [];
     public int $flushes = 0;
     public ?FakeMailboxRepo $mailboxRepo = null;
+    public ?FakeAliasRepo $aliasRepo = null;
 
     public function persist(object $object): void { $this->persisted[] = $object; }
     public function remove(object $object): void { $this->removed[] = $object; }
@@ -56,10 +80,28 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     public function detach(object $object): void {}
     public function refresh(object $object): void {}
     public function getRepository(string $className) {
+        if ($this->aliasRepo !== null && str_contains($className, 'Alias')) {
+            return $this->aliasRepo;
+        }
         if ($this->mailboxRepo !== null && str_contains($className, 'Mailbox')) {
             return $this->mailboxRepo;
         }
         throw new \RuntimeException('not used');
+    }
+
+    public function lastAlias(): ?\Entities\Alias
+    {
+        for ($i = count($this->persisted) - 1; $i >= 0; $i--) {
+            if ($this->persisted[$i] instanceof \Entities\Alias) {
+                return $this->persisted[$i];
+            }
+        }
+        return null;
+    }
+
+    public function countPersisted(string $class): int
+    {
+        return count(array_filter($this->persisted, static fn($o) => $o instanceof $class));
     }
     public function getClassMetadata(string $className) { throw new \RuntimeException('not used'); }
     public function getMetadataFactory() { throw new \RuntimeException('not used'); }
@@ -185,6 +227,83 @@ check('purge veto returns false',             $rv === false);
 check('purge veto did NOT purgeMailbox',      $emV->mailboxRepo->purges === []);
 check('purge veto did NOT flush',             $emV->flushes === 0);
 check('purge veto wrote no log',              $emV->lastLog() === null);
+
+// --- create: full add path, auto-alias on, hooks fire in order -------- //
+$mkDomain = static function (int $count): \Entities\Domain {
+    $d = new \Entities\Domain();
+    $d->setDomain('example.com');
+    $d->setMailboxCount($count);
+    return $d;
+};
+
+$createOptions = [
+    'mailboxAliases' => 1,
+    'defaults' => ['mailbox' => [
+        'homedir'         => '/var/vmail/%d/',
+        'maildir'         => '/var/vmail/%d/%u/',
+        'uid'             => 5000,
+        'gid'             => 5000,
+        'password_scheme' => 'crypt:sha512',
+    ]],
+];
+
+$emC = new FakeObjectManager();
+$emC->aliasRepo = new FakeAliasRepo();        // findOneBy -> null (no clash)
+$domC = $mkDomain(7);
+$mbC  = new \Entities\Mailbox();
+$mbC->setUsername('new@example.com');
+$mbC->setLocalPart('new');
+$mbC->setName('New User');
+$mbC->setQuota(0);
+$mbC->setPassword('s3cr3t-plaintext');
+
+$orderC = [];
+$created = (new ViMbAdmin_Service_Mailbox($emC))->create(
+    $mbC, $domC, $actor, $createOptions,
+    function () use (&$orderC, $emC): void { $orderC[] = 'preFlush:' . $emC->flushes; },
+    function () use (&$orderC, $emC): void { $orderC[] = 'postFlush:' . $emC->flushes; },
+);
+
+check('create returns the mailbox',           $created === $mbC);
+check('create set the domain',                $mbC->getDomain() === $domC);
+check('create set active',                    (bool) $mbC->getActive() === true);
+check('create cleared delete-pending',        (bool) $mbC->getDeletePending() === false);
+check('create set uid/gid from options',      (int) $mbC->getUid() === 5000 && (int) $mbC->getGid() === 5000);
+check('create formatted homedir (%d)',        $mbC->getHomedir() === '/var/vmail/example.com/');
+check('create formatted maildir (%d/%u)',     $mbC->getMaildir() === '/var/vmail/example.com/new/');
+check('create hashed the password',           $mbC->getPassword() !== 's3cr3t-plaintext');
+check('create password verifies',             OSS_Auth_Password::verify('s3cr3t-plaintext', $mbC->getPassword(), ['pwhash' => 'crypt:sha512']) === true);
+check('create persisted the mailbox',         in_array($mbC, $emC->persisted, true));
+check('create bumped domain mailboxCount',    (int) $domC->getMailboxCount() === 8);
+check('create logged ACTION_MAILBOX_ADD',     $emC->lastLog()?->getAction() === \Entities\Log::ACTION_MAILBOX_ADD);
+check('create flushed once',                  $emC->flushes === 1);
+check('create hook order around flush',       $orderC === ['preFlush:0', 'postFlush:1']);
+// auto mailbox-alias
+check('create made the auto-alias',           $emC->countPersisted(\Entities\Alias::class) === 1);
+check('auto-alias address == username',       $emC->lastAlias()?->getAddress() === 'new@example.com');
+check('auto-alias goto == username',          $emC->lastAlias()?->getGoto() === 'new@example.com');
+
+// --- create: mailboxAliases off -> no auto-alias ---------------------- //
+$emN = new FakeObjectManager();
+$emN->aliasRepo = new FakeAliasRepo();
+$optsN = $createOptions; $optsN['mailboxAliases'] = 0;
+$mbN = new \Entities\Mailbox();
+$mbN->setUsername('noalias@example.com');
+$mbN->setPassword('s3cr3t-plaintext');
+(new ViMbAdmin_Service_Mailbox($emN))->create($mbN, $mkDomain(0), $actor, $optsN);
+check('aliases off: no auto-alias',           $emN->countPersisted(\Entities\Alias::class) === 0);
+check('aliases off: still creates mailbox',   $emN->countPersisted(\Entities\Mailbox::class) === 1 && $emN->flushes === 1);
+
+// --- create: a clashing alias already exists -> skip the auto-alias --- //
+$emE = new FakeObjectManager();
+$emE->aliasRepo = new FakeAliasRepo();
+$emE->aliasRepo->existing = new \Entities\Alias();   // findOneBy returns one
+$mbE = new \Entities\Mailbox();
+$mbE->setUsername('clash@example.com');
+$mbE->setPassword('s3cr3t-plaintext');
+(new ViMbAdmin_Service_Mailbox($emE))->create($mbE, $mkDomain(0), $actor, $createOptions);
+check('existing alias: no new auto-alias',    $emE->countPersisted(\Entities\Alias::class) === 0);
+check('existing alias: mailbox still created', $emE->countPersisted(\Entities\Mailbox::class) === 1);
 
 echo "\n";
 if ($failures === 0) {

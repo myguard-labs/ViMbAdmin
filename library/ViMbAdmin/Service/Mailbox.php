@@ -149,6 +149,94 @@ class ViMbAdmin_Service_Mailbox
     }
 
     /**
+     * Create a new mailbox.
+     *
+     * Mirrors the create path of the legacy `MailboxController::addAction`: the
+     * caller has already resolved `$domain`, set the username, name, quota and
+     * the PLAINTEXT password on `$mailbox`, and run its own form validation /
+     * uniqueness / quota-clamp checks. This service owns the rest of the add:
+     * it derives the storage fields from the application options (homedir / uid /
+     * gid + the formatted home/maildir paths), hashes the plaintext password,
+     * marks the mailbox active and not delete-pending, stamps `created`, persists
+     * it, optionally creates the matching auto mailbox-alias (address -> address,
+     * skipped if one already exists), bumps the domain's mailbox count, logs the
+     * add and flushes — firing the supplied pre/post-flush plugin hooks around
+     * the flush (the native equivalent of the ZF1 `addPreflush`/`addPostflush`
+     * notify). Like {@see toggleActive}/{@see purge} the hooks are optional
+     * callables so either dispatch path can thread its plugin notify in.
+     *
+     * @param array $options the merged application options (needs
+     *        `defaults.mailbox.{homedir,maildir,uid,gid,password_scheme[,password_salt]}`
+     *        and the top-level `mailboxAliases` switch)
+     * @param callable():void|null $preFlush  fires after the log, before flush
+     * @param callable():void|null $postFlush fires after flush
+     */
+    public function create(
+        \Entities\Mailbox $mailbox,
+        \Entities\Domain $domain,
+        \Entities\Admin $actor,
+        array $options,
+        ?callable $preFlush = null,
+        ?callable $postFlush = null
+    ): \Entities\Mailbox {
+        $mb = $options['defaults']['mailbox'];
+
+        $mailbox->setDomain($domain);
+        $mailbox->setHomedir($mb['homedir']);
+        $mailbox->setUid($mb['uid']);
+        $mailbox->setGid($mb['gid']);
+        $mailbox->formatHomedir($mb['homedir']);
+        $mailbox->formatMaildir($mb['maildir']);
+        $mailbox->setActive(1);
+        $mailbox->setDeletePending(false);
+        $mailbox->setCreated(new \DateTime());
+
+        $mailbox->setPassword(\OSS_Auth_Password::hash($mailbox->getPassword(), [
+            'pwhash'   => $mb['password_scheme'],
+            'pwsalt'   => $mb['password_salt'] ?? null,
+            'username' => $mailbox->getUsername(),
+        ]));
+
+        $this->em->persist($mailbox);
+
+        // Auto mailbox-alias (address -> address). Skip if an alias with that
+        // address already exists (e.g. an orphan from an earlier failed attempt)
+        // — inserting a duplicate violates the unique key and rolls the create
+        // back.
+        if (!empty($options['mailboxAliases']) && (int) $options['mailboxAliases'] === 1
+            && $this->em->getRepository('\\Entities\\Alias')->findOneBy(['address' => $mailbox->getUsername()]) === null
+        ) {
+            $alias = new \Entities\Alias();
+            $alias->setAddress($mailbox->getUsername());
+            $alias->setGoto($mailbox->getUsername());
+            $alias->setDomain($domain);
+            $alias->setActive(1);
+            $alias->setCreated(new \DateTime());
+            $this->em->persist($alias);
+        }
+
+        $domain->setMailboxCount($domain->getMailboxCount() + 1);
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_MAILBOX_ADD,
+            "{$actor->getFormattedName()} added mailbox {$mailbox->getUsername()}"
+        );
+
+        if ($preFlush !== null) {
+            $preFlush();
+        }
+
+        $this->em->flush();
+
+        if ($postFlush !== null) {
+            $postFlush();
+        }
+
+        return $mailbox;
+    }
+
+    /**
      * Write a Log row for an action (persist only; the caller's flush commits it).
      */
     private function log(\Entities\Admin $actor, string $action, string $message, ?\Entities\Domain $domain = null): void

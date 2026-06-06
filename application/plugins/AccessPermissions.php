@@ -145,7 +145,7 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
         return _( 'You must select which services the user can access if you are choosing to apply specific access permissions' );
     }
 
-    public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options ): void
+    public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null ): void
     {
         if( empty( $values['plugin_accessPermissions'] ) )
         {

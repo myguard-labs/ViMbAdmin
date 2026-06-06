@@ -70,7 +70,7 @@ function purgeDomain( id, domain )
         show: true
     });
 
-    $( '#purge_dialog_delete' ).attr( 'href', '{genUrl controller="domain" action="purge"}/did/' + id );
+    $( '#purge_dialog_delete' ).attr( 'href', '{genUrl controller="domain" action="purge"}/did/' + id + '/csrf/{$csrfToken}' );
 
     $( '#purge_dialog_cancel' ).click( function(){
         delDialog.modal('hide');

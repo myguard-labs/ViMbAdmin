@@ -11,6 +11,8 @@ use ViMbAdmin\Kernel\Form\FormRenderer;
 use ViMbAdmin\Kernel\Form\Validators;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\Mvc\AbstractController;
+use ViMbAdmin\Kernel\Security\Csrf;
+use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 
 /**
  * Native login / logout (docs/ZF1-REMOVAL.md) — the framework-free replacement
@@ -99,6 +101,85 @@ final class AuthController extends AbstractController
     }
 
     /**
+     * GET|POST /auth/setup — first-run: create the initial super administrator.
+     *
+     * Faithful port of the ZF1 `setupAction` for the common case (a configured
+     * 64-char `securitysalt`). Guards: it only runs when there are zero admins and
+     * nobody is logged in (else it flashes and bounces, as ZF1 did). The
+     * security-salt-not-yet-configured screen (`saltSet=false`, which presents
+     * generated salts to paste into `application.ini`) is a rare brand-new-install
+     * path with a bespoke view — this returns null for it so the ZF1 action still
+     * renders it (the dispatcher fallback).
+     *
+     * With the salt configured, the submitted `salt` must match the configured
+     * `securitysalt` (the first-run gate, exactly as ZF1) before the first admin is
+     * created super + active, the Doctrine migration row is seeded, and the user is
+     * sent to the login page. There is no logged-in actor on a first run, so —
+     * unlike the authenticated add path — this writes no Log row and does not go
+     * through `Service_Admin::create`. The welcome email is dropped (no mailer in
+     * the native kernel, consistent with the native login).
+     */
+    public function setupAction(): ?Response
+    {
+        if ((int) $this->em()->getRepository('\\Entities\\Admin')->getCount() !== 0) {
+            $this->flash('Admins already exist in the system.', FlashMessages::INFO);
+            return $this->redirect('auth/login');
+        }
+
+        if ($this->admin() !== null) {
+            $this->flash('You are already logged in.', FlashMessages::INFO);
+            return $this->redirect('');
+        }
+
+        $options = $this->container->options();
+        $salt    = (string) ($options['securitysalt'] ?? '');
+
+        // The salt-not-configured first-run screen has a bespoke view — let ZF1
+        // serve it.
+        if (strlen($salt) !== 64) {
+            return null;
+        }
+
+        $form = $this->buildSetupForm();
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $values = $form->values();
+
+            if (!hash_equals($salt, (string) $values['salt'])) {
+                $this->flash('Incorrect security salt provided. Please copy and paste it from the application.ini file.', FlashMessages::INFO);
+                return $this->redirect('auth/login');
+            }
+
+            $admin = new \Entities\Admin();
+            $admin->setUsername((string) $values['username']);
+            $admin->setPassword(
+                \OSS_Auth_Password::hash((string) $values['password'], $options['resources']['auth']['oss'])
+            );
+            $admin->setSuper(true);
+            $admin->setActive(true);
+            $admin->setCreated(new \DateTime());
+            $admin->setModified(new \DateTime());
+            $this->em()->persist($admin);
+
+            // Seed the Doctrine migration row, exactly as the ZF1 setup did.
+            $dbversion = new \Entities\DatabaseVersion();
+            $dbversion->setVersion(\ViMbAdmin_Version::DBVERSION);
+            $dbversion->setName(\ViMbAdmin_Version::DBVERSION_NAME);
+            $dbversion->setAppliedOn(new \DateTime());
+            $this->em()->persist($dbversion);
+
+            $this->em()->flush();
+
+            $this->flash('Your administrator account has been added. Please log in below.');
+            return $this->redirect('auth/login');
+        }
+
+        return $this->view('auth/native-setup.phtml', [
+            'formHtml' => (new FormRenderer())->render($form, '/auth/setup', 'Create Administrator'),
+        ]);
+    }
+
+    /**
      * GET /auth/logout — drop the identity and the session, then back to login.
      */
     public function logoutAction(): Response
@@ -179,6 +260,23 @@ final class AuthController extends AbstractController
         $form->add(new Field('username', 'Username', 'text', [Validators::required()]))
              ->add(new Field('password', 'Password', 'password', [Validators::required()]))
              ->add(new Field('rememberme', 'Remember me', 'checkbox'));
+
+        return $form;
+    }
+
+    /**
+     * The first-run setup form: the security salt (the first-run gate), the new
+     * super admin's username (email) and password. CSRF-guarded (the GET that
+     * renders it mints the token in the fresh session). Username uniqueness is not
+     * needed — the action only runs when the admin table is empty.
+     */
+    private function buildSetupForm(): Form
+    {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+
+        $form->add(new Field('salt', 'Security salt', 'text', [Validators::required()]))
+             ->add(new Field('username', 'Username (email)', 'text', [Validators::required(), Validators::email()]))
+             ->add(new Field('password', 'Password', 'password', [Validators::required(), Validators::minLength(6)]));
 
         return $form;
     }

@@ -1,0 +1,15 @@
+{tmplinclude file="header.phtml"}
+<div class="page-content" >
+    <div class="page-header" >
+        <h1>Welcome to ViMbAdmin <small>create the first administrator</small></h1>
+    </div>
+    {OSS_Message}
+
+    <p>No administrators exist yet. Paste the 64-character <code>securitysalt</code>
+       from your <code>application.ini</code> and choose the credentials for the
+       first (super) administrator.</p>
+
+    {$formHtml nofilter}
+
+</div>
+{tmplinclude file="footer.phtml"}

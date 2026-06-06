@@ -44,7 +44,7 @@ set_include_path( implode( PATH_SEPARATOR,
 // ---------------------------------------------------------------------------
 $cliOpts   = getopt( 'a:vdhc', array(
     'action:', 'verbose', 'debug', 'help', 'copyright',
-    'username:', 'all', 'name:', 'scope:', 'ip:', 'days:', 'id:',
+    'username:', 'all', 'name:', 'scope:', 'ip:', 'domains:', 'days:', 'id:',
 ) );
 $cliAction = isset( $cliOpts['action'] ) ? $cliOpts['action'] : ( isset( $cliOpts['a'] ) ? $cliOpts['a'] : null );
 
@@ -53,23 +53,25 @@ if( is_string( $cliAction ) )
     $cliKernel = new \ViMbAdmin\Kernel\Cli\CliKernel( APPLICATION_PATH, APPLICATION_ENV );
     if( $cliKernel->canHandle( $cliAction ) )
     {
-        // The migrated library classes a native command reuses
-        // (ViMbAdmin_Service_*, OSS_*) are PSR-0 under library/ and NOT in the
-        // composer classmap; the ZF1 path registers Zend_Loader_Autoloader for
-        // them, but the native path runs first. Register a tiny Zend-free PSR-0
-        // autoloader for those two prefixes (library/ is already on include_path).
-        spl_autoload_register( function( $class ) {
-            if( strncmp( $class, 'OSS_', 4 ) !== 0 && strncmp( $class, 'ViMbAdmin_', 10 ) !== 0 )
-                return;
-            $rel = str_replace( '_', DIRECTORY_SEPARATOR, $class ) . '.php';
-            foreach( explode( PATH_SEPARATOR, get_include_path() ) as $base )
-            {
-                $path = rtrim( $base, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR . $rel;
-                if( is_file( $path ) ) { require $path; return; }
-            }
-        } );
+        // Autoload the legacy library/ classes a native command reuses
+        // (ViMbAdmin_Service_*, OSS_*) and the few Zend_ classes the residual
+        // glue still touches — exactly as public/index.php's native zone does.
+        // These are not in the composer classmap; the ZF1 path below registers
+        // this autoloader only later, and the native path runs first.
+        require_once 'Zend/Loader/Autoloader.php';
+        $cliZendAutoloader = Zend_Loader_Autoloader::getInstance();
+        $cliZendAutoloader->registerNamespace( 'OSS' );
+        $cliZendAutoloader->registerNamespace( 'ViMbAdmin' );
 
-        exit( $cliKernel->run( $cliAction, $cliOpts ) );
+        // Build the native resources, then wire the residual legacy glue some
+        // library classes still read (the entity-preference layer
+        // OSS_Doctrine2_WithPreferences fetches the EM from Zend_Registry 'd2em';
+        // OSS_Utils reads 'options') — exactly as public/index.php does for the web.
+        $cliContainer = $cliKernel->boot();
+        Zend_Registry::set( 'd2em',    array( 'default' => $cliContainer->entityManager() ) );
+        Zend_Registry::set( 'options', $cliContainer->options() );
+
+        exit( $cliKernel->run( $cliAction, $cliOpts, $cliContainer ) );
     }
 }
 

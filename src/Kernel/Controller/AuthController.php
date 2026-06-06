@@ -808,7 +808,7 @@ final class AuthController extends AbstractController
     private function tryRenderEmail(string $script, array $vars): ?string
     {
         try {
-            return $this->renderEmail($script, $vars);
+            return $this->renderPartial($script, $vars);
         } catch (\Throwable $e) {
             return null;
         }

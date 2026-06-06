@@ -99,6 +99,34 @@ final class Kernel
     }
 
     /**
+     * Whether the kernel can serve this path natively, decided WITHOUT building
+     * any resource (no container, no dispatcher) — purely from the route, the
+     * built-in handler keys and `method_exists` on the mapped controller class.
+     *
+     * The entry point uses this to route before bootstrapping: once the native
+     * bootstrap is the default, a path it cannot serve (the mailer/CLI/remote
+     * tail) must reach the ZF1 path with NOTHING started, because the native
+     * bootstrap opens the PHP session and the ZF1 session layer then fatals on
+     * the already-defined `SID`. So servability must be known before a session
+     * is opened. A controller whose specific action method does not exist is NOT
+     * servable here; native controllers must therefore never punt a route they
+     * own by returning null at runtime — they self-handle and redirect instead.
+     */
+    public function canHandle(string $path): bool
+    {
+        $match = $this->router->match($path);
+        if ($match === null) {
+            return false;
+        }
+        if (isset($this->handlers[$match->controller])) {
+            return true; // a built-in (e.g. kernel-health)
+        }
+        $class = self::NATIVE_CONTROLLERS[$match->controller] ?? null;
+
+        return $class !== null && method_exists($class, $match->actionMethod);
+    }
+
+    /**
      * Decode the path and dispatch it natively if possible, else null
      * (→ ZF1 fallback). Pure: it returns a Response and touches no output.
      */

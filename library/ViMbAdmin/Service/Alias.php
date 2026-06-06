@@ -138,6 +138,46 @@ class ViMbAdmin_Service_Alias
     }
 
     /**
+     * Update an existing alias (the edit path).
+     *
+     * The lighter sibling of {@see create()}: the caller has already re-parsed the
+     * goto list onto `$alias` (the form concern); this service stamps `modified`,
+     * logs the edit and flushes — firing the pre/post-flush plugin hooks around the
+     * flush (the native equivalent of the ZF1 edit `addPreflush`/`addPostflush`
+     * notify). The address, domain and alias count are not touched on an edit
+     * (matching the ZF1 `addAction` edit branch, which only re-sets `goto`).
+     *
+     * @param callable():void|null $preFlush  fires after the log, before flush
+     * @param callable():void|null $postFlush fires after flush
+     */
+    public function update(
+        \Entities\Alias $alias,
+        \Entities\Admin $actor,
+        ?callable $preFlush = null,
+        ?callable $postFlush = null
+    ): \Entities\Alias {
+        $alias->setModified(new \DateTime());
+
+        $this->log(
+            $actor,
+            \Entities\Log::ACTION_ALIAS_EDIT,
+            "{$actor->getFormattedName()} edited alias {$alias->getAddress()}"
+        );
+
+        if ($preFlush !== null) {
+            $preFlush();
+        }
+
+        $this->em->flush();
+
+        if ($postFlush !== null) {
+            $postFlush();
+        }
+
+        return $alias;
+    }
+
+    /**
      * Delete an alias.
      *
      * Mirrors the legacy `AliasController::deleteAction`: it removes the alias's

@@ -23,8 +23,9 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  *
  * All super-gated (the ZF1 `preDispatch` `authorise(true)`); the action POSTs
  * carry the CSRF token as a hidden field (read from the body via {@see postCsrfValid}).
- * The heavier actions — orphan scan/import, archive prune, and the DDL schema
- * update — stay on ZF1 via the dispatcher fallback for now.
+ * `prune-expired` / `prune-all` remove autoprune archive backups via the doveadm
+ * HTTP API (two-step confirm). The remaining actions — orphan scan/import and the
+ * DDL schema-update / cli-schema-update — stay on ZF1 via the dispatcher fallback.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -143,6 +144,96 @@ final class MaintenanceController extends AbstractController
         }
 
         return $this->redirect('maintenance/index');
+    }
+
+    /**
+     * POST /maintenance/prune-expired — remove autoprune backups older than
+     * queue.autoprune.days (two-step confirm).
+     */
+    public function pruneExpiredAction(): Response
+    {
+        $guard = $this->guardSuperPost();
+        if ($guard instanceof Response) {
+            return $guard;
+        }
+
+        $days   = max(0, (int) ($this->container->options()['queue']['autoprune']['days'] ?? 90));
+        $cutoff = (new \DateTime())->modify('-' . $days . ' days');
+        $candidates = $this->em()->getRepository('\\Entities\\Archive')->findAutoprune($cutoff);
+
+        if ((int) ($this->postData()['confirm'] ?? 0) !== 1) {
+            return $this->renderDashboard([
+                'confirmPruneExpired' => true,
+                'pruneExpiredCount'   => count($candidates),
+                'pruneExpiredDays'    => $days,
+            ]);
+        }
+
+        $n = $this->prune($candidates);
+        $this->logMaintenance($guard, "autopruned {$n} expired archive backup(s) (> {$days} days)");
+        $this->flash(sprintf('Pruned %d expired archive backup(s).', $n));
+        return $this->redirect('archive/list');
+    }
+
+    /**
+     * POST /maintenance/prune-all — remove ALL autoprune-on backups regardless of
+     * age (two-step confirm).
+     */
+    public function pruneAllAction(): Response
+    {
+        $guard = $this->guardSuperPost();
+        if ($guard instanceof Response) {
+            return $guard;
+        }
+
+        $candidates = $this->em()->getRepository('\\Entities\\Archive')->findAutoprune(null);
+
+        if ((int) ($this->postData()['confirm'] ?? 0) !== 1) {
+            return $this->renderDashboard([
+                'confirmPruneAll' => true,
+                'pruneAllCount'   => count($candidates),
+            ]);
+        }
+
+        $n = $this->prune($candidates);
+        $this->logMaintenance($guard, "deleted ALL {$n} autoprune-on archive backup(s)");
+        $this->flash(sprintf('Deleted %d autoprune-on archive backup(s).', $n));
+        return $this->redirect('archive/list');
+    }
+
+    /**
+     * Remove each archive's backup maildir via the doveadm HTTP API and drop its
+     * row. Stamps the last-prune marker; a doveadm failure on one archive is logged
+     * and the row kept (retried next run). Returns the number pruned.
+     *
+     * @param \Entities\Archive[] $archives
+     */
+    private function prune(array $archives): int
+    {
+        \ViMbAdmin_Setting::stampNow($this->em(), \ViMbAdmin_Setting::LAST_PRUNE);
+
+        if (!$archives) {
+            return 0;
+        }
+
+        $doveadm = \ViMbAdmin_Doveadm::fromOptions($this->container->options());
+        $pruned  = 0;
+
+        foreach ($archives as $archive) {
+            $dest = $archive->getMaildirFile();
+            try {
+                if ($dest) {
+                    $doveadm->fsDelete($dest);
+                }
+                $this->em()->remove($archive);
+                $pruned++;
+            } catch (\Throwable $e) {
+                error_log("MaintenanceController::prune {$archive->getUsername()}: " . $e->getMessage());
+            }
+        }
+        $this->em()->flush();
+
+        return $pruned;
     }
 
     /**

@@ -29,6 +29,17 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  */
 final class ArchiveController extends AbstractController
 {
+
+    /**
+     * GET /archive and /archive/index — the auth-gated landing forwards to the list
+     * (the native equivalent of the ZF1 indexAction `_forward('list')`).
+     */
+    public function indexAction(): Response
+    {
+        return $this->admin() !== null
+            ? $this->redirect('archive/list')
+            : $this->redirect('auth/login');
+    }
     /**
      * GET /archive/list[/did/<id>][/unset/1] — the archives overview.
      */

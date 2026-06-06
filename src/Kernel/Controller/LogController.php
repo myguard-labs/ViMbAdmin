@@ -33,6 +33,17 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  */
 final class LogController extends AbstractController
 {
+
+    /**
+     * GET /log and /log/index — the auth-gated landing forwards to the list
+     * (the native equivalent of the ZF1 indexAction `_forward('list')`).
+     */
+    public function indexAction(): Response
+    {
+        return $this->admin() !== null
+            ? $this->redirect('log/list')
+            : $this->redirect('auth/login');
+    }
     /**
      * GET /log/list[/did/<id>][/aid/<id>][/unset/1] — the action log table.
      */

@@ -48,6 +48,17 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class MailboxController extends AbstractController
 {
+
+    /**
+     * GET /mailbox and /mailbox/index — the auth-gated landing forwards to the list
+     * (the native equivalent of the ZF1 indexAction `_forward('list')`).
+     */
+    public function indexAction(): Response
+    {
+        return $this->admin() !== null
+            ? $this->redirect('mailbox/list')
+            : $this->redirect('auth/login');
+    }
     /**
      * GET /mailbox/list[/did/<id>][/unset/1] — the mailboxes overview.
      */

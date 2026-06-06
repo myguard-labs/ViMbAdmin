@@ -12,12 +12,11 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  * first controller served by the native kernel that renders a Smarty page (the
  * additionalinfo port emitted JSON).
  *
- * Only `aboutAction` is migrated: it renders the static `index/about.phtml`
- * (chrome + copy, no per-request data), which is the cleanest first proof of the
- * native view pipeline. The controller's other action, `index` (the auth-gated
- * redirect / forward to domain list), is NOT implemented here, so the dispatcher
- * returns null for it and ZF1 still serves `/` and `/index` unchanged — native
- * migration is per-action, not all-or-nothing per controller.
+ * `aboutAction` renders the static `index/about.phtml`; `indexAction` is the
+ * auth-gated landing — an authenticated admin is sent to the domain list, anyone
+ * else to the login page (the native equivalent of the ZF1 `forward('list',
+ * 'domain')` / `redirect('auth/login')`; a redirect replaces the internal forward,
+ * so `/` lands on `/domain/list`).
  *
  * The legacy `application/controllers/IndexController.php` stays in place; with
  * VIMBADMIN_NATIVE_KERNEL off, ZF1 serves the whole controller byte-for-byte.
@@ -33,5 +32,15 @@ final class IndexController extends AbstractController
     public function aboutAction(): Response
     {
         return $this->view('index/about.phtml');
+    }
+
+    /**
+     * GET / and /index/index — the auth-gated landing page.
+     */
+    public function indexAction(): Response
+    {
+        return $this->admin() !== null
+            ? $this->redirect('domain/list')
+            : $this->redirect('auth/login');
     }
 }

@@ -35,6 +35,17 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class AdminController extends AbstractController
 {
+
+    /**
+     * GET /admin and /admin/index — the auth-gated landing forwards to the list
+     * (the native equivalent of the ZF1 indexAction `_forward('list')`).
+     */
+    public function indexAction(): Response
+    {
+        return $this->admin() !== null
+            ? $this->redirect('admin/list')
+            : $this->redirect('auth/login');
+    }
     /**
      * GET /admin/list — the administrator overview (super admins only).
      */

@@ -47,6 +47,17 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class AliasController extends AbstractController
 {
+
+    /**
+     * GET /alias and /alias/index — the auth-gated landing forwards to the list
+     * (the native equivalent of the ZF1 indexAction `_forward('list')`).
+     */
+    public function indexAction(): Response
+    {
+        return $this->admin() !== null
+            ? $this->redirect('alias/list')
+            : $this->redirect('auth/login');
+    }
     /**
      * GET /alias/list[/did/<id>][/ima/<0|1>][/unset/1] — the aliases overview.
      */

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use Symfony\Component\Mime\Address;
+use Symfony\Component\Mime\Email;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Form\Field;
 use ViMbAdmin\Kernel\Form\Form;
@@ -42,9 +44,11 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * brute-force-gated; a CSRF requirement would only add a session-expiry footgun).
  * Remember-me cookies and login-history are intentionally NOT carried over in
  * this first cut (dropping remember-me is a safe reduction). Login, logout, setup,
- * the 2FA flow (totp / totp-setup) and the mailbox self-service change-password
- * are native; only lost/reset-password (mailer-dependent) remains on ZF1 via the
- * dispatcher fallback.
+ * the 2FA flow (totp / totp-setup), the mailbox self-service change-password and
+ * the lost-password / reset-password flow (native {@see Mailer}, WALL #2 slice
+ * 6b) are all native. The captcha image itself (`auth/captcha-image`) is still
+ * served by ZF1 via the dispatcher fallback (it streams a generated PNG); slice
+ * 6c de-Zends `OSS_Captcha_Image`.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -373,6 +377,163 @@ final class AuthController extends AbstractController
     }
 
     /**
+     * GET|POST /auth/lost-password — request a password-reset token by email.
+     *
+     * Native port of `OSS_Controller_Trait_Auth::lostPasswordAction()`. On a
+     * valid POST it looks the admin up by username and, to avoid revealing which
+     * usernames exist, ALWAYS shows the same success message and redirects to the
+     * reset form — only actually minting a token + sending mail when the admin is
+     * found. The token is a 40-char random string stored as an indexed, expiring
+     * (2h, max 5) `tokens.password_reset` preference on the admin entity (the
+     * framework-free `OSS_Doctrine2_WithPreferences` API), and mailed as a
+     * reset-link via the native {@see Mailer}.
+     *
+     * The captcha is honoured when `resources.auth.oss.lost_password.use_captcha`
+     * is on: a fresh `OSS_Captcha_Image` is generated for the render and the
+     * submitted text is validated (as a field rule) against the SUBMITTED captcha
+     * id — exactly as ZF1 did. Clicking the image re-requests a new one
+     * (`requestnewimage`), short-circuiting before validation.
+     */
+    public function lostPasswordAction(): Response
+    {
+        $options     = $this->container->options();
+        $useCaptcha  = !empty($options['resources']['auth']['oss']['lost_password']['use_captcha']);
+        $entityClass = $options['resources']['auth']['oss']['entity'] ?? '\\Entities\\Admin';
+
+        $form = $this->buildLostPasswordForm($useCaptcha);
+        $form->field('username')?->setValue((string) $this->param('username', ''));
+
+        // A fresh captcha for THIS render. Validation (below) checks the captcha
+        // id the user actually SAW (submitted), not this freshly minted one —
+        // mirroring ZF1, which also re-generates on every action invocation.
+        $captchaId = $useCaptcha ? (new \OSS_Captcha_Image(0, 0))->generate() : null;
+
+        if ($this->isPost()) {
+            $post = $this->postData();
+
+            // "click image for a new one": re-render with a fresh captcha, keep
+            // the typed username, do NOT validate yet.
+            if ($useCaptcha && !empty($post['requestnewimage'])) {
+                $form->field('username')?->setValue((string) ($post['username'] ?? ''));
+                return $this->renderLostPassword($form, $useCaptcha, $captchaId);
+            }
+
+            if ($form->isValid($post)) {
+                $username = (string) $form->values()['username'];
+                $user     = $this->em()->getRepository($entityClass)->findOneBy(['username' => $username]);
+
+                // Anti-enumeration: identical response whether or not the user exists.
+                if ($user === null) {
+                    $this->flash(
+                        'If your username was correct, then an email with a key to allow you to change your password below has been sent to you.'
+                    );
+                    return $this->redirect('auth/reset-password/username/' . rawurlencode($username));
+                }
+
+                if ($user->cleanExpiredPreferences()) {
+                    $this->em()->flush();
+                }
+
+                $token = \OSS_String::random(40);
+
+                try {
+                    $user->addIndexedPreference('tokens.password_reset', $token, '=', time() + 2 * 60 * 60, 5);
+                } catch (\OSS_Doctrine2_WithPreferences_IndexLimitException $e) {
+                    $this->flash(
+                        'The limit of password reset tokens has been reached. Please try again later when the existing ones will expire or contact support.',
+                        FlashMessages::ERROR
+                    );
+                    return $this->redirect('auth/lost-password');
+                }
+
+                $this->em()->flush();
+
+                $this->sendAuthEmail(
+                    'lost-password',
+                    ($options['identity']['sitename'] ?? '') . ' - Password Reset Information',
+                    $user,
+                    ['token' => $token]
+                );
+
+                $this->flash(
+                    'If your username was correct, then an email with a key to allow you to change your password below has been sent to you.'
+                );
+                error_log(sprintf('%s requested a reset password token', $user->getUsername()));
+
+                return $this->redirect('auth/reset-password/username/' . rawurlencode($username));
+            }
+        }
+
+        return $this->renderLostPassword($form, $useCaptcha, $captchaId);
+    }
+
+    /**
+     * GET|POST /auth/reset-password — set a new password using an emailed token.
+     *
+     * Native port of `OSS_Controller_Trait_Auth::resetPasswordAction()`. The GET
+     * (reached from the emailed link `/auth/reset-password/username/<u>/token/<t>`)
+     * prefills username + token from the path. A valid POST verifies the token is
+     * among the admin's live `tokens.password_reset` preferences, sets the new
+     * password hash, clears ALL reset tokens, zeroes any failed-login counter,
+     * mails a confirmation, and redirects to login. Every failure path uses the
+     * SAME generic "invalid username / token" message (anti-enumeration).
+     */
+    public function resetPasswordAction(): Response
+    {
+        $options     = $this->container->options();
+        $entityClass = $options['resources']['auth']['oss']['entity'] ?? '\\Entities\\Admin';
+        $form        = $this->buildResetPasswordForm();
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $v    = $form->values();
+            $user = $this->em()->getRepository($entityClass)->findOneBy(['username' => $v['username']]);
+
+            if ($user === null) {
+                $this->flash('Invalid username / token combination. Please check your details and try again.', FlashMessages::ERROR);
+            } else {
+                if ($user->cleanExpiredPreferences()) {
+                    $this->em()->flush();
+                }
+
+                $tokens = $user->getIndexedPreference('tokens.password_reset');
+
+                if (!is_array($tokens) || !in_array($v['token'], $tokens)) {
+                    $this->flash('Invalid username / token combination. Please check your details and try again.', FlashMessages::ERROR);
+                } else {
+                    $user->setPassword(\OSS_Auth_Password::hash((string) $v['password'], $options['resources']['auth']['oss']));
+                    $user->deletePreference('tokens.password_reset');
+
+                    if (method_exists($user, 'setFailedLogins')) {
+                        $user->setFailedLogins(0);
+                    }
+
+                    $this->em()->flush();
+
+                    $this->sendAuthEmail(
+                        'reset-password',
+                        ($options['identity']['sitename'] ?? '') . ' - Your Password Has Been Reset',
+                        $user,
+                        []
+                    );
+
+                    $this->flash('Your password has been successfully changed. Please log in below with your new password.');
+                    error_log(sprintf('%s has completed a password reset', $user->getUsername()));
+
+                    return $this->redirect('auth/login');
+                }
+            }
+        } else {
+            // GET (incl. the emailed link): prefill from the path params.
+            $form->field('username')?->setValue((string) $this->param('username', ''));
+            $form->field('token')?->setValue((string) $this->param('token', ''));
+        }
+
+        return $this->view('auth/native-reset-password.phtml', [
+            'formHtml' => (new FormRenderer())->render($form, '/auth/reset-password', 'Reset Password'),
+        ]);
+    }
+
+    /**
      * Finish a 2FA-gated login: regenerate the session id, mark 2FA done, grant
      * the identity (same legacy slot), and stamp last-login. Mirrors the ZF1
      * `_reauthenticate` + session bookkeeping. Returns the post-auth redirect
@@ -517,5 +678,139 @@ final class AuthController extends AbstractController
              ->add(new Field('password', 'Password', 'password', [Validators::required(), Validators::minLength(6)]));
 
         return $form;
+    }
+
+    /**
+     * The lost-password form. Username (required — NOT email-validated, matching
+     * the ZF1 nonemail username element, since an admin username need not be an
+     * email). When the captcha is enabled it adds a `captchatext` field whose rule
+     * validates the typed text against the SUBMITTED `captchaid` via
+     * `OSS_Captcha_Image::_isValid()` (so a mismatch shows inline), plus the two
+     * hidden fields the refresh widget needs. No CSRF — gated by captcha + the
+     * angie rate-limit on `/auth/forgot`, as ZF1 was.
+     */
+    private function buildLostPasswordForm(bool $useCaptcha): Form
+    {
+        $form = new Form();
+        $form->add(new Field('username', 'Username', 'text', [Validators::required()]));
+
+        if ($useCaptcha) {
+            $form->add(new Field('captchatext', 'Verification', 'text', [
+                Validators::required(),
+                static fn(mixed $v): ?string =>
+                    \OSS_Captcha_Image::_isValid((string) ($_POST['captchaid'] ?? ''), (string) $v)
+                        ? null
+                        : 'The entered text does not match that of the image.',
+            ]))
+                 ->add(new Field('captchaid', '', 'hidden'))
+                 ->add(new Field('requestnewimage', '', 'hidden'));
+        }
+
+        return $form;
+    }
+
+    /**
+     * Stamp the current captcha id onto the hidden fields and render the
+     * lost-password page (captcha image + refresh wiring live in the view).
+     */
+    private function renderLostPassword(Form $form, bool $useCaptcha, ?string $captchaId): Response
+    {
+        if ($useCaptcha) {
+            $form->field('captchaid')?->setValue((string) $captchaId);
+            $form->field('requestnewimage')?->setValue('0');
+        }
+
+        return $this->view('auth/native-lost-password.phtml', [
+            'formHtml'   => (new FormRenderer())->render($form, '/auth/lost-password', 'Reset Password'),
+            'useCaptcha' => $useCaptcha,
+            'captchaId'  => $captchaId,
+        ]);
+    }
+
+    /**
+     * The reset-password form: username + 40-char token + new password + confirm
+     * (must match). Username/password are required only (matching the lax ZF1
+     * elements — admin usernames need not be emails, and the original element set
+     * no real minimum); the token is shape-checked to the `OSS_String::random(40)`
+     * alphabet. No CSRF — possession of the emailed token IS the secret.
+     */
+    private function buildResetPasswordForm(): Form
+    {
+        $form = new Form();
+        $form->add(new Field('username', 'Email address', 'text', [Validators::required()]))
+             ->add(new Field('token', 'Token', 'text', [
+                 Validators::required(),
+                 Validators::regex('/^[A-Za-z0-9]{40}$/', 'Invalid token.'),
+             ]))
+             ->add(new Field('password', 'New password', 'password', [Validators::required()]))
+             ->add(new Field('password_confirm', 'Confirm new password', 'password', [
+                 Validators::required(),
+                 Validators::matches(static fn() => $_POST['password'] ?? null, 'The passwords do not match.'),
+             ]));
+
+        return $form;
+    }
+
+    /**
+     * Render an auth email body template and send it through the native mailer,
+     * honouring `resources.auth.oss.email_format` (html | plaintext | both —
+     * default both, falling back to whichever template renders). Mirrors
+     * `OSS_Controller_Trait_Auth::resolveTemplate()` + the From/To/Subject the
+     * legacy actions set (`identity.mailer.*`, the admin email + formatted name).
+     *
+     * @param array<string,mixed> $vars extra template variables (e.g. the token)
+     */
+    private function sendAuthEmail(string $template, string $subject, object $user, array $vars): void
+    {
+        $options = $this->container->options();
+
+        $email = (new Email())
+            ->from(new Address(
+                (string) ($options['identity']['mailer']['email'] ?? 'do-not-reply@localhost'),
+                (string) ($options['identity']['mailer']['name'] ?? '')
+            ))
+            ->to(new Address((string) $user->getEmail(), (string) $user->getFormattedName()))
+            ->subject($subject);
+
+        $vars += ['user' => $user, 'options' => $options];
+        $format = $options['resources']['auth']['oss']['email_format'] ?? 'both';
+
+        $haveBody = false;
+        if ($format === 'html' || $format === 'both') {
+            $html = $this->tryRenderEmail("auth/email/html/{$template}.phtml", $vars);
+            if ($html !== null) {
+                $email->html($html);
+                $haveBody = true;
+            }
+        }
+        if ($format === 'plaintext' || $format === 'both') {
+            $text = $this->tryRenderEmail("auth/email/plaintext/{$template}.txt", $vars);
+            if ($text !== null) {
+                $email->text($text);
+                $haveBody = true;
+            }
+        }
+
+        if (!$haveBody) {
+            throw new \RuntimeException("Cannot render '{$template}' email body — no html or plaintext template found");
+        }
+
+        $this->mailer()->send($email);
+    }
+
+    /**
+     * Render an email template to a string, or null if it does not exist (so the
+     * caller can try the other format). The Smarty engine throws on a missing
+     * template; that is the "absent" signal.
+     *
+     * @param array<string,mixed> $vars
+     */
+    private function tryRenderEmail(string $script, array $vars): ?string
+    {
+        try {
+            return $this->renderEmail($script, $vars);
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 }

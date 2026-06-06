@@ -48,6 +48,38 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class MailboxController extends AbstractController
 {
+    /**
+     * GET /mailbox/list-search?search=… — server-side pagination JSON (only when
+     * `defaults.server_side.pagination.enable`), scoped to the remembered session
+     * domain. Returns matching mailboxes as JSON or the bare string `ko`.
+     */
+    public function listSearchAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return new Response('ko');
+        }
+
+        $cfg = $this->container->options()['defaults']['server_side']['pagination'] ?? [];
+        if (empty($cfg['enable'])) {
+            return new Response('ko');
+        }
+
+        $search = (string) ($_GET['search'] ?? $_POST['search'] ?? '');
+        if ($search === '' || strlen($search) < (int) ($cfg['min_search_str'] ?? 3)) {
+            return new Response('ko');
+        }
+
+        $domain = $this->session()->domain ?? null;
+        $rows   = $this->em()->getRepository('\Entities\Mailbox')->filterForMailboxList($search, $admin, $domain);
+        $maxCnt = $cfg['max_result_cnt'] ?? false;
+        if (!$rows || ($maxCnt && $maxCnt < count($rows))) {
+            return new Response('ko');
+        }
+
+        return new Response((string) json_encode($rows));
+    }
+
 
     /**
      * GET /mailbox and /mailbox/index — the auth-gated landing forwards to the list

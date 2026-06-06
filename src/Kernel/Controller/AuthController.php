@@ -41,10 +41,10 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * Like the ZF1 login this form carries NO CSRF token (it is credential- and
  * brute-force-gated; a CSRF requirement would only add a session-expiry footgun).
  * Remember-me cookies and login-history are intentionally NOT carried over in
- * this first cut (dropping remember-me is a safe reduction). Login, logout, setup
- * and the 2FA flow (totp / totp-setup) are native; the remaining auth surface
- * (lost/reset password — mailer-dependent — and change-password) stays on ZF1 via
- * the dispatcher fallback.
+ * this first cut (dropping remember-me is a safe reduction). Login, logout, setup,
+ * the 2FA flow (totp / totp-setup) and the mailbox self-service change-password
+ * are native; only lost/reset-password (mailer-dependent) remains on ZF1 via the
+ * dispatcher fallback.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -302,6 +302,58 @@ final class AuthController extends AbstractController
     }
 
     /**
+     * GET|POST /auth/change-password — mailbox-owner self-service password change.
+     *
+     * Faithful port of the ZF1 `changePasswordAction`: a public (pre-auth) form
+     * where a mailbox owner supplies their address + current password + a new one.
+     * The current password is verified against the MAILBOX password (not an admin)
+     * with the configured mailbox scheme, and on success the new password is hashed
+     * + stored — all via the already-framework-free {@see \OSS_Auth_Password}
+     * (PHP-native dovecot hashing), so no ZF1. The demo account is refused. No CSRF
+     * (pre-auth, credential-gated, like the login form). A wrong username or
+     * current password gives the same generic "Invalid username or password" as
+     * ZF1 (no user enumeration).
+     */
+    public function changePasswordAction(): Response
+    {
+        $options = $this->container->options();
+
+        if ($this->isPost() && \ViMbAdmin_Demo::isLocked($options, (string) ($this->postData()['username'] ?? ''))) {
+            $this->flash('Password changes are disabled for the demo account.', FlashMessages::ERROR);
+            return $this->redirect('auth/change-password');
+        }
+
+        $minPw = (int) ($options['defaults']['mailbox']['min_password_length'] ?? 8);
+        $form  = $this->buildChangePasswordForm($minPw);
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $v       = $form->values();
+            $mailbox = $this->em()->getRepository('\\Entities\\Mailbox')->findOneBy(['username' => $v['username']]);
+
+            $pwOpts = [
+                'pwhash'   => $options['defaults']['mailbox']['password_scheme'] ?? null,
+                'pwsalt'   => $options['defaults']['mailbox']['password_salt'] ?? null,
+                'username' => (string) $v['username'],
+            ];
+
+            if ($mailbox !== null
+                && \OSS_Auth_Password::verify((string) $v['current_password'], $mailbox->getPassword(), $pwOpts)) {
+                $mailbox->setPassword(\OSS_Auth_Password::hash((string) $v['new_password'], $pwOpts));
+                $this->em()->flush();
+                $this->flash('You have successfully changed your password.');
+                return $this->redirect('auth/change-password');
+            }
+
+            // Generic message — do not reveal whether the username exists.
+            $this->flash('Invalid username or password.', FlashMessages::ERROR);
+        }
+
+        return $this->view('auth/native-change-password.phtml', [
+            'formHtml' => (new FormRenderer())->render($form, '/auth/change-password', 'Change Password'),
+        ]);
+    }
+
+    /**
      * GET /auth/logout — drop the identity and the session, then back to login.
      */
     public function logoutAction(): Response
@@ -351,6 +403,24 @@ final class AuthController extends AbstractController
     {
         $form = new Form();
         $form->add(new Field('code', 'Authentication code', 'text', [Validators::required()]));
+
+        return $form;
+    }
+
+    /**
+     * The mailbox self-service change-password form (no CSRF — pre-auth, gated by
+     * the current password). Username + current + new + confirm (must match new).
+     */
+    private function buildChangePasswordForm(int $minPw): Form
+    {
+        $form = new Form();
+        $form->add(new Field('username', 'Email address', 'text', [Validators::required(), Validators::email()]))
+             ->add(new Field('current_password', 'Current password', 'password', [Validators::required()]))
+             ->add(new Field('new_password', 'New password', 'password', [Validators::required(), Validators::minLength($minPw)]))
+             ->add(new Field('confirm_new_password', 'Confirm new password', 'password', [
+                 Validators::required(),
+                 Validators::matches(static fn() => $_POST['new_password'] ?? null, 'The passwords do not match.'),
+             ]));
 
         return $form;
     }

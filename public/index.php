@@ -64,6 +64,23 @@ if (getenv('VIMBADMIN_NATIVE_BOOTSTRAP') !== '0') {
         Zend_Registry::set('d2em', array('default' => $container->entityManager()));
         Zend_Controller_Front::getInstance()->setBaseUrl(\ViMbAdmin\Kernel\Bootstrap::baseUrl());
 
+        // Bridge ZF1 Zend_Session to the already-open native PHP session. A few
+        // legacy helpers the native controllers still reuse instantiate a
+        // Zend_Session_Namespace (e.g. the OSS/Zend image captcha on
+        // auth/lost-password). Zend_Session::start() fatals when a PHP session is
+        // already active that it did not itself start (the native bootstrap opened
+        // it), so mark it started — the namespace then attaches to the live native
+        // session. (6c removes the ZF1 captcha and this shim.)
+        if (session_status() === PHP_SESSION_ACTIVE && !Zend_Session::isStarted()) {
+            // Set the three flags Zend_Session::start() would have set, so a
+            // namespace is started + readable + writable against the native session.
+            foreach (['_sessionStarted', '_readable', '_writable'] as $zProp) {
+                $rp = new ReflectionProperty('Zend_Session', $zProp);
+                $rp->setAccessible(true);
+                $rp->setValue(null, true);
+            }
+        }
+
         $kernel = new \ViMbAdmin\Kernel\Http\Kernel(
             $router,
             new \ViMbAdmin\Kernel\Mvc\Dispatcher($container, \ViMbAdmin\Kernel\Http\Kernel::NATIVE_CONTROLLERS)

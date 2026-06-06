@@ -5,10 +5,16 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\Controller;
 
 use ViMbAdmin\Kernel\Flash\FlashMessages;
+use ViMbAdmin\Kernel\Form\Field;
+use ViMbAdmin\Kernel\Form\Form;
+use ViMbAdmin\Kernel\Form\FormRenderer;
+use ViMbAdmin\Kernel\Form\Validators;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\Mvc\AbstractController;
+use ViMbAdmin\Kernel\Plugin\FormPluginHost;
 use ViMbAdmin\Kernel\Plugin\MailboxContext;
 use ViMbAdmin\Kernel\Plugin\PluginHost;
+use ViMbAdmin\Kernel\Security\Csrf;
 use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 
 /**
@@ -215,5 +221,208 @@ final class MailboxController extends AbstractController
             'aliases'   => $aliasRepo->loadForMailbox($mailbox, $admin),
             'inAliases' => $aliasRepo->loadWithMailbox($mailbox, $admin),
         ]);
+    }
+
+    /**
+     * GET|POST /mailbox/add[/did/<id>] — create a mailbox (the heaviest form).
+     *
+     * Native port of the create path of the ZF1 `MailboxController::addAction`.
+     * Edit (`/mailbox/edit/mid/<id>`) is a different action and stays on ZF1 via
+     * the dispatcher fallback (the `mid` guard keeps any `add` URL carrying a
+     * `mid` on ZF1 too).
+     *
+     * The form is the framework-free {@see Form}: the base mailbox fields plus
+     * any native plugin sections appended by the {@see FormPluginHost} (today the
+     * AccessPermissions access-restriction checkboxes; AdditionalInfo /
+     * DirectoryEntry are not yet adapted to the native contract, so their ZF1
+     * subforms are dropped here — a known, documented gap). The `welcome_email` /
+     * `cc_welcome_email` fields are dropped because the native kernel has no
+     * mailer (consistent with the native login dropping remember-me).
+     *
+     * On POST it validates the base form, then the plugin sections
+     * ({@see FormPluginHost::validate}), resolves + authorises the chosen domain,
+     * enforces the per-admin mailbox allowance, the address validity (a field
+     * rule) and uniqueness, clamps the quota to the domain maximum, applies the
+     * plugin writebacks ({@see FormPluginHost::apply}) and persists through the
+     * extracted {@see \ViMbAdmin_Service_Mailbox::create} — threading the
+     * `mailbox_add_addPostflush` plugin hook over the native {@see PluginHost} so
+     * MailboxAutomaticAliases still creates its RFC2142 default aliases. A
+     * cross-field failure flashes the reason and re-renders the repopulated form,
+     * mirroring the ZF1 `addMessage(...) + return`.
+     */
+    public function addAction(): ?Response
+    {
+        // Edit (mid in URL) stays on ZF1 via the dispatcher fallback.
+        if ($this->param('mid')) {
+            return null;
+        }
+
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $em      = $this->em();
+        $options = $this->container->options();
+        $mult    = $options['defaults']['quota']['multiplier'] ?? \OSS_Filter_FileSize::SIZE_KILOBYTES;
+        $minPw   = (int) ($options['defaults']['mailbox']['min_password_length'] ?? 8);
+
+        // The domains this admin may add a mailbox to (id => name); super sees all.
+        $choices = $em->getRepository('\\Entities\\Domain')->loadForAdminAsArray($admin, true);
+        if ($choices === []) {
+            $this->flash('There are no domains to which you can add a mailbox.', FlashMessages::INFO);
+            return $this->redirect('domain/list');
+        }
+
+        // A preferred domain from `did` preselects the dropdown and seeds the quota.
+        $preferred = null;
+        if ($did = $this->param('did')) {
+            $d = $em->getRepository('\\Entities\\Domain')->find((int) $did);
+            if ($d !== null && ($admin->isSuper() || $admin->canManageDomain($d))) {
+                $preferred = $d;
+            }
+        }
+
+        $formHost = new FormPluginHost($options);
+        $form     = $this->buildMailboxAddForm($choices, $preferred, $mult, $minPw, $formHost, $options);
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $v      = $form->values();
+            $pErr   = $formHost->validate($v, $options);
+            $domain = $em->getRepository('\\Entities\\Domain')->find((int) $v['domain']);
+
+            // The inArray rule already rejected a domain not offered; re-check
+            // management server-side so a non-super admin cannot widen scope.
+            if ($domain === null || (!$admin->isSuper() && !$admin->canManageDomain($domain))) {
+                $this->flash('Please select a valid domain.', FlashMessages::ERROR);
+            } elseif ($pErr !== null) {
+                $this->flash($pErr, FlashMessages::ERROR);
+            } elseif (!$admin->isSuper() && $domain->getMaxMailboxes() != 0
+                && $domain->getMailboxCount() >= $domain->getMaxMailboxes()) {
+                $this->flash('You have used all of your allocated mailboxes.', FlashMessages::ERROR);
+            } else {
+                $localPart = strtolower(trim((string) $v['local_part']));
+                $username  = sprintf('%s@%s', $localPart, $domain->getDomain());
+
+                if (!$em->getRepository('\\Entities\\Mailbox')->isUnique($username)) {
+                    $this->flash("Mailbox already exists for {$username}", FlashMessages::ERROR);
+                } else {
+                    $mailbox = new \Entities\Mailbox();
+                    $mailbox->setLocalPart($localPart);
+                    $mailbox->setUsername($username);
+                    $mailbox->setName((string) $v['name']);
+                    $mailbox->setAltEmail(($v['alt_email'] ?? '') !== '' ? (string) $v['alt_email'] : null);
+                    $mailbox->setPassword((string) $v['password']); // plaintext; the service hashes it
+                    $mailbox->setQuota((int) (new \OSS_Filter_FileSize($mult))->filter((string) $v['quota']));
+
+                    // Clamp the quota to the domain's per-mailbox maximum.
+                    if ($domain->getMaxQuota() != 0
+                        && ($mailbox->getQuota() <= 0 || $mailbox->getQuota() > $domain->getMaxQuota())) {
+                        $mailbox->setQuota($domain->getQuota());
+                        $this->flash('Mailbox quota set to ' . $domain->getQuota(), FlashMessages::INFO);
+                    }
+
+                    // Plugin form sections write back onto the entity (e.g. the
+                    // AccessPermissions access restriction).
+                    $formHost->apply($mailbox, $v, $options);
+
+                    // Fire the post-flush plugin hook natively so
+                    // MailboxAutomaticAliases creates its RFC2142 default aliases.
+                    $context = new MailboxContext(
+                        $em,
+                        $admin,
+                        $domain,
+                        $mailbox,
+                        $options,
+                        new FlashMessages(new MagicPropertyStorage($this->session())),
+                    );
+                    $host = new PluginHost($context);
+
+                    (new \ViMbAdmin_Service_Mailbox($em))->create(
+                        $mailbox,
+                        $domain,
+                        $admin,
+                        $options,
+                        null,
+                        fn() => $host->notify('mailbox', 'add', 'addPostflush', $context, ['options' => $options]),
+                    );
+
+                    if ($this->param('did')) {
+                        $this->session()->domain = $domain;
+                    }
+
+                    $this->flash('You have successfully added the mailbox record.');
+                    return $this->redirect('mailbox/list');
+                }
+            }
+        }
+
+        return $this->view('mailbox/native-add.phtml', [
+            'formHtml' => (new FormRenderer())->render($form, '/mailbox/add', 'Add Mailbox'),
+        ]);
+    }
+
+    /**
+     * Build the native mailbox add form: the base fields + the plugin sections.
+     *
+     * @param array<int|string,string> $choices  domain id → name for the dropdown
+     * @param array<string,mixed>      $options  the merged application options
+     */
+    private function buildMailboxAddForm(
+        array $choices,
+        ?object $preferred,
+        string $mult,
+        int $minPw,
+        FormPluginHost $formHost,
+        array $options
+    ): Form {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+
+        $form->add(new Field('local_part', 'Local Part', 'text', [
+            Validators::required(),
+            Validators::regex('/^[a-zA-Z0-9._%+\-]+$/', 'Please enter a valid local part (the bit before the @).'),
+        ]));
+
+        $domainKeys = array_map('strval', array_keys($choices));
+        $domainField = new Field('domain', 'Domain', 'select', [
+            Validators::required(),
+            Validators::inArray($domainKeys),
+        ]);
+        $domainField->setOptions(['' => ''] + $choices);
+        if ($preferred !== null) {
+            $domainField->setValue((string) $preferred->getId());
+        }
+        $form->add($domainField);
+
+        $form->add(new Field('name', 'Name', 'text'));
+
+        // ZF1 renders the password as a visible text field; keep that (type=text)
+        // so the generated password stays readable on screen.
+        $form->add(new Field('password', 'Password', 'text', [
+            Validators::required(),
+            Validators::minLength($minPw),
+        ]));
+
+        $quota = new Field('quota', 'Quota', 'text');
+        $quota->setValue($preferred !== null
+            ? (string) \OSS_Filter_FileSize::unfilter((int) $preferred->getQuota())
+            : '0');
+        $form->add($quota);
+
+        $form->add(new Field('alt_email', 'Alternative Email', 'text', [
+            static function (mixed $value): ?string {
+                if ($value === null || $value === '') {
+                    return null; // optional
+                }
+                return Validators::email()($value);
+            },
+        ]));
+
+        // Native plugin form sections (AccessPermissions today).
+        foreach ($formHost->fields(null, $options) as $field) {
+            $form->add($field);
+        }
+
+        return $form;
     }
 }

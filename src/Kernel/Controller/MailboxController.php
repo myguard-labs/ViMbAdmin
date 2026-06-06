@@ -576,6 +576,66 @@ final class MailboxController extends AbstractController
     }
 
     /**
+     * GET|POST /mailbox/password/mid/<id> — an admin sets a mailbox's password.
+     *
+     * Native port of `MailboxController::passwordAction`: resolve + authorise the
+     * mailbox, then on a valid POST hash the new password with the configured
+     * mailbox scheme (framework-free {@see \OSS_Auth_Password}) and store it,
+     * logging MAILBOX_PW_CHANGE. The ZF1 `mailbox_password_*` notify hooks have no
+     * listeners (verified) so they are no-ops and omitted; the opt-in "email the
+     * new password" is dropped (no mailer in the native kernel, like native login).
+     * Password rendered as a visible text field, matching the ZF1 form.
+     */
+    public function passwordAction(): ?Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $em      = $this->em();
+        $mailbox = ($mid = $this->param('mid'))
+            ? $em->getRepository('\\Entities\\Mailbox')->find((int) $mid)
+            : null;
+
+        if (!$mailbox || (!$admin->isSuper() && !$admin->canManageDomain($mailbox->getDomain()))) {
+            $this->flash('No mailbox id passed.', FlashMessages::ERROR);
+            return $this->redirect('mailbox/list');
+        }
+
+        $options = $this->container->options();
+        $minPw   = (int) ($options['defaults']['mailbox']['min_password_length'] ?? 8);
+
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+        $form->add(new Field('password', 'Password', 'text', [Validators::required(), Validators::minLength($minPw)]));
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $pwOpts = [
+                'pwhash'   => $options['defaults']['mailbox']['password_scheme'] ?? null,
+                'pwsalt'   => $options['defaults']['mailbox']['password_salt'] ?? null,
+                'username' => $mailbox->getUsername(),
+            ];
+            $mailbox->setPassword(\OSS_Auth_Password::hash((string) $form->values()['password'], $pwOpts));
+
+            $log = new \Entities\Log();
+            $log->setAction(\Entities\Log::ACTION_MAILBOX_PW_CHANGE)
+                ->setData("{$admin->getFormattedName()} changed password for mailbox {$mailbox->getUsername()}")
+                ->setAdmin($admin)
+                ->setTimestamp(new \DateTime());
+            $em->persist($log);
+            $em->flush();
+
+            $this->flash('Password has been successfully changed.');
+            return $this->redirect('mailbox/list');
+        }
+
+        return $this->view('mailbox/native-password.phtml', [
+            'mailbox'  => $mailbox,
+            'formHtml' => (new FormRenderer())->render($form, '/mailbox/password/mid/' . $mailbox->getId(), 'Change Password'),
+        ]);
+    }
+
+    /**
      * GET /mailbox/queue-repair/mid/<id>/csrf/<token> — enqueue a REPAIR task.
      */
     public function queueRepairAction(): Response

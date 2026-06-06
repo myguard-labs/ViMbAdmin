@@ -17,6 +17,62 @@ set_include_path(implode(PATH_SEPARATOR, array(
     get_include_path(),
 )));
 
+// ---------------------------------------------------------------------------
+// WALL #2 (docs/ZF1-REMOVAL.md): optional NATIVE BOOTSTRAP, opt-in via the
+// VIMBADMIN_NATIVE_BOOTSTRAP env flag. DEFAULT (unset / not "1") = the historical
+// ZF1 Zend_Application path below, untouched.
+//
+// When enabled the kernel runs with resources built natively
+// (ViMbAdmin\Kernel\Bootstrap: config + Doctrine EM + session + Smarty + auth)
+// WITHOUT ever constructing Zend_Application — the endgame of the ZF1 removal.
+// The whole interactive admin UI is native, so the kernel serves it from here;
+// any remaining non-UI route (mailer/CLI/remote tail) returns null from handle()
+// and falls through to the ZF1 path below, which boots lazily only then.
+//
+// A thin Zend autoloader is still registered: the legacy library/ classes the
+// native controllers reuse (ViMbAdmin_Service_*, OSS_*) and the template helpers
+// (OSS_Utils::genUrl reading Zend_Registry / the front-controller base URL) are
+// not yet de-Zended. Bootstrap stays framework-free; this ZF1-aware entry point
+// wires those residual shims around the Container it returns. Removing the shims
+// (and this autoloader) is the final cleanup slice.
+// ---------------------------------------------------------------------------
+if (getenv('VIMBADMIN_NATIVE_BOOTSTRAP') === '1') {
+    require_once 'Zend/Loader/Autoloader.php';
+    $zendAutoloader = Zend_Loader_Autoloader::getInstance();
+    $zendAutoloader->registerNamespace('OSS');
+    $zendAutoloader->registerNamespace('ViMbAdmin');
+
+    register_shutdown_function(array('Zend_Session', 'writeClose'), true);
+
+    $container = \ViMbAdmin\Kernel\Bootstrap::boot(APPLICATION_PATH, APPLICATION_ENV, 'Zend_Auth');
+    $options   = $container->options();
+
+    // Residual ZF1 glue the OSS template helpers still read.
+    Zend_Registry::set('options', $options);
+    Zend_Registry::set('d2em', array('default' => $container->entityManager()));
+    Zend_Controller_Front::getInstance()->setBaseUrl(\ViMbAdmin\Kernel\Bootstrap::baseUrl());
+
+    $dispatcher = new \ViMbAdmin\Kernel\Mvc\Dispatcher($container, \ViMbAdmin\Kernel\Http\Kernel::NATIVE_CONTROLLERS);
+    $kernel     = new \ViMbAdmin\Kernel\Http\Kernel(
+        new \ViMbAdmin\Kernel\Router(\ViMbAdmin\Kernel\Http\Kernel::nativeControllers()),
+        $dispatcher
+    );
+
+    $path     = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    $response = $kernel->handle(is_string($path) ? $path : '/');
+
+    if ($response !== null) {
+        http_response_code($response->status);
+        header('Content-Type: ' . $response->contentType);
+        foreach ($response->headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
+        echo $response->body;
+        return; // request fully served by the native kernel, no ZF1 at all
+    }
+    // else: non-native route — fall through to the ZF1 front controller below.
+}
+
 /** Zend_Application */
 require_once 'Zend/Application.php';
 

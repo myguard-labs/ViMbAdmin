@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel;
 
+use ViMbAdmin\Kernel\Mail\Mailer;
 use ViMbAdmin\Kernel\Security\Auth;
 
 /**
@@ -46,6 +47,21 @@ final class Container
         private readonly Auth $auth,
         private readonly array $chrome = [],
     ) {
+    }
+
+    private ?Mailer $mailer = null;
+
+    /**
+     * The native mail sender, built from the `resources.mail.transport.*`
+     * options. Replaces the ZF1 mailer (`OSS_Resource_Mailer`) path for
+     * native controllers (lost-password / reset / email-settings). Lazily built
+     * and cached.
+     */
+    public function mailer(): Mailer
+    {
+        return $this->mailer ??= new Mailer(
+            $this->options()['resources']['mail']['transport'] ?? []
+        );
     }
 
     /**

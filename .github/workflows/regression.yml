@@ -104,6 +104,9 @@ jobs:
       - name: ViMbAdmin\Kernel\Bootstrap (native bootstrap, pure pieces)
         run: php tests/test-kernel-bootstrap.php
 
+      - name: ViMbAdmin\Kernel\Mail\Mailer (native mail sender)
+        run: php tests/test-kernel-mailer.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

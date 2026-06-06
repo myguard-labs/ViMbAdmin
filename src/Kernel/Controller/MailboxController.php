@@ -455,6 +455,79 @@ final class MailboxController extends AbstractController
     }
 
     /**
+     * GET /mailbox/queue-repair/mid/<id>/csrf/<token> — enqueue a REPAIR task.
+     */
+    public function queueRepairAction(): Response
+    {
+        return $this->queueMailboxTask(\Entities\MailboxTask::TYPE_REPAIR, 'Repair/optimize');
+    }
+
+    /**
+     * GET /mailbox/queue-archive/mid/<id>/csrf/<token> — enqueue an ARCHIVE task.
+     */
+    public function queueArchiveAction(): Response
+    {
+        return $this->queueMailboxTask(\Entities\MailboxTask::TYPE_ARCHIVE, 'Archive');
+    }
+
+    /**
+     * GET /mailbox/queue-delete/mid/<id>/csrf/<token> — enqueue a DELETE task.
+     */
+    public function queueDeleteAction(): Response
+    {
+        return $this->queueMailboxTask(\Entities\MailboxTask::TYPE_DELETE, 'Delete');
+    }
+
+    /**
+     * Enqueue a background mailbox-maintenance task (the native port of the ZF1
+     * `_queueMailboxTask`). CSRF-gated GET link; resolve + authorise the mailbox,
+     * enqueue via `ViMbAdmin_MailboxQueue` (deduped — a second identical open task
+     * is refused with an info notice), audit-log the request, flash and bounce to
+     * the list. The cron / native run-now then drains it through the shared
+     * {@see \ViMbAdmin_Service_QueueRunner}.
+     */
+    private function queueMailboxTask(string $type, string $label): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        if (!$this->csrfValid()) {
+            $this->flash('Invalid or missing security token. Please retry from the list page.', FlashMessages::ERROR);
+            return $this->redirect('mailbox/list');
+        }
+
+        $mailbox = ($mid = $this->param('mid'))
+            ? $this->em()->getRepository('\\Entities\\Mailbox')->find((int) $mid)
+            : null;
+
+        if (!$mailbox || (!$admin->isSuper() && !$admin->canManageDomain($mailbox->getDomain()))) {
+            return $this->redirect('mailbox/list');
+        }
+
+        $username = $mailbox->getUsername();
+        $task     = \ViMbAdmin_MailboxQueue::enqueue($this->em(), $mailbox, $type, $admin);
+        $this->em()->flush();
+
+        if ($task) {
+            $log = new \Entities\Log();
+            $log->setAction(\Entities\Log::ACTION_MAILBOX_EDIT)
+                ->setData("{$admin->getFormattedName()} queued {$type} for {$username}")
+                ->setAdmin($admin)
+                ->setTimestamp(new \DateTime());
+            $this->em()->persist($log);
+            $this->em()->flush();
+
+            $this->flash(sprintf('%s queued for %s.', $label, $username));
+        } else {
+            $this->flash(sprintf('A %s task is already queued for %s.', strtolower($label), $username), FlashMessages::INFO);
+        }
+
+        return $this->redirect('mailbox/list');
+    }
+
+    /**
      * Build the native mailbox EDIT form: only the editable fields (name, quota,
      * alt_email) + the plugin sections, prefilled from the entity.
      *

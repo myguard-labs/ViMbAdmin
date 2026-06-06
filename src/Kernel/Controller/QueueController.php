@@ -144,6 +144,32 @@ final class QueueController extends AbstractController
     }
 
     /**
+     * POST /queue/clear — delete all finished (DONE/FAILED/CANCELLED) tasks.
+     *
+     * Faithful port of the ZF1 `clearAction`: super-gated POST+CSRF, a bulk DQL
+     * delete of the terminal-state rows, then flashes how many were cleared.
+     */
+    public function clearAction(): Response
+    {
+        $admin = $this->guardSuperPost();
+        if ($admin instanceof Response) {
+            return $admin;
+        }
+
+        $n = (int) $this->em()->createQuery(
+            'DELETE FROM \\Entities\\MailboxTask t WHERE t.status IN (:done)')
+            ->setParameter('done', [
+                \Entities\MailboxTask::STATUS_DONE,
+                \Entities\MailboxTask::STATUS_FAILED,
+                \Entities\MailboxTask::STATUS_CANCELLED,
+            ])
+            ->execute();
+
+        $this->flash(sprintf('Cleared %d finished task(s).', $n));
+        return $this->redirect('queue/index');
+    }
+
+    /**
      * POST /queue/run-now — drain the queue now (super admins only).
      *
      * Faithful port of the ZF1 `runNowAction`: lease-gated batch run of up to

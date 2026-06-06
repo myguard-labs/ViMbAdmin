@@ -139,7 +139,22 @@ class OSS_Utils
      */
     public static function getIniOption( $option )
     {
-        return Zend_Controller_Front::getInstance()->getParam( 'bootstrap' )->getApplication()->getOption( $option );
+        $bootstrap = Zend_Controller_Front::getInstance()->getParam( 'bootstrap' );
+
+        if( $bootstrap !== null && method_exists( $bootstrap, 'getApplication' ) )
+            return $bootstrap->getApplication()->getOption( $option );
+
+        // WALL #2 native bootstrap: there is no ZF1 Zend_Application front-controller
+        // param. The native entry point publishes the merged options in the
+        // registry, so fall back to that (and to null for an unknown key) instead
+        // of fatally dereferencing a null bootstrap.
+        if( Zend_Registry::isRegistered( 'options' ) )
+        {
+            $options = Zend_Registry::get( 'options' );
+            return ( is_array( $options ) && array_key_exists( $option, $options ) ) ? $options[ $option ] : null;
+        }
+
+        return null;
     }
 
 

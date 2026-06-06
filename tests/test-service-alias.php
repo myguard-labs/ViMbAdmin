@@ -163,6 +163,27 @@ $alS->setGoto('box@example.com');
 check('self-alias does NOT bump count',       (int) $domS->getAliasCount() === 7);
 check('self-alias still persisted + logged',  in_array($alS, $emS->persisted, true) && $emS->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_ADD);
 
+// --- update (edit): stamps modified, logs EDIT, one flush, no count ---- //
+$emU = new FakeObjectManager();
+$domU = $mkDomain(9);
+$alU  = new \Entities\Alias();
+$alU->setAddress('info@example.com');
+$alU->setGoto('new@example.com');
+$alU->setDomain($domU);
+$orderU = [];
+$updated = (new ViMbAdmin_Service_Alias($emU))->update(
+    $alU, $actor,
+    function () use (&$orderU, $emU): void { $orderU[] = 'preFlush:' . $emU->flushes; },
+    function () use (&$orderU, $emU): void { $orderU[] = 'postFlush:' . $emU->flushes; },
+);
+check('update returns the alias',             $updated === $alU);
+check('update stamped modified',              $alU->getModified() instanceof \DateTime);
+check('update logged ACTION_ALIAS_EDIT',      $emU->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_EDIT);
+check('update flushed once',                  $emU->flushes === 1);
+check('update did NOT touch aliasCount',      (int) $domU->getAliasCount() === 9);
+check('update did NOT persist (edit only)',   $emU->countPersisted(\Entities\Alias::class) === 0);
+check('update hook order around flush',       $orderU === ['preFlush:0', 'postFlush:1']);
+
 // --- delete: forwarding alias, hooks fire, count decrements ----------- //
 $emD = new FakeObjectManager();
 $domD = $mkDomain(5);

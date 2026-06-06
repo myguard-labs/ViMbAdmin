@@ -34,10 +34,11 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * 4c), so the MailboxAutomaticAliases pre/post-toggle logic runs natively and a
  * pre-toggle veto still aborts the change.
  *
- * `add` ports the create path of the ZF1 `addAction`, and `delete` ports the
- * CSRF-guarded `deleteAction`, both persisting through the extracted
- * `ViMbAdmin_Service_Alias` (#50) with their plugin hooks threaded over the
- * native PluginHost. The `edit` action stays on ZF1 via the dispatcher fallback.
+ * `add`/`edit`/`delete` port the create, edit and CSRF-guarded delete paths of
+ * the ZF1 controller, persisting through the extracted `ViMbAdmin_Service_Alias`
+ * (create/update/delete, #50) with their plugin hooks threaded over the native
+ * PluginHost. (ZF1 `editAction` is a `forward('add')`; the native edit is its own
+ * action.)
  *
  * The legacy controller is untouched.
  *
@@ -268,6 +269,81 @@ final class AliasController extends AbstractController
     }
 
     /**
+     * GET|POST /alias/edit/alid/<id> — edit an existing alias.
+     *
+     * Native port of the edit branch of the ZF1 `addAction` (`editAction` is a
+     * `forward('add')`). The ZF1 edit form removes `local_part` + `domain` and
+     * keeps only the goto list, so the native edit form is the goto textarea alone,
+     * prefilled from the entity (the stored comma-joined goto split back to one
+     * address per line). A missing / unmanaged alias flashes and bounces to the
+     * list (the ZF1 `loadAlias` redirect).
+     *
+     * GET prepopulates; POST validates the base form, re-parses the goto list onto
+     * the entity, then persists through {@see \ViMbAdmin_Service_Alias::update} —
+     * threading the `alias_add_addPostflush` plugin hook over the native
+     * {@see PluginHost} (the ZF1 add/edit path always notifies). The address, its
+     * domain and the alias count are not touched on an edit, matching ZF1.
+     */
+    public function editAction(): ?Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $em    = $this->em();
+        $alias = ($alid = $this->param('alid'))
+            ? $em->getRepository('\\Entities\\Alias')->find((int) $alid)
+            : null;
+
+        // loadAlias() authorises a non-super admin against the alias's domain.
+        if (!$alias || (!$admin->isSuper() && !$admin->canManageDomain($alias->getDomain()))) {
+            $this->flash('Alias not found.', FlashMessages::ERROR);
+            return $this->redirect('alias/list');
+        }
+
+        $options = $this->container->options();
+        $form    = $this->buildAliasEditForm($alias);
+
+        if ($this->isPost() && $form->isValid($this->postData())) {
+            $v = $form->values();
+
+            [$gotos, $gErr] = $this->parseGotos((string) ($v['goto'] ?? ''));
+
+            if ($gErr !== null) {
+                $this->flash($gErr, FlashMessages::ERROR);
+            } else {
+                $alias->setGoto(implode(',', $gotos));
+
+                $context = new AliasContext(
+                    $em,
+                    $admin,
+                    $alias->getDomain(),
+                    $alias,
+                    $options,
+                    new FlashMessages(new MagicPropertyStorage($this->session())),
+                );
+                $host = new PluginHost($context);
+
+                (new \ViMbAdmin_Service_Alias($em))->update(
+                    $alias,
+                    $admin,
+                    null,
+                    fn() => $host->notify('alias', 'add', 'addPostflush', $context, ['options' => $options]),
+                );
+
+                $this->flash('You have successfully added/edited the alias.');
+                return $this->redirect('alias/list');
+            }
+        }
+
+        return $this->view('alias/native-add.phtml', [
+            'formHtml'  => (new FormRenderer())->render($form, '/alias/edit/alid/' . $alias->getId(), 'Save'),
+            'pageTitle' => 'Edit Alias: ' . $alias->getAddress(),
+        ]);
+    }
+
+    /**
      * GET /alias/delete/alid/<id>/csrf/<token> — delete an alias.
      *
      * Faithful port of the ZF1 CSRF-guarded `deleteAction`: the token (carried in
@@ -354,6 +430,22 @@ final class AliasController extends AbstractController
         // One destination per line (or comma-separated) — the JS-free replacement
         // for the ZF1 goto[] multi-input widget. Parsed/validated on POST.
         $form->add(new Field('goto', 'Goto (one address per line)', 'textarea'));
+
+        return $form;
+    }
+
+    /**
+     * Build the native alias EDIT form: the goto textarea alone (local_part +
+     * domain are dropped on edit, matching ZF1), prefilled from the entity — the
+     * stored comma-joined goto list shown one address per line.
+     */
+    private function buildAliasEditForm(object $alias): Form
+    {
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
+
+        $goto = new Field('goto', 'Goto (one address per line)', 'textarea');
+        $goto->setValue(implode("\n", array_filter(array_map('trim', explode(',', (string) $alias->getGoto())))));
+        $form->add($goto);
 
         return $form;
     }

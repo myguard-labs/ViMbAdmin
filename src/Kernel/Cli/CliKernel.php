@@ -5,7 +5,14 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\Cli;
 
 use ViMbAdmin\Kernel\Bootstrap;
+use ViMbAdmin\Kernel\Container;
+use ViMbAdmin\Kernel\Cli\Command\DeletePendingCommand;
+use ViMbAdmin\Kernel\Cli\Command\McpTokenGenerateCommand;
+use ViMbAdmin\Kernel\Cli\Command\McpTokenListCommand;
+use ViMbAdmin\Kernel\Cli\Command\McpTokenRevokeCommand;
 use ViMbAdmin\Kernel\Cli\Command\QueueRunCommand;
+use ViMbAdmin\Kernel\Cli\Command\ResetTotpCommand;
+use ViMbAdmin\Kernel\Cli\Command\SchemaUpdateCommand;
 
 /**
  * Framework-free CLI dispatcher (WALL #2, docs/ZF1-REMOVAL.md).
@@ -34,10 +41,18 @@ final class CliKernel
         private readonly string $appPath,
         private readonly string $env,
     ) {
-        // Register each migrated command. Grow this list as the cli-* tail moves
-        // off ZF1 (cli-reset-totp, cli-delete-pending, cli-schema-update,
-        // mcp.cli-token-*); an unregistered name falls back to ZF1 in vimbtool.php.
-        foreach ([new QueueRunCommand()] as $command) {
+        // Register each migrated command. An unregistered name falls back to the
+        // ZF1 CLI in vimbtool.php. The whole cli-* tail is now native.
+        $registered = [
+            new QueueRunCommand(),
+            new ResetTotpCommand(),
+            new DeletePendingCommand(),
+            new SchemaUpdateCommand(),
+            new McpTokenGenerateCommand(),
+            new McpTokenListCommand(),
+            new McpTokenRevokeCommand(),
+        ];
+        foreach ($registered as $command) {
             $this->commands[$command->name()] = $command;
         }
     }
@@ -62,22 +77,33 @@ final class CliKernel
     }
 
     /**
-     * Boot the native resources and run $action, returning its process exit code.
-     * Caller must have checked {@see canHandle()} first.
+     * Build the native resources (config + Doctrine EM; no session under CLI).
+     *
+     * Exposed separately from {@see run()} so the entry point can wire the
+     * residual legacy glue some library classes still read (e.g. the entity
+     * preference layer `OSS_Doctrine2_WithPreferences` fetches the EM from the
+     * `d2em` registry) around the booted container — the same split the web entry
+     * point uses. The identity-namespace argument is irrelevant under CLI (no
+     * command authenticates and boot() starts no session for the CLI SAPI), so a
+     * neutral placeholder is passed.
+     */
+    public function boot(): Container
+    {
+        return Bootstrap::boot($this->appPath, $this->env, 'cli');
+    }
+
+    /**
+     * Run $action against the (already booted) container, returning its process
+     * exit code. Caller must have checked {@see canHandle()} first.
      *
      * @param array<string,mixed> $args the parsed argv (see {@see CliCommand::run()})
      */
-    public function run(string $action, array $args): int
+    public function run(string $action, array $args, Container $container): int
     {
         $command = $this->commands[$action] ?? null;
         if ($command === null) {
             return 1;
         }
-
-        // The identity-namespace argument is irrelevant under CLI: no command
-        // reads auth and boot() starts no session for the CLI SAPI, so the auth
-        // bridge is built but never used. Pass a neutral placeholder.
-        $container = Bootstrap::boot($this->appPath, $this->env, 'cli');
 
         return $command->run($container, $args);
     }

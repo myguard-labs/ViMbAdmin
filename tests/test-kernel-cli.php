@@ -8,7 +8,9 @@
  */
 
 require __DIR__ . '/../src/Kernel/Cli/CliCommand.php';
-require __DIR__ . '/../src/Kernel/Cli/Command/QueueRunCommand.php';
+foreach (glob(__DIR__ . '/../src/Kernel/Cli/Command/*.php') as $cmd) {
+    require $cmd;
+}
 require __DIR__ . '/../src/Kernel/Cli/CliKernel.php';
 
 // CliKernel pulls in Bootstrap via a `use` import only for run(); canHandle()
@@ -26,10 +28,26 @@ echo "== native CLI dispatcher ==\n";
 
 $kernel = new CliKernel('/nonexistent', 'testing');
 
-check('canHandle(queue.cli-run) true',  $kernel->canHandle('queue.cli-run'));
+$expected = [
+    'queue.cli-run',
+    'admin.cli-reset-totp',
+    'mailbox.cli-delete-pending',
+    'maintenance.cli-schema-update',
+    'mcp.cli-token-generate',
+    'mcp.cli-token-list',
+    'mcp.cli-token-revoke',
+];
+foreach ($expected as $name) {
+    check("canHandle({$name}) true", $kernel->canHandle($name));
+}
 check('canHandle(unknown) false',        !$kernel->canHandle('foo.bar'));
 check('canHandle(empty) false',          !$kernel->canHandle(''));
-check('commands() lists queue.cli-run',  in_array('queue.cli-run', $kernel->commands(), true));
+
+$got = $kernel->commands();
+sort($got);
+$want = $expected;
+sort($want);
+check('commands() == registered set',    $got === $want);
 
 $cmd = new QueueRunCommand();
 check('QueueRunCommand name',            $cmd->name() === 'queue.cli-run');

@@ -144,6 +144,9 @@ jobs:
       - name: Native Doctrine EM factory (WALL #2)
         run: php tests/test-kernel-em-factory.php
 
+      - name: Native Smarty view (WALL #2)
+        run: php tests/test-kernel-smarty-view.php
+
   # ------------------------------------------------------------------ #
   # Schema drift — loads the shipped SQL into a real MariaDB and proves #
   # the XML mappings produce NO pending changes (phantom-ALTER guard).  #

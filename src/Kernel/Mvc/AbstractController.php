@@ -7,6 +7,7 @@ namespace ViMbAdmin\Kernel\Mvc;
 use ViMbAdmin\Kernel\Container;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Http\Response;
+use ViMbAdmin\Kernel\Mail\Mailer;
 use ViMbAdmin\Kernel\RouteMatch;
 use ViMbAdmin\Kernel\Security\Csrf;
 use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
@@ -152,6 +153,38 @@ abstract class AbstractController
     {
         return (new Csrf(new MagicPropertyStorage($this->container->session())))
             ->isValid((string) $this->param('csrf', ''));
+    }
+
+    /**
+     * The native mail sender (replaces the ZF1 `getMailer()`), built from the
+     * `resources.mail.transport.*` options. Used by the mailer-dependent actions
+     * (auth lost-password / reset-password, mailbox email-settings).
+     */
+    protected function mailer(): Mailer
+    {
+        return $this->container->mailer();
+    }
+
+    /**
+     * Render a body-only email template to a string through the same `smarty`
+     * view (the native equivalent of `OSS_Controller_Trait_Auth::resolveTemplate()`
+     * for one format). Unlike {@see view()} it seeds NO page chrome — the email
+     * templates under `auth/email/` and `mailbox/email/` are standalone
+     * documents — it only assigns the caller's variables. `{genUrl}` still works
+     * (it reads the front-controller base URL set up at the entry point).
+     *
+     * @param string              $script template path, e.g. "auth/email/html/lost-password.phtml"
+     * @param array<string,mixed> $vars   template variables
+     */
+    protected function renderEmail(string $script, array $vars = []): string
+    {
+        $view = $this->container->getResource('smarty');
+
+        foreach ($vars as $key => $value) {
+            $view->{$key} = $value;
+        }
+
+        return (string) $view->render($script);
     }
 
     /**

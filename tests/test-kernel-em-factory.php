@@ -64,6 +64,11 @@ function check(string $label, callable $fn): void {
     }
 }
 
+// Register the Entities/Repositories autoloaders up front: getClassMetadata()
+// below reflects on the real entity class, so it must be loadable first — which
+// is also what the native bootstrap does once, before any query.
+EntityManagerFactory::registerEntityAutoloaders($options);
+
 $em = null;
 
 // The XML metadata driver requires SimpleXML. CI's cache-wiring job installs it;

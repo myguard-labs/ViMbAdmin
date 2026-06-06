@@ -144,6 +144,165 @@ final class AdminController extends AbstractController
     }
 
     /**
+     * GET|POST /admin/two-factor — the logged-in admin's own 2FA settings.
+     *
+     * Self-service enrolment / management via the framework-free
+     * {@see \ViMbAdmin_TwoFactor}: `enable` (verify a code against the stashed
+     * enrolment secret → store secret + reveal one-time backup codes), `disable`
+     * and `regen-backup` (each require a valid current code or backup code). The
+     * enrolment QR + secret are shown while 2FA is off. CSRF is a hidden POST
+     * field (read from the body, not the URL).
+     */
+    public function twoFactorAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->redirect('auth/login');
+        }
+
+        $tfa     = new \ViMbAdmin_TwoFactor('ViMbAdmin', (string) ($this->container->options()['securitysalt'] ?? ''));
+        $session = $this->session();
+
+        if ($this->isPost() && $this->postCsrfValid()) {
+            $op   = (string) ($this->postData()['op'] ?? '');
+            $code = trim((string) ($this->postData()['code'] ?? ''));
+
+            if ($op === 'enable' && !$tfa->isEnabled($admin)) {
+                $secret = $session->totp_enrol_secret ?? null;
+                if ($secret && $tfa->verifyCode($secret, $code)) {
+                    $backup = $tfa->enable($admin, $secret);
+                    $this->em()->flush();
+                    unset($session->totp_enrol_secret);
+                    return $this->view('admin/two-factor.phtml', [
+                        'justEnabled'     => true,
+                        'backupCodes'     => $backup,
+                        'enabled'         => true,
+                        'backupRemaining' => $tfa->backupCodesRemaining($admin),
+                    ]);
+                }
+                $this->flash('That code did not verify. Scan the QR and try again.', FlashMessages::ERROR);
+            } elseif ($op === 'disable' && $tfa->isEnabled($admin)) {
+                if ($tfa->verifyForAdmin($admin, $code) || $tfa->consumeBackupCode($admin, $code)) {
+                    $tfa->disable($admin);
+                    $this->em()->flush();
+                    $this->flash('Two-factor authentication has been disabled.');
+                    return $this->redirect('admin/two-factor');
+                }
+                $this->flash('A valid current code is required to disable 2FA.', FlashMessages::ERROR);
+            } elseif ($op === 'regen-backup' && $tfa->isEnabled($admin)) {
+                if ($tfa->verifyForAdmin($admin, $code)) {
+                    $backup = $tfa->regenerateBackupCodes($admin);
+                    $this->em()->flush();
+                    return $this->view('admin/two-factor.phtml', [
+                        'backupCodes'     => $backup,
+                        'enabled'         => true,
+                        'backupRemaining' => $tfa->backupCodesRemaining($admin),
+                    ]);
+                }
+                $this->flash('A valid current code is required to regenerate backup codes.', FlashMessages::ERROR);
+            }
+        }
+
+        $enabled = $tfa->isEnabled($admin);
+        $vars    = ['enabled' => $enabled, 'backupRemaining' => $tfa->backupCodesRemaining($admin)];
+
+        if (!$enabled) {
+            $secret = $session->totp_enrol_secret ?? null;
+            if (!$secret) {
+                $secret = $tfa->createSecret();
+                $session->totp_enrol_secret = $secret;
+            }
+            $vars['secret']    = $secret;
+            $vars['qrDataUri'] = $tfa->getQrDataUri($admin->getUsername(), $secret);
+        }
+
+        return $this->view('admin/two-factor.phtml', $vars);
+    }
+
+    /**
+     * GET|POST /admin/manage-two-factor/aid/<id> — a super admin manages ANOTHER
+     * admin's 2FA. `provision` / `regen-secret` mint a secret and reveal the QR +
+     * one-time backup codes; `disable` clears it; `force-on` / `force-off` toggle
+     * the next-login enrolment requirement. Super-only; managing oneself redirects
+     * to the self-service page. CSRF is a hidden POST field.
+     */
+    public function manageTwoFactorAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null || !$admin->isSuper()) {
+            return $this->redirect('auth/login');
+        }
+
+        $target = ($aid = $this->param('aid'))
+            ? $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid)
+            : null;
+        if (!$target) {
+            return $this->redirect('admin/list');
+        }
+        if ($target->getId() === $admin->getId()) {
+            return $this->redirect('admin/two-factor');
+        }
+
+        $tfa = new \ViMbAdmin_TwoFactor('ViMbAdmin', (string) ($this->container->options()['securitysalt'] ?? ''));
+
+        if ($this->isPost() && $this->postCsrfValid()) {
+            $op = (string) ($this->postData()['op'] ?? '');
+
+            if (($op === 'provision') || ($op === 'regen-secret' && $tfa->isEnabled($target))) {
+                $res = $tfa->provision($target);
+                $this->em()->flush();
+                return $this->view('admin/manage-two-factor.phtml', [
+                    'target'          => $target,
+                    'enabled'         => true,
+                    'forced'          => $tfa->isForced($target),
+                    'backupRemaining' => $tfa->backupCodesRemaining($target),
+                    'revealSecret'    => $res['secret'],
+                    'backupCodes'     => $res['backup'],
+                    'qrDataUri'       => $tfa->getQrDataUri($target->getUsername(), $res['secret']),
+                ]);
+            }
+
+            if ($op === 'disable') {
+                $tfa->disable($target);
+                $this->em()->flush();
+                $this->flash(sprintf('2FA disabled for %s.', $target->getUsername()));
+                return $this->redirect('admin/manage-two-factor/aid/' . $target->getId());
+            }
+            if ($op === 'force-on') {
+                $tfa->setForce($target, true);
+                $this->em()->flush();
+                $this->flash(sprintf('%s will be required to set up 2FA at next login.', $target->getUsername()));
+                return $this->redirect('admin/manage-two-factor/aid/' . $target->getId());
+            }
+            if ($op === 'force-off') {
+                $tfa->setForce($target, false);
+                $this->em()->flush();
+                $this->flash(sprintf('Enrolment requirement cleared for %s.', $target->getUsername()));
+                return $this->redirect('admin/manage-two-factor/aid/' . $target->getId());
+            }
+        }
+
+        return $this->view('admin/manage-two-factor.phtml', [
+            'target'          => $target,
+            'enabled'         => $tfa->isEnabled($target),
+            'forced'          => $tfa->isForced($target),
+            'backupRemaining' => $tfa->backupCodesRemaining($target),
+        ]);
+    }
+
+    /**
+     * Whether the request carries a valid CSRF token in the POST body (`csrf`
+     * field). The 2FA forms POST the token as a hidden input rather than carrying
+     * it in the URL like the GET-link actions, so the base {@see csrfValid()}
+     * (which reads the route params) does not see it.
+     */
+    private function postCsrfValid(): bool
+    {
+        return (new Csrf(new MagicPropertyStorage($this->container->session())))
+            ->isValid((string) ($this->postData()['csrf'] ?? ''));
+    }
+
+    /**
      * The native add-admin form: username (email) + password + super flag,
      * CSRF-guarded over the session.
      */

@@ -6,6 +6,8 @@ namespace ViMbAdmin\Kernel\Controller;
 
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
+use ViMbAdmin\Kernel\DataTable\DataTableResult;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Form\Field;
 use ViMbAdmin\Kernel\Form\Form;
@@ -80,6 +82,39 @@ final class MailboxController extends AbstractController
         }
 
         return new Response((string) json_encode($rows));
+    }
+
+    /**
+     * GET /mailbox/list-data — DataTables server-side processing source.
+     *
+     * One page of the scoped mailbox list as the DataTables JSON envelope (draw
+     * counter + total / filtered counts + page rows), letting the browser page
+     * through the full list without ever shipping every row. Active only when
+     * server-side pagination is enabled; the in-image angie + edge CRS allow the
+     * `list-data` route and the DataTables query args.
+     */
+    public function listDataAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return new Response('ko');
+        }
+
+        $domain = $this->session()->domain ?? null;
+        $q      = DataTableQuery::fromArray($_GET);
+
+        // Column index -> sortable DB field (must match the JS column order;
+        // computed columns — used quota, last login, controls — fall back).
+        $sortField = [0 => 'username', 1 => 'name', 4 => 'domain', 5 => 'active'][$q->sortColumn] ?? 'username';
+
+        $r = $this->em()->getRepository('\\Entities\\Mailbox')
+            ->pagedForMailboxList($admin, $domain, $q->search, $sortField, $q->sortDir, $q->start, $q->length);
+
+        return new Response(
+            DataTableResult::json($q, $r['total'], $r['filtered'], $r['rows']),
+            200,
+            'application/json; charset=utf-8'
+        );
     }
 
 

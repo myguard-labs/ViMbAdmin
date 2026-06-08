@@ -576,22 +576,22 @@ final class AuthController extends AbstractController
         return $this->redirect($target);
     }
 
-    /** The TOTP code form (no CSRF — pre-auth, gated by the pending-session id). */
+    /** The TOTP code form. CSRF-guarded (also gated by the pending-session id). */
     private function buildTotpForm(): Form
     {
-        $form = new Form();
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add(new Field('code', 'Authentication code', 'text', [Validators::required()]));
 
         return $form;
     }
 
     /**
-     * The mailbox self-service change-password form (no CSRF — pre-auth, gated by
+     * The mailbox self-service change-password form. CSRF-guarded (also gated by
      * the current password). Username + current + new + confirm (must match new).
      */
     private function buildChangePasswordForm(int $minPw): Form
     {
-        $form = new Form();
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add(new Field('username', 'Email address', 'text', [Validators::required(), Validators::email()]))
              ->add(new Field('current_password', 'Current password', 'password', [Validators::required()]))
              ->add(new Field('new_password', 'New password', 'password', [Validators::required(), Validators::minLength($minPw)]))
@@ -661,10 +661,10 @@ final class AuthController extends AbstractController
         return new \ViMbAdmin_BruteForce($this->em(), $opts);
     }
 
-    /** The login form. No CSRF, matching the historical login flow. */
+    /** The login form. CSRF-guarded (login-CSRF defence; the GET mints the token). */
     private function buildLoginForm(): Form
     {
-        $form = new Form();
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add(new Field('username', 'Username', 'text', [Validators::required()]))
              ->add(new Field('password', 'Password', 'password', [Validators::required()]));
 
@@ -694,12 +694,12 @@ final class AuthController extends AbstractController
      * email). When the captcha is enabled it adds a `captchatext` field whose rule
      * validates the typed text against the SUBMITTED `captchaid` via
      * `OSS_Captcha_Image::_isValid()` (so a mismatch shows inline), plus the two
-     * hidden fields the refresh widget needs. No CSRF — gated by captcha + the
-     * angie rate-limit on `/auth/forgot`, as ZF1 was.
+     * hidden fields the refresh widget needs. CSRF-guarded (also gated by captcha
+     * + the angie rate-limit on `/auth/forgot`).
      */
     private function buildLostPasswordForm(bool $useCaptcha): Form
     {
-        $form = new Form();
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add(new Field('username', 'Username', 'text', [Validators::required()]));
 
         if ($useCaptcha) {
@@ -740,11 +740,11 @@ final class AuthController extends AbstractController
      * (must match). Username/password are required only (matching the lax ZF1
      * elements — admin usernames need not be emails, and the original element set
      * no real minimum); the token is shape-checked to the `OSS_String::random(40)`
-     * alphabet. No CSRF — possession of the emailed token IS the secret.
+     * alphabet. CSRF-guarded (possession of the emailed token is the primary secret).
      */
     private function buildResetPasswordForm(): Form
     {
-        $form = new Form();
+        $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add(new Field('username', 'Email address', 'text', [Validators::required()]))
              ->add(new Field('token', 'Token', 'text', [
                  Validators::required(),

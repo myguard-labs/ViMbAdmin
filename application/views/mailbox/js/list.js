@@ -7,46 +7,59 @@ $(document).ready( function() {
         $( "a[id|='dir-size']" ).bind( "click", showSizes );
     {/if}
     
+    {if isset($options.defaults.server_side.pagination.enable) && $options.defaults.server_side.pagination.enable }
+    /* Server-side processing: the browser pages / sorts / searches the FULL list
+       through /mailbox/list-data, fetching only the visible page — the initial
+       HTML carries no rows. Cells are rendered client-side by the same format
+       helpers used below. */
+    oDataTable = $( '#list_table' ).dataTable({
+        'bServerProcessing': true,
+        'bServerSide': true,
+        'sServerMethod': 'GET',
+        'sAjaxSource': "{genUrl controller='mailbox' action='list-data'}",
+        "sPaginationType": "bootstrap",
+        "sDom": "<'row'<'span6'l><'span6'f>r>t<'row'<'span6'i><'span6'p>>",
+        'iDisplayLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
+                ? parseInt( vm_prefs['iLength'] )
+                : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
+        'oLanguage': { 'sProcessing': 'Loading…', 'sEmptyTable': 'No mailboxes.' },
+        'fnDrawCallback': function() {
+            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
+                $( "a[id|='dir-size']" ).unbind().bind( "click", showSizes );
+            {/if}
+            $( "a[id|='modal-dialog']" ).unbind().bind( 'click', tt_openModalDialog );
+            $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
+            $( '.oss-dropdown' ).each( ossDropdown );
+            if( vm_prefs['iLength'] != $( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            $.jsonCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
+        },
+        'aoColumns': [
+            { 'mData': 'username' },
+            { 'mData': 'name' },
+            { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatUsedQuota( row.id, row.quota_bytes, row.quota ); } },
+            { 'mData': 'last_login', 'bSortable': false, 'mRender': function( d ){ return formatLastLogin( d ); } },
+            {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
+            { 'mData': 'domain' },
+            {/if}
+            { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatActive( row.id, row.active ); } },
+            { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatControlls( row.id ); } }
+        ]
+    });
+    {else}
     oDataTable = $( '#list_table' ).dataTable({
         'fnDrawCallback': function() {
             if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
                 vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
-            
-            {if isset($options.defaults.server_side.pagination.enable) && $options.defaults.server_side.pagination.enable }
-                if( !$( "#list_table_filter_div" ).html() ){
-                    $( "#list_table_filter_div" ).html( '\
-                        <div id="list_table_filter" class="dataTables_filter">\
-                            <label>\
-                            Search:\
-                            <input type="text" aria-controls="list_table">\
-                            </label>\
-                        </div>');
-                    $( "#list_table_filter > label > input" ).unbind().bind( "keyup", getEntries );
-                };
-                 {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                    $( "a[id|='dir-size']" ).unbind().bind( "click", showSizes );
-                {/if}
-                $( "a[id|='modal-dialog']" ).unbind().bind( 'click', tt_openModalDialog );
-                $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
-                $( '.oss-dropdown' ).each( ossDropdown );
-            {/if}
             $.jsonCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'iDisplayLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
                 ? parseInt( vm_prefs['iLength'] )
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
 
-        "sDom": "<'row'<'span6'l><'span6' <'#list_table_filter_div'f>>r>t<'row'<'span6'i><'span6'p>>",
-
-        {if isset($options.defaults.server_side.pagination.enable) && $options.defaults.server_side.pagination.enable }
-            "bFilter": false,
-            "oLanguage": {
-              "sEmptyTable": "No data available in table. Use search field to look for entries."
-            },
-        {/if}
-
+        "sDom": "<'row'<'span6'l><'span6'f>r>t<'row'<'span6'i><'span6'p>>",
         "sPaginationType": "bootstrap",
-        
+
         'aoColumns': [
             null,
             null,
@@ -59,6 +72,7 @@ $(document).ready( function() {
             { 'bSortable': false, "bSearchable": false }
         ]
     });
+    {/if}
     
 
 }); // document onready

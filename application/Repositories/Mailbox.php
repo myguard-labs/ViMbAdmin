@@ -66,6 +66,61 @@ class Mailbox extends EntityRepository
     }
 
     /**
+     * One page of the mailbox list for DataTables server-side processing.
+     *
+     * Same scope as {@see loadForMailboxList} (active, admin/domain filtered) but
+     * applies the global search, ORDER BY, and LIMIT/OFFSET in SQL and returns
+     * the page plus the total / filtered counts the protocol needs. Search binds
+     * a parameter (no string interpolation) and the sort field is whitelisted by
+     * the caller. `COUNT(DISTINCT m.id)` because the non-super `d.Admins` join
+     * fans rows out.
+     *
+     * @param \Entities\Admin       $admin
+     * @param \Entities\Domain|null $domain
+     * @return array{rows: array, total: int, filtered: int}
+     */
+    public function pagedForMailboxList( $admin, $domain, string $search, string $sortField, string $sortDir, int $start, int $length )
+    {
+        $base = function() use ( $admin, $domain ) {
+            $qb = $this->getEntityManager()->createQueryBuilder()
+                ->from( '\\Entities\\Mailbox', 'm' )
+                ->where( 'm.delete_pending = FALSE' )
+                ->join( 'm.Domain', 'd' );
+
+            if( !$admin->isSuper() )
+                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+
+            if( $domain )
+                $qb->andWhere( 'm.Domain = :domain' )->setParameter( 'domain', $domain );
+
+            return $qb;
+        };
+
+        $applySearch = function( $qb ) use ( $search ) {
+            if( $search !== '' )
+                $qb->andWhere( '( m.username LIKE :s OR m.name LIKE :s OR d.domain LIKE :s )' )
+                   ->setParameter( 's', '%' . addcslashes( $search, '%_\\' ) . '%' );
+            return $qb;
+        };
+
+        $total    = (int) $base()->select( 'COUNT(DISTINCT m.id)' )->getQuery()->getSingleScalarResult();
+        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT m.id)' )->getQuery()->getSingleScalarResult();
+
+        $sortMap = [ 'username' => 'm.username', 'name' => 'm.name', 'quota' => 'm.quota', 'domain' => 'd.domain', 'active' => 'm.active' ];
+        $orderBy = $sortMap[ $sortField ] ?? 'm.username';
+
+        $rows = $applySearch( $base() )
+            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active,
+                    m.quota as quota, d.domain as domain, m.delete_pending' )
+            ->orderBy( $orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC' )
+            ->setFirstResult( max( 0, $start ) )
+            ->setMaxResults( max( 1, $length ) )
+            ->getQuery()->getArrayResult();
+
+        return [ 'rows' => $this->_mergeQuotaUsage( $rows ), 'total' => $total, 'filtered' => $filtered ];
+    }
+
+    /**
      * Merge live Dovecot quota-clone usage into a mailbox list array.
      *
      * The `dovecot_quota` table (Entities\Quota) is populated by Dovecot's

@@ -45,6 +45,20 @@ check('nested sub-path preserved', Bootstrap::baseUrl() === '/a/b');
 unset($_SERVER['SCRIPT_NAME']);
 check('missing SCRIPT_NAME yields empty base', Bootstrap::baseUrl() === '');
 
+// --- reverse-proxy sub-path: prefix is stripped before PHP, so SCRIPT_NAME
+//     can't reveal it. Config (1) and X-Forwarded-Prefix (2) must win. --------
+$_SERVER['SCRIPT_NAME'] = '/index.php';                       // proxy stripped /vimbadmin
+$cfg = ['resources' => ['frontcontroller' => ['baseurl' => '/vimbadmin']]];
+check('config baseurl overrides stripped SCRIPT_NAME', Bootstrap::baseUrl($cfg) === '/vimbadmin');
+check('config baseurl is slash-normalised', Bootstrap::baseUrl(['resources' => ['frontcontroller' => ['baseurl' => 'vimbadmin/']]]) === '/vimbadmin');
+
+$_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/vimbadmin';
+check('X-Forwarded-Prefix used when no config', Bootstrap::baseUrl() === '/vimbadmin');
+$_SERVER['HTTP_X_FORWARDED_PREFIX'] = "/evil\r\nSet-Cookie: x"; // header-injection attempt
+check('malformed X-Forwarded-Prefix is rejected', Bootstrap::baseUrl() === '');
+unset($_SERVER['HTTP_X_FORWARDED_PREFIX']);
+check('config still wins over present SCRIPT_NAME dir', Bootstrap::baseUrl($cfg) === '/vimbadmin');
+
 // --- NativeResources presents the Container's bootstrap shape ---------------
 $em      = new stdClass();
 $view    = new stdClass();

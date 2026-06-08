@@ -86,7 +86,7 @@ final class Bootstrap
         );
 
         $resources = new NativeResources($options, $em, $view, $session);
-        \OSS_Runtime::configure($options, self::baseUrl(), $em);
+        \OSS_Runtime::configure($options, self::baseUrl($options), $em);
 
         return new Container($resources, $auth, ['skinCss' => self::skinCss($appPath, $options)]);
     }
@@ -133,14 +133,35 @@ final class Bootstrap
     }
 
     /**
-     * The application base URL, derived from the front-controller script path
-     * the same way the ZF1 front controller did: the directory of `SCRIPT_NAME`
-     * with no trailing slash (so a docroot install yields `''`, a sub-path
-     * install `/vimb`). The entry point feeds this to the front controller so
-     * `OSS_Utils::genUrl` keeps producing identical URLs.
+     * The application base URL prefix `OSS_Utils::genUrl` prepends to every
+     * link/asset. Resolution order:
+     *
+     *   1. Explicit config `resources.frontcontroller.baseurl` (the ZF1
+     *      `resources.frontController.baseUrl`). REQUIRED behind a reverse
+     *      proxy that mounts the app under a sub-path and strips that prefix
+     *      before it reaches PHP (e.g. mail.myguard.nl/vimbadmin/ →
+     *      `proxy_pass http://up/;`): the backend then sees `/auth/login`, so
+     *      `SCRIPT_NAME` can no longer reveal the mount point and assets would
+     *      otherwise resolve to the proxy root.
+     *   2. `X-Forwarded-Prefix` from the trusted edge proxy (sanitised; the
+     *      backend is not directly client-reachable on this deployment).
+     *   3. Otherwise the directory of `SCRIPT_NAME`, as the ZF1 front
+     *      controller did (docroot install → `''`, sub-path install → `/vimb`).
+     *
+     * @param array<string,mixed> $options the merged application options
      */
-    public static function baseUrl(): string
+    public static function baseUrl(array $options = []): string
     {
+        $configured = $options['resources']['frontcontroller']['baseurl'] ?? null;
+        if (is_string($configured) && trim($configured) !== '') {
+            return '/' . trim(trim($configured), '/');
+        }
+
+        $prefix = (string) ($_SERVER['HTTP_X_FORWARDED_PREFIX'] ?? '');
+        if ($prefix !== '' && preg_match('#^/[A-Za-z0-9._~/-]+$#', $prefix)) {
+            return '/' . trim($prefix, '/');
+        }
+
         $scriptName = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
         $dir        = str_replace('\\', '/', dirname($scriptName));
 
@@ -170,6 +191,6 @@ final class Bootstrap
             return '';
         }
 
-        return rtrim(self::baseUrl(), '/') . '/' . $rel;
+        return rtrim(self::baseUrl($options), '/') . '/' . $rel;
     }
 }

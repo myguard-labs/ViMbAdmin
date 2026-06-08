@@ -3,8 +3,8 @@
  * Unit test: ViMbAdmin\Kernel\Http\Kernel (Phase 2b, docs/ZF1-REMOVAL.md).
  *
  * Pure dispatch logic — no framework, no DB, no Composer install, no output.
- * Proves the native health route is served and that every other path returns
- * null (→ ZF1 fallback at the entry point).
+ * Proves the native health route is served and unknown paths remain unhandled
+ * so the entry point can return a native 404.
  *
  * Exit 0 = all passed, 1 = a failure.
  */
@@ -35,17 +35,20 @@ check('health is text/plain',             $r !== null && str_starts_with($r->con
 check('health body says ok',              $r !== null && str_contains($r->body, 'ok') && str_contains($r->body, 'native dispatch'));
 
 check('unknown controller -> null',       $kernel->handle('/domain/list') === null);
-check('root -> null (ZF1 index)',         $kernel->handle('/') === null);
-check('auth path -> null (ZF1)',          $kernel->handle('/auth/setup') === null);
+check('root needs a dispatcher',          $kernel->handle('/') === null);
+check('auth path needs a dispatcher',     $kernel->handle('/auth/setup') === null);
 check('health with action still routes',  $kernel->handle('/kernel-health/index') instanceof Response);
 
 // Phase 3: the migrated controllers join the allowlist (health stays first).
 check('nativeControllers includes the migrated controllers',
-    Kernel::nativeControllers() === ['kernel-health', 'additionalinfo', 'auth', 'index', 'log', 'admin', 'domain', 'alias', 'mailbox', 'archive', 'queue', 'maintenance']);
+    Kernel::nativeControllers() === ['kernel-health', 'additionalinfo', 'auth', 'index', 'log', 'admin', 'domain', 'alias', 'mailbox', 'archive', 'queue', 'maintenance', 'mcp']);
 
-// A container-backed native controller routed through a Kernel built WITHOUT a
-// dispatcher (as here) still returns null → ZF1 fallback, never a fatal.
-check('additionalinfo without a dispatcher -> null (ZF1 fallback)',
+check('removed Thunderbird export route is not handled',
+    $kernel->canHandle('/exportsettings/thunderbird/email/user@example.com') === false);
+
+// A container-backed controller routed through a Kernel built WITHOUT a
+// dispatcher (as here) remains unhandled.
+check('additionalinfo without a dispatcher -> null',
     $kernel->handle('/additionalinfo/typeahead/type/x') === null);
 
 // Defence: a native controller name with no handler would fall back. (All

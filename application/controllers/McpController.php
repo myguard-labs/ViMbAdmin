@@ -16,27 +16,10 @@
  * This controller is intentionally NOT session-authenticated; it never calls
  * authorise(). Web access is bearer-only; cli-* actions run under vimbtool.
  */
-class McpController extends ViMbAdmin_Controller_Action
+class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
 {
     /** @var \Entities\McpToken|null  the authenticated token for this request */
     private $_token = null;
-
-    public function preDispatch()
-    {
-        // No session auth here. Web action authenticates via bearer; the
-        // cli-* actions run from vimbtool.
-        $this->_helper->viewRenderer->setNoRender( true );
-        try { $this->_helper->layout()->disableLayout(); } catch( \Exception $e ) {}
-    }
-
-    public function init()
-    {
-        // Override the base init's skin/csrf/view wiring (not needed for JSON),
-        // but keep the essential bit it does: make options available (getD2EM
-        // and _mcpEnabled rely on Zend_Registry 'options').
-        $this->_options = $this->getBootstrap()->getOptions();
-        Zend_Registry::set( 'options', $this->_options );
-    }
 
     // =====================================================================
     //  Web endpoint  (POST /mcp, JSON-RPC 2.0)
@@ -47,7 +30,7 @@ class McpController extends ViMbAdmin_Controller_Action
         if( !$this->_mcpEnabled() )
             return $this->_http( 404, 'mcp disabled' );
 
-        if( strtoupper( $this->getRequest()->getMethod() ) !== 'POST' )
+        if( strtoupper( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) !== 'POST' )
             return $this->_http( 405, 'POST required' );
 
         $body = file_get_contents( 'php://input' );
@@ -62,7 +45,7 @@ class McpController extends ViMbAdmin_Controller_Action
         // ---- authenticate (bearer + ip + scope) -------------------------
         try
         {
-            $auth  = new ViMbAdmin_Mcp_Auth( $this->getD2EM(), $this->_options['trustedproxy'] ?? [] );
+            $auth  = new ViMbAdmin_Mcp_Auth( $this->em(), $this->options()['trustedproxy'] ?? [] );
             $token = $this->_token = $auth->authenticate( $_SERVER, $this->_scopeFor( $method ) );
 
             // Destructive methods are additionally per-token rate-limited.
@@ -105,7 +88,7 @@ class McpController extends ViMbAdmin_Controller_Action
         }
         catch( \Throwable $e )
         {
-            $this->getLogger()->err( 'MCP ' . $method . ': ' . $e->getMessage() );
+            error_log( 'MCP ' . $method . ': ' . $e->getMessage() );
             return $this->_rpcError( $id, -32603, 'internal error' );
         }
 
@@ -122,7 +105,7 @@ class McpController extends ViMbAdmin_Controller_Action
     private function _domainsList()
     {
         $out = [];
-        foreach( $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findAll() as $d )
+        foreach( $this->em()->getRepository( '\\Entities\\Domain' )->findAll() as $d )
         {
             if( $this->_token && !$this->_token->allowsDomain( $d->getDomain() ) )
                 continue;
@@ -144,7 +127,7 @@ class McpController extends ViMbAdmin_Controller_Action
     {
         $domain = $this->_requireDomain( $params );
         $out = [];
-        foreach( $this->getD2EM()->getRepository( '\\Entities\\Mailbox' )->findBy( [ 'Domain' => $domain ] ) as $m )
+        foreach( $this->em()->getRepository( '\\Entities\\Mailbox' )->findBy( [ 'Domain' => $domain ] ) as $m )
             $out[] = [
                 'username'   => $m->getUsername(),
                 'name'       => $m->getName(),
@@ -161,7 +144,7 @@ class McpController extends ViMbAdmin_Controller_Action
     {
         $domain = $this->_requireDomain( $params );
         $out = [];
-        foreach( $this->getD2EM()->getRepository( '\\Entities\\Alias' )->findBy( [ 'Domain' => $domain ] ) as $a )
+        foreach( $this->em()->getRepository( '\\Entities\\Alias' )->findBy( [ 'Domain' => $domain ] ) as $a )
             $out[] = [
                 'address' => $a->getAddress(),
                 'goto'    => $a->getGoto(),
@@ -178,23 +161,23 @@ class McpController extends ViMbAdmin_Controller_Action
         // Bind the per-token domain allowlist to creation too: a token scoped to
         // specific domains must not be able to create one outside that list.
         $this->_assertDomainAllowed( $name );
-        if( $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] ) )
+        if( $this->em()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] ) )
             throw new ViMbAdmin_Mcp_Exception( 'domain already exists' );
 
         $d = new \Entities\Domain();
         $d->setDomain( $name );
         $d->setActive( isset( $params['active'] ) ? (bool) $params['active'] : true );
-        $d->setTransport( $this->_str( $params, 'transport' ) ?: ( $this->_options['defaults']['domain']['transport'] ?? 'virtual' ) );
-        $d->setQuota(        (int) ( $params['quota']        ?? ( $this->_options['defaults']['domain']['quota']     ?? 0 ) ) );
-        $d->setMaxQuota(     (int) ( $params['maxquota']     ?? ( $this->_options['defaults']['domain']['maxquota']  ?? 0 ) ) );
-        $d->setMaxMailboxes( (int) ( $params['max_mailboxes']?? ( $this->_options['defaults']['domain']['mailboxes']?? 0 ) ) );
-        $d->setMaxAliases(   (int) ( $params['max_aliases']  ?? ( $this->_options['defaults']['domain']['aliases']  ?? 0 ) ) );
+        $d->setTransport( $this->_str( $params, 'transport' ) ?: ( $this->options()['defaults']['domain']['transport'] ?? 'virtual' ) );
+        $d->setQuota(        (int) ( $params['quota']        ?? ( $this->options()['defaults']['domain']['quota']     ?? 0 ) ) );
+        $d->setMaxQuota(     (int) ( $params['maxquota']     ?? ( $this->options()['defaults']['domain']['maxquota']  ?? 0 ) ) );
+        $d->setMaxMailboxes( (int) ( $params['max_mailboxes']?? ( $this->options()['defaults']['domain']['mailboxes']?? 0 ) ) );
+        $d->setMaxAliases(   (int) ( $params['max_aliases']  ?? ( $this->options()['defaults']['domain']['aliases']  ?? 0 ) ) );
         $d->setBackupmx( false );
         $d->setMailboxCount( 0 );
         $d->setAliasCount( 0 );
         $d->setCreated( new \DateTime() );
 
-        $em = $this->getD2EM();
+        $em = $this->em();
         $em->persist( $d );
         $em->flush();
         return [ 'created' => true, 'domain' => $d->getDomain(), 'id' => $d->getId() ];
@@ -204,7 +187,7 @@ class McpController extends ViMbAdmin_Controller_Action
     {
         $domain = $this->_requireDomain( $params );
         $name   = $domain->getDomain();
-        $this->getD2EM()->getRepository( '\\Entities\\Domain' )->purge( $domain );
+        $this->em()->getRepository( '\\Entities\\Domain' )->purge( $domain );
         return [ 'deleted' => true, 'domain' => $name ];
     }
 
@@ -215,7 +198,7 @@ class McpController extends ViMbAdmin_Controller_Action
         $password  = $this->_str( $params, 'password', true );
         $username  = $localPart . '@' . $domain->getDomain();
 
-        $repo = $this->getD2EM()->getRepository( '\\Entities\\Mailbox' );
+        $repo = $this->em()->getRepository( '\\Entities\\Mailbox' );
         if( !$repo->isUnique( $username ) )
             throw new ViMbAdmin_Mcp_Exception( 'mailbox already exists' );
 
@@ -224,28 +207,28 @@ class McpController extends ViMbAdmin_Controller_Action
         $m->setUsername( $username );
         $m->setName( $this->_str( $params, 'name' ) ?: $username );
         $m->setDomain( $domain );
-        $m->setUid( $this->_options['defaults']['mailbox']['uid'] );
-        $m->setGid( $this->_options['defaults']['mailbox']['gid'] );
-        $m->formatHomedir( $this->_options['defaults']['mailbox']['homedir'] );
-        $m->formatMaildir( $this->_options['defaults']['mailbox']['maildir'] );
+        $m->setUid( $this->options()['defaults']['mailbox']['uid'] );
+        $m->setGid( $this->options()['defaults']['mailbox']['gid'] );
+        $m->formatHomedir( $this->options()['defaults']['mailbox']['homedir'] );
+        $m->formatMaildir( $this->options()['defaults']['mailbox']['maildir'] );
         $m->setQuota( (int) ( $params['quota'] ?? 0 ) );
         $m->setActive( isset( $params['active'] ) ? (bool) $params['active'] : true );
         $m->setDeletePending( false );
         $m->setCreated( new \DateTime() );
         $m->setPassword( OSS_Auth_Password::hash( $password, [
-            'pwhash'    => $this->_options['defaults']['mailbox']['password_scheme'],
-            'pwsalt'    => $this->_options['defaults']['mailbox']['password_salt'] ?? null,
+            'pwhash'    => $this->options()['defaults']['mailbox']['password_scheme'],
+            'pwsalt'    => $this->options()['defaults']['mailbox']['password_salt'] ?? null,
             'username'  => $username,
         ] ) );
 
-        $em = $this->getD2EM();
+        $em = $this->em();
         $em->persist( $m );
 
         // Auto mailbox-alias (address -> address). Reuse an existing alias with
         // that address rather than inserting a duplicate (which would violate
         // the unique key and roll the whole create back -- e.g. an orphan alias
         // left by an earlier failed attempt).
-        if( ( $this->_options['mailboxAliases'] ?? 0 ) == 1
+        if( ( $this->options()['mailboxAliases'] ?? 0 ) == 1
             && !$em->getRepository( '\\Entities\\Alias' )->findOneBy( [ 'address' => $username ] ) )
         {
             $a = new \Entities\Alias();
@@ -267,9 +250,9 @@ class McpController extends ViMbAdmin_Controller_Action
         $m = $this->_requireMailbox( $params );
         $username = $m->getUsername();
         $domain   = $m->getDomain();
-        $this->getD2EM()->getRepository( '\\Entities\\Mailbox' )->purgeMailbox( $m, null, true );
+        $this->em()->getRepository( '\\Entities\\Mailbox' )->purgeMailbox( $m, null, true );
         $domain->setMailboxCount( max( 0, $domain->getMailboxCount() - 1 ) );
-        $this->getD2EM()->flush();
+        $this->em()->flush();
         return [ 'deleted' => true, 'username' => $username ];
     }
 
@@ -281,7 +264,7 @@ class McpController extends ViMbAdmin_Controller_Action
         if( strpos( $address, '@' ) === false )
             $address .= '@' . $domain->getDomain();
 
-        $repo = $this->getD2EM()->getRepository( '\\Entities\\Alias' );
+        $repo = $this->em()->getRepository( '\\Entities\\Alias' );
         if( $repo->findOneBy( [ 'address' => $address ] ) )
             throw new ViMbAdmin_Mcp_Exception( 'alias already exists' );
 
@@ -291,7 +274,7 @@ class McpController extends ViMbAdmin_Controller_Action
         $a->setDomain( $domain );
         $a->setActive( isset( $params['active'] ) ? (bool) $params['active'] : true );
         $a->setCreated( new \DateTime() );
-        $em = $this->getD2EM();
+        $em = $this->em();
         $em->persist( $a );
         $domain->setAliasCount( $domain->getAliasCount() + 1 );
         $em->flush();
@@ -301,13 +284,13 @@ class McpController extends ViMbAdmin_Controller_Action
     private function _aliasDelete( array $params )
     {
         $address = $this->_str( $params, 'address', true );
-        $a = $this->getD2EM()->getRepository( '\\Entities\\Alias' )->findOneBy( [ 'address' => $address ] );
+        $a = $this->em()->getRepository( '\\Entities\\Alias' )->findOneBy( [ 'address' => $address ] );
         if( !$a )
             throw new ViMbAdmin_Mcp_Exception( 'unknown alias' );
         $domain = $a->getDomain();
         if( $domain )
             $this->_assertDomainAllowed( $domain->getDomain() );
-        $em = $this->getD2EM();
+        $em = $this->em();
         $em->remove( $a );
         if( $domain )
             $domain->setAliasCount( max( 0, $domain->getAliasCount() - 1 ) );
@@ -320,7 +303,7 @@ class McpController extends ViMbAdmin_Controller_Action
     private function _mailboxArchive( array $params )
     {
         $m  = $this->_requireMailbox( $params );
-        $em = $this->getD2EM();
+        $em = $this->em();
         $username = $m->getUsername();
 
         // Queue a real ARCHIVE task (doveadm backup -> empty store, keep
@@ -342,7 +325,7 @@ class McpController extends ViMbAdmin_Controller_Action
     private function _archiveState( array $params, $status )
     {
         $username = $this->_str( $params, 'username', true );
-        $em       = $this->getD2EM();
+        $em       = $this->em();
         $archive  = $em->getRepository( '\\Entities\\Archive' )->findOneBy( [ 'username' => $username ] );
         if( !$archive )
             throw new ViMbAdmin_Mcp_Exception( 'no archive for that username' );
@@ -350,7 +333,7 @@ class McpController extends ViMbAdmin_Controller_Action
             $this->_assertDomainAllowed( $archive->getDomain()->getDomain() );
 
         $dest    = $archive->getMaildirFile();
-        $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->_options );
+        $doveadm = ViMbAdmin_Doveadm::fromOptions( $this->options() );
 
         if( $status === \Entities\Archive::STATUS_PENDING_DELETE )
         {
@@ -402,7 +385,7 @@ class McpController extends ViMbAdmin_Controller_Action
     private function _requireDomain( array $params )
     {
         $name   = $this->_str( $params, 'domain', true );
-        $domain = $this->getD2EM()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] );
+        $domain = $this->em()->getRepository( '\\Entities\\Domain' )->findOneBy( [ 'domain' => $name ] );
         if( !$domain )
             throw new ViMbAdmin_Mcp_Exception( 'unknown domain' );
         $this->_assertDomainAllowed( $domain->getDomain() );
@@ -429,7 +412,7 @@ class McpController extends ViMbAdmin_Controller_Action
     private function _requireMailbox( array $params )
     {
         $username = $this->_str( $params, 'username', true );
-        $m = $this->getD2EM()->getRepository( '\\Entities\\Mailbox' )->findOneBy( [ 'username' => $username ] );
+        $m = $this->em()->getRepository( '\\Entities\\Mailbox' )->findOneBy( [ 'username' => $username ] );
         if( !$m )
             throw new ViMbAdmin_Mcp_Exception( 'unknown mailbox' );
         if( $m->getDomain() )
@@ -470,9 +453,9 @@ class McpController extends ViMbAdmin_Controller_Action
 
     private function _rateLimiter()
     {
-        $rl = $this->_options['mcp']['ratelimit']['destructive'] ?? [];
+        $rl = $this->options()['mcp']['ratelimit']['destructive'] ?? [];
         return new ViMbAdmin_Mcp_RateLimit( [
-            'statedir' => $this->_options['mcp']['ratelimit']['statedir'] ?? null,
+            'statedir' => $this->options()['mcp']['ratelimit']['statedir'] ?? null,
             'max'      => $rl['max']    ?? 10,
             'window'   => $rl['window'] ?? 3600,
         ] );
@@ -482,130 +465,41 @@ class McpController extends ViMbAdmin_Controller_Action
 
     private function _mcpEnabled()
     {
-        return isset( $this->_options['mcp']['enabled'] ) && $this->_options['mcp']['enabled'];
+        return isset( $this->options()['mcp']['enabled'] ) && $this->options()['mcp']['enabled'];
     }
 
     private function _json( $payload, $httpStatus = 200 )
     {
-        $this->getResponse()
-             ->setHttpResponseCode( $httpStatus )
-             ->setHeader( 'Content-Type', 'application/json', true )
-             ->setBody( json_encode( $payload ) );
+        return $this->json( $payload, $httpStatus );
     }
 
     private function _rpcResult( $id, $result )
     {
-        $this->_json( [ 'jsonrpc' => '2.0', 'id' => $id, 'result' => $result ] );
+        return $this->_json( [ 'jsonrpc' => '2.0', 'id' => $id, 'result' => $result ] );
     }
 
     private function _rpcError( $id, $code, $message, $httpStatus = 200 )
     {
-        $this->_json( [ 'jsonrpc' => '2.0', 'id' => $id, 'error' => [ 'code' => $code, 'message' => $message ] ], $httpStatus );
+        return $this->_json( [ 'jsonrpc' => '2.0', 'id' => $id, 'error' => [ 'code' => $code, 'message' => $message ] ], $httpStatus );
     }
 
     /** Auth/transport-level failure: HTTP status + JSON-RPC error envelope. */
     private function _http( $status, $message, $id = null )
     {
-        if( $status === 401 )
-            $this->getResponse()->setHeader( 'WWW-Authenticate', 'Bearer', true );
-        $this->_rpcError( $id, -32000, $message, $status );
+        $response = $this->_rpcError( $id, -32000, $message, $status );
+        if( $status !== 401 )
+            return $response;
+
+        return new \ViMbAdmin\Kernel\Http\Response(
+            $response->body,
+            $response->status,
+            $response->contentType,
+            [ 'WWW-Authenticate' => 'Bearer' ]
+        );
     }
 
-    // =====================================================================
-    //  CLI token management  (vimbtool -a mcp.cli-token-*)
-    // =====================================================================
-
-    public function cliTokenGenerateAction()
+    private function options(): array
     {
-        $name = $this->_cliOpt( 'name' );
-        if( $name === null )
-            return $this->_cliDie( "ERROR: --name is required\n" );
-
-        $em  = $this->getD2EM();
-        $old = $em->getRepository( '\\Entities\\McpToken' )->findByName( $name );
-        if( $old !== null )
-        {
-            if( !$old->getRevoked() )
-                return $this->_cliDie( "ERROR: an active token named '{$name}' already exists (revoke it first)\n" );
-            // name is free to reuse: drop the old revoked row
-            $em->remove( $old );
-            $em->flush();
-        }
-
-        $raw  = bin2hex( random_bytes( 32 ) );
-        $tok  = new \Entities\McpToken();
-        $tok->setName( $name );
-        $tok->setTokenHash( hash( 'sha256', $raw ) );
-        $tok->setScope( $this->_cliOpt( 'scope' ) ?: 'read' );
-        $tok->setAllowedIps( $this->_cliOpt( 'ip' ) ?: null );
-        $tok->setAllowedDomains( $this->_cliOpt( 'domains' ) ?: null );
-        $tok->setCreated( new \DateTime() );
-        $tok->setRevoked( false );
-
-        $days = $this->_cliOpt( 'days' );
-        if( $days !== null && (int) $days > 0 )
-            $tok->setExpiresAt( ( new \DateTime() )->modify( '+' . (int) $days . ' days' ) );
-
-        $em->persist( $tok );
-        $em->flush();
-
-        echo "MCP token '{$name}' created. Scope: {$tok->getScope()}.";
-        echo $tok->getAllowedIps() ? " IPs: {$tok->getAllowedIps()}." : " IPs: any.";
-        echo $tok->getAllowedDomains() ? " Domains: {$tok->getAllowedDomains()}." : " Domains: all.";
-        echo $tok->getExpiresAt() ? " Expires: " . $tok->getExpiresAt()->format( 'Y-m-d' ) . ".\n" : " No expiry.\n";
-        echo "\n  TOKEN (shown once, store it now):\n\n    {$raw}\n\n";
-        echo "Use it as:  Authorization: Bearer {$raw}\n";
-    }
-
-    public function cliTokenListAction()
-    {
-        $tokens = $this->getD2EM()->getRepository( '\\Entities\\McpToken' )->findBy( [], [ 'id' => 'ASC' ] );
-        if( !$tokens )
-        {
-            echo "No MCP tokens.\n";
-            return;
-        }
-        printf( "%-4s %-20s %-12s %-20s %-20s %-10s %-19s\n", 'ID', 'NAME', 'SCOPE', 'IPS', 'DOMAINS', 'STATE', 'LAST USED' );
-        foreach( $tokens as $t )
-        {
-            printf( "%-4d %-20s %-12s %-20s %-20s %-10s %-19s\n",
-                $t->getId(), $t->getName(), $t->getScope(),
-                $t->getAllowedIps() ?: 'any',
-                $t->getAllowedDomains() ?: 'all',
-                $t->getRevoked() ? 'revoked' : ( $t->isActive() ? 'active' : 'expired' ),
-                $t->getLastUsedAt() ? $t->getLastUsedAt()->format( 'Y-m-d H:i:s' ) : '-' );
-        }
-    }
-
-    public function cliTokenRevokeAction()
-    {
-        $em   = $this->getD2EM();
-        $repo = $em->getRepository( '\\Entities\\McpToken' );
-        $id   = $this->_cliOpt( 'id' );
-        $name = $this->_cliOpt( 'name' );
-
-        $tok = $id !== null ? $repo->find( (int) $id )
-             : ( $name !== null ? $repo->findByName( $name ) : null );
-
-        if( !$tok )
-            return $this->_cliDie( "ERROR: token not found (use --name or --id; see mcp.cli-token-list)\n" );
-
-        $tok->setRevoked( true );
-        $em->flush();
-        echo "Revoked MCP token '{$tok->getName()}' (id {$tok->getId()}).\n";
-    }
-
-    // ---- cli helpers ---------------------------------------------------
-
-    private function _cliOpt( $name )
-    {
-        $v = $this->getRequest()->getParam( $name, null );
-        return ( $v === null || $v === '' ) ? null : $v;
-    }
-
-    private function _cliDie( $msg )
-    {
-        fwrite( STDERR, $msg );
-        exit( 1 );
+        return $this->container->options();
     }
 }

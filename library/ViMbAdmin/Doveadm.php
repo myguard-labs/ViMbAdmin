@@ -74,7 +74,7 @@ class ViMbAdmin_Doveadm
     }
 
     /**
-     * Build an instance from the application options (Zend_Registry 'options').
+     * Build an instance from the application options.
      *
      * @param array|null $options
      * @return ViMbAdmin_Doveadm
@@ -83,7 +83,7 @@ class ViMbAdmin_Doveadm
     public static function fromOptions( $options = null )
     {
         if( $options === null )
-            $options = Zend_Registry::get( 'options' );
+            $options = OSS_Runtime::options();
 
         if( empty( $options['doveadm']['http']['url'] ) || !isset( $options['doveadm']['http']['api_key'] ) )
             throw new ViMbAdmin_Exception( _( 'doveadm HTTP API is not configured (doveadm.http.url / doveadm.http.api_key)' ) );
@@ -142,8 +142,6 @@ class ViMbAdmin_Doveadm
     /**
      * POST the JSON body to the doveadm endpoint.
      *
-     * Uses Zend_Http_Client when available, falling back to the cURL extension.
-     *
      * @param string $payload JSON request body
      * @return array{0:int,1:string} [ httpStatus, responseBody ]
      * @throws ViMbAdmin_Exception on transport failure
@@ -151,29 +149,6 @@ class ViMbAdmin_Doveadm
     private function _post( $payload )
     {
         $authHeader = 'X-Dovecot-API ' . base64_encode( $this->_apiKey );
-
-        if( class_exists( 'Zend_Http_Client' ) )
-        {
-            try
-            {
-                $client = new Zend_Http_Client( $this->_url, [
-                    'timeout'      => $this->_timeout,
-                    'keepalive'    => false,
-                    'maxredirects' => 0,
-                ] );
-                $client->setHeaders( [
-                    'Content-Type'  => 'application/json',
-                    'Authorization' => $authHeader,
-                ] );
-                $client->setRawData( $payload, 'application/json' );
-                $resp = $client->request( Zend_Http_Client::POST );
-                return [ (int) $resp->getStatus(), $resp->getBody() ];
-            }
-            catch( Exception $e )
-            {
-                throw new ViMbAdmin_Exception( _( 'doveadm HTTP request failed: ' ) . $e->getMessage() );
-            }
-        }
 
         if( function_exists( 'curl_init' ) )
         {
@@ -197,7 +172,7 @@ class ViMbAdmin_Doveadm
             return [ $status, $body ];
         }
 
-        throw new ViMbAdmin_Exception( _( 'No HTTP client available (neither Zend_Http_Client nor cURL)' ) );
+        throw new ViMbAdmin_Exception( _( 'No HTTP client available (cURL extension missing)' ) );
     }
 
     // =====================================================================

@@ -6,7 +6,7 @@
 *Virtual Mailbox Administration that runs on a PHP version released this decade.*
 
 [![PHP](https://img.shields.io/badge/PHP-8.4%2B-777bb4)]()
-[![Framework](https://img.shields.io/badge/ZF1--future%20%C2%B7%20Doctrine%202.20%20%C2%B7%20Smarty%205-informational)]()
+[![Stack](https://img.shields.io/badge/Native%20kernel%20%C2%B7%20Doctrine%202.20%20%C2%B7%20Smarty%205-informational)]()
 
 **ViMbAdmin** (*vim-be-admin*, and yes the editor war is intentional) is a web
 panel for managing the virtual domains, mailboxes and aliases in a
@@ -99,8 +99,8 @@ stock upstream had **none** of the application-layer items below.
 - **Brute-force protection** — per-source-IP attempt counter with lockout
   window; a fully successful login clears it. IP/CIDR **allowlist** and all
   thresholds configurable in `application.ini` (`[bruteforce]`). 429 when locked.
-- **CSRF** — a per-session token on **every form** (auto-validated by
-  `Zend_Form::isValid()`) *and* on every destructive GET link
+- **CSRF** — a per-session token validated by the native form layer on
+  **every form** and on every destructive GET link
   (purge/delete/cancel/restore); forged request → 403.
 
 ### Output / input handling
@@ -147,7 +147,7 @@ stock upstream had **none** of the application-layer items below.
   resource limits.
 - **Hardened Angie/nginx vhost** (`contrib/angie/vimbadmin.conf`) — a **native
   positive-security gate**: only known HTTP methods, the real route map
-  (controllers + ZF1 param URLs), and the app's known argument names reach PHP;
+  (controllers + path parameters), and the app's known argument names reach PHP;
   scanner/empty user-agents are dropped. Plus TLS, strict **CSP** + security
   headers, a **rate-limited login**, internal-path/dotfile denies, and
   **BREACH mitigation** (no compression of secret-bearing dynamic responses).
@@ -171,8 +171,9 @@ stock upstream had **none** of the application-layer items below.
 
 ### Dependencies
 
-- On current LTS lines (doctrine/orm 2.20, dbal 3, symfony/cache 6.4/7,
-  smarty 5, zf1-future 1.25, robthree/twofactorauth 3, bacon/bacon-qr-code 3);
+- On current LTS lines (doctrine/orm 2.20, DBAL 3, symfony/cache 6.4/7/8,
+  Smarty 5, robthree/twofactorauth 3, bacon/bacon-qr-code 3);
+  the application kernel, routing, forms, sessions and CLI are native and ZF1-free;
   `composer audit` reports **no advisories**.
 
 ---
@@ -213,7 +214,7 @@ ModSecurity plugin shipped alongside this repo.
 ## Quick start (from source)
 
 PHP **8.4.1+** (the dependency-tree floor) with `pdo_mysql`, `mbstring`,
-`intl`, `gettext`, `dom`, `ctype`, `iconv` and `sodium` (the 2FA secrets are
+`intl`, `gettext`, `gd`, `dom`, `ctype`, `iconv` and `sodium` (the 2FA secrets are
 encrypted with libsodium). `apcu` is optional but recommended (see
 [Performance](#performance)).
 
@@ -603,9 +604,10 @@ and trusted.
 ## Layout
 
 ```
-application/    ZF1 controllers (incl. McpController), entities, views (Smarty)
-library/        OSS + ViMbAdmin framework (Doctrine, auth, Net, Mcp/)
-public/         web docroot (index.php front controller)
+application/    entities, repositories, plugins, config and Smarty views
+src/Kernel/     native HTTP/CLI kernel, controllers, forms, auth and session
+library/        framework-free OSS + ViMbAdmin domain helpers
+public/         web docroot (native index.php front controller)
 bin/            CLI tools (doctrine2-cli.php, vimbtool.php, crons)
 contrib/        deploy configs: php-fpm pool, Angie vhost, mail-host crons,
                 snuffleupagus/ (the validated SP ruleset), migrations/, theming
@@ -620,8 +622,9 @@ libmodsecurity.
 
 ## Credits & licence
 
-Originally written by [Open Solutions](https://www.opensolutions.ie/) on the
-Zend Framework, Doctrine ORM and Smarty. GPLv3 — same as it always was. This
+Originally written by [Open Solutions](https://www.opensolutions.ie/) on Zend
+Framework, Doctrine ORM and Smarty. The current fork has removed Zend Framework.
+GPLv3 — same as it always was. This
 fork keeps the licence and the gratitude; it just keeps the lights on too.
 
 - Upstream: <https://github.com/opensolutions/ViMbAdmin>

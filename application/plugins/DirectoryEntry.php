@@ -71,78 +71,8 @@ class ViMbAdminPlugin_DirectoryEntry extends ViMbAdmin_Plugin implements OSS_Plu
         // typically you might load an config file for example, but as this is a system
         // plugin, we can use the main application.ini for that.
     }
-    
-   /**
-     * Prepares and adds directory entry subform
-     *
-     * @param object $controller an OSS_Controller_Action instance
-     * @param array $params Additional parameters
-     * @return void
-     */
-    public function mailbox_add_formPostProcess( $controller, $params )
-    {
-        $form    = $controller->getMailboxForm();
-        $mailbox = $controller->getMailbox();
-        $subform = new ViMbAdmin_Form_Mailbox_DirectoryEntry();
-
-        $disabled = isset( $controller->getOptions()['vimbadmin_plugins']['DirectoryEntry']['disabled_elements'] ) ?
-                    $controller->getOptions()['vimbadmin_plugins']['DirectoryEntry']['disabled_elements'] :
-                    [];
-        if( isset( $controller->getOptions()['identity']['orgname'] ) )
-            $subform->getElement( "plugin_directoryEntry_O" )->setValue( $controller->getOptions()['identity']['orgname'] );
-
-        if( $controller->isEdit() )
-            $subform->prepare( $disabled, $mailbox->getDirectoryEntry() );
-        else
-            $subform->prepare( $disabled );
-        
-        $form->addSubForm( $subform, 'pluginsf_DirectoryEntry' );
-        
-    }
-     
     /**
-     * Creates/updates directory entry.
-     *
-     * @param object $controller an OSS_Controller_Action instance
-     * @param array $params Additional parameters
-     * @return void
-     */
-    public function mailbox_add_addPreflush( $controller, $params )
-    {
-        $form    = $controller->getMailboxForm();
-        $mailbox = $controller->getMailbox();
-        $subform = $form->getSubform( 'pluginsf_DirectoryEntry' );
-
-        if( !$mailbox->getDirectoryEntry() )
-        {
-            $dentry = new \Entities\DirectoryEntry();
-            $controller->getD2EM()->persist( $dentry );
-            $dentry->setMailbox( $mailbox );
-            $dentry->setVimbCreated( new \DateTime() );
-        }
-        else
-            $dentry = $mailbox->getDirectoryEntry();
-
-        $dentry->setMail( $mailbox->getUsername() );
-        $subform->formToEntity( $dentry );
-        $dentry->setVimbUpdate( new \DateTime() );
-    }
-    
-    /**
-     * Clears cache for additional Info autocomplete values.
-     *
-     * @param object $controller an OSS_Controller_Action instance
-     * @param array $params Additional parameters
-     * @return void
-     */
-    public function mailbox_purge_postFlush( $controller, $params )
-    {
-        //$controller->getD2Cache()->delete( 'ViMbAdmin_Plugin_AdditionalInfo_autocomplete_*' );
-    }
-    
-    
-    /**
-     * Deletes the drectory entry
+     * Deletes the directory entry with its mailbox.
      *
      * @param object $controller an OSS_Controller_Action instance
      * @return void
@@ -159,32 +89,7 @@ class ViMbAdminPlugin_DirectoryEntry extends ViMbAdmin_Plugin implements OSS_Plu
         }
     }            
 
-    /**
-     * Deletes the drectory entry when archiving
-     *
-     * @param object $controller an OSS_Controller_Action instance
-     * @return void
-     * @access public
-     */
-    public function archive_add_preSerialize( $controller, $params )
-    {
-        if( $de = $controller->getMailbox()->getDirectoryEntry() )
-        {
-
-            $controller->getD2EM()->remove( $de );
-            $controller->getMailbox()->setDirectoryEntry( null );
-            $controller->getD2EM()->flush();
-        }
-    }
-
-
-    // ---------------------------------------------------------------------
-    //  Native mailbox-form extension (ViMbAdmin_Plugin_MailboxFormExtension,
-    //  Phase 4 of docs/ZF1-REMOVAL.md). The framework-free counterpart of the
-    //  mailbox_add_formPostProcess / addPreflush hooks above: the same LDAP-style
-    //  directory-entry fields become native Form fields, read back into the same
-    //  \Entities\DirectoryEntry. The legacy ZF1 hooks are untouched (flag-off path).
-    // ---------------------------------------------------------------------
+    // -- Native mailbox-form extension ---------------------------------------
 
     /**
      * Which attributes are disabled via vimbadmin_plugins.DirectoryEntry.disabled_elements.
@@ -268,4 +173,3 @@ class ViMbAdminPlugin_DirectoryEntry extends ViMbAdmin_Plugin implements OSS_Plu
         $dentry->setVimbUpdate( new \DateTime() );
     }
 }
-

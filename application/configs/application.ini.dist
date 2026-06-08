@@ -22,7 +22,6 @@
 ; installation as well as provide security for cookies and passwords.
 
 securitysalt                       = ""
-resources.auth.oss.rememberme.salt = ""
 defaults.mailbox.password_salt     = ""
 
 
@@ -33,7 +32,6 @@ defaults.mailbox.password_salt     = ""
 
 phpSettings.display_startup_errors = 1
 phpSettings.display_errors = 1
-resources.frontController.params.displayExceptions = 1
 
 
 
@@ -267,20 +265,6 @@ queue.runner.allowed_ips = "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0
 ;
 
 mailbox_deletion_fs_enabled = false
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Export Mailbox Settings
-;
-; See: https://github.com/opensolutions/ViMbAdmin/wiki/Export-Settings
-;
-defaults.export_settings.disabled = true
-
-
-;; Export settings alowed subnets
-defaults.export_settings.allowed_subnet[] = "10."
-defaults.export_settings.allowed_subnet[] = "192.168."
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -517,9 +501,9 @@ vimbadmin_plugins.AdditionalInfo.disabled = true
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;;  ABOUT THESE [section] HEADERS  (Zend environment sections)
+;;  ABOUT THESE [section] HEADERS
 ;;
-;;  This is a Zend_Application config. `[name]` and `[name : parent]` are
+;;  `[name]` and `[name : parent]` are
 ;;  *environments*, and `: parent` means "inherit everything from parent,
 ;;  then override". Which section loads is chosen by APPLICATION_ENV.
 ;;
@@ -540,27 +524,16 @@ vimbadmin_plugins.AdditionalInfo.disabled = true
 [production : user]
 
 includePaths.library = APPLICATION_PATH "/../library"
-includePaths.osslibrary = APPLICATION_PATH "/../vendor/opensolutions/oss-framework/src/"
 
-bootstrap.path = APPLICATION_PATH "/Bootstrap.php"
-bootstrap.class = "Bootstrap"
 appnamespace = "ViMbAdmin"
 
 temporary_directory = APPLICATION_PATH "/../var/tmp"
-
-pluginPaths.OSS_Resource = APPLICATION_PATH "/../library/OSS/Resource"
-pluginPaths.ViMbAdmin_Resource = APPLICATION_PATH "/../library/ViMbAdmin/Resource"
 
 mini_js = 1
 mini_css = 1
 
 alias_autocomplete_min_length = 2
 
-
-
-resources.frontController.controllerDirectory = APPLICATION_PATH "/controllers"
-resources.frontController.moduleDirectory = APPLICATION_PATH "/modules"
-resources.modules[] =
 
 
 ; doctrine2
@@ -581,17 +554,11 @@ resources.doctrine2cache.autoload_method    = "composer"
 
 resources.namespace.checkip = 0
 
-resources.auth.enabled = 1
-resources.auth.oss.adapter = "OSS_Auth_Doctrine2Adapter"
 resources.auth.oss.pwhash  = "bcrypt"
 resources.auth.oss.hash_cost  = 12
 resources.auth.oss.entity  = "\\Entities\\Admin"
 resources.auth.oss.disabled.lost-username = 1
 resources.auth.oss.disabled.lost-password = 0
-
-resources.auth.oss.rememberme.enabled = 1
-resources.auth.oss.rememberme.timeout = 2592000
-resources.auth.oss.rememberme.secure  = true
 
 resources.auth.oss.lost_password.use_captcha = true
 
@@ -681,9 +648,7 @@ resources.session.name = 'VIMBADMIN3'
 ;; is never sent and login loops).
 ;; NOTE: session.use_strict_mode (rejects attacker-seeded SIDs) is enforced at
 ;; the PHP level by the FPM pool (contrib/php-fpm/vimbadmin.conf) — it is NOT a
-;; resources.session.* key, because shardj/zf1-future's Zend_Session does not
-;; whitelist it and throws "Unknown option: use_strict_mode" (a 500 on every
-;; request) if set here. Do not re-add it to this file.
+;; resources.session.* key. Keep it in the FPM pool rather than duplicating it.
 resources.session.cookie_httponly = true
 resources.session.cookie_secure   = true
 resources.session.cookie_samesite = "Lax"
@@ -729,4 +694,3 @@ mini_css = 0
 
 phpSettings.display_startup_errors = 1
 phpSettings.display_errors = 1
-resources.frontController.params.displayExceptions = 1

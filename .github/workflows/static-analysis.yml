@@ -30,7 +30,7 @@ jobs:
         with:
           php-version: '8.4'
           coverage: none
-          extensions: ctype, dom, gettext, iconv, intl, json, mbstring, pdo, pdo_mysql, sodium
+          extensions: ctype, dom, gd, gettext, iconv, intl, json, mbstring, pdo, pdo_mysql, sodium
           tools: composer:v2, phpstan
 
       - name: Install dependencies

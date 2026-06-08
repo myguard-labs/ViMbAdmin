@@ -139,34 +139,22 @@ class OSS_Utils
      */
     public static function getIniOption( $option )
     {
-        $bootstrap = Zend_Controller_Front::getInstance()->getParam( 'bootstrap' );
-
-        if( $bootstrap !== null && method_exists( $bootstrap, 'getApplication' ) )
-            return $bootstrap->getApplication()->getOption( $option );
-
-        // WALL #2 native bootstrap: there is no ZF1 Zend_Application front-controller
-        // param. The native entry point publishes the merged options in the
-        // registry, so fall back to that (and to null for an unknown key) instead
-        // of fatally dereferencing a null bootstrap.
-        if( Zend_Registry::isRegistered( 'options' ) )
-        {
-            $options = Zend_Registry::get( 'options' );
-            return ( is_array( $options ) && array_key_exists( $option, $options ) ) ? $options[ $option ] : null;
-        }
-
-        return null;
+        return OSS_Runtime::option( $option );
     }
 
 
     /**
-    * Returns with the resource object. Use if Zend_Registry::get() doesn't work. (And in the OSS framework it doesn't.)
+    * Returns a named runtime resource.
     *
     * @param string $resource
     * @return object
     */
     public static function getResource( $resource )
     {
-        return Zend_Controller_Front::getInstance()->getParam( 'bootstrap ')->getResource( $resource );
+        if( strtolower( (string) $resource ) === 'doctrine2' )
+            return OSS_Runtime::entityManager();
+
+        return null;
     }
 
 
@@ -190,8 +178,7 @@ class OSS_Utils
      *
      * This is a useful function as no knowledge of the application's path is required.
      *
-     * It is also configurable (via Zend_Application config and assuming 'options' is 
-     * available in Zend_Registry as it would be from OSS_Controller_Action).
+     * It is configurable through the loaded application options.
      *
      * You can configure the hostname by setting config: utils.genurl.host_mode
      *
@@ -208,9 +195,8 @@ class OSS_Utils
      */
     public static function genUrl( $controller = false, $action = false, $module = false, $params = array(), $host = null )
     {
-        $options = Zend_Registry::get( 'options' );
-        
-        $url = Zend_Controller_Front::getInstance()->getBaseUrl();
+        $options = OSS_Runtime::options();
+        $url = OSS_Runtime::baseUrl();
         
         if( $host !== null )
         {
@@ -232,7 +218,7 @@ class OSS_Utils
                 switch( $options['utils']['genurl']['host_mode'] )
                 {
                     case 'HTTP_X_FORWARDED_HOST':
-                        $host = $_SERVER['HTTP_X_FORWARDED_HOST'];
+                        $host = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
                         break;
                         
                     case 'REPLACE':
@@ -240,11 +226,11 @@ class OSS_Utils
                         break;
                         
                     default:
-                        $host = $_SERVER['HTTP_HOST'];
+                        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
                 }
             }
             else
-                $host = $_SERVER['HTTP_HOST'];
+                $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
         }
 
         $url = $host . $url;

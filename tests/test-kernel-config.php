@@ -93,8 +93,8 @@ check('dist: doctrine2 driver resolved',
 check('dist: APPLICATION_PATH expanded in a path key',
     is_string($dist['resources']['doctrine2']['proxies_path'] ?? null)
         && str_starts_with((string) $dist['resources']['doctrine2']['proxies_path'], '/app/'));
-check('dist: bootstrap path nested + constant-expanded',
-    ($dist['bootstrap']['path'] ?? null) === '/app/Bootstrap.php');
+check('dist: removed legacy bootstrap config stays absent',
+    !isset($dist['bootstrap']));
 
 echo $failures === 0 ? "\nALL PASSED\n" : "\n{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

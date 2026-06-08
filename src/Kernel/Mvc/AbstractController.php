@@ -30,10 +30,8 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * view. Each helper is a thin, intention-revealing wrapper so a migrated
  * action body reads almost exactly like its ZF1 original.
  *
- * The original ZF1 controller stays in place untouched: the native kernel is
- * opt-in (VIMBADMIN_NATIVE_KERNEL), so with the flag off ZF1 still serves the
- * route byte-for-byte. This is a true strangler — the native class is added
- * ALONGSIDE the legacy one, not a rewrite of it.
+ * These controllers are the sole HTTP implementation; the legacy controller
+ * layer has been removed.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

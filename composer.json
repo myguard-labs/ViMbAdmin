@@ -24,6 +24,7 @@
         "ext-ctype": "*",
         "ext-dom": "*",
         "ext-gettext": "*",
+        "ext-gd": "*",
         "ext-iconv": "*",
         "ext-intl": "*",
         "ext-json": "*",
@@ -34,7 +35,6 @@
         "bacon/bacon-qr-code": "^3.0",
         "doctrine/orm": "^2.20",
         "robthree/twofactorauth": "^3.0",
-        "shardj/zf1-future": "^1.25",
         "smarty/smarty": "^5.0",
         "symfony/cache": "^6.4 || ^7.0 || ^8.0",
         "symfony/mailer": "^8.0"
@@ -49,15 +49,15 @@
     "autoload": {
         "psr-0": {
             "OSS_": "library/",
-            "Twitter_": "library"
+            "ViMbAdmin_": "library/"
         },
         "psr-4": {
             "ViMbAdmin\\Kernel\\": "src/Kernel/"
-        }
+        },
+        "classmap": [
+            "application/controllers/McpController.php"
+        ]
     },
-    "include-path": [
-        "library/"
-    ],
     "support": {
         "issues": "https://github.com/opensolutions/ViMbAdmin/issues",
         "wiki": "https://github.com/opensolutions/ViMbAdmin/wiki",

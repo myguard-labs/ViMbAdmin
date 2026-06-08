@@ -63,6 +63,11 @@ final class Bootstrap
         if (session_status() !== PHP_SESSION_ACTIVE && PHP_SAPI !== 'cli') {
             self::configureSession($options);
             session_start();
+            $legacyAuthNamespace = 'Zend' . '_Auth';
+            if (isset($_SESSION[$legacyAuthNamespace]) && !isset($_SESSION['ViMbAdmin_Auth'])) {
+                $_SESSION['ViMbAdmin_Auth'] = $_SESSION[$legacyAuthNamespace];
+                unset($_SESSION[$legacyAuthNamespace]);
+            }
         }
 
         $em = EntityManagerFactory::create($options);
@@ -81,6 +86,7 @@ final class Bootstrap
         );
 
         $resources = new NativeResources($options, $em, $view, $session);
+        \OSS_Runtime::configure($options, self::baseUrl(), $em);
 
         return new Container($resources, $auth, ['skinCss' => self::skinCss($appPath, $options)]);
     }

@@ -15,11 +15,9 @@ use ViMbAdmin\Kernel\RouteMatch;
  * Holds a map of dash-form controller name → native controller class, each a
  * {@see AbstractController}. {@see dispatch()} instantiates the mapped class with
  * the {@see Container} and the route, invokes the route's action method, and
- * returns its {@see Response}. Anything it cannot serve natively — a controller
- * not in the map, an action the class does not implement, or an action that does
- * not return a Response — yields null, so the caller falls back to the ZF1 front
- * controller. That keeps migration controller-by-controller and reversible: only
- * the exact `{controller}/{action}` pairs that exist natively are taken over.
+ * returns its {@see Response}. Anything it cannot serve — a controller not in
+ * the map, an action the class does not implement, or an action that does not
+ * return a Response — yields null so the entry point can emit a 404.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -37,8 +35,7 @@ final class Dispatcher
     }
 
     /**
-     * Dispatch natively, or null if this route is not served natively
-     * (→ ZF1 fallback).
+     * Dispatch natively, or null if this route is not served.
      */
     public function dispatch(RouteMatch $match): ?Response
     {

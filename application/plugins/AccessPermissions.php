@@ -57,41 +57,7 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
         // typically you might load an config file for example, but as this is a system
         // plugin, we can use the main application.ini for that.
     }
-    
-    public function mailbox_add_formPostProcess( $controller, $params )
-    {
-        $form    = $controller->getMailboxForm();
-        $mailbox = $controller->getMailbox();
-        
-        $subform = new ViMbAdmin_Form_Mailbox_AccessPermissions();
-
-        if( $controller->isEdit() )
-            $subform->setAccessPermissions( $controller->getOptions()['vimbadmin_plugins']['AccessPermissions']['type'], $mailbox );
-        else
-            $subform->setAccessPermissions( $controller->getOptions()['vimbadmin_plugins']['AccessPermissions']['type'] );
-        
-        $form->addSubForm( $subform, 'pluginsf_AccessPermissions' );
-    }
-    
-    
-    public function mailbox_add_addPostvalidate( $controller, $params )
-    {
-        $subform = $controller->getMailboxForm()->getSubform( 'pluginsf_AccessPermissions' );
-
-        if( $subform->getElement( 'plugin_accessPermissions' )->isChecked() )
-        {
-            $controller->getMailbox()->setAccessRestriction( $subform->getSelectedAccessPermissions() );
-        }
-        else
-            $controller->getMailbox()->setAccessRestriction( 'ALL' );
-    }
-
-
-    // -- Native form extension (Phase 4f) ------------------------------------
-    //
-    // The same access-restriction section the Zend hooks above build, expressed
-    // as framework-free native Fields so the native mailbox form can render,
-    // validate and persist it without Zend_Form.
+    // -- Native form extension ------------------------------------------------
 
     /**
      * The configured permission types (e.g. SMTP/IMAP/POP3/SIEVE) as a name=>label
@@ -161,4 +127,3 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
         $mailbox->setAccessRestriction( $selected === [] ? 'ALL' : implode( ',', $selected ) );
     }
 }
-

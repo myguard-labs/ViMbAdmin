@@ -42,7 +42,7 @@
  * @copyright  Copyright (c) 2007 - 2013, Open Source Solutions Limited, Dublin, Ireland
  * @license    http://www.opensolutions.ie/licenses/new-bsd New BSD License
  */
-class OSS_Filter_FileSize implements Zend_Filter_Interface
+class OSS_Filter_FileSize
 {
     const SIZE_BYTES     = "B";
     const SIZE_KILOBYTES = "KB";

@@ -19,10 +19,7 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  * `removeHelper('viewRenderer'); echo json_encode(...)`; here it simply returns a
  * JSON {@see Response}, so no view is involved.
  *
- * The legacy `application/controllers/AdditionalInfoController.php` is left in
- * place: with VIMBADMIN_NATIVE_KERNEL off, ZF1 still serves
- * `/additionalinfo/typeahead` byte-for-byte. This class is the opt-in native
- * path, added alongside it.
+ * Preserves the historical `/additionalinfo/typeahead` route and response.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

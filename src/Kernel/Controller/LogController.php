@@ -24,9 +24,7 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  * pointing at another admin, or a `did` for a domain the caller cannot manage,
  * redirects exactly as the ZF1 `loadAdmin()` / `loadDomain()` did.
  *
- * Only `listAction` is migrated; the legacy `indexAction` (which forwards to
- * `list`) stays on ZF1. The legacy controller is untouched — with
- * VIMBADMIN_NATIVE_KERNEL off, ZF1 serves the whole controller unchanged.
+ * `indexAction` and `listAction` both serve the native log listing.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

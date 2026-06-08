@@ -20,7 +20,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * Native login / logout (docs/ZF1-REMOVAL.md) — the framework-free replacement
  * for the ZF1 framework-auth login, the deepest auth coupling.
  *
- * SECURITY: this re-uses the SAME vetted primitives the ZF1 path used rather
+ * SECURITY: this re-uses the same vetted password and 2FA primitives rather
  * than re-implementing any of them — password verification
  * ({@see \OSS_Auth_Password::verify}), the brute-force gate
  * ({@see \ViMbAdmin_BruteForce}), and the two-factor gate
@@ -28,7 +28,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * `OSS_Controller_Trait_Auth::loginAction` + `AuthController::_postLoginChecks`:
  *
  *   1. already authenticated → bounce home;
- *   2. zero admins → first-run setup (still ZF1);
+ *   2. zero admins → first-run setup;
  *   3. brute-force: refuse a locked source (429 + exit), count this attempt;
  *   4. verify the credentials; a miss increments the admin's failed-login
  *      counter exactly as the ZF1 adapter did;
@@ -37,7 +37,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  *      the native `auth/totp` / `auth/totp-setup` flow, so 2FA is never bypassed;
  *   6. otherwise regenerate the session id (fixation defence), grant the identity
  *      via {@see \ViMbAdmin\Kernel\Security\Auth::establish()} (which writes the
- *      same legacy identity slot, so any remaining ZF1 page reads it too), clear
+ *      native identity slot), clear
  *      the brute-force counter and stamp last-login.
  *
  * Like the ZF1 login this form carries NO CSRF token (it is credential- and
@@ -45,16 +45,28 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * Remember-me cookies and login-history are intentionally NOT carried over in
  * this first cut (dropping remember-me is a safe reduction). Login, logout, setup,
  * the 2FA flow (totp / totp-setup), the mailbox self-service change-password and
- * the lost-password / reset-password flow (native {@see Mailer}, WALL #2 slice
- * 6b) are all native. The captcha image itself (`auth/captcha-image`) is still
- * served by ZF1 via the dispatcher fallback (it streams a generated PNG); slice
- * 6c de-Zends `OSS_Captcha_Image`.
+ * the lost-password / reset-password flow and captcha image are all native.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
  */
 final class AuthController extends AbstractController
 {
+    public function captchaImageAction(): Response
+    {
+        $path = \OSS_Captcha_Image::path((string) $this->param('id', ''));
+        if ($path === null) {
+            return Response::text('Not found', 404);
+        }
+
+        return new Response(
+            (string) file_get_contents($path),
+            200,
+            'image/png',
+            ['Cache-Control' => 'no-store, max-age=0']
+        );
+    }
+
     /**
      * GET|POST /auth/login.
      */
@@ -649,16 +661,12 @@ final class AuthController extends AbstractController
         return new \ViMbAdmin_BruteForce($this->em(), $opts);
     }
 
-    /**
-     * The login form: username + password (required) + an (ignored) rememberme
-     * checkbox. No CSRF, matching the ZF1 login form.
-     */
+    /** The login form. No CSRF, matching the historical login flow. */
     private function buildLoginForm(): Form
     {
         $form = new Form();
         $form->add(new Field('username', 'Username', 'text', [Validators::required()]))
-             ->add(new Field('password', 'Password', 'password', [Validators::required()]))
-             ->add(new Field('rememberme', 'Remember me', 'checkbox'));
+             ->add(new Field('password', 'Password', 'password', [Validators::required()]));
 
         return $form;
     }

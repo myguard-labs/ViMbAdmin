@@ -1,10 +1,12 @@
 # ZF1 removal roadmap
 
-> **Status: Phase 0 done; Phases 1–5 not started.** This is the agreed strategy
-> for incrementally removing Zend Framework 1. The app runs on ZF1 today (via
-> `shardj/zf1-future`) and that is fully supported; the only landed work so far
-> is the Phase 0 CI guard that stops the ZF1 surface from growing. The remaining
-> phases are followed opportunistically so the application never breaks.
+> **Status: completed on 2026-06-08.** `shardj/zf1-future`, the
+> `Zend_Application` web/CLI fallbacks, legacy controllers/forms/resources and
+> every runtime `Zend_*` reference have been removed. The native kernel now owns
+> all web routes, MCP, error handling, sessions, forms, Doctrine bootstrap,
+> Smarty rendering and CLI commands. The CI guard now rejects any reintroduced
+> Zend Framework symbol. The remainder of this document is retained as the
+> historical migration design and progress log.
 
 ## Principle
 

@@ -26,9 +26,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * keep validating against the legacy actions that still serve them.
  *
  * Migrated: list, add, the ajax toggles, purge, password, domains,
- * remove-domain and assign-domain. The remaining actions (two-factor/cli-*)
- * stay on ZF1 via the dispatcher fallback. The legacy controller is untouched —
- * with VIMBADMIN_NATIVE_KERNEL off ZF1 serves the whole controller unchanged.
+ * remove-domain, assign-domain and two-factor management.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

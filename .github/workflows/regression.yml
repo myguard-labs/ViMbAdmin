@@ -50,7 +50,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          extensions: ctype, dom, intl, json, mbstring
+          extensions: ctype, dom, gd, intl, json, mbstring
           tools: composer:v2
 
       - name: Install dependencies
@@ -110,6 +110,15 @@ jobs:
       - name: ViMbAdmin\Kernel\Cli\CliKernel (native CLI dispatcher)
         run: php tests/test-kernel-cli.php
 
+      - name: Native entry point and removed routes
+        run: php tests/test-native-entrypoint.php
+
+      - name: Standalone captcha lifecycle
+        run: php tests/test-captcha.php
+
+      - name: Native MCP transport
+        run: php tests/test-kernel-mcp.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #
@@ -130,7 +139,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          extensions: apcu, ctype, dom, intl, json, mbstring, pdo, pdo_mysql, simplexml, sodium
+          extensions: apcu, ctype, dom, gd, intl, json, mbstring, pdo, pdo_mysql, simplexml, sodium
           ini-values: apc.enable_cli=1
           tools: composer:v2
 
@@ -182,7 +191,7 @@ jobs:
         with:
           php-version: '8.5'
           coverage: none
-          extensions: ctype, dom, intl, json, mbstring, pdo, pdo_mysql, sodium
+          extensions: ctype, dom, gd, intl, json, mbstring, pdo, pdo_mysql, sodium
           tools: composer:v2
 
       - name: Install dependencies

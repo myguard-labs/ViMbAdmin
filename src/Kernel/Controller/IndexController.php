@@ -18,8 +18,7 @@ use ViMbAdmin\Kernel\Mvc\AbstractController;
  * 'domain')` / `redirect('auth/login')`; a redirect replaces the internal forward,
  * so `/` lands on `/domain/list`).
  *
- * The legacy `application/controllers/IndexController.php` stays in place; with
- * VIMBADMIN_NATIVE_KERNEL off, ZF1 serves the whole controller byte-for-byte.
+ * Preserves the historical landing-page routes and templates.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

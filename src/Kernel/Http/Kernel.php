@@ -23,24 +23,17 @@ use ViMbAdmin\Kernel\RouteMatch;
  * Framework-free front controller (Phase 2b skeleton + Phase 3 dispatch,
  * docs/ZF1-REMOVAL.md).
  *
- * Runs ALONGSIDE the ZF1 front controller. {@see handle()} decodes the request
- * path with the {@see Router} and returns a {@see Response} only when the route
- * is served natively — either the built-in `kernel-health` probe or a controller
- * in {@see NATIVE_CONTROLLERS} dispatched through the {@see Dispatcher}. For
- * everything else it returns null and the caller (public/index.php) falls back
- * to the ZF1 front-controller run, so old and new dispatch run side by side and
- * no URL changes behaviour until it is explicitly migrated.
+ * {@see handle()} decodes the request path with the {@see Router} and returns a
+ * {@see Response} for the built-in health probe or a controller in
+ * {@see NATIVE_CONTROLLERS}. Unknown routes return null for the entry point to
+ * emit a 404.
  *
  * `kernel-health` is a no-auth, no-database, no-view liveness probe kept from
  * the Phase 2b skeleton. Phase 3 adds the {@see Dispatcher}: real controllers
  * are ported to {@see \ViMbAdmin\Kernel\Mvc\AbstractController} subclasses under
  * `src/Kernel/Controller/`, listed in {@see NATIVE_CONTROLLERS}, and reach the
  * Doctrine EM / auth service through the {@see \ViMbAdmin\Kernel\Container}. A
- * matched controller with no native action still falls back to ZF1.
- *
- * The whole native path is opt-in at the entry point via the
- * VIMBADMIN_NATIVE_KERNEL env flag (default off = the historical ZF1 path,
- * byte for byte), so enabling it is a deliberate, reversible step.
+ * matched controller with no native action is treated as not found.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -67,6 +60,7 @@ final class Kernel
         'archive'        => ArchiveController::class,
         'queue'          => QueueController::class,
         'maintenance'    => MaintenanceController::class,
+        'mcp'            => \McpController::class,
     ];
 
     /**
@@ -103,12 +97,8 @@ final class Kernel
      * any resource (no container, no dispatcher) — purely from the route, the
      * built-in handler keys and `method_exists` on the mapped controller class.
      *
-     * The entry point uses this to route before bootstrapping: once the native
-     * bootstrap is the default, a path it cannot serve (the mailer/CLI/remote
-     * tail) must reach the ZF1 path with NOTHING started, because the native
-     * bootstrap opens the PHP session and the ZF1 session layer then fatals on
-     * the already-defined `SID`. So servability must be known before a session
-     * is opened. A controller whose specific action method does not exist is NOT
+     * The entry point uses this to reject unknown routes before bootstrapping.
+     * A controller whose specific action method does not exist is NOT
      * servable here; native controllers must therefore never punt a route they
      * own by returning null at runtime — they self-handle and redirect instead.
      */
@@ -127,14 +117,13 @@ final class Kernel
     }
 
     /**
-     * Decode the path and dispatch it natively if possible, else null
-     * (→ ZF1 fallback). Pure: it returns a Response and touches no output.
+     * Decode the path and dispatch it if possible, else null.
      */
     public function handle(string $path): ?Response
     {
         $match = $this->router->match($path);
         if ($match === null) {
-            return null; // not a native controller → ZF1
+            return null; // unknown controller
         }
 
         // Built-in, container-free handlers (e.g. the health probe) first.

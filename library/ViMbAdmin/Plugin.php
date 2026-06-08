@@ -38,10 +38,7 @@
  */
 class ViMbAdmin_Plugin
 {
-    /**
-     * The plugin configuration
-     * @var Zend_Config_Ini
-     */
+    /** @var array<string,mixed>|null */
     private $config = null;
 
     /**
@@ -87,7 +84,7 @@ class ViMbAdmin_Plugin
 
     /**
      * Set the configuration
-     * @param Zend_Config_Ini $config
+     * @param array<string,mixed> $config
      */
     public function setConfig( $config )
     {
@@ -96,31 +93,11 @@ class ViMbAdmin_Plugin
 
     /**
      * Get the configuration
-     * @return Zend_Config_Ini $config
+     * @return array<string,mixed>|null
      */
     public function getConfig()
     {
         return $this->config;
     }
-
-    /**
-     * Load the specified configuration file
-     * @return Zend_Config_Ini $config
-     */
-    protected function loadConfig( $file )
-    {
-        try
-        {
-            $this->config = new Zend_Config_Ini( $file, APPLICATION_ENV );
-        }
-        catch( Exception $e )
-        {
-            throw new ViMbAdmin_Exception( "Unable to load and parse configuratin file [{$file}]" );
-        }
-
-        // add it to the registry also as it may be useful
-        Zend_Registry::set( 'plugin_jabber_config', $this->getConfig() );
-    }
-
 
 }

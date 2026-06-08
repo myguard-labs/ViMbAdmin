@@ -50,7 +50,7 @@ final class EmFake
     public function ping(): string { return 'em-ok'; }
 }
 
-/** Fake ZF1 bootstrap: only getResource() is used by the Container. */
+/** Fake native resource holder: only getResource() is used by the Container. */
 final class BootstrapFake
 {
     public function __construct(private EmFake $em) {}
@@ -116,8 +116,8 @@ $resp2 = $dispatcher->dispatch(new RouteMatch('probe', 'show', 'ProbeController'
 $body2 = $resp2 !== null ? json_decode($resp2->body, true) : null;
 check('param() falls back to its default',    is_array($body2) && $body2['type'] === 'DEFAULT');
 
-// Fallbacks → null ----------------------------------------------------- //
-check('unknown controller → null (ZF1 fallback)',
+// Unhandled dispatches → null ----------------------------------------- //
+check('unknown controller → null',
     $dispatcher->dispatch(new RouteMatch('nope', 'show', 'NopeController', 'showAction', [])) === null);
 check('unknown action on a native controller → null',
     $dispatcher->dispatch(new RouteMatch('probe', 'gone', 'ProbeController', 'goneAction', [])) === null);

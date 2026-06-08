@@ -7,7 +7,7 @@ updates:
     open-pull-requests-limit: 10
     # Security advisories are picked up automatically; this also surfaces
     # routine version bumps for the direct deps (doctrine/orm, smarty/smarty,
-    # robthree/twofactorauth, bacon/bacon-qr-code, symfony/cache, zf1-future).
+    # robthree/twofactorauth, bacon/bacon-qr-code, symfony/cache).
     # doctrine/orm 3.x removes ORM2-only APIs this codebase still relies on
     # (EntityManager::create, set*CacheImpl, Common\ClassLoader, old XmlDriver
     # ctor). Block major bumps until the ORM2->3 migration is done; minor and

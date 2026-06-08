@@ -22,7 +22,6 @@
 ; installation as well as provide security for cookies and passwords.
 
 securitysalt                       = ""
-resources.auth.oss.rememberme.salt = ""
 defaults.mailbox.password_salt     = ""
 
 
@@ -32,7 +31,6 @@ defaults.mailbox.password_salt     = ""
 
 phpSettings.display_startup_errors = 1
 phpSettings.display_errors = 1
-resources.frontController.params.displayExceptions = 1
 
 
 
@@ -196,20 +194,6 @@ queue.runner.allowed_ips = ""
 ;
 
 mailbox_deletion_fs_enabled = false
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Export Mailbox Settings
-;
-; See: https://github.com/opensolutions/ViMbAdmin/wiki/Export-Settings
-;
-defaults.export_settings.disabled = true
-
-
-;; Export settings alowed subnets
-defaults.export_settings.allowed_subnet[] = "10."
-defaults.export_settings.allowed_subnet[] = "192.168."
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -469,51 +453,51 @@ vimbadmin_plugins.DirectoryEntry.disabled_elements.Manager                  = fa
 AdditionalInfo.mailbox.formPreBlurb  = "<p><strong>NB:</strong> Do not edit the following. It is sync'd on a nightly basis ..."
 
 ; First Name
-vimbadmin_plugins.AdditionalInfo.elements.id.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.id.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.id.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.id.options.label = "LDAP Id"
 
 ; First Name
-vimbadmin_plugins.AdditionalInfo.elements.first_name.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.first_name.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.first_name.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.first_name.options.label = "First Name"
 
 ; Last Name
-vimbadmin_plugins.AdditionalInfo.elements.second_name.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.second_name.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.second_name.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.second_name.options.label = "Last Name"
 
 ; Grade
-vimbadmin_plugins.AdditionalInfo.elements.grade.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.grade.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.grade.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.grade.options.label = "Grade"
 
 ; Grade Id
-vimbadmin_plugins.AdditionalInfo.elements.grade_id.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.grade_id.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.label = "Grade Id"
 vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.validators.digits[] = 'Digits'
 vimbadmin_plugins.AdditionalInfo.elements.grade_id.options.validators.digits[] = true
 
 ; Department
-vimbadmin_plugins.AdditionalInfo.elements.department.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.department.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.department.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.department.options.label = "Department"
 
 ; Department Id
-vimbadmin_plugins.AdditionalInfo.elements.department_id.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.department_id.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.department_id.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.department_id.options.label = "Department Id"
 vimbadmin_plugins.AdditionalInfo.elements.department_id.options.validators.digits[] = 'Digits'
 vimbadmin_plugins.AdditionalInfo.elements.department_id.options.validators.digits[] = true
 
 ; Section
-vimbadmin_plugins.AdditionalInfo.elements.section.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.section.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.section.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.section.options.label = "Section"
 
 ; Extension Number
-vimbadmin_plugins.AdditionalInfo.elements.ext_no.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.ext_no.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.label = "Extension Number"
 vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.digits[] = 'Digits'
@@ -526,13 +510,13 @@ vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.validators.length.range
 vimbadmin_plugins.AdditionalInfo.elements.ext_no.options.autocomplete = 'off'
 
 ; Direct Dial
-vimbadmin_plugins.AdditionalInfo.elements.d_dial.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.d_dial.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.d_dial.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.d_dial.options.label = "Direct Dial"
 vimbadmin_plugins.AdditionalInfo.elements.d_dial.options.autocomplete = 'off'
 
 ; Mobile
-vimbadmin_plugins.AdditionalInfo.elements.mobile.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.elements.mobile.type = "text"
 vimbadmin_plugins.AdditionalInfo.elements.mobile.options.required = false
 vimbadmin_plugins.AdditionalInfo.elements.mobile.options.label = "Mobile"
 vimbadmin_plugins.AdditionalInfo.elements.mobile.options.autocomplete = 'off'
@@ -541,12 +525,12 @@ vimbadmin_plugins.AdditionalInfo.elements.mobile.options.autocomplete = 'off'
 ;; Aliases additional information
 ;;
 ; First Name
-vimbadmin_plugins.AdditionalInfo.alias.elements.name.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.alias.elements.name.type = "text"
 vimbadmin_plugins.AdditionalInfo.alias.elements.name.options.required = false
 vimbadmin_plugins.AdditionalInfo.alias.elements.name.options.label = "Name"
 
 ; Extension Number
-vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.type = "text"
 vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.required = false
 vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.label = "Extension Number"
 vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.digits[] = 'Digits'
@@ -558,7 +542,7 @@ vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.validators.length
 vimbadmin_plugins.AdditionalInfo.alias.elements.ext_no.options.autocomplete = 'off'
 
 ; Direct Dial
-vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.type = "Zend_Form_Element_Text"
+vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.type = "text"
 vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.options.required = false
 vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.options.label = "Direct Dial"
 vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.options.autocomplete = 'off'
@@ -567,27 +551,16 @@ vimbadmin_plugins.AdditionalInfo.alias.elements.d_dial.options.autocomplete = 'o
 [production : user]
 
 includePaths.library = APPLICATION_PATH "/../library"
-includePaths.osslibrary = APPLICATION_PATH "/../vendor/opensolutions/oss-framework/src/"
 
-bootstrap.path = APPLICATION_PATH "/Bootstrap.php"
-bootstrap.class = "Bootstrap"
 appnamespace = "ViMbAdmin"
 
 temporary_directory = APPLICATION_PATH "/../var/tmp"
-
-pluginPaths.OSS_Resource = APPLICATION_PATH "/../vendor/opensolutions/oss-framework/src/OSS/Resource"
-pluginPaths.ViMbAdmin_Resource = APPLICATION_PATH "/../library/ViMbAdmin/Resource"
 
 mini_js = 1
 mini_css = 1
 
 alias_autocomplete_min_length = 2
 
-
-
-resources.frontController.controllerDirectory = APPLICATION_PATH "/controllers"
-resources.frontController.moduleDirectory = APPLICATION_PATH "/modules"
-resources.modules[] =
 
 
 ; doctrine2
@@ -617,17 +590,11 @@ resources.doctrine2cache.autoload_method    = "composer"
 
 resources.namespace.checkip = 0
 
-resources.auth.enabled = 1
-resources.auth.oss.adapter = "OSS_Auth_Doctrine2Adapter"
 resources.auth.oss.pwhash  = "bcrypt"
 resources.auth.oss.hash_cost  = 9
 resources.auth.oss.entity  = "\\Entities\\Admin"
 resources.auth.oss.disabled.lost-username = 1
 resources.auth.oss.disabled.lost-password = 0
-
-resources.auth.oss.rememberme.enabled = 1
-resources.auth.oss.rememberme.timeout = 2592000
-resources.auth.oss.rememberme.secure  = true
 
 resources.auth.oss.lost_password.use_captcha = true
 
@@ -653,7 +620,7 @@ resources.smarty.compiled  = APPLICATION_PATH "/../var/templates_c"
 resources.smarty.cache     = APPLICATION_PATH "/../var/cache"
 resources.smarty.config    = APPLICATION_PATH "/configs/smarty"
 resources.smarty.plugins[] = APPLICATION_PATH "/../library/ViMbAdmin/Smarty/functions"
-resources.smarty.plugins[] = APPLICATION_PATH "/../vendor/opensolutions/oss-framework/src/OSS/Smarty/functions"
+resources.smarty.plugins[] = APPLICATION_PATH "/../library/OSS/Smarty/functions"
 ; Smarty 5 ships its core plugins as namespaced classes via Composer; the
 ; legacy libs/plugins and libs/sysplugins directories no longer exist.
 resources.smarty.debugging = 0
@@ -668,12 +635,10 @@ mini_css = 0
 
 phpSettings.display_startup_errors = 1
 phpSettings.display_errors = 1
-resources.frontController.params.displayExceptions = 1
 
 [vagrant : production]
 
 securitysalt                       = "0e(*MnS;<VK]U9836PRUOnDJosMqCx_$m=zvX\y#/~z=~[Hb!92|EIL6>b@1)Kf:"
-resources.auth.oss.rememberme.salt = ")y$USG;@-M=kH&.ULF^Rh~oNAQ-DG,/j60v^|{gy/ieAE\23F1Em(e}6qSsb4%@h"
 defaults.mailbox.password_salt     = "QdnC~7nE$A~YQrXV\0L|#P4a{\c=@Zk/N@vgKx!|_^#odh)SjT&lkRUIJ}Z5VD8["
 
 

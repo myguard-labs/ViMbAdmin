@@ -7,6 +7,9 @@
     <field name="action" type="string" length="100" nullable="false"/>
     <field name="data" type="text" nullable="true"/>
     <field name="timestamp" type="datetime" nullable="false"/>
+    <indexes>
+      <index name="IX_Log_timestamp" columns="timestamp"/>
+    </indexes>
     <many-to-one field="Admin" target-entity="Entities\Admin" inversed-by="Logs">
       <join-columns>
         <join-column name="Admin_id" referenced-column-name="id"/>

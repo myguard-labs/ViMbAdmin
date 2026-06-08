@@ -136,8 +136,8 @@ final class Bootstrap
      * The application base URL prefix `OSS_Utils::genUrl` prepends to every
      * link/asset. Resolution order:
      *
-     *   1. Explicit config `resources.frontcontroller.baseurl` (the ZF1
-     *      `resources.frontController.baseUrl`). REQUIRED behind a reverse
+     *   1. Explicit config `resources.frontController.baseUrl` (the ZF1
+     *      front-controller key; lowercase accepted too). REQUIRED behind a reverse
      *      proxy that mounts the app under a sub-path and strips that prefix
      *      before it reaches PHP (e.g. mail.myguard.nl/vimbadmin/ →
      *      `proxy_pass http://up/;`): the backend then sees `/auth/login`, so
@@ -152,7 +152,11 @@ final class Bootstrap
      */
     public static function baseUrl(array $options = []): string
     {
-        $configured = $options['resources']['frontcontroller']['baseurl'] ?? null;
+        // Accept the ZF1 key casing (`frontController.baseUrl`, what existing
+        // deployments + application.ini.dist use) and an all-lowercase variant.
+        $fc         = $options['resources']['frontController']
+            ?? $options['resources']['frontcontroller'] ?? [];
+        $configured = $fc['baseUrl'] ?? $fc['baseurl'] ?? null;
         if (is_string($configured) && trim($configured) !== '') {
             return '/' . trim(trim($configured), '/');
         }

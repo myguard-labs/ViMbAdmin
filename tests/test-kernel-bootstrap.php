@@ -48,9 +48,9 @@ check('missing SCRIPT_NAME yields empty base', Bootstrap::baseUrl() === '');
 // --- reverse-proxy sub-path: prefix is stripped before PHP, so SCRIPT_NAME
 //     can't reveal it. Config (1) and X-Forwarded-Prefix (2) must win. --------
 $_SERVER['SCRIPT_NAME'] = '/index.php';                       // proxy stripped /vimbadmin
-$cfg = ['resources' => ['frontcontroller' => ['baseurl' => '/vimbadmin']]];
-check('config baseurl overrides stripped SCRIPT_NAME', Bootstrap::baseUrl($cfg) === '/vimbadmin');
-check('config baseurl is slash-normalised', Bootstrap::baseUrl(['resources' => ['frontcontroller' => ['baseurl' => 'vimbadmin/']]]) === '/vimbadmin');
+$cfg = ['resources' => ['frontController' => ['baseUrl' => '/vimbadmin']]];  // ZF1 key casing (what the host ini uses)
+check('config baseUrl overrides stripped SCRIPT_NAME', Bootstrap::baseUrl($cfg) === '/vimbadmin');
+check('lowercase frontcontroller.baseurl also accepted', Bootstrap::baseUrl(['resources' => ['frontcontroller' => ['baseurl' => 'vimbadmin/']]]) === '/vimbadmin');
 
 $_SERVER['HTTP_X_FORWARDED_PREFIX'] = '/vimbadmin';
 check('X-Forwarded-Prefix used when no config', Bootstrap::baseUrl() === '/vimbadmin');

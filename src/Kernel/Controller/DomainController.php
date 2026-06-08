@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
+use ViMbAdmin\Kernel\DataTable\DataTableResult;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Form\Field;
 use ViMbAdmin\Kernel\Form\Form;
@@ -120,6 +122,41 @@ final class DomainController extends AbstractController
         }
 
         return $this->view('domain/list.phtml', $vars);
+    }
+
+    /**
+     * GET /domain/list-data — DataTables server-side processing source.
+     *
+     * One page of the admin's domain list as the DataTables JSON envelope.
+     * Active when domain server-side pagination is enabled.
+     */
+    public function listDataAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return new Response('ko');
+        }
+
+        $q = DataTableQuery::fromArray($_GET);
+        // Column index -> sortable field (matches JS column order; computed
+        // "used" + controls fall back to domain).
+        $sortField = [0 => 'domain', 1 => 'mailboxes', 2 => 'aliases', 4 => 'quota', 5 => 'active', 6 => 'transport', 8 => 'created'][$q->sortColumn] ?? 'domain';
+
+        $r = $this->em()->getRepository('\\Entities\\Domain')
+            ->pagedForDomainList($admin, $q->search, $sortField, $q->sortDir, $q->start, $q->length);
+
+        foreach ($r['rows'] as &$row) {
+            if (($row['created'] ?? null) instanceof \DateTimeInterface) {
+                $row['created'] = $row['created']->format('Y-m-d H:i:s');
+            }
+        }
+        unset($row);
+
+        return new Response(
+            DataTableResult::json($q, $r['total'], $r['filtered'], $r['rows']),
+            200,
+            'application/json; charset=utf-8'
+        );
     }
 
     /**

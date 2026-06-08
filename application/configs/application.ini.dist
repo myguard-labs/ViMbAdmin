@@ -89,6 +89,10 @@ defaults.server_side.pagination.domain.enable = false
 defaults.server_side.pagination.domain.min_search_str = 3
 defaults.server_side.pagination.domain.max_result_cnt = 500
 
+;; Separate configuration for the (unbounded) log and the archive list
+defaults.server_side.pagination.log.enable = false
+defaults.server_side.pagination.archive.enable = false
+
 ; The number of rows displayed in the tables
 ; must be one of these: 10, 25, 50, 100
 defaults.table.entries = 50

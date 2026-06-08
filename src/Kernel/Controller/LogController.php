@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
+use ViMbAdmin\Kernel\DataTable\DataTableResult;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\Mvc\AbstractController;
 
@@ -47,19 +49,84 @@ final class LogController extends AbstractController
      */
     public function listAction(): Response
     {
+        $scope = $this->resolveScope();
+        if ($scope instanceof Response) {
+            return $scope;
+        }
+        [$targetAdmin, $domain] = $scope;
+
+        // When server-side pagination is on the table is filled by /log/list-data;
+        // ship the page without inlining every (unbounded) log row.
+        $cfg     = $this->container->options()['defaults']['server_side']['pagination']['log'] ?? [];
+        $logs    = empty($cfg['enable'])
+            ? $this->em()->getRepository('\\Entities\\Log')->loadForLogList($targetAdmin, $domain)
+            : [];
+
+        return $this->view('log/list.phtml', ['logs' => $logs]);
+    }
+
+    /**
+     * GET /log/list-data — DataTables server-side processing source for the log.
+     *
+     * Same scope as {@see listAction} (target admin + remembered domain) but one
+     * page only, so the unbounded log table never ships whole. Active when
+     * server-side pagination is enabled for the log.
+     */
+    public function listDataAction(): Response
+    {
+        $scope = $this->resolveScope();
+        if ($scope instanceof Response) {
+            return new Response('ko');
+        }
+        [$targetAdmin, $domain] = $scope;
+
+        $q = DataTableQuery::fromArray($_GET);
+        // Column index -> sortable field (matches the JS column order; "Log"/data
+        // column is not usefully sortable -> falls back to timestamp).
+        $sortField = [0 => 'action', 2 => 'admin', 3 => 'domain', 4 => 'timestamp'][$q->sortColumn] ?? 'timestamp';
+
+        $r = $this->em()->getRepository('\\Entities\\Log')
+            ->pagedForLogList($targetAdmin, $domain, $q->search, $sortField, $q->sortDir, $q->start, $q->length);
+
+        // Array-hydrated datetime columns come back as DateTime objects; format
+        // to the same string the inline template used before JSON-encoding.
+        foreach ($r['rows'] as &$row) {
+            if (($row['timestamp'] ?? null) instanceof \DateTimeInterface) {
+                $row['timestamp'] = $row['timestamp']->format('Y-m-d H:i:s');
+            }
+        }
+        unset($row);
+
+        return new Response(
+            DataTableResult::json($q, $r['total'], $r['filtered'], $r['rows']),
+            200,
+            'application/json; charset=utf-8'
+        );
+    }
+
+    /**
+     * Resolve the log scope shared by {@see listAction} and {@see listDataAction}:
+     * authenticate, pick the target admin (a non-super sees only their own
+     * actions; super sees all, or one admin's via `aid`) and the session-remembered
+     * domain filter (`did` sets it, `unset` clears it). Returns `[targetAdmin,
+     * domain]` or a redirect {@see Response} when authentication / authorisation
+     * fails — preserving the ZF1 `loadAdmin()` / `loadDomain()` side effects.
+     *
+     * @return array{0: \Entities\Admin|false, 1: \Entities\Domain|null}|Response
+     */
+    private function resolveScope(): array|Response
+    {
         $admin = $this->admin();
         if ($admin === null) {
             return $this->redirect('auth/login');
         }
 
-        // --- target admin (whose actions to show) ------------------------- //
         $targetAdmin = false;
         if ($aid = $this->param('aid')) {
             $targetAdmin = $this->em()->getRepository('\\Entities\\Admin')->find((int) $aid);
             if (!$targetAdmin) {
                 return $this->redirect('admin/list');
             }
-            // loadAdmin() authorises super when acting on another admin.
             if ($targetAdmin->getId() != $admin->getId() && !$admin->isSuper()) {
                 return $this->redirect('auth/login');
             }
@@ -68,7 +135,6 @@ final class LogController extends AbstractController
             $targetAdmin = $admin;
         }
 
-        // --- domain filter (remembered in the session) -------------------- //
         $session = $this->session();
         $domain  = null;
 
@@ -78,7 +144,6 @@ final class LogController extends AbstractController
             $domain = $session->domain;
         } elseif ($did = $this->param('did')) {
             $domain = $this->em()->getRepository('\\Entities\\Domain')->find((int) $did);
-            // loadDomain() authorises a non-super admin against the domain.
             if ($domain && !$admin->isSuper() && !$admin->canManageDomain($domain)) {
                 return $this->redirect('auth/login');
             }
@@ -87,10 +152,6 @@ final class LogController extends AbstractController
             }
         }
 
-        $logs = $this->em()
-            ->getRepository('\\Entities\\Log')
-            ->loadForLogList($targetAdmin, $domain);
-
-        return $this->view('log/list.phtml', ['logs' => $logs]);
+        return [$targetAdmin, $domain];
     }
 }

@@ -129,6 +129,60 @@ class Alias extends EntityRepository
     }
 
     /**
+     * One page of the alias list for DataTables server-side processing.
+     *
+     * Same scope as {@see loadForAliasList} (domain/admin filtered, mailbox
+     * aliases excluded unless $ima) but searched, ordered and LIMIT/OFFSET in
+     * SQL, returning the page plus total / filtered counts. Search binds a
+     * parameter; the sort field is whitelisted by the caller.
+     *
+     * @param \Entities\Admin       $admin
+     * @param \Entities\Domain|null $domain
+     * @return array{rows: array, total: int, filtered: int}
+     */
+    public function pagedForAliasList( $admin, $domain, bool $ima, string $search, string $sortField, string $sortDir, int $start, int $length )
+    {
+        $base = function() use ( $admin, $domain, $ima ) {
+            $qb = $this->getEntityManager()->createQueryBuilder()
+                ->from( '\\Entities\\Alias', 'a' )
+                ->join( 'a.Domain', 'd' );
+
+            if( !$admin->isSuper() )
+                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+
+            if( $domain )
+                $qb->andWhere( 'a.Domain = :domain' )->setParameter( 'domain', $domain );
+
+            if( !$ima )
+                $qb->andWhere( 'a.address != a.goto' );
+
+            return $qb;
+        };
+
+        $applySearch = function( $qb ) use ( $search ) {
+            if( $search !== '' )
+                $qb->andWhere( '( a.address LIKE :s OR a.goto LIKE :s OR d.domain LIKE :s )' )
+                   ->setParameter( 's', '%' . addcslashes( $search, '%_\\' ) . '%' );
+            return $qb;
+        };
+
+        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+
+        $sortMap = [ 'address' => 'a.address', 'domain' => 'd.domain', 'active' => 'a.active', 'goto' => 'a.goto' ];
+        $orderBy = $sortMap[ $sortField ] ?? 'a.address';
+
+        $rows = $applySearch( $base() )
+            ->select( 'a.id as id, a.address as address, a.goto as goto, a.active as active, d.domain as domain' )
+            ->orderBy( $orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC' )
+            ->setFirstResult( max( 0, $start ) )
+            ->setMaxResults( max( 1, $length ) )
+            ->getQuery()->getArrayResult();
+
+        return [ 'rows' => $rows, 'total' => $total, 'filtered' => $filtered ];
+    }
+
+    /**
      * Return filtered alias data array
      *
      * Use filter to filter aliases by address or goto or domain. If filter

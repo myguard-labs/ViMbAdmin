@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
+use ViMbAdmin\Kernel\DataTable\DataTableResult;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Form\Field;
 use ViMbAdmin\Kernel\Form\Form;
@@ -136,6 +138,39 @@ final class AliasController extends AbstractController
             'domain'  => $domain,
             'aliases' => $aliases,
         ]);
+    }
+
+    /**
+     * GET /alias/list-data — DataTables server-side processing source.
+     *
+     * One page of the scoped alias list (honouring the remembered domain and the
+     * `ima` "include mailbox aliases" toggle) as the DataTables JSON envelope.
+     * Active when server-side pagination is enabled.
+     */
+    public function listDataAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return new Response('ko');
+        }
+
+        $session = $this->session();
+        $domain  = (isset($session->domain) && $session->domain) ? $session->domain : null;
+        $ima     = (int) $this->param('ima', 0);
+
+        $q = DataTableQuery::fromArray($_GET);
+        // Column index -> sortable field (matches JS column order; goto/controls
+        // fall back to address).
+        $sortField = [0 => 'address', 1 => 'domain', 2 => 'active'][$q->sortColumn] ?? 'address';
+
+        $r = $this->em()->getRepository('\\Entities\\Alias')
+            ->pagedForAliasList($admin, $domain, (bool) $ima, $q->search, $sortField, $q->sortDir, $q->start, $q->length);
+
+        return new Response(
+            DataTableResult::json($q, $r['total'], $r['filtered'], $r['rows']),
+            200,
+            'application/json; charset=utf-8'
+        );
     }
 
     /**

@@ -48,6 +48,61 @@ class Archive extends EntityRepository
     }
 
     /**
+     * One page of the archive list for DataTables server-side processing.
+     *
+     * Same fields/scope as {@see loadForArchiveList} (incl. the live-mailbox
+     * existence CASE) but searched, ordered and LIMIT/OFFSET in SQL, returning
+     * the page plus total / filtered counts. Search binds a parameter; the sort
+     * field is whitelisted by the caller.
+     *
+     * @param \Entities\Admin       $admin
+     * @param \Entities\Domain|null $domain
+     * @return array{rows: array, total: int, filtered: int}
+     */
+    public function pagedForArchiveList( $admin, $domain, string $search, string $sortField, string $sortDir, int $start, int $length )
+    {
+        $base = function() use ( $admin, $domain ) {
+            $qb = $this->getEntityManager()->createQueryBuilder()
+                ->from( '\\Entities\\Archive', 'a' )
+                ->join( 'a.Domain', 'd' )
+                ->leftJoin( '\\Entities\\Mailbox', 'm', \Doctrine\ORM\Query\Expr\Join::WITH, 'm.username = a.username' );
+
+            if( !$admin->isSuper() )
+                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+
+            if( $domain )
+                $qb->andWhere( 'a.Domain = :domain' )->setParameter( 'domain', $domain );
+
+            return $qb;
+        };
+
+        $applySearch = function( $qb ) use ( $search ) {
+            if( $search !== '' )
+                $qb->andWhere( '( a.username LIKE :s OR d.domain LIKE :s )' )
+                   ->setParameter( 's', '%' . addcslashes( $search, '%_\\' ) . '%' );
+            return $qb;
+        };
+
+        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+
+        $sortMap = [ 'username' => 'a.username', 'status' => 'a.status', 'domain' => 'd.domain', 'archived_at' => 'a.archived_at' ];
+        $orderBy = $sortMap[ $sortField ] ?? 'a.archived_at';
+
+        $rows = $applySearch( $base() )
+            ->select( 'a.id as id, a.username as username, a.status as status, '
+                    . 'a.archived_at as archived_at, a.autoprune as autoprune, '
+                    . 'a.maildir_size as maildir_size, d.domain as domain, '
+                    . '(CASE WHEN m.id IS NULL THEN 0 ELSE 1 END) as user_exists' )
+            ->orderBy( $orderBy, $sortDir === 'ASC' ? 'ASC' : 'DESC' )
+            ->setFirstResult( max( 0, $start ) )
+            ->setMaxResults( max( 1, $length ) )
+            ->getQuery()->getArrayResult();
+
+        return [ 'rows' => $rows, 'total' => $total, 'filtered' => $filtered ];
+    }
+
+    /**
      * Archives flagged autoprune=1. With $before set, only those archived at or
      * before that cutoff (expired); without it, every autoprune-on archive.
      * Returns Archive entities (the prune needs their maildir dest + row).

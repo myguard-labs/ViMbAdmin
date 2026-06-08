@@ -35,12 +35,12 @@ $(document).ready( function() {
             $.jsonCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'aoColumns': [
-            { 'mData': 'username' },
-            { 'mData': 'name' },
+            { 'mData': 'username', 'mRender': $.fn.dataTable.render.text() },
+            { 'mData': 'name',     'mRender': $.fn.dataTable.render.text() },
             { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatUsedQuota( row.id, row.quota_bytes, row.quota ); } },
             { 'mData': 'last_login', 'bSortable': false, 'mRender': function( d ){ return formatLastLogin( d ); } },
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
-            { 'mData': 'domain' },
+            { 'mData': 'domain', 'mRender': $.fn.dataTable.render.text() },
             {/if}
             { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatActive( row.id, row.active ); } },
             { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatControlls( row.id ); } }

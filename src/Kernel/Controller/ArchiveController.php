@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
+use ViMbAdmin\Kernel\DataTable\DataTableResult;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
 use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\Mvc\AbstractController;
@@ -67,12 +69,56 @@ final class ArchiveController extends AbstractController
             }
         }
 
+        $cfg      = $this->container->options()['defaults']['server_side']['pagination']['archive'] ?? [];
+        $archives = empty($cfg['enable'])
+            ? $this->em()->getRepository('\\Entities\\Archive')->loadForArchiveList($admin, $domain)
+            : [];
+
         return $this->view('archive/list.phtml', [
-            'archives'     => $this->em()->getRepository('\\Entities\\Archive')->loadForArchiveList($admin, $domain),
+            'archives'     => $archives,
             'statuses'     => \Entities\Archive::$ARCHIVE_STATUS,
             'allowDelete'  => [\Entities\Archive::STATUS_ARCHIVED],
             'allowRestore' => [\Entities\Archive::STATUS_ARCHIVED],
         ]);
+    }
+
+    /**
+     * GET /archive/list-data — DataTables server-side processing source.
+     *
+     * One page of the scoped archive list (honouring the remembered domain) as
+     * the DataTables JSON envelope. Active when archive server-side pagination is
+     * enabled.
+     */
+    public function listDataAction(): Response
+    {
+        $admin = $this->admin();
+        if ($admin === null) {
+            return new Response('ko');
+        }
+
+        $session = $this->session();
+        $domain  = (isset($session->domain) && $session->domain) ? $session->domain : null;
+
+        $q = DataTableQuery::fromArray($_GET);
+        // Column index -> sortable field (matches JS column order; size / user-exists
+        // / autoprune / controls fall back to archived date).
+        $sortField = [0 => 'username', 1 => 'status', 2 => 'domain', 4 => 'archived_at'][$q->sortColumn] ?? 'archived_at';
+
+        $r = $this->em()->getRepository('\\Entities\\Archive')
+            ->pagedForArchiveList($admin, $domain, $q->search, $sortField, $q->sortDir, $q->start, $q->length);
+
+        foreach ($r['rows'] as &$row) {
+            if (($row['archived_at'] ?? null) instanceof \DateTimeInterface) {
+                $row['archived_at'] = $row['archived_at']->format('Y-m-d H:i');
+            }
+        }
+        unset($row);
+
+        return new Response(
+            DataTableResult::json($q, $r['total'], $r['filtered'], $r['rows']),
+            200,
+            'application/json; charset=utf-8'
+        );
     }
 
     /**

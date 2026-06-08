@@ -36,6 +36,59 @@ class Log extends EntityRepository
             $qb->andWhere( 'l.Domain = ?2' )
                 ->setParameter( 2, $domain );
 
-        return $qb->getQuery()->getArrayResult();  
+        return $qb->getQuery()->getArrayResult();
+    }
+
+    /**
+     * One page of the log list for DataTables server-side processing.
+     *
+     * The log table grows unbounded, so this never materialises the whole set:
+     * it applies the global search, ORDER BY and LIMIT/OFFSET in SQL and returns
+     * the page plus total / filtered counts. Search binds a parameter; the sort
+     * field is whitelisted by the caller. `COUNT(DISTINCT l.id)` because the
+     * non-system `d.Admins` join fans rows out.
+     *
+     * @param \Entities\Admin|null  $admin   null = system/super scope (all)
+     * @param \Entities\Domain|null $domain
+     * @return array{rows: array, total: int, filtered: int}
+     */
+    public function pagedForLogList( $admin, $domain, string $search, string $sortField, string $sortDir, int $start, int $length )
+    {
+        $base = function() use ( $admin, $domain ) {
+            $qb = $this->getEntityManager()->createQueryBuilder()
+                ->from( '\\Entities\\Log', 'l' )
+                ->leftJoin( 'l.Domain', 'd' )
+                ->join( 'l.Admin', 'a' );
+
+            if( $admin )
+                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+
+            if( $domain )
+                $qb->andWhere( 'l.Domain = :domain' )->setParameter( 'domain', $domain );
+
+            return $qb;
+        };
+
+        $applySearch = function( $qb ) use ( $search ) {
+            if( $search !== '' )
+                $qb->andWhere( '( l.action LIKE :s OR l.data LIKE :s OR a.username LIKE :s OR d.domain LIKE :s )' )
+                   ->setParameter( 's', '%' . addcslashes( $search, '%_\\' ) . '%' );
+            return $qb;
+        };
+
+        $total    = (int) $base()->select( 'COUNT(DISTINCT l.id)' )->getQuery()->getSingleScalarResult();
+        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT l.id)' )->getQuery()->getSingleScalarResult();
+
+        $sortMap = [ 'action' => 'l.action', 'admin' => 'a.username', 'domain' => 'd.domain', 'timestamp' => 'l.timestamp' ];
+        $orderBy = $sortMap[ $sortField ] ?? 'l.timestamp';
+
+        $rows = $applySearch( $base() )
+            ->select( 'l.id as id, l.action as action, l.data as data, l.timestamp as timestamp, a.username as admin, d.domain as domain' )
+            ->orderBy( $orderBy, $sortDir === 'ASC' ? 'ASC' : 'DESC' )
+            ->setFirstResult( max( 0, $start ) )
+            ->setMaxResults( max( 1, $length ) )
+            ->getQuery()->getArrayResult();
+
+        return [ 'rows' => $rows, 'total' => $total, 'filtered' => $filtered ];
     }
 }

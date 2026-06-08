@@ -6,41 +6,49 @@ $(document).ready( function()
 {
     $( "a[id|='delete-alias']" ).bind( 'click', deleteAlias );
     
+    {if isset($options.defaults.server_side.pagination.enable) && $options.defaults.server_side.pagination.enable }
+    /* Server-side processing: the full alias list is paged/sorted/searched via
+       /alias/list-data, fetching only the visible page. Text cells escaped. */
+    oDataTable = $( '#list_table' ).dataTable({
+        'bServerProcessing': true,
+        'bServerSide': true,
+        'sServerMethod': 'GET',
+        'sAjaxSource': "{genUrl controller='alias' action='list-data' ima=$ima}",
+        "sDom": "<'row'<'span6'l><'span6'f>r>t<'row'<'span6'i><'span6'p>>",
+        "sPaginationType": "bootstrap",
+        'iDisplayLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
+                ? parseInt( vm_prefs['iLength'] )
+                : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
+        'oLanguage': { 'sProcessing': 'Loading…', 'sEmptyTable': 'No aliases.' },
+        'fnDrawCallback': function() {
+            $( "a[id|='delete-alias']" ).unbind().bind( 'click', deleteAlias );
+            $( "a[id|='modal-dialog']" ).unbind().bind( 'click', tt_openModalDialog );
+            $( '.have-tooltip-long' ).tooltip("destroy").tooltip( { html: true, trigger: 'hover', placement: 'top' } );
+            $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
+            $( '.oss-dropdown' ).each( ossDropdown );
+            if( vm_prefs['iLength'] != $( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            $.jsonCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
+        },
+        'aoColumns': [
+            { 'mData': 'address', 'mRender': $.fn.dataTable.render.text() },
+            { 'mData': 'domain',  'mRender': $.fn.dataTable.render.text() },
+            { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatActive( row.id, row.active ); } },
+            { 'mData': 'goto', 'bSortable': false, 'mRender': function( d, t, row ){ return formatGoto( row.id, row.goto ); } },
+            { 'mData': null, 'bSortable': false, 'mRender': function( d, t, row ){ return formatControlls( row.id ); } }
+        ]
+    });
+    {else}
     oDataTable = $( '#list_table' ).dataTable({
         'fnDrawCallback': function() {
             if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
                 vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
-            
-            {if isset($options.defaults.server_side.pagination.enable) && $options.defaults.server_side.pagination.enable }
-                if( !$( "#list_table_filter_div" ).html() ){
-                    $( "#list_table_filter_div" ).html( '\
-                        <div id="list_table_filter" class="dataTables_filter">\
-                            <label>\
-                            Search:\
-                            <input type="text" aria-controls="list_table">\
-                            </label>\
-                        </div>');
-                    $( "#list_table_filter > label > input" ).unbind().bind( "keyup", getEntries );
-                };
-                $( "a[id|='delete-alias']" ).unbind().bind( 'click', deleteAlias );
-                $( "a[id|='modal-dialog']" ).unbind().bind( 'click', tt_openModalDialog );
-                $( '.have-tooltip-long' ).tooltip("destroy").tooltip( { html: true, trigger: 'hover', placement: 'top' } );
-                $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
-                $( '.oss-dropdown' ).each( ossDropdown );
-            {/if}
             $.jsonCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
-            
         },
         'iDisplayLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
                 ? parseInt( vm_prefs['iLength'] )
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
-        "sDom": "<'row'<'span6'l><'span6' <'#list_table_filter_div'f>>r>t<'row'<'span6'i><'span6'p>>",
-        {if isset($options.defaults.server_side.pagination.enable) && $options.defaults.server_side.pagination.enable }
-            "bFilter": false,
-            "oLanguage": {
-              "sEmptyTable": "No data available in table. Use search field to look for entries."
-            },
-        {/if}
+        "sDom": "<'row'<'span6'l><'span6'f>r>t<'row'<'span6'i><'span6'p>>",
         "sPaginationType": "bootstrap",
         'aoColumns': [
             null,
@@ -50,6 +58,7 @@ $(document).ready( function()
             { 'bSortable': false, "bSearchable": false }
         ]
     });
+    {/if}
     
 }); // document onready
 

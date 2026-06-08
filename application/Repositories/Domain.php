@@ -118,6 +118,58 @@ class Domain extends EntityRepository
     }
 
     /**
+     * One page of the domain list for DataTables server-side processing.
+     *
+     * Same fields/scope as {@see loadForDomainList} but searched, ordered and
+     * LIMIT/OFFSET in SQL. The alias/mailbox counts are denormalised columns on
+     * the domain row, so no GROUP BY / mailbox join is needed (unlike the legacy
+     * list query). `COUNT(DISTINCT d.id)` for the non-super `d.Admins` fan-out.
+     *
+     * @param \Entities\Admin $admin
+     * @return array{rows: array, total: int, filtered: int}
+     */
+    public function pagedForDomainList( $admin, string $search, string $sortField, string $sortDir, int $start, int $length )
+    {
+        $base = function() use ( $admin ) {
+            $qb = $this->getEntityManager()->createQueryBuilder()
+                ->from( '\\Entities\\Domain', 'd' );
+
+            if( !$admin->isSuper() )
+                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+
+            return $qb;
+        };
+
+        $applySearch = function( $qb ) use ( $search ) {
+            if( $search !== '' )
+                $qb->andWhere( '( d.domain LIKE :s OR d.description LIKE :s OR d.transport LIKE :s )' )
+                   ->setParameter( 's', '%' . addcslashes( $search, '%_\\' ) . '%' );
+            return $qb;
+        };
+
+        $total    = (int) $base()->select( 'COUNT(DISTINCT d.id)' )->getQuery()->getSingleScalarResult();
+        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT d.id)' )->getQuery()->getSingleScalarResult();
+
+        $sortMap = [
+            'domain' => 'd.domain', 'mailboxes' => 'd.mailbox_count', 'aliases' => 'd.alias_count',
+            'quota' => 'd.quota', 'active' => 'd.active', 'transport' => 'd.transport', 'created' => 'd.created',
+        ];
+        $orderBy = $sortMap[ $sortField ] ?? 'd.domain';
+
+        $rows = $applySearch( $base() )
+            ->select( 'd.id AS id, d.domain AS name, d.alias_count AS aliases, d.mailbox_count AS mailboxes,
+                    d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes,
+                    d.max_quota AS maxquota, d.quota AS quota, d.transport AS transport, d.backupmx AS backupmx,
+                    d.active AS active, d.created AS created' )
+            ->orderBy( $orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC' )
+            ->setFirstResult( max( 0, $start ) )
+            ->setMaxResults( max( 1, $length ) )
+            ->getQuery()->getArrayResult();
+
+        return [ 'rows' => $this->_mergeDomainUsage( $rows ), 'total' => $total, 'filtered' => $filtered ];
+    }
+
+    /**
      * Graft per-domain mailbox usage (`mailboxes_size`) onto a domain list array.
      *
      * Usage now comes from Dovecot's quota-clone `dovecot_quota` table

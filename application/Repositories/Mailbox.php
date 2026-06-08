@@ -177,46 +177,6 @@ class Mailbox extends EntityRepository
     }
 
     /**
-     * Return filtered mailboxes data array
-     *
-     * Use filter to filter mailboxes by username or name or domain. If filter
-     * starts with * it will be replaced with % to meet sql requirements. At 
-     * the end % will be added to all strings. So filter 'man' will bicome
-     * 'man%' and will look for man, manual and iffilter '*man' it wil bicome
-     * '%man%' and will look for records like human, humanity, man, manual.
-     *
-     * @param string           $filter Flter for mailboxes 
-     * @param \Entities\Admin  $admin  Admin for filtering mailboxes.
-     * @param \Entities\Domain $domain Domain for filtering mailboxes.
-     * @return array
-     */
-    public function filterForMailboxList( $filter, $admin, $domain = null )
-    {
-        $filter = str_replace ( "'" , "" , $filter );
-        
-        if( strpos( $filter, "*" ) === 0 )
-            $filter = '%' . substr( $filter, 1 );
-        
-        $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active,
-                    m.quota as quota, d.domain as domain, m.delete_pending' )
-            ->from( '\\Entities\\Mailbox', 'm' )
-            ->join( 'm.Domain', 'd' )
-            ->where( "m.delete_pending = FALSE AND ( m.username LIKE '{$filter}%' OR m.name LIKE '{$filter}%' OR d.domain LIKE '{$filter}%' )" );
-        
-        if( !$admin->isSuper() )
-            $qb->join( 'd.Admins', 'd2a' )
-                ->andWhere( 'd2a = ?1' )
-                ->setParameter( 1, $admin );
-
-        if( $domain )
-            $qb->andWhere( 'm.Domain = ?2' )
-                ->setParameter( 2, $domain );
-
-        return $this->_mergeQuotaUsage( $qb->getQuery()->getArrayResult() );
-    }
-
-    /**
      * Load mailboxes usernmae list.
      *
      * If admin is super he gets all mailboxes.

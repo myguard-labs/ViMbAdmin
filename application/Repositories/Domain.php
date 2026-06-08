@@ -186,12 +186,23 @@ class Domain extends EntityRepository
             return $rows;
 
         // SUBSTRING_INDEX is MySQL/MariaDB-specific; username is always
-        // local@domain, so take everything after the last '@'.
-        $conn = $this->getEntityManager()->getConnection();
-        $sums = $conn->fetchAllAssociative(
-            "SELECT SUBSTRING_INDEX( username, '@', -1 ) AS domain, SUM( bytes ) AS bytes
-               FROM dovecot_quota GROUP BY SUBSTRING_INDEX( username, '@', -1 )"
-        );
+        // local@domain, so take everything after the last '@'. The function in
+        // GROUP BY can't use an index -> full scan of dovecot_quota, so cache
+        // the aggregate (APCu result cache, 60s): usage is approximate and the
+        // domain list is hit repeatedly while browsing. Native query because of
+        // SUBSTRING_INDEX.
+        $rsm = new \Doctrine\ORM\Query\ResultSetMapping();
+        $rsm->addScalarResult( 'domain', 'domain', 'string' );
+        $rsm->addScalarResult( 'bytes', 'bytes', 'bigint' );
+
+        $sums = $this->getEntityManager()
+            ->createNativeQuery(
+                "SELECT SUBSTRING_INDEX( username, '@', -1 ) AS domain, SUM( bytes ) AS bytes
+                   FROM dovecot_quota GROUP BY SUBSTRING_INDEX( username, '@', -1 )",
+                $rsm
+            )
+            ->enableResultCache( 60, 'vimb_domain_quota_sums' )
+            ->getResult();
 
         $byDomain = [];
         foreach( $sums as $s )
@@ -203,43 +214,6 @@ class Domain extends EntityRepository
 
         return $rows;
     }
-
-    /**
-     * Load data for domains list
-     *
-     * Loads information for domains list.
-     *
-     * @param string          $filter
-     * @param \Entities\Admin $admin
-     * @return array
-     */
-    public function filterForDomainList( $filter, $admin )
-    {
-        $filter = str_replace ( "'" , "" , $filter );
-        
-        if( strpos( $filter, "*" ) === 0 )
-            $filter = '%' . substr( $filter, 1 );
-            
-        $dql = "SELECT d.id AS id, d.domain AS name, d.alias_count AS aliases, d.mailbox_count AS mailboxes,
-                    d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes,
-                    d.max_quota AS maxquota, d.quota AS quota, d.transport AS transport, d.backupmx AS backupmx,
-                    d.active AS active, d.created AS created
-                FROM \\Entities\\Domain d LEFT JOIN d.Mailboxes m 
-                WHERE ( d.domain LIKE '{$filter}%' OR d.transport LIKE '{$filter}%'  OR d.created LIKE '{$filter}%' )";
-        
-        if( !$admin->isSuper() )
-            $dql .= " LEFT JOIN d.Admins d2a WHERE d2a = ?1";
-
-        $dql .= " GROUP BY d.id ORDER BY d.domain ASC";
-                
-        $q = $this->getEntityManager()->createQuery( $dql );
-
-        if( !$admin->isSuper() )
-            $q->setParameter( 1, $admin );
-
-        return $this->_mergeDomainUsage( $q->getArrayResult() );
-    }
-
 
     /**
      * Convenience function to purge all associations of a domain and the domain

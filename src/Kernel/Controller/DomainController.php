@@ -44,38 +44,6 @@ final class DomainController extends AbstractController
 {
 
     /**
-     * GET /domain/list-search?search=… — server-side pagination JSON (only when
-     * `defaults.server_side.pagination.domain.enable`). Returns the matching
-     * domains as JSON, or the bare string `ko` (disabled / search too short /
-     * over the result cap) — the body the DataTables JS expects.
-     */
-    public function listSearchAction(): Response
-    {
-        $admin = $this->admin();
-        if ($admin === null) {
-            return new Response('ko');
-        }
-
-        $cfg = $this->container->options()['defaults']['server_side']['pagination']['domain'] ?? [];
-        if (empty($cfg['enable'])) {
-            return new Response('ko');
-        }
-
-        $search = (string) ($_GET['search'] ?? $_POST['search'] ?? '');
-        if ($search === '' || strlen($search) < (int) ($cfg['min_search_str'] ?? 3)) {
-            return new Response('ko');
-        }
-
-        $rows   = $this->em()->getRepository('\\Entities\\Domain')->filterForDomainList($search, $admin);
-        $maxCnt = $cfg['max_result_cnt'] ?? false;
-        if (!$rows || ($maxCnt && $maxCnt < count($rows))) {
-            return new Response('ko');
-        }
-
-        return new Response((string) json_encode($rows));
-    }
-
-    /**
      * GET /domain and /domain/index — the auth-gated landing forwards to the list
      * (the native equivalent of the ZF1 indexAction `_forward('list')`).
      */

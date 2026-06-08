@@ -183,45 +183,42 @@ class Alias extends EntityRepository
     }
 
     /**
-     * Return filtered alias data array
+     * Filtered alias data array (used by the MailboxAutomaticAliases plugin to
+     * look an alias up by name). `*` prefix → contains-match, else prefix-match.
      *
-     * Use filter to filter aliases by address or goto or domain. If filter
-     * starts with * it will be replaced with % to meet sql requirements. At
-     * the end % will be added to all strings. So filter 'man' will bicome
-     * 'man%' and will look for man, manual and iffilter '*man' it wil bicome
-     * '%man%' and will look for records like human, humanity, man, manual.
+     * NB: the filter is bound as a parameter (the old version interpolated it
+     * straight into the DQL — a DQL-injection footgun). The list pages no longer
+     * use this; they use {@see pagedForAliasList} (DataTables server-side).
      *
-     * @param string           $filter Flter for mailboxes
-     * @param \Entities\Admin  $admin  Admin for filtering mailboxes.
-     * @param \Entities\Domain $domain Domain for filtering mailboxes.
-     * @param bool             $ima    Include mailbox aliases flag.
+     * @param string                $filter
+     * @param \Entities\Admin       $admin
+     * @param \Entities\Domain|int  $domain
      * @return array
      */
-    public function filterForAliasList( $filter, $admin, $domain = null,  $ima = false  )
+    public function filterForAliasList( $filter, $admin, $domain = null, $ima = false )
     {
-        $filter = str_replace ( "'" , "" , $filter );
-
-        if( strpos( $filter, "*" ) === 0 )
-            $filter = '%' . substr( $filter, 1 );
+        $filter  = str_replace( "'", "", (string) $filter );
+        $pattern = ( strpos( $filter, '*' ) === 0 )
+            ? '%' . addcslashes( substr( $filter, 1 ), '%_\\' ) . '%'
+            : addcslashes( $filter, '%_\\' ) . '%';
 
         $qb = $this->getEntityManager()->createQueryBuilder()
             ->select( 'a.id as id , a.address as address, a.goto as goto, a.active as active, d.domain as domain' )
             ->from( '\\Entities\\Alias', 'a' )
             ->join( 'a.Domain', 'd' )
-            ->where( "( a.goto LIKE '{$filter}%' OR a.address LIKE '{$filter}%' OR d.domain LIKE '{$filter}%')" );
+            ->where( '( a.goto LIKE :s OR a.address LIKE :s OR d.domain LIKE :s )' )
+            ->setParameter( 's', $pattern );
 
         if( !$admin->isSuper() )
-            $qb->join( 'd.Admins', 'd2a' )
-                ->andWhere( 'd2a = ?1' )
-                ->setParameter( 1, $admin );
+            $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
 
         if( $domain )
-            $qb->andWhere( 'a.Domain = ?2' )
-                ->setParameter( 2, $domain );
+            $qb->andWhere( 'a.Domain = :domain' )->setParameter( 'domain', $domain );
 
         if( !$ima )
-            $qb->andWhere( "a.address != a.goto" );
+            $qb->andWhere( 'a.address != a.goto' );
 
         return $qb->getQuery()->getArrayResult();
     }
+
 }

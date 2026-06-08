@@ -33,15 +33,20 @@ class MailboxPreference extends EntityRepository
         $qb = $this->getEntityManager()->createQueryBuilder()
                 ->select( 'mp.value' )
                 ->from( '\\Entities\\MailboxPreference', 'mp' )
-                ->where( 'mp.attribute = ?1' )
-                ->setParameter( 1, $attribute );
-                
+                ->where( 'mp.attribute = :attr' )
+                ->setParameter( 'attr', $attribute );
+
+        // Non-super admins are scoped to their own domains. NB: use andWhere +
+        // a distinct named param — the old code called where() again (which
+        // REPLACES the attribute filter) and reused ?1, so it returned every
+        // attribute's values across all domains. Join matches the other repos
+        // (d.Admins / d2a), not the stale d.DomainToAdmin / d2a.Admin.
         if( !$admin->isSuper() )
-        	$qb->join( 'mp.Mailbox', 'm' )
-        	    ->join( 'm.Domain', 'd' )
-	            ->join( 'd.DomainToAdmin', 'd2a' )
-	            ->where( 'd2a.Admin = ?1' )
-	            ->setParameter( 1, $admin );
+            $qb->join( 'mp.Mailbox', 'm' )
+                ->join( 'm.Domain', 'd' )
+                ->join( 'd.Admins', 'd2a' )
+                ->andWhere( 'd2a = :admin' )
+                ->setParameter( 'admin', $admin );
                 
         $data = $qb->getQuery()
             ->useResultCache( true, 3600, self::VALUES_CACHE_KEY . '_' . $admin->getId() . '_' . $attribute )

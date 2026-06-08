@@ -116,13 +116,18 @@ abstract class AbstractController
 
     /**
      * A 302 redirect to an application path (the native equivalent of the ZF1
-     * `_redirect()` / `redirectAndEnsureDie()`). The path is taken relative to
-     * the site root, matching ZF1's empty base URL in the container deployment.
+     * `_redirect()` / `redirectAndEnsureDie()`). The path is application-relative
+     * (e.g. `auth/login`); it is prefixed with the front-controller base URL so
+     * the redirect honours a reverse-proxy sub-path mount. Without that prefix a
+     * `/vimbadmin/` deployment redirects to the proxy root (`/auth/login`) and
+     * lands on whatever else lives there (here: Roundcube).
      */
     protected function redirect(string $path): Response
     {
+        $base = rtrim((string) \OSS_Runtime::baseUrl(), '/');
+
         return new Response('', 302, 'text/html; charset=utf-8', [
-            'Location' => '/' . ltrim($path, '/'),
+            'Location' => $base . '/' . ltrim($path, '/'),
         ]);
     }
 

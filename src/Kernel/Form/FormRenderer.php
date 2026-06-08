@@ -30,7 +30,7 @@ final class FormRenderer
      */
     public function render(Form $form, string $action, string $submitLabel = 'Save'): string
     {
-        $html  = '<form method="post" action="' . $this->esc($action) . '" class="form-horizontal">' . "\n";
+        $html  = '<form method="post" action="' . $this->esc($this->url($action)) . '" class="form-horizontal">' . "\n";
         $html .= $this->formError($form);
 
         foreach ($form->fields() as $field) {
@@ -125,6 +125,38 @@ final class FormRenderer
 
         return '<input type="' . $type . '" name="' . $name . '" id="' . $name
             . '" value="' . $this->esc($value) . '"' . $readonly . ' />';
+    }
+
+    /**
+     * Prefix a root-relative form action (`/auth/login`) with the
+     * front-controller base URL so the POST honours a reverse-proxy sub-path
+     * mount (without it a `/vimbadmin/` deployment posts to the proxy root).
+     * Absolute URLs (scheme or `//host`) and already-prefixed paths pass
+     * through untouched.
+     */
+    private function url(string $action): string
+    {
+        if ($action === '' || preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $action)) {
+            return $action;
+        }
+
+        // OSS_Runtime carries the front-controller base URL once the app has
+        // booted; absent (pure unit test) there is no prefix to apply.
+        if (!class_exists('OSS_Runtime', false)) {
+            return $action;
+        }
+
+        $base = rtrim((string) \OSS_Runtime::baseUrl(), '/');
+        if ($base === '') {
+            return $action;
+        }
+
+        $path = '/' . ltrim($action, '/');
+        if ($path === $base || str_starts_with($path, $base . '/')) {
+            return $path; // already prefixed
+        }
+
+        return $base . $path;
     }
 
     private function esc(string $value): string

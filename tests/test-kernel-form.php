@@ -130,6 +130,14 @@ check('render: checkbox checked from submit',  str_contains($out, 'type="checkbo
 check('render: hidden csrf token present',     str_contains($out, 'name="csrf"') && str_contains($out, 'value="' . $rtok . '"'));
 check('render: submit button label',          str_contains($out, '>Add</button>'));
 
+// --- form action honours the front-controller base URL (sub-path mount) -----
+require_once __DIR__ . '/../library/OSS/Runtime.php';
+\OSS_Runtime::configure([], '/vimbadmin', new stdClass());
+$out2 = $renderer->render($rform, '/admin/add', 'Add');
+check('render: action prefixed with base URL',  str_contains($out2, 'action="/vimbadmin/admin/add"'));
+check('render: already-prefixed action not doubled', !str_contains($renderer->render($rform, '/vimbadmin/admin/add', 'Add'), '/vimbadmin/vimbadmin/'));
+\OSS_Runtime::configure([], '', new stdClass()); // reset for any later assertions
+
 // escaping
 $xform = new Form();
 $xform->add(new Field('q', 'Q', 'text'));

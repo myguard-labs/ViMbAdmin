@@ -13,6 +13,9 @@
     </field>
     <field name="created" type="datetime" nullable="false"/>
     <field name="modified" type="datetime" nullable="true"/>
+    <indexes>
+      <index name="IX_Alias_active" columns="active"/>
+    </indexes>
     <unique-constraints>
       <unique-constraint name="IX_Address_1" columns="address"/>
     </unique-constraints>

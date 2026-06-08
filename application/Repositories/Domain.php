@@ -147,8 +147,13 @@ class Domain extends EntityRepository
             return $qb;
         };
 
-        $total    = (int) $base()->select( 'COUNT(DISTINCT d.id)' )->getQuery()->getSingleScalarResult();
-        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT d.id)' )->getQuery()->getSingleScalarResult();
+        // Unfiltered total stable per admin -> cache briefly.
+        $scopeKey = 'vimb_total_dom_' . $admin->getId();
+        $total    = (int) $base()->select( 'COUNT(DISTINCT d.id)' )->getQuery()
+            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $filtered = $search === ''
+            ? $total
+            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT d.id)' )->getQuery()->getSingleScalarResult();
 
         $sortMap = [
             'domain' => 'd.domain', 'mailboxes' => 'd.mailbox_count', 'aliases' => 'd.alias_count',

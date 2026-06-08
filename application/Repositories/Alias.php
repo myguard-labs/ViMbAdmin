@@ -166,8 +166,13 @@ class Alias extends EntityRepository
             return $qb;
         };
 
-        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
-        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+        // Unfiltered total stable per scope (ima changes it) -> cache briefly.
+        $scopeKey = 'vimb_total_al_' . $admin->getId() . '_' . ( $domain ? $domain->getId() : 0 ) . '_' . (int) $ima;
+        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()
+            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $filtered = $search === ''
+            ? $total
+            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
 
         $sortMap = [ 'address' => 'a.address', 'domain' => 'd.domain', 'active' => 'a.active', 'goto' => 'a.goto' ];
         $orderBy = $sortMap[ $sortField ] ?? 'a.address';

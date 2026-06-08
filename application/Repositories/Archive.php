@@ -83,8 +83,13 @@ class Archive extends EntityRepository
             return $qb;
         };
 
-        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
-        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+        // Unfiltered total stable per scope -> cache briefly.
+        $scopeKey = 'vimb_total_arc_' . $admin->getId() . '_' . ( $domain ? $domain->getId() : 0 );
+        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()
+            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $filtered = $search === ''
+            ? $total
+            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
 
         $sortMap = [ 'username' => 'a.username', 'status' => 'a.status', 'domain' => 'd.domain', 'archived_at' => 'a.archived_at' ];
         $orderBy = $sortMap[ $sortField ] ?? 'a.archived_at';

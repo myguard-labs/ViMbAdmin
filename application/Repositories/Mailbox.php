@@ -103,8 +103,14 @@ class Mailbox extends EntityRepository
             return $qb;
         };
 
-        $total    = (int) $base()->select( 'COUNT(DISTINCT m.id)' )->getQuery()->getSingleScalarResult();
-        $filtered = (int) $applySearch( $base() )->select( 'COUNT(DISTINCT m.id)' )->getQuery()->getSingleScalarResult();
+        // Unfiltered total is stable per scope and hit on every paging draw -> cache it briefly.
+        $scopeKey = 'vimb_total_mb_' . $admin->getId() . '_' . ( $domain ? $domain->getId() : 0 );
+        $total    = (int) $base()->select( 'COUNT(DISTINCT m.id)' )->getQuery()
+            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        // No search -> filtered == total; skip the second COUNT entirely.
+        $filtered = $search === ''
+            ? $total
+            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT m.id)' )->getQuery()->getSingleScalarResult();
 
         $sortMap = [ 'username' => 'm.username', 'name' => 'm.name', 'quota' => 'm.quota', 'domain' => 'd.domain', 'active' => 'm.active' ];
         $orderBy = $sortMap[ $sortField ] ?? 'm.username';

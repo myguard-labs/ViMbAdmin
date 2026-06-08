@@ -330,14 +330,22 @@ final class MaintenanceController extends AbstractController
 
         $em     = $this->em();
         $queued = 0;
+
+        // Which of these orphans already have an open backup-orphan task — one
+        // query for the whole set, not a COUNT per orphan (was N+1).
+        $alreadyQueued = [];
+        foreach ($em->createQuery(
+            'SELECT DISTINCT t.username AS username FROM \Entities\MailboxTask t'
+            . ' WHERE t.type = :t AND t.status IN (:open) AND t.username IN (:users)')
+            ->setParameter('t', \Entities\MailboxTask::TYPE_BACKUP_ORPHAN)
+            ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
+            ->setParameter('users', $orphans)
+            ->getArrayResult() as $r) {
+            $alreadyQueued[$r['username']] = true;
+        }
+
         foreach ($orphans as $user) {
-            $open = (int) $em->createQuery(
-                'SELECT COUNT(t.id) FROM \Entities\MailboxTask t WHERE t.username = :u AND t.type = :t AND t.status IN (:open)')
-                ->setParameter('u', $user)
-                ->setParameter('t', \Entities\MailboxTask::TYPE_BACKUP_ORPHAN)
-                ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
-                ->getSingleScalarResult();
-            if ($open > 0) {
+            if (isset($alreadyQueued[$user])) {
                 continue;
             }
 

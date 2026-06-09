@@ -265,22 +265,30 @@ immediately, on a trusted network.
 
 ### The panel upgrades its own schema
 
-**ViMbAdmin migrates its database itself — you usually do nothing.** It tracks a
-`DBVERSION` and applies any pending DDL through the native
-`maintenance.cli-schema-update` command (`ViMbAdmin_Schema::migrate()`, the same
-code the in-panel **Maintenance → schema update** button runs). It bundles the
-Doctrine `SchemaTool` diff with the extra FK/collation/index steps the
-schema-tool can't express, and is idempotent:
+**ViMbAdmin knows how to migrate its own database** — one self-contained command,
+no Doctrine Migrations files to manage. It tracks a `DBVERSION` and applies any
+pending DDL through the native `maintenance.cli-schema-update` command
+(`ViMbAdmin_Schema::migrate()`, the same code the in-panel **Maintenance →
+schema update** button runs). It bundles the Doctrine `SchemaTool` diff with the
+extra FK/collation/index steps the schema-tool can't express, and is idempotent:
 
 ```sh
 ./bin/vimbtool.php -a maintenance.cli-schema-update            # apply
 ./bin/vimbtool.php -a maintenance.cli-schema-update --verbose  # apply + print SQL + DB version
 ```
 
-The **Docker image runs this automatically at every container start** (see
-`bootstrap.sh`), so pulling a newer image and `docker compose up -d` brings the
-schema forward with no manual step. From source, run the command above (or click
-the Maintenance button) after `git pull`. Always back up first — it issues DDL.
+**It does not run on its own** — nothing triggers it on login or per request.
+You invoke it once after an upgrade. Where it's invoked *for* you depends on the
+deployment:
+
+- **Docker** — the image runs it automatically at **every container start** (see
+  `bootstrap.sh`), so pulling a newer image and `docker compose up -d` brings the
+  schema forward with no manual step.
+- **From source / bare metal** — run the command above (or click **Maintenance →
+  schema update**) yourself after each `git pull`. Wire it into your own
+  deploy/cron if you want it automatic.
+
+Always back up first — it issues DDL.
 
 ### Doing it by hand instead
 

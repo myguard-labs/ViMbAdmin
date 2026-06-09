@@ -54,14 +54,28 @@
         }
     }
 
-    foreach (array_unique($files) as $file) {
-        if (is_string($file) && is_file($file)) {
-            try {
-                @opcache_compile_file($file);
-            } catch (\Throwable $e) {
-                // A file that cannot be preloaded (missing optional dependency,
-                // conditional class def, …) is skipped — never fatal.
+    // opcache emits an E_WARNING ("Can't preload unlinked class …") for every
+    // file whose parent/interface/trait is not yet loaded at preload time, or
+    // for dev-only classes (PHPUnit constraints, DI compiler passes) that will
+    // never be reachable in production. These are benign — preload is
+    // best-effort and the worker compiles such a file lazily on first use — but
+    // they flood the FPM log on every master start. The warning is raised by
+    // the engine, not by the function call, so a leading `@` on
+    // opcache_compile_file does not suppress it; lower error_reporting around
+    // the whole loop instead and restore it after.
+    $prevReporting = error_reporting(0);
+    try {
+        foreach (array_unique($files) as $file) {
+            if (is_string($file) && is_file($file)) {
+                try {
+                    @opcache_compile_file($file);
+                } catch (\Throwable $e) {
+                    // A file that cannot be preloaded (missing optional dependency,
+                    // conditional class def, …) is skipped — never fatal.
+                }
             }
         }
+    } finally {
+        error_reporting($prevReporting);
     }
 })();

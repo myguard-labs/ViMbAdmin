@@ -74,20 +74,24 @@ defaults.quota.multiplier = 'MB'
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Use server side filtering to reduce pagination time on client side
-;; Defaults to off / false
-defaults.server_side.pagination.enable = false
+;; Use server side filtering to reduce pagination time on client side.
+;; Defaults to ON: the browser fetches one page at a time instead of the whole
+;; table. Strictly better for large installs and harmless for small ones — the
+;; log table in particular is unbounded, so client-side paging there loads the
+;; entire history into the page. Set any of these false to revert a given list
+;; to client-side paging.
+defaults.server_side.pagination.enable = true
 defaults.server_side.pagination.min_search_str = 3
 defaults.server_side.pagination.max_result_cnt = 500
 
 ;; Separate configuration for domain list
-defaults.server_side.pagination.domain.enable = false
+defaults.server_side.pagination.domain.enable = true
 defaults.server_side.pagination.domain.min_search_str = 3
 defaults.server_side.pagination.domain.max_result_cnt = 500
 
 ;; Separate configuration for the (unbounded) log and the archive list
-defaults.server_side.pagination.log.enable = false
-defaults.server_side.pagination.archive.enable = false
+defaults.server_side.pagination.log.enable = true
+defaults.server_side.pagination.archive.enable = true
 
 ; The number of rows displayed in the tables
 ; must be one of these: 10, 25, 50, 100
@@ -327,11 +331,13 @@ server.email.address = "support@example.com"
 ;;
 ;; Skinning
 ;;
-;; You can skin ViMbAdmin pages if you wish.
+;; You can skin ViMbAdmin pages if you wish. The fork ships a "dark" skin and
+;; uses it by default; set "myskin" (or your own under views/_skins/<name>/) to
+;; override, or comment this out for the stock light theme.
 ;;
 ;; See: https://github.com/opensolutions/ViMbAdmin/wiki/Skinning
 
-; resources.smarty.skin      = "myskin"
+resources.smarty.skin      = "dark"
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

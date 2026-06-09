@@ -98,6 +98,14 @@ sp.disable_function.function("fpassthru").drop();
 sp.disable_function.function("pcntl_exec").drop();
 sp.disable_function.function("pcntl_fork").drop();
 sp.disable_function.function("dl").drop();
+# More process-control primitives the tree never calls (the only pcntl_* the
+# vendored symfony console touches are pcntl_signal/pcntl_alarm, left enabled).
+sp.disable_function.function("proc_nice").drop();
+sp.disable_function.function("proc_terminate").drop();
+sp.disable_function.function("proc_get_status").drop();
+sp.disable_function.function("pcntl_wait").drop();
+sp.disable_function.function("pcntl_waitpid").drop();
+sp.disable_function.function("pcntl_setpriority").drop();
 
 # Belt-and-braces: refuse exec args containing shell metacharacters even
 # from the allow-listed files (every legit call is escapeshellarg'd, so a
@@ -189,6 +197,16 @@ sp.disable_function.function("php_uname").drop();
 sp.disable_function.function("show_source").drop();
 sp.disable_function.function("highlight_file").drop();
 sp.disable_function.function("posix_getpwuid").drop();
+# Host/environment fingerprinting the app never needs.
+sp.disable_function.function("get_current_user").drop();
+sp.disable_function.function("getmyuid").drop();
+sp.disable_function.function("getmygid").drop();
+sp.disable_function.function("apache_setenv").drop();
+sp.disable_function.function("apache_note").drop();
+sp.disable_function.function("net_get_interfaces").drop();
+sp.disable_function.function("sys_getloadavg").drop();
+sp.disable_function.function("disk_free_space").drop();
+sp.disable_function.function("diskfreespace").drop();
 
 
 # ---------------------------------------------------------------------
@@ -201,6 +219,54 @@ sp.disable_function.function("posix_setgid").drop();
 sp.disable_function.function("posix_setpgid").drop();
 sp.disable_function.function("posix_setsid").drop();
 sp.disable_function.function("posix_setuid").drop();
+sp.disable_function.function("posix_getppid").drop();
+sp.disable_function.function("posix_ttyname").drop();
+sp.disable_function.function("posix_mkfifo").drop();
+# posix_getpwnam: user-DB lookup by name (recon); posix_getpwuid already dropped.
+sp.disable_function.function("posix_getpwnam").drop();
+
+
+# ---------------------------------------------------------------------
+# 12b. Remote-transport / second-stage fetch primitives
+# ---------------------------------------------------------------------
+# The app talks to MySQL (PDO) and to Dovecot over the doveadm HTTP API via
+# curl; it never opens IMAP/FTP/SSH2 sockets or a raw pfsockopen. A webshell's
+# favourite egress + RCE channels — drop them all (none used in app or vendor).
+# (symfony/mailer's stream_socket_client for SMTP IS used, so that stays.)
+sp.disable_function.function("imap_open").drop();
+sp.disable_function.function("ftp_connect").drop();
+sp.disable_function.function("ssh2_connect").drop();
+sp.disable_function.function("ssh2_exec").drop();
+sp.disable_function.function("ssh2_shell").drop();
+sp.disable_function.function("expect_expectl").drop();
+sp.disable_function.function("expect_popen").drop();
+sp.disable_function.function("pfsockopen").drop();
+
+
+# ---------------------------------------------------------------------
+# 12c. Filesystem ownership mutation
+# ---------------------------------------------------------------------
+# Runs unprivileged + read-only rootfs: it never re-owns files. chmod is
+# already value-guarded above; ownership calls are dropped outright (unused).
+sp.disable_function.function("chown").drop();
+sp.disable_function.function("chgrp").drop();
+sp.disable_function.function("lchown").drop();
+sp.disable_function.function("lchgrp").drop();
+
+
+# ---------------------------------------------------------------------
+# 12d. Runtime code redefinition / misc dangerous primitives
+# ---------------------------------------------------------------------
+# runkit/uopz rewrite functions at runtime (a webshell's way around any other
+# guard); extract() mass-injects variables from attacker arrays; virtual() runs
+# an Apache subrequest; mb_send_mail / dba_open are unused mail/DB-file vectors.
+# None appear anywhere in the audited tree or vendor.
+sp.disable_function.function("runkit_function_redefine").drop();
+sp.disable_function.function("uopz_redefine").drop();
+sp.disable_function.function("extract").drop();
+sp.disable_function.function("virtual").drop();
+sp.disable_function.function("mb_send_mail").drop();
+sp.disable_function.function("dba_open").drop();
 
 
 # ---------------------------------------------------------------------

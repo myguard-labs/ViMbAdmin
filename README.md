@@ -377,6 +377,61 @@ In order, because the order matters:
 
 Every action is logged, validated, and CSRF-protected.
 
+## CLI reference (`bin/vimbtool.php`)
+
+All maintenance/automation tasks run through one entry point:
+
+```bash
+./bin/vimbtool.php -a <controller.action> [options]
+# in the Docker image:
+docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a <controller.action> [options]
+```
+
+`bin/vimbtool.php -a help` (or `--help`) prints the action list; `--copyright`
+prints the banner. The CLI is framework-free (ZF1-removed) and never starts a
+session or authenticates — every command works against the Doctrine EM directly.
+
+**Global flags** (accepted by every action; honoured where meaningful):
+
+| Flag | Meaning |
+|---|---|
+| `-v`, `--verbose` | extra output (e.g. schema-update prints the SQL + DB version) |
+| `-d`, `--debug` | debug output |
+| `-h`, `--help` | usage + action list |
+| `-c`, `--copyright` | print the banner and exit |
+
+**Actions:**
+
+| Action | What it does | Options |
+|---|---|---|
+| `queue.cli-run` | Drain the **mailbox-task queue** — claims up to `queue.runner.max_per_run` PENDING tasks (repair / optimize / archive / delete) and runs them against Dovecot over the doveadm HTTP API. The periodic runner (the image fires it on start + every 5 min; also triggered on login / Maintenance / MCP). Concurrency capped by the `queue.runner.max_concurrent` DB lease. | — |
+| `mailbox.cli-delete-pending` | Purge mailboxes flagged **delete-pending**: removes the on-disk maildir + homedir (via `binary.path.rm_rf`, each path `escapeshellarg`'d) then the DB row. Run from cron after a deletion grace period. | — |
+| `maintenance.cli-schema-update` | Apply pending **Doctrine schema migrations** (DDL). Same code as the in-panel **Maintenance → Update schema** button. Run on deploy/upgrade; the Docker image runs it automatically on every start. | `--verbose` → also print the SQL + resulting DB version |
+| `maintenance.cli-precompile-templates` | Compile every **Smarty template** ahead of time into the persistent `var/templates_c`, so the first web request pays no compile cost. Idempotent; the image runs it on start. | — |
+| `admin.cli-reset-totp` | **Disable two-factor** for a locked-out admin (recovery path). | `--username=<email>` (one admin) **or** `--all` (every admin) |
+| `mcp.cli-token-generate` | Mint a new **MCP API token**. The raw token is printed **once** (only its SHA-256 is stored). | `--name=` (required, must be free/revoked), `--scope=` (default `read`), `--ip=` (allow-list), `--domains=` (scope to domains), `--days=` (validity; default no expiry) |
+| `mcp.cli-token-list` | List the MCP API tokens (name, scope, ip, domains, expiry, revoked). | — |
+| `mcp.cli-token-revoke` | Revoke an MCP API token (sets the revoked flag; the row is kept for audit). | `--id=<id>` **or** `--name=<name>` |
+
+Examples:
+
+```bash
+# drain the queue (the every-5-min job; safe to run by hand)
+./bin/vimbtool.php -a queue.cli-run
+
+# apply schema changes after an upgrade, showing the SQL
+./bin/vimbtool.php -a maintenance.cli-schema-update --verbose
+
+# rescue an admin who lost their 2FA device
+./bin/vimbtool.php -a admin.cli-reset-totp --username=admin@example.com
+
+# issue a read-only MCP token, locked to one IP + domain, valid 30 days
+./bin/vimbtool.php -a mcp.cli-token-generate --name=monitoring \
+    --scope=read --ip=10.0.0.5 --domains=example.com --days=30
+./bin/vimbtool.php -a mcp.cli-token-list
+./bin/vimbtool.php -a mcp.cli-token-revoke --name=monitoring
+```
+
 ## Two-factor authentication
 
 Opt-in, per admin. Each admin enables it on themselves at **`/admin/two-factor`**:

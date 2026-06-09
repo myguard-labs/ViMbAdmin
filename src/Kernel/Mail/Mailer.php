@@ -48,9 +48,15 @@ final class Mailer
     /**
      * @param array<string,mixed> $transportOptions the `resources.mail.transport`
      *                            sub-array of the application options
+     * @param bool $demo when true the mailer is a no-op: send() silently
+     *                   succeeds (returns OK) without ever opening a transport.
+     *                   Used by the public demo so visitor actions that would
+     *                   email (welcome, lost-password, …) cannot send real mail.
      */
-    public function __construct(private readonly array $transportOptions)
-    {
+    public function __construct(
+        private readonly array $transportOptions,
+        private readonly bool $demo = false
+    ) {
     }
 
     /**
@@ -70,6 +76,13 @@ final class Mailer
      */
     public function send(Email $message): void
     {
+        // Demo mode: swallow outgoing mail. No transport is opened; the call
+        // returns OK so callers (and their flash "email sent" messages) behave
+        // exactly as if delivery succeeded, but nothing leaves the box.
+        if ($this->demo) {
+            return;
+        }
+
         (new SymfonyMailer($this->transport()))->send($message);
     }
 

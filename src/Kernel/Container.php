@@ -50,7 +50,8 @@ final class Container
     public function mailer(): Mailer
     {
         return $this->mailer ??= new Mailer(
-            $this->options()['resources']['mail']['transport'] ?? []
+            $this->options()['resources']['mail']['transport'] ?? [],
+            \ViMbAdmin_Demo::enabled($this->options())
         );
     }
 

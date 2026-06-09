@@ -113,7 +113,9 @@ final class AuthController extends AbstractController
         }
 
         return $this->view('auth/native-login.phtml', [
-            'formHtml' => (new FormRenderer())->render($form, '/auth/login', 'Log In'),
+            'formHtml'     => (new FormRenderer())->render($form, '/auth/login', 'Log In'),
+            'demoAccount'  => \ViMbAdmin_Demo::account($options),
+            'demoPassword' => \ViMbAdmin_Demo::password($options),
         ]);
     }
 

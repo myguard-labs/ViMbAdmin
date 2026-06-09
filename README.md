@@ -1,9 +1,23 @@
 # ViMbAdmin — modernised fork
 
+> 🚀 **Live demo:** **<https://vimbadmin.myguard.nl>** — kick the tyres before you
+> deploy. Read-only-ish demo account (password + 2FA changes locked, outgoing
+> mail no-op'd); everything else is the real panel.
+>
 > 📖 **Full write-up, history & guided tour:**
 > **<https://deb.myguard.nl/2026/06/vimbadmin-postfix-dovecot-mailbox-admin-panel/>**
 
 *Virtual Mailbox Administration that runs on a PHP version released this decade.*
+
+**ZF1 is completely gone.** Upstream was built on Zend Framework 1 (EOL since
+2016). This fork rips it out **entirely** — the HTTP/CLI kernel, routing, forms,
+config loader, sessions and auth are all native PHP 8 now. Not a single line of
+Zend Framework, nor any `Zend_*` class, remains in the tree or the dependency
+graph; `composer.json` no longer requires it. The one visible ZF1 leftover is
+the `application.ini` config *format* (its `[child : parent]` section
+inheritance and `resources.*` keys are a ZF1 convention) — read by a small
+native loader now, and a candidate to be replaced in a future release. See
+[Upgrading & schema migrations](#upgrading--schema-migrations).
 
 [![PHP](https://img.shields.io/badge/PHP-8.4%2B-777bb4)]()
 [![Stack](https://img.shields.io/badge/Native%20kernel%20%C2%B7%20Doctrine%202.20%20%C2%B7%20Smarty%205-informational)]()
@@ -92,8 +106,9 @@ stock upstream had **none** of the application-layer items below.
     (`vimbtool.php -a admin.cli-reset-totp --username=…|--all`), or
     `application.ini` (`twofactor.force_disable`).
 - **Passwords.** Admin passwords bcrypt-hashed and compared in **constant time**
-  (`hash_equals`). Mailbox passwords hashed in a Dovecot-accepted scheme
-  (`doveadm pw`).
+  (`hash_equals`). Mailbox passwords hashed **natively in PHP** in a
+  Dovecot-accepted scheme (`BLF-CRYPT`/`SHA512-CRYPT`/`SHA256-CRYPT`) — no
+  `doveadm pw` shell-out.
 - **Session-fixation defence** — the session id is regenerated on every
   successful login (and again after the 2FA step).
 - **Brute-force protection** — per-source-IP attempt counter with lockout
@@ -130,17 +145,19 @@ stock upstream had **none** of the application-layer items below.
   Edge IP-allowlisted in the vhost; bearer-only (no admin session). See the
   [MCP adapter](#mcp-adapter) section and [docs/mcp-auth.md](docs/mcp-auth.md).
 
-### Runtime (Snuffleupagus)
+### Contrib
 
-- A **code-derived [`vimbadmin-strict.list`](contrib/snuffleupagus/vimbadmin-strict.list)**
-  ruleset: bans every dangerous function the app doesn't use, allow-scopes the
-  `exec` it does, blocks RFI/LFI wrappers, eval/`base64_decode` webshell pipes,
-  mail-header injection, env hijacking, world-writable chmod, writing
-  PHP-loadable files, and insecure cURL/SSRF. Logs/encrypts cookies as available.
-  A unique `secret_key` must be set per deployment.
+Everything under [`contrib/`](contrib/) — deploy configs, the runtime
+Snuffleupagus ruleset, schema migrations and the WAF plugin — that hardens the
+panel around the edges. The stock upstream shipped none of it.
 
-### Edge / deployment (`contrib/`)
-
+- **Runtime Snuffleupagus ruleset** — a **code-derived
+  [`vimbadmin-strict.list`](contrib/snuffleupagus/vimbadmin-strict.list)**: bans
+  every dangerous function the app doesn't use, allow-scopes the `exec` it does,
+  blocks RFI/LFI wrappers, eval/`base64_decode` webshell pipes, mail-header
+  injection, env hijacking, world-writable chmod, writing PHP-loadable files, and
+  insecure cURL/SSRF. Logs/encrypts cookies as available. A unique `secret_key`
+  must be set per deployment.
 - **Hardened PHP-FPM pool** (`contrib/php-fpm/vimbadmin.conf`) —
   `open_basedir`, empty native `disable_functions` (Snuffleupagus owns the
   policy), strict session-cookie flags, `security.limit_extensions=.php`,
@@ -247,8 +264,28 @@ immediately, on a trusted network.
 
 ## Upgrading & schema migrations
 
-Pulling a newer version of the fork may add columns, indexes or tables. Bring
-your database in line in one of two ways:
+### The panel upgrades its own schema
+
+**ViMbAdmin migrates its database itself — you usually do nothing.** It tracks a
+`DBVERSION` and applies any pending DDL through the native
+`maintenance.cli-schema-update` command (`ViMbAdmin_Schema::migrate()`, the same
+code the in-panel **Maintenance → schema update** button runs). It bundles the
+Doctrine `SchemaTool` diff with the extra FK/collation/index steps the
+schema-tool can't express, and is idempotent:
+
+```sh
+./bin/vimbtool.php -a maintenance.cli-schema-update            # apply
+./bin/vimbtool.php -a maintenance.cli-schema-update --verbose  # apply + print SQL + DB version
+```
+
+The **Docker image runs this automatically at every container start** (see
+`bootstrap.sh`), so pulling a newer image and `docker compose up -d` brings the
+schema forward with no manual step. From source, run the command above (or click
+the Maintenance button) after `git pull`. Always back up first — it issues DDL.
+
+### Doing it by hand instead
+
+If you'd rather drive the migration yourself, two equivalent manual routes:
 
 ```sh
 # A) let Doctrine reconcile the DB with the entity mappings (shows the SQL):
@@ -280,6 +317,35 @@ applying:
 SELECT username, COUNT(*) c FROM mailbox GROUP BY username HAVING c > 1;
 ```
 
+### Config (`application.ini`) migration
+
+The schema isn't the only thing that drifts across upgrades — a newer version
+may also add config keys. Your live `application.ini` is **never overwritten**
+(it holds your DB credentials and salt), so new keys won't appear by magic;
+reconcile it against the shipped template after a `git pull`:
+
+```sh
+# see which keys the template gained that your live file lacks
+diff <(grep -oE '^[a-z][a-zA-Z0-9_.\[\]]*' application/configs/application.ini      | sort -u) \
+     <(grep -oE '^[a-z][a-zA-Z0-9_.\[\]]*' application/configs/application.ini.dist | sort -u)
+```
+
+Every key carries a sane default in code, so a missing key just means "feature
+off / default value" — nothing breaks. Copy across only the new keys you want to
+change. The Docker image generates a fresh `application.ini` from the `.dist`
+template at first run (injecting the DB env + a per-deployment salt) and leaves
+it alone thereafter, so the same "diff against `.dist`" rule applies there.
+
+> **`application.ini` is a ZF1 leftover and will likely change.** Its
+> `[child : parent]` section-inheritance and `resources.*` key namespace are a
+> Zend Framework 1 convention. ZF1 itself is gone (a small native
+> [`IniConfig`](src/Kernel/Config/IniConfig.php) loader reads the file now), so
+> the format is a candidate to be **replaced** in a future release — likely with
+> a plain PHP-array or env-driven config and a one-shot converter. The keys and
+> their meanings will be preserved across any such change; only the on-disk
+> *shape* would move. Treat the `application.ini` filename/format as **not yet
+> final**.
+
 The **`dovecot_quota`** part of that migration lets this fork retire the old
 nightly maildir-scan (`mailbox.cli-get-sizes`) and get **live** mailbox usage
 straight from Dovecot's quota-clone plugin instead: it creates the
@@ -297,7 +363,8 @@ In order, because the order matters:
    (Postfix still has to be configured to read `virtual_mailbox_domains` from
    the DB — ViMbAdmin maintains the data, it can't make Postfix care.)
 2. **Mailboxes → Add.** Local part, password, quota. The password is hashed
-   in a scheme Dovecot accepts (it can shell out to `doveadm pw`).
+   natively in PHP in a scheme Dovecot accepts (`BLF-CRYPT` etc.) — no external
+   `doveadm pw`.
 3. **Aliases → Add.** Address → comma-separated `goto` list. This is your
    `postmaster@`, your role addresses, your distribution lists.
 
@@ -654,9 +721,11 @@ libmodsecurity.
 ## Credits & licence
 
 Originally written by [Open Solutions](https://www.opensolutions.ie/) on Zend
-Framework, Doctrine ORM and Smarty. The current fork has removed Zend Framework.
-GPLv3 — same as it always was. This
-fork keeps the licence and the gratitude; it just keeps the lights on too.
+Framework 1, Doctrine ORM and Smarty. This fork has **removed Zend Framework
+entirely** — kernel, routing, forms, config loader, sessions and auth are native
+PHP 8 — while keeping Doctrine (2.20) and Smarty (5). GPLv3 — same as it always
+was. This fork keeps the licence and the gratitude; it just keeps the lights on
+too.
 
 - Upstream: <https://github.com/opensolutions/ViMbAdmin>
 - This fork: <https://github.com/eilandert/ViMbAdmin>

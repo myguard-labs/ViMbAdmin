@@ -158,6 +158,8 @@ class Domain
         $this->Aliases = new \Doctrine\Common\Collections\ArrayCollection();
         $this->Logs = new \Doctrine\Common\Collections\ArrayCollection();
         $this->Admins = new \Doctrine\Common\Collections\ArrayCollection();
+        $this->Preferences = new \Doctrine\Common\Collections\ArrayCollection();
+        $this->Archives = new \Doctrine\Common\Collections\ArrayCollection();
     }
     
     /**

@@ -7,156 +7,191 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * DirectoryEntry
  */
+#[ORM\Entity(repositoryClass: \Repositories\DirectoryEntry::class)]
+#[ORM\Table(name: 'directory_entry')]
 class DirectoryEntry
 {
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $businessCategory = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $carLicense = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $departmentNumber = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $displayName = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $employeeNumber = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $employeeType = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $homePhone = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $homePostalAddress = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 10, nullable: true)]
     private ?string $initials = null;
 
     /**
      * @var \stdClass
      */
+    #[ORM\Column(type: 'object', nullable: true)]
     private mixed $jpegPhoto = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $labeledURI = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $mail = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $manager = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $mobile = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $o = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $pager = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $preferredLanguage = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $roomNumber = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $secretary = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $personalTitle = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $sn = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $ou = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $title = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $facsimileTelephoneNumber = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $givenName = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $telephoneNumber = null;
 
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $vimb_created = null;
 
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $vimb_update = null;
 
     /**
      * @var integer
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
      * @var \Entities\Mailbox
      */
+    #[ORM\OneToOne(targetEntity: \Entities\Mailbox::class, inversedBy: 'DirectoryEntry')]
+    #[ORM\JoinColumn(name: 'mailbox_id', referencedColumnName: 'id', nullable: false, unique: true)]
     private ?\Entities\Mailbox $Mailbox = null;
 
 

@@ -25,7 +25,7 @@ require __DIR__ . '/../src/Kernel/Doctrine/EntityManagerFactory.php';
 
 use ViMbAdmin\Kernel\Doctrine\EntityManagerFactory;
 use Doctrine\ORM\EntityManagerInterface;
-use Doctrine\ORM\Mapping\Driver\XmlDriver;
+use Doctrine\ORM\Mapping\Driver\AttributeDriver;
 
 $appPath = realpath(__DIR__ . '/../application');
 
@@ -36,7 +36,6 @@ $options = [
                 // pdo_sqlite :memory: — never connected (lazy), just a valid driver.
                 'options' => ['driver' => 'pdo_sqlite', 'memory' => true],
             ],
-            'xml_schema_path'        => $appPath . '/../doctrine2/xml',
             'proxies_path'           => $appPath . '/Proxies',
             'proxies_namespace'      => 'Proxies',
             'models_path'            => $appPath,
@@ -71,16 +70,8 @@ EntityManagerFactory::registerEntityAutoloaders($options);
 
 $em = null;
 
-// The XML metadata driver requires SimpleXML. CI's cache-wiring job installs it;
-// guard the driver-dependent asserts so the suite still runs green in a minimal
-// environment lacking the extension (the registerEntityAutoloaders assert below
-// is independent of it). Mirrors test-cache-bootstrap's apcu skip idiom.
-$hasSimpleXml = extension_loaded('simplexml');
-if (!$hasSimpleXml) {
-    echo "SKIP XmlDriver asserts (simplexml ext not loaded)\n";
-}
-
-if ($hasSimpleXml) {
+// The attribute metadata driver needs no extra extension (reflection only), so
+// these asserts always run.
 check('factory builds an EntityManager', function () use ($options, &$em) {
     $em = EntityManagerFactory::create($options);
     if (!$em instanceof EntityManagerInterface) {
@@ -88,9 +79,9 @@ check('factory builds an EntityManager', function () use ($options, &$em) {
     }
 });
 
-check('metadata driver is the XML driver over xml_schema_path', function () use (&$em) {
+check('metadata driver is the attribute driver over the Entities dir', function () use (&$em) {
     $driver = $em->getConfiguration()->getMetadataDriverImpl();
-    if (!$driver instanceof XmlDriver) {
+    if (!$driver instanceof AttributeDriver) {
         throw new RuntimeException('metadata driver is ' . get_debug_type($driver));
     }
 });
@@ -114,15 +105,14 @@ check('metadata cache is wired (no exception fetching it)', function () use (&$e
     }
 });
 
-check('a known entity XML mapping loads through the driver', function () use (&$em) {
-    // Proves xml_schema_path actually points at real mappings: the driver can
-    // read Entities.Admin.dcm.xml and produce class metadata (no DB needed).
+check('a known entity attribute mapping loads through the driver', function () use (&$em) {
+    // Proves the driver reads the #[ORM\...] attributes on Entities\Admin and
+    // produces class metadata (no DB needed).
     $meta = $em->getClassMetadata('Entities\\Admin');
     if ($meta->getTableName() === '') {
         throw new RuntimeException('Admin metadata has no table name');
     }
 });
-} // end if ($hasSimpleXml)
 
 check('registerEntityAutoloaders loads an Entities class', function () use ($options) {
     EntityManagerFactory::registerEntityAutoloaders($options);

@@ -7,16 +7,22 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entities\DatabaseVersion
  */
+#[ORM\Entity(repositoryClass: \Repositories\DatabaseVersion::class)]
+#[ORM\Table(name: 'dbversion')]
 class DatabaseVersion
 {
     /**
      * @var integer $version
      */
+    #[ORM\Column(type: 'integer')]
     private ?int $version = null;
 
     /**
      * @var integer $id
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'integer')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
 
@@ -55,11 +61,13 @@ class DatabaseVersion
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $name = null;
 
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $applied_on = null;
 
 

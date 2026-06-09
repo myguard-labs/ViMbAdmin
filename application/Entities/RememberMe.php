@@ -7,41 +7,53 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * RememberMe
  */
+#[ORM\Entity(repositoryClass: \Repositories\RememberMe::class)]
+#[ORM\Table(name: 'remember_me')]
 class RememberMe
 {
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 40)]
     private ?string $userhash = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 40)]
     private ?string $ckey = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 40)]
     private ?string $original_ip = null;
 
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $expires = null;
 
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $created = null;
 
     /**
      * @var integer
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
      * @var \Entities\Admin
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Admin::class, inversedBy: 'RememberMes')]
+    #[ORM\JoinColumn(name: 'Admin_id', referencedColumnName: 'id')]
     private ?\Entities\Admin $User = null;
 
 
@@ -195,6 +207,7 @@ class RememberMe
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $last_used = null;
 
 

@@ -58,15 +58,14 @@ $name = getenv('DB_NAME') ?: 'vimbadmin';
 $user = getenv('DB_USER') ?: 'root';
 $pass = getenv('DB_PASS') ?: '';
 
-$xmlDir = realpath(__DIR__ . '/../doctrine2/xml');
-if ($xmlDir === false) {
-    fwrite(STDERR, "doctrine2/xml mapping dir not found\n");
+$entityDir = realpath(__DIR__ . '/../application/Entities');
+if ($entityDir === false) {
+    fwrite(STDERR, "application/Entities dir not found\n");
     exit(2);
 }
 
-// 1. EM from the XML mappings — same source of truth the app uses.
-//    simplified=false: file names are the FQCN form (Entities.Mailbox.dcm.xml).
-$config = ORMSetup::createXMLMetadataConfiguration([$xmlDir], true);
+// 1. EM from the attribute mappings — same source of truth the app uses.
+$config = ORMSetup::createAttributeMetadataConfiguration([$entityDir], true);
 // ORM 3 on PHP 8.4+: native lazy objects are the proxy backend the app uses
 // (see EntityManagerFactory); the EM ctor instantiates ProxyFactory eagerly.
 $config->enableNativeLazyObjects(true);

@@ -716,7 +716,7 @@ public/         web docroot (native index.php front controller)
 bin/            CLI tools (doctrine2-cli.php, vimbtool.php, crons)
 contrib/        deploy configs: php-fpm pool, Angie vhost, mail-host crons,
                 snuffleupagus/ (the validated SP ruleset), migrations/, theming
-doctrine2/xml/  Doctrine XML mappings (the schema source of truth)
+application/Entities/  Doctrine entities; schema mapping lives in #[ORM\...] attributes
 docs/           extra documentation (mcp-auth.md)
 ```
 

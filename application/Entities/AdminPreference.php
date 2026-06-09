@@ -7,36 +7,47 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entities\AdminPreference
  */
+#[ORM\Entity(repositoryClass: \Repositories\AdminPreference::class)]
+#[ORM\Table(name: 'admin_pref')]
+#[ORM\UniqueConstraint(name: 'IX_AdminPreference_1', columns: ['Admin_id', 'attribute', 'ix'])]
 class AdminPreference
 {
     /**
      * @var string $attribute
      */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $attribute = null;
 
     /**
      * @var integer $ix
      */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private ?int $ix = null;
 
     /**
      * @var string $op
      */
+    #[ORM\Column(type: 'string', length: 2, options: ['default' => ':='])]
     private ?string $op = null;
 
     /**
      * @var string $value
      */
+    #[ORM\Column(type: 'text')]
     private ?string $value = null;
 
     /**
      * @var integer $expire
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private ?int $expire = null;
 
     /**
      * @var integer $id
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
@@ -195,6 +206,8 @@ class AdminPreference
     /**
      * @var Entities\Admin
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Admin::class, inversedBy: 'Preferences')]
+    #[ORM\JoinColumn(name: 'Admin_id', referencedColumnName: 'id')]
     private ?\Entities\Admin $Admin = null;
 
 

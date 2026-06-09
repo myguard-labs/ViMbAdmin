@@ -7,6 +7,10 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entities\Domain
  */
+#[ORM\Entity(repositoryClass: \Repositories\Domain::class)]
+#[ORM\Table(name: 'domain')]
+#[ORM\Index(name: 'IX_Domain_active', columns: ['active'])]
+#[ORM\UniqueConstraint(name: 'IX_Domain_1', columns: ['domain'])]
 class Domain
 {
     use \OSS_Doctrine2_WithPreferences;
@@ -14,111 +18,135 @@ class Domain
     /**
      * @var string $domain
      */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $domain = null;
 
     /**
      * @var string $description
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $description = null;
 
     /**
      * @var integer $quota
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private ?int $quota = null;
 
     /**
      * @var string $transport
      */
+    #[ORM\Column(type: 'string', length: 255, options: ['default' => 'virtual'])]
     private ?string $transport = null;
 
     /**
      * @var boolean $backupmx
      */
+    #[ORM\Column(type: 'boolean', options: ['default' => 0])]
     private ?bool $backupmx = null;
 
     /**
      * @var boolean $active
      */
+    #[ORM\Column(type: 'boolean', options: ['default' => 1])]
     private ?bool $active = null;
 
     /**
      * @var string $homedir
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $homedir = null;
 
     /**
      * @var string $maildir
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $maildir = null;
 
     /**
      * @var integer $uid
      */
+    #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $uid = null;
 
     /**
      * @var integer $gid
      */
+    #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $gid = null;
 
     /**
      * @var \DateTime $created
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $modified = null;
 
     /**
      * @var integer $id
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
      * @var integer $max_quota
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private ?int $max_quota = null;
 
     /**
      * @var integer $max_aliases
      */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private ?int $max_aliases = null;
 
     /**
      * @var integer $max_mailboxes
      */
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
     private ?int $max_mailboxes = null;
 
     /**
      * @var bigint $alias_count
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private ?int $alias_count = null;
 
     /**
      * @var bigint $mailbox_count
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private ?int $mailbox_count = null;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\Mailbox::class, mappedBy: 'Domain')]
     private $Mailboxes;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\Alias::class, mappedBy: 'Domain')]
     private $Aliases;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\Log::class, mappedBy: 'Domain')]
     private $Logs;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\ManyToMany(targetEntity: \Entities\Admin::class, mappedBy: 'Domains')]
     private $Admins;
 
     /**
@@ -761,6 +789,7 @@ class Domain
     /**
      * @var \Doctrine\Common\Collections\Collection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\DomainPreference::class, mappedBy: 'Domain')]
     private $Preferences;
 
 
@@ -799,6 +828,7 @@ class Domain
     /**
      * @var \Doctrine\Common\Collections\Collection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\Archive::class, mappedBy: 'Domain')]
     private $Archives;
 
 

@@ -7,6 +7,8 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Archive
  */
+#[ORM\Entity(repositoryClass: \Repositories\Archive::class)]
+#[ORM\Table(name: 'archive')]
 class Archive
 {
     const STATUS_PENDING_ARCHIVE = "PENDING_ARCHIVE";
@@ -35,86 +37,107 @@ class Archive
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', unique: true)]
     private ?string $username = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string')]
     private ?string $status = null;
 
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $archived_at = null;
 
     /**
      * @var \DateTime
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $status_changed_at = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $homedir_server = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $homedir_file = null;
 
     /**
      * @var integer
      */
+    #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $homedir_orig_size = null;
 
     /**
      * @var integer
      */
+    #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $homedir_size = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $maildir_server = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $maildir_file = null;
 
     /**
      * @var integer
      */
+    #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $maildir_orig_size = null;
 
     /**
      * @var integer
      */
+    #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $maildir_size = null;
 
     /**
      * @var string
      */
+    #[ORM\Column(type: 'text')]
     private ?string $data = null;
 
     /**
      * @var boolean
      */
+    #[ORM\Column(type: 'boolean', options: ['default' => 0])]
     private bool $autoprune = false;
 
     /**
      * @var integer
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
      * @var \Entities\Domain
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Domain::class, inversedBy: 'Archives')]
+    #[ORM\JoinColumn(name: 'Domain_id', referencedColumnName: 'id')]
     private ?\Entities\Domain $Domain = null;
 
     /**
      * @var \Entities\Admin
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Admin::class, inversedBy: 'Archives')]
+    #[ORM\JoinColumn(name: 'Admin_id', referencedColumnName: 'id')]
     private ?\Entities\Admin $ArchivedBy = null;
 
 

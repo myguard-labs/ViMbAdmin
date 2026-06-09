@@ -77,7 +77,7 @@ check('ORM3 Configuration accepts PSR-6 pools + native lazy + EntityManager cons
     $config->setProxyDir(sys_get_temp_dir());
     $config->setProxyNamespace('Proxies');
     $config->setMetadataDriverImpl(
-        new Doctrine\ORM\Mapping\Driver\XmlDriver([realpath(__DIR__ . '/../doctrine2/xml')])
+        new Doctrine\ORM\Mapping\Driver\AttributeDriver([realpath(__DIR__ . '/../application/Entities')])
     );
 
     // ORM 3 removed EntityManager::create(); construction now takes a DBAL

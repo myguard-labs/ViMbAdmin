@@ -7,6 +7,9 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entities\Admin
  */
+#[ORM\Entity(repositoryClass: \Repositories\Admin::class)]
+#[ORM\Table(name: 'admin')]
+#[ORM\UniqueConstraint(name: 'IX_Username_admin', columns: ['username'])]
 class Admin
 {
     use \OSS_Doctrine2_WithPreferences;
@@ -14,41 +17,51 @@ class Admin
     /**
      * @var string $username
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $username = null;
 
     /**
      * @var string $password
      */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $password = null;
 
     /**
      * @var boolean $super
      */
+    #[ORM\Column(type: 'boolean', options: ['default' => 0])]
     private ?bool $super = null;
 
     /**
      * @var boolean $active
      */
+    #[ORM\Column(type: 'boolean', options: ['default' => 1])]
     private ?bool $active = null;
 
     /**
      * @var \DateTime $created
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $modified = null;
 
     /**
      * @var \DateTime $last_login
      */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $last_login = null;
 
     /**
      * @var integer $id
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
@@ -59,11 +72,16 @@ class Admin
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\Log::class, mappedBy: 'Admin')]
     private $Logs;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\ManyToMany(targetEntity: \Entities\Domain::class, inversedBy: 'Admins')]
+    #[ORM\JoinTable(name: 'domain_admins')]
+    #[ORM\JoinColumn(name: 'Admin_id', referencedColumnName: 'id', nullable: false)]
+    #[ORM\InverseJoinColumn(name: 'Domain_id', referencedColumnName: 'id', nullable: false)]
     private $Domains;
 
     /**
@@ -380,6 +398,7 @@ class Admin
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\AdminPreference::class, mappedBy: 'Admin')]
     private $Preferences;
 
 
@@ -453,6 +472,7 @@ class Admin
     /**
      * @var \Doctrine\Common\Collections\Collection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\RememberMe::class, mappedBy: 'User')]
     private $RememberMes;
 
 
@@ -491,6 +511,7 @@ class Admin
     /**
      * @var \Doctrine\Common\Collections\Collection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\Archive::class, mappedBy: 'ArchivedBy')]
     private $Archives;
 
 

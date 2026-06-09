@@ -38,16 +38,16 @@ use Doctrine\ORM\ORMSetup;
 use Doctrine\ORM\EntityManager;
 use Doctrine\DBAL\DriverManager;
 
-$xmlDir   = $root . '/doctrine2/xml';
-$proxyDir = $root . '/application/Proxies';
+$entityDir = $root . '/application/Entities';
+$proxyDir  = $root . '/application/Proxies';
 
-if (!is_dir($xmlDir)) {
-    fwrite(STDERR, "XML mapping dir not found: $xmlDir\n");
+if (!is_dir($entityDir)) {
+    fwrite(STDERR, "Entities dir not found: $entityDir\n");
     exit(1);
 }
 @mkdir($proxyDir, 0o755, true);
 
-$config = ORMSetup::createXMLMetadataConfiguration([$xmlDir], true);
+$config = ORMSetup::createAttributeMetadataConfiguration([$entityDir], true);
 $config->enableNativeLazyObjects(true); // ORM 3.x on PHP 8.4: native lazy-object proxies
 $config->setProxyDir($proxyDir);
 $config->setProxyNamespace('Proxies');

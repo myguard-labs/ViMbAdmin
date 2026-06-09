@@ -5,13 +5,11 @@
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;; IMPORTANT: Review and change all options in [user]
+;; IMPORTANT: Review and change the installation keys, DB and defaults below
 ;;
 ;; ** This is for ViMbAdmin V3 and later **
 ;;
 ;; See: https://github.com/opensolutions/ViMbAdmin/wiki/Configuration
-
-[user]
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -25,14 +23,9 @@ securitysalt                       = ""
 defaults.mailbox.password_salt     = ""
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; When installing for the first time, it may be useful to set the following
 ; to 1 BUT ensure you set it to zero again in a production system
-
-phpSettings.display_startup_errors = 1
-phpSettings.display_errors = 1
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -114,7 +107,6 @@ defaults.list_size.disabled = true
 defaults.list_size.multiplier = 'GB'
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Default values for creating mailboxes
 
@@ -175,7 +167,6 @@ defaults.mailbox.password_scheme = "dovecot:BLF-CRYPT"
 ; writes to stdout, not the API response.)
 
 
-
 ;; A "mailbox alias" will, for example add the following entry to
 ;; the alias table for a mailbox: name@example.com
 ;;
@@ -185,13 +176,11 @@ defaults.mailbox.password_scheme = "dovecot:BLF-CRYPT"
 mailboxAliases = 1
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Misc / legacy
 ;; (Archiving in this fork is queue-driven — see the doveadm/queue section below
 ;;  and the Archives + Maintenance tabs; there is no tar/bzip2 archive.path.)
 
-server_id = 1
 
 ; rm binary for the optional CLI on-disk mailbox purge (mailbox_deletion_fs_*).
 ; This is a SEPARATE, default-off legacy feature that shells out on a host with
@@ -261,7 +250,6 @@ queue.runner.key         = ""
 queue.runner.allowed_ips = "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1/128, fc00::/7"
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Enable mailbox deletion on the file system
 ;
@@ -309,7 +297,6 @@ server.webmail.host  = "https://webmail.%d"
 server.webmail.user  = "%m"
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Identity
@@ -344,7 +331,6 @@ server.email.address = "support@example.com"
 ; resources.smarty.skin      = "myskin"
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Outgoing mail transport ViMbAdmin uses to SEND its own mail (notifications,
@@ -370,7 +356,6 @@ resources.mail.transport.verify_peer      = 1
 resources.mail.transport.verify_peer_name = 1
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Local filesystem logging.
@@ -380,14 +365,11 @@ resources.mail.transport.verify_peer_name = 1
 ;; It is useful to use the email logger to be alerted of serious errors.
 ;;
 
-ondemand_resources.logger.enabled = 1
 
 ;ondemand_resources.logger.writers.email.from   = "admin@example.com"
 ;ondemand_resources.logger.writers.email.to     = "admin@example.com"
 ;ondemand_resources.logger.writers.email.prefix = "ViMbAdmin_Error"
 ;ondemand_resources.logger.writers.email.level  = 3
-
-ondemand_resources.logger.writers.stream.level = 7
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -399,14 +381,10 @@ ondemand_resources.logger.writers.stream.level = 7
 ;; This can be disabled by setting the below to 1
 ;;
 
-skipVersionCheck = 1
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Install pingback to the upstream authors. The endpoint is long dead, so
 ;; this is disabled by default in the fork.
-
-skipInstallPingback = 1
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -474,12 +452,6 @@ vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "webmaster"
 ;vimbadmin_plugins.MailboxAutomaticAliases.defaultMapping.* = "root@domain.tld"
 
 
-
-
-
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -487,9 +459,8 @@ vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "webmaster"
 ;;
 ;; Proceed onwards with caution.
 ;;
-;; The above [user] params are the may ones of consequence.
+;; The params above are the main ones of consequence.
 ;;
-
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -502,42 +473,25 @@ vimbadmin_plugins.DirectoryEntry.disabled = true
 vimbadmin_plugins.AdditionalInfo.disabled = true
 
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-;;  ABOUT THESE [section] HEADERS
+;;  FLAT CONFIG (no [section] headers)
 ;;
-;;  `[name]` and `[name : parent]` are
-;;  *environments*, and `: parent` means "inherit everything from parent,
-;;  then override". Which section loads is chosen by APPLICATION_ENV.
+;;  This file has no `[section]` headers: every key below is read regardless of
+;;  APPLICATION_ENV. You normally only edit the block at the top (salts, DB,
+;;  defaults); everything below is plumbing — paths, Doctrine wiring, auth,
+;;  sessions, Smarty — change it only if you know why. (2FA / brute-force live
+;;  down here too, near the end.)
 ;;
-;;      [user]                  <- your settings (the block above)
-;;      [production : user]     <- framework wiring; inherits [user]
-;;      [development : production]  inherits [production] (verbose errors)
-;;
-;;  So with APPLICATION_ENV=production the app reads [user] + [production].
-;;  The Docker image runs APPLICATION_ENV=docker and appends a
-;;  `[docker : production]` section for its container-specific overrides.
-;;
-;;  You normally only edit [user] at the top. Everything below is plumbing —
-;;  paths, Doctrine wiring, auth, sessions, Smarty. Change it only if you know
-;;  why. (2FA / brute-force / footer toggles live down here too, near the end.)
+;;  The loader still understands environment sections, so a deployment MAY add a
+;;  `[docker : production]` (or any `[env]`) header to OVERRIDE these base keys
+;;  for a specific APPLICATION_ENV. The Docker image does exactly that for its
+;;  container-specific values; the keys here are the base it overrides.
 ;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-[production : user]
-
-includePaths.library = APPLICATION_PATH "/../library"
-
-appnamespace = "ViMbAdmin"
 
 temporary_directory = APPLICATION_PATH "/../var/tmp"
-
-mini_js = 1
-mini_css = 1
-
-alias_autocomplete_min_length = 2
-
 
 
 ; doctrine2
@@ -545,17 +499,14 @@ resources.doctrine2.models_path        = APPLICATION_PATH
 resources.doctrine2.proxies_path       = APPLICATION_PATH "/Proxies"
 resources.doctrine2.repositories_path  = APPLICATION_PATH
 resources.doctrine2.autogen_proxies    = 0
-resources.doctrine2.logger             = 1
 resources.doctrine2.models_namespace       = "Entities"
 resources.doctrine2.proxies_namespace      = "Proxies"
 resources.doctrine2.repositories_namespace = "Repositories"
 
 
-resources.doctrine2cache.autoload_method    = "composer"
-;; Cache backend + namespace are set in the [user] section above
+;; Cache backend + namespace are set near the top of this file
 ;; (ArrayCache / ApcuCache / RedisCache).
 
-resources.namespace.checkip = 0
 
 resources.auth.oss.pwhash  = "bcrypt"
 resources.auth.oss.hash_cost  = 12
@@ -658,11 +609,6 @@ resources.session.cookie_httponly = true
 resources.session.cookie_secure   = true
 resources.session.cookie_samesite = "Lax"
 
-ondemand_resources.logger.writers.stream.path    = APPLICATION_PATH "/../var/log"
-ondemand_resources.logger.writers.stream.owner   = www-data
-ondemand_resources.logger.writers.stream.group   = www-data
-ondemand_resources.logger.writers.stream.mode    = single
-ondemand_resources.logger.writers.stream.logname = vimbadmin.log
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Smarty View
@@ -688,14 +634,3 @@ resources.smarty.debugging = 0
 ;; Default (unset) shows it. The upstream authors ask that you keep their
 ;; credit; set this only if you have reason to.
 ;;; footer.hide = 1
-
-
-
-
-[development : production]
-
-mini_js = 0
-mini_css = 0
-
-phpSettings.display_startup_errors = 1
-phpSettings.display_errors = 1

@@ -18,7 +18,10 @@ namespace ViMbAdmin\Kernel\Config;
  *   1. **Section inheritance** — a header `[child : parent]` makes `child`
  *      inherit every key of `parent` (which may itself extend another section),
  *      with the child's own keys overriding. Exactly one parent per section, as
- *      ZF1 enforced.
+ *      ZF1 enforced. Section-less keys (a file with no `[headers]` at all, the
+ *      flattened `application.ini.dist`) form a base layer applied first, under
+ *      any requested section; a deployed file may still add a `[docker : ...]`
+ *      section that overrides the base.
  *   2. **Dotted-key nesting** — `a.b.c = v` becomes `['a']['b']['c'] = v`.
  *   3. **Constant concatenation** — `APPLICATION_PATH "/../library"` expands to
  *      the value of the defined constant followed by the quoted string.
@@ -71,14 +74,20 @@ final class IniConfig
             throw new \RuntimeException('Failed to parse INI contents');
         }
 
-        // Split each "[name]" / "[name : parent]" header into its own name and
-        // its single optional parent, keying the section bodies by own-name.
+        // Split the parse into section-less "global" keys (the base layer) and
+        // the named "[name]" / "[name : parent]" sections. A flat config file
+        // with no `[section]` headers is all globals; the legacy sectioned files
+        // (and the deployed host config's `[docker : production]`) still resolve
+        // their inheritance chain on top of whatever globals exist.
+        $globals = [];
         $bodies  = [];
         $parents = [];
         foreach ($raw as $header => $body) {
-            if (!is_array($body)) {
-                // A key outside any section. ZF1 ini files keep everything in
-                // sections; ignore stray globals rather than guess their home.
+            // A scalar, or a `key[] = ...` array-append in the section-less scope
+            // (which PHP returns as a list-keyed array), is a global base key —
+            // not a `[section]`. Real section bodies are string-keyed maps.
+            if (!is_array($body) || array_is_list($body)) {
+                $globals[$header] = $body;
                 continue;
             }
             $parts = array_map('trim', explode(':', (string) $header));
@@ -90,12 +99,22 @@ final class IniConfig
             $parents[$name] = $parts[0] ?? null;
         }
 
+        // Base layer: the section-less keys, always applied first.
+        $merged = self::expandDottedKeys($globals);
+
         if (!array_key_exists($section, $bodies)) {
+            // A flat file (globals only) loads under any environment name. Only
+            // a sectioned file that lacks BOTH the requested section and any
+            // globals is a genuine misconfiguration.
+            if ($bodies === [] || $globals !== []) {
+                return $merged;
+            }
             throw new \RuntimeException("Section '{$section}' not found in config");
         }
 
-        // Walk the parent chain root-first so child keys override parent keys.
-        $chain = [];
+        // Walk the parent chain root-first so child keys override parent keys,
+        // then layer it on top of the globals base.
+        $chain  = [];
         $cursor = $section;
         $seen   = [];
         while ($cursor !== null) {
@@ -110,7 +129,6 @@ final class IniConfig
             $cursor = $parents[$cursor];
         }
 
-        $merged = [];
         foreach ($chain as $name) {
             $merged = self::deepMerge($merged, self::expandDottedKeys($bodies[$name]));
         }

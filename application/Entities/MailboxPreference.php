@@ -12,37 +12,37 @@ class MailboxPreference
     /**
      * @var string $attribute
      */
-    private $attribute;
+    private ?string $attribute = null;
 
     /**
      * @var integer $ix
      */
-    private $ix;
+    private ?int $ix = null;
 
     /**
      * @var string $op
      */
-    private $op;
+    private ?string $op = null;
 
     /**
      * @var string $value
      */
-    private $value;
+    private ?string $value = null;
 
     /**
      * @var integer $expire
      */
-    private $expire;
+    private ?int $expire = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var Entities\Mailbox
      */
-    private $Mailbox;
+    private ?\Entities\Mailbox $Mailbox = null;
 
 
     /**

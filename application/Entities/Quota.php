@@ -31,22 +31,22 @@ class Quota
     /**
      * @var string $username
      */
-    private $username;
+    private ?int $username = null;
 
     /**
      * @var integer $bytes
      */
-    private $bytes = 0;
+    private int $bytes = 0;
 
     /**
      * @var integer $messages
      */
-    private $messages = 0;
+    private int $messages = 0;
 
     /**
      * @var \DateTime $updated_at
      */
-    private $updated_at;
+    private ?\DateTime $updated_at = null;
 
     /**
      * Set username

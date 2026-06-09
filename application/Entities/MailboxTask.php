@@ -77,40 +77,40 @@ class MailboxTask
     ];
 
     /** @var integer */
-    private $id;
+    private ?int $id = null;
 
     /** @var string */
-    private $type;
+    private ?string $type = null;
 
     /** @var string */
-    private $username;
+    private ?string $username = null;
 
     /** @var string */
-    private $status;
+    private ?string $status = null;
 
     /** @var integer */
-    private $priority = 0;
+    private int $priority = 0;
 
     /** @var \DateTime */
-    private $created_at;
+    private ?\DateTime $created_at = null;
 
     /** @var \DateTime|null */
-    private $started_at;
+    private ?\DateTime $started_at = null;
 
     /** @var \DateTime|null */
-    private $finished_at;
+    private ?\DateTime $finished_at = null;
 
     /** @var string|null */
-    private $log;
+    private ?string $log = null;
 
     /** @var string|null */
-    private $data;
+    private ?string $data = null;
 
     /** @var \Entities\Domain|null */
-    private $Domain;
+    private ?\Entities\Domain $Domain = null;
 
     /** @var \Entities\Admin|null */
-    private $RequestedBy;
+    private ?\Entities\Admin $RequestedBy = null;
 
     public function getId()                 { return $this->id; }
 

@@ -35,87 +35,87 @@ class Archive
     /**
      * @var string
      */
-    private $username;
+    private ?string $username = null;
 
     /**
      * @var string
      */
-    private $status;
+    private ?string $status = null;
 
     /**
      * @var \DateTime
      */
-    private $archived_at;
+    private ?\DateTime $archived_at = null;
 
     /**
      * @var \DateTime
      */
-    private $status_changed_at;
+    private ?\DateTime $status_changed_at = null;
 
     /**
      * @var string
      */
-    private $homedir_server;
+    private ?string $homedir_server = null;
 
     /**
      * @var string
      */
-    private $homedir_file;
+    private ?string $homedir_file = null;
 
     /**
      * @var integer
      */
-    private $homedir_orig_size;
+    private ?int $homedir_orig_size = null;
 
     /**
      * @var integer
      */
-    private $homedir_size;
+    private ?int $homedir_size = null;
 
     /**
      * @var string
      */
-    private $maildir_server;
+    private ?string $maildir_server = null;
 
     /**
      * @var string
      */
-    private $maildir_file;
+    private ?string $maildir_file = null;
 
     /**
      * @var integer
      */
-    private $maildir_orig_size;
+    private ?int $maildir_orig_size = null;
 
     /**
      * @var integer
      */
-    private $maildir_size;
+    private ?int $maildir_size = null;
 
     /**
      * @var string
      */
-    private $data;
+    private ?string $data = null;
 
     /**
      * @var boolean
      */
-    private $autoprune = false;
+    private bool $autoprune = false;
 
     /**
      * @var integer
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var \Entities\Domain
      */
-    private $Domain;
+    private ?\Entities\Domain $Domain = null;
 
     /**
      * @var \Entities\Admin
      */
-    private $ArchivedBy;
+    private ?\Entities\Admin $ArchivedBy = null;
 
 
     /**

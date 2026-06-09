@@ -12,152 +12,152 @@ class DirectoryEntry
     /**
      * @var string
      */
-    private $businessCategory;
+    private ?string $businessCategory = null;
 
     /**
      * @var string
      */
-    private $carLicense;
+    private ?string $carLicense = null;
 
     /**
      * @var string
      */
-    private $departmentNumber;
+    private ?string $departmentNumber = null;
 
     /**
      * @var string
      */
-    private $displayName;
+    private ?string $displayName = null;
 
     /**
      * @var string
      */
-    private $employeeNumber;
+    private ?string $employeeNumber = null;
 
     /**
      * @var string
      */
-    private $employeeType;
+    private ?string $employeeType = null;
 
     /**
      * @var string
      */
-    private $homePhone;
+    private ?string $homePhone = null;
 
     /**
      * @var string
      */
-    private $homePostalAddress;
+    private ?string $homePostalAddress = null;
 
     /**
      * @var string
      */
-    private $initials;
+    private ?string $initials = null;
 
     /**
      * @var \stdClass
      */
-    private $jpegPhoto;
+    private mixed $jpegPhoto = null;
 
     /**
      * @var string
      */
-    private $labeledURI;
+    private ?string $labeledURI = null;
 
     /**
      * @var string
      */
-    private $mail;
+    private ?string $mail = null;
 
     /**
      * @var string
      */
-    private $manager;
+    private ?string $manager = null;
 
     /**
      * @var string
      */
-    private $mobile;
+    private ?string $mobile = null;
 
     /**
      * @var string
      */
-    private $o;
+    private ?string $o = null;
 
     /**
      * @var string
      */
-    private $pager;
+    private ?string $pager = null;
 
     /**
      * @var string
      */
-    private $preferredLanguage;
+    private ?string $preferredLanguage = null;
 
     /**
      * @var string
      */
-    private $roomNumber;
+    private ?string $roomNumber = null;
 
     /**
      * @var string
      */
-    private $secretary;
+    private ?string $secretary = null;
 
     /**
      * @var string
      */
-    private $personalTitle;
+    private ?string $personalTitle = null;
 
     /**
      * @var string
      */
-    private $sn;
+    private ?string $sn = null;
 
     /**
      * @var string
      */
-    private $ou;
+    private ?string $ou = null;
 
     /**
      * @var string
      */
-    private $title;
+    private ?string $title = null;
 
     /**
      * @var string
      */
-    private $facsimileTelephoneNumber;
+    private ?string $facsimileTelephoneNumber = null;
 
     /**
      * @var string
      */
-    private $givenName;
+    private ?string $givenName = null;
 
     /**
      * @var string
      */
-    private $telephoneNumber;
+    private ?string $telephoneNumber = null;
 
     /**
      * @var \DateTime
      */
-    private $vimb_created;
+    private ?\DateTime $vimb_created = null;
 
     /**
      * @var \DateTime
      */
-    private $vimb_update;
+    private ?\DateTime $vimb_update = null;
 
     /**
      * @var integer
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var \Entities\Mailbox
      */
-    private $Mailbox;
+    private ?\Entities\Mailbox $Mailbox = null;
 
 
     /**

@@ -14,37 +14,37 @@ class Alias
     /**
      * @var string $address
      */
-    private $address;
+    private ?string $address = null;
 
     /**
      * @var string $goto
      */
-    private $goto;
+    private ?string $goto = null;
 
     /**
      * @var boolean $active
      */
-    private $active;
+    private ?bool $active = null;
 
     /**
      * @var \DateTime $created
      */
-    private $created;
+    private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
-    private $modified;
+    private ?\DateTime $modified = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var Entities\Domain
      */
-    private $Domain;
+    private ?\Entities\Domain $Domain = null;
 
 
     /**

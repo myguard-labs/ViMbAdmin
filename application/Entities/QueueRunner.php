@@ -16,19 +16,19 @@ use Doctrine\ORM\Mapping as ORM;
 class QueueRunner
 {
     /** @var integer */
-    private $id;
+    private ?int $id = null;
 
     /** @var string */
-    private $host;
+    private ?string $host = null;
 
     /** @var integer */
-    private $pid;
+    private ?int $pid = null;
 
     /** @var \DateTime */
-    private $started_at;
+    private ?\DateTime $started_at = null;
 
     /** @var \DateTime */
-    private $heartbeat_at;
+    private ?\DateTime $heartbeat_at = null;
 
     public function getId()              { return $this->id; }
 

@@ -12,34 +12,34 @@ namespace Entities;
 class McpToken
 {
     /** @var integer */
-    private $id;
+    private ?int $id = null;
 
     /** @var string  Human label for the token (e.g. "agent1"). */
-    private $name;
+    private ?string $name = null;
 
     /** @var string  hex sha256 of the raw token. */
-    private $token_hash;
+    private ?string $token_hash = null;
 
     /** @var string  space/comma separated scopes (e.g. "read" or "read write"). */
-    private $scope = 'read';
+    private string $scope = 'read';
 
     /** @var string|null  space/comma separated IP/CIDR allowlist; null = any (rely on the edge). */
-    private $allowed_ips;
+    private ?string $allowed_ips = null;
 
     /** @var string|null  space/comma separated domain allowlist; null = all domains. */
-    private $allowed_domains;
+    private ?string $allowed_domains = null;
 
     /** @var \DateTime */
-    private $created;
+    private ?\DateTime $created = null;
 
     /** @var \DateTime|null */
-    private $expires_at;
+    private ?\DateTime $expires_at = null;
 
     /** @var \DateTime|null */
-    private $last_used_at;
+    private ?\DateTime $last_used_at = null;
 
     /** @var boolean */
-    private $revoked = false;
+    private bool $revoked = false;
 
     public function getId()                 { return $this->id; }
 

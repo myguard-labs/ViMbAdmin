@@ -31,10 +31,10 @@ namespace Entities;
 class LastLogin
 {
     /** @var string  full email address (mailbox username) */
-    private $username;
+    private ?int $username = null;
 
     /** @var integer  unix timestamp (seconds) of the last login */
-    private $last_login = 0;
+    private int $last_login = 0;
 
     public function setUsername( $username )
     {

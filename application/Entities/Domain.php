@@ -14,92 +14,92 @@ class Domain
     /**
      * @var string $domain
      */
-    private $domain;
+    private ?string $domain = null;
 
     /**
      * @var string $description
      */
-    private $description;
+    private ?string $description = null;
 
     /**
      * @var integer $quota
      */
-    private $quota;
+    private ?int $quota = null;
 
     /**
      * @var string $transport
      */
-    private $transport;
+    private ?string $transport = null;
 
     /**
      * @var boolean $backupmx
      */
-    private $backupmx;
+    private ?bool $backupmx = null;
 
     /**
      * @var boolean $active
      */
-    private $active;
+    private ?bool $active = null;
 
     /**
      * @var string $homedir
      */
-    private $homedir;
+    private ?string $homedir = null;
 
     /**
      * @var string $maildir
      */
-    private $maildir;
+    private ?string $maildir = null;
 
     /**
      * @var integer $uid
      */
-    private $uid;
+    private ?int $uid = null;
 
     /**
      * @var integer $gid
      */
-    private $gid;
+    private ?int $gid = null;
 
     /**
      * @var \DateTime $created
      */
-    private $created;
+    private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
-    private $modified;
+    private ?\DateTime $modified = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var integer $max_quota
      */
-    private $max_quota;
+    private ?int $max_quota = null;
 
     /**
      * @var integer $max_aliases
      */
-    private $max_aliases;
+    private ?int $max_aliases = null;
 
     /**
      * @var integer $max_mailboxes
      */
-    private $max_mailboxes;
+    private ?int $max_mailboxes = null;
 
     /**
      * @var bigint $alias_count
      */
-    private $alias_count;
+    private ?int $alias_count = null;
 
     /**
      * @var bigint $mailbox_count
      */
-    private $mailbox_count;
+    private ?int $mailbox_count = null;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection

@@ -70,8 +70,8 @@ $(document).ready( function()
 /* Server-side render helpers (the inline rows were rendered + escaped by Smarty;
    DataTables inserts cell HTML raw, so escape any value that reaches markup). */
 var archiveStatuses = { {foreach $statuses as $k => $v}'{$k}': "{$v|escape:'javascript'}"{if !$v@last}, {/if}{/foreach} };
-var archiveAllowRestore = [ {foreach $allowRestore as $s}{$s}{if !$s@last}, {/if}{/foreach} ];
-var archiveAllowDelete  = [ {foreach $allowDelete as $s}{$s}{if !$s@last}, {/if}{/foreach} ];
+var archiveAllowRestore = [ {foreach $allowRestore as $s}'{$s|escape:'javascript'}'{if !$s@last}, {/if}{/foreach} ];
+var archiveAllowDelete  = [ {foreach $allowDelete as $s}'{$s|escape:'javascript'}'{if !$s@last}, {/if}{/foreach} ];
 
 function vmArchiveEsc( s ){ return $( '<div>' ).text( s == null ? '' : s ).html(); }
 
@@ -91,13 +91,13 @@ function formatArchiveControls( row )
     var jsName = String( row.username ).replace( /\\/g, '\\\\' ).replace( /'/g, "\\'" );
     var str   = '<div class="btn-group">';
 
-    if( $.inArray( parseInt( row.status, 10 ), archiveAllowRestore ) != -1 )
+    if( $.inArray( row.status, archiveAllowRestore ) != -1 )
         str += '<a class="btn btn-mini have-tooltip" id="restore-archive-' + id + '" title="Restore mail back into the mailbox"'
              + ' href="{genUrl controller="archive" action="restore"}/arid/' + id + '/csrf/{$csrfToken}"'
              + ' onclick="return confirm(\'Restore ' + jsName + '? Recreates the mailbox if it was deleted, syncs the backed-up mail back, then removes the backup.\');">'
              + '<i class="icon-retweet"></i></a>';
 
-    if( $.inArray( parseInt( row.status, 10 ), archiveAllowDelete ) != -1 )
+    if( $.inArray( row.status, archiveAllowDelete ) != -1 )
         str += '<a class="btn btn-mini btn-danger have-tooltip" id="delete-archive-' + id + '" title="Delete backup permanently"'
              + ' href="{genUrl controller="archive" action="delete"}/arid/' + id + '/csrf/{$csrfToken}"'
              + ' onclick="return confirm(\'Permanently delete the backup for ' + jsName + '? This removes the /backups maildir and cannot be undone.\');">'

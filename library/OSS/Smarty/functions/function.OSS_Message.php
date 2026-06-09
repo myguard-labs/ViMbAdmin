@@ -61,7 +61,7 @@
     {
         $ossms = $smarty->getTemplateVars( 'OSS_Messages' );
 
-        if( $ossms === null ) $ossms = array();
+        if( $ossms === null ) $ossms = [];
 
         if( isset( $_SESSION['Application']['OSS_Messages'] ) && is_array( $_SESSION['Application']['OSS_Messages'] )
                 && sizeof( $_SESSION['Application']['OSS_Messages'] ) > 0 )
@@ -111,7 +111,7 @@ END_MESSAGE;
                 $items = $ossm->getMessage();
 
                 if( !is_array( $items ) )
-                    $items = array( $items );
+                    $items = [ $items ];
 
                 foreach( $items as $item )
                 {
@@ -133,7 +133,7 @@ END_MESSAGE;
                 $items = $ossm->getMessage();
 
                 if( !is_array( $items ) )
-                    $items = array( $items );
+                    $items = [ $items ];
                 
                 foreach( $items as $item )
                 {

@@ -102,7 +102,7 @@ class OSS_Message_Block extends OSS_Message
     public function addAction( $str )
     {
         if( $this->actions === null )
-            $this->actions = array();
+            $this->actions = [];
             
         $this->actions[] = $str;
     }

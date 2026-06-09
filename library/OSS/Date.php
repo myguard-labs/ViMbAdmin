@@ -56,13 +56,13 @@ class OSS_Date
      *
      * @var array
      */
-    public static $DATE_FORMATS = array(
+    public static $DATE_FORMATS = [
         self::DF_EUROPEAN => 'DD/MM/YYYY',
         self::DF_AMERICAN => 'MM/DD/YYYY',
         self::DF_COMPUTER => 'YYYY-MM-DD',
         self::DF_REVERSE  => 'YYYY/MM/DD',
         self::DF_COMPACT  => 'YYYYMMDD'
-    );
+    ];
     
     
     /**
@@ -70,26 +70,26 @@ class OSS_Date
      *
      * @var array 
      */
-    public static $DATEPICKER_FORMATS = array(
+    public static $DATEPICKER_FORMATS = [
         self::DF_EUROPEAN => 'dd/mm/yy',
         self::DF_AMERICAN => 'mm/dd/yy',
         self::DF_COMPUTER => 'yy-mm-dd',
         self::DF_REVERSE  => 'yy/mm/dd',
         self::DF_COMPACT  => 'yymmdd'
-    );
+    ];
     
     /**
      * Date formats for PHP
      *
      * @var array 
      */
-    public static $PHP_FORMATS = array(
+    public static $PHP_FORMATS = [
         self::DF_EUROPEAN => 'd/m/Y',
         self::DF_AMERICAN => 'm/d/Y',
         self::DF_COMPUTER => 'Y-m-d',
         self::DF_REVERSE  => 'Y/m/d',
         self::DF_COMPACT  => 'Ymd'
-    );
+    ];
     
     
     
@@ -189,7 +189,7 @@ class OSS_Date
      */
     public static function dateSplit( $string, $format = self::DF_EUROPEAN )
     {
-        $dparts = array();
+        $dparts = [];
     
         // case values correspond to OSS_Date DF_* constants
         switch( $format )

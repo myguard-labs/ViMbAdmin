@@ -260,8 +260,8 @@ class OSS_String
         * @see http://www.utf8-chartable.de/
         */
 
-        $from = array( "\xC3\x86", "\xC3\xA6", "\xC3\xB0", "\xC3\x98", "\xC3\xB8", "\xC3\x9F", "\xC3\x9E", "\xC3\xBE", "\xC5\x81", "\xC5\x82", "\xC4\x91", "\xC4\x90", "\xE2\x82\xAC" );
-        $to = array(   'AE',       'ae',       'd',        'O',        'o',        'ss',       'Th',       'th',       'L',        'l',        "d",        "D",        "EUR" );
+        $from = [ "\xC3\x86", "\xC3\xA6", "\xC3\xB0", "\xC3\x98", "\xC3\xB8", "\xC3\x9F", "\xC3\x9E", "\xC3\xBE", "\xC5\x81", "\xC5\x82", "\xC4\x91", "\xC4\x90", "\xE2\x82\xAC" ];
+        $to = [   'AE',       'ae',       'd',        'O',        'o',        'ss',       'Th',       'th',       'L',        'l',        "d",        "D",        "EUR" ];
 
         $retVal = iconv( 'UTF-8', 'ASCII//TRANSLIT', str_replace( $from, $to, $input ) ); // TRANSLIT does the whole job
         if( !$keepSpaces )
@@ -291,7 +291,7 @@ class OSS_String
      */
     public static function randomMacAddress( $upperCase = false )
     {
-        $retArr = array();
+        $retArr = [];
 
         for( $x = 1; $x <= 6; $x++ )
             $retArr[] = OSS_String::random( 2, false, false, false, '0123456789abcdef', '' );

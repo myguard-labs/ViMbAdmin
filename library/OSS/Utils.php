@@ -193,7 +193,7 @@ class OSS_Utils
      * @param string $host Defaults to null. Hostname (including http[s]://) to override url with
      * @return string
      */
-    public static function genUrl( $controller = false, $action = false, $module = false, $params = array(), $host = null )
+    public static function genUrl( $controller = false, $action = false, $module = false, $params = [], $host = null )
     {
         $options = OSS_Runtime::options();
         $url = OSS_Runtime::baseUrl();
@@ -281,9 +281,9 @@ class OSS_Utils
      */
     public static function ordinal( $number )
     {
-        $ends = array( 'th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th' );
+        $ends = [ 'th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th' ];
 
-        return ( in_array( $number % 100, array( 11, 12, 13 ) ) ? $number . 'th' : $number . $ends[ $number % 10 ] );
+        return ( in_array( $number % 100, [ 11, 12, 13 ] ) ? $number . 'th' : $number . $ends[ $number % 10 ] );
     }
 
     

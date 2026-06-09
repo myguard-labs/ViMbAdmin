@@ -12,12 +12,12 @@ class DatabaseVersion
     /**
      * @var integer $version
      */
-    private $version;
+    private ?int $version = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
 
     /**
@@ -55,12 +55,12 @@ class DatabaseVersion
     /**
      * @var string
      */
-    private $name;
+    private ?string $name = null;
 
     /**
      * @var \DateTime
      */
-    private $applied_on;
+    private ?\DateTime $applied_on = null;
 
 
     /**

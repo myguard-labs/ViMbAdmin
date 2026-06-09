@@ -12,37 +12,37 @@ class RememberMe
     /**
      * @var string
      */
-    private $userhash;
+    private ?string $userhash = null;
 
     /**
      * @var string
      */
-    private $ckey;
+    private ?string $ckey = null;
 
     /**
      * @var string
      */
-    private $original_ip;
+    private ?string $original_ip = null;
 
     /**
      * @var \DateTime
      */
-    private $expires;
+    private ?\DateTime $expires = null;
 
     /**
      * @var \DateTime
      */
-    private $created;
+    private ?\DateTime $created = null;
 
     /**
      * @var integer
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var \Entities\Admin
      */
-    private $User;
+    private ?\Entities\Admin $User = null;
 
 
     /**
@@ -195,7 +195,7 @@ class RememberMe
     /**
      * @var \DateTime
      */
-    private $last_used;
+    private ?\DateTime $last_used = null;
 
 
     /**

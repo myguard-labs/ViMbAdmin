@@ -12,32 +12,32 @@ class AdminPreference
     /**
      * @var string $attribute
      */
-    private $attribute;
+    private ?string $attribute = null;
 
     /**
      * @var integer $ix
      */
-    private $ix;
+    private ?int $ix = null;
 
     /**
      * @var string $op
      */
-    private $op;
+    private ?string $op = null;
 
     /**
      * @var string $value
      */
-    private $value;
+    private ?string $value = null;
 
     /**
      * @var integer $expire
      */
-    private $expire;
+    private ?int $expire = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var Entities\Admin
@@ -195,7 +195,7 @@ class AdminPreference
     /**
      * @var Entities\Admin
      */
-    private $Admin;
+    private ?\Entities\Admin $Admin = null;
 
 
     /**

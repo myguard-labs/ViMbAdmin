@@ -14,42 +14,42 @@ class Admin
     /**
      * @var string $username
      */
-    private $username;
+    private ?string $username = null;
 
     /**
      * @var string $password
      */
-    private $password;
+    private ?string $password = null;
 
     /**
      * @var boolean $super
      */
-    private $super;
+    private ?bool $super = null;
 
     /**
      * @var boolean $active
      */
-    private $active;
+    private ?bool $active = null;
 
     /**
      * @var \DateTime $created
      */
-    private $created;
+    private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
-    private $modified;
+    private ?\DateTime $modified = null;
 
     /**
      * @var \DateTime $last_login
      */
-    private $last_login;
+    private ?\DateTime $last_login = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection

@@ -42,32 +42,32 @@ class Log
     /**
      * @var string $action
      */
-    private $action;
+    private ?string $action = null;
 
     /**
      * @var string $data
      */
-    private $data;
+    private ?string $data = null;
 
     /**
      * @var \DateTime $timestamp
      */
-    private $timestamp;
+    private ?\DateTime $timestamp = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var Entities\Admin
      */
-    private $Admin;
+    private ?\Entities\Admin $Admin = null;
 
     /**
      * @var Entities\Domain
      */
-    private $Domain;
+    private ?\Entities\Domain $Domain = null;
 
 
     /**

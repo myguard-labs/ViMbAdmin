@@ -12,37 +12,37 @@ class DomainPreference
     /**
      * @var string
      */
-    private $attribute;
+    private ?string $attribute = null;
 
     /**
      * @var integer
      */
-    private $ix;
+    private ?int $ix = null;
 
     /**
      * @var string
      */
-    private $op;
+    private ?string $op = null;
 
     /**
      * @var string
      */
-    private $value;
+    private ?string $value = null;
 
     /**
      * @var integer
      */
-    private $expire;
+    private ?int $expire = null;
 
     /**
      * @var integer
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var \Entities\Domain
      */
-    private $Domain;
+    private ?\Entities\Domain $Domain = null;
 
 
     /**

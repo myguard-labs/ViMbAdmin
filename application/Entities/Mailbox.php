@@ -14,77 +14,77 @@ class Mailbox
     /**
      * @var string $username
      */
-    private $username;
+    private ?string $username = null;
 
     /**
      * @var string $password
      */
-    private $password;
+    private ?string $password = null;
 
     /**
      * @var string $name
      */
-    private $name;
+    private ?string $name = null;
 
     /**
      * @var string $alt_email
      */
-    private $alt_email;
+    private ?string $alt_email = null;
 
     /**
      * @var integer $quota
      */
-    private $quota;
+    private ?int $quota = null;
 
     /**
      * @var string $local_part
      */
-    private $local_part;
+    private ?string $local_part = null;
 
     /**
      * @var boolean $active
      */
-    private $active;
+    private ?bool $active = null;
 
     /**
      * @var string $access_restriction
      */
-    private $access_restriction = 'ALL';
+    private string $access_restriction = 'ALL';
 
     /**
      * @var string $homedir
      */
-    private $homedir;
+    private ?string $homedir = null;
 
     /**
      * @var string $maildir
      */
-    private $maildir;
+    private ?string $maildir = null;
 
     /**
      * @var integer $uid
      */
-    private $uid;
+    private ?int $uid = null;
 
     /**
      * @var integer $gid
      */
-    private $gid;
+    private ?int $gid = null;
 
     /**
      * @var \DateTime $created
      */
-    private $created;
+    private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
-    private $modified;
+    private ?\DateTime $modified = null;
 
     /**
      * @var integer $id
      */
-    private $id;
+    private ?int $id = null;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
@@ -477,7 +477,7 @@ class Mailbox
     /**
      * @var Entities\Domain
      */
-    private $Domain;
+    private ?\Entities\Domain $Domain = null;
 
 
     /**
@@ -605,7 +605,7 @@ class Mailbox
     /**
      * @var \Entities\DirectoryEntry
      */
-    private $DirectoryEntry;
+    private ?\Entities\DirectoryEntry $DirectoryEntry = null;
 
 
     /**
@@ -633,7 +633,7 @@ class Mailbox
     /**
      * @var boolean
      */
-    private $delete_pending;
+    private ?bool $delete_pending = null;
 
 
     /**

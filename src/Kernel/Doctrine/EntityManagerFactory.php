@@ -152,7 +152,22 @@ final class EntityManagerFactory
         $pool      = null;
 
         try {
-            switch ($cfg['type'] ?? 'ArrayCache') {
+            switch ($cfg['type'] ?? 'auto') {
+                case 'auto':
+                    // Default: prefer APCu (a persistent, cross-request metadata/
+                    // query cache) whenever the extension is loaded and enabled
+                    // for this SAPI; otherwise fall through to the per-request
+                    // Array pool below. This gives a from-source install the same
+                    // cached-metadata speed the Docker image gets, with no config
+                    // and no hard dependency (graceful degrade).
+                    if (
+                        extension_loaded('apcu')
+                        && (PHP_SAPI === 'cli' ? (bool) ini_get('apc.enable_cli') : apcu_enabled())
+                    ) {
+                        $pool = new \Symfony\Component\Cache\Adapter\ApcuAdapter($namespace);
+                    }
+                    break;
+
                 case 'ApcCache':
                 case 'ApcuCache':
                     $pool = new \Symfony\Component\Cache\Adapter\ApcuAdapter($namespace);

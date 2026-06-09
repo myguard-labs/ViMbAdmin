@@ -457,8 +457,8 @@ final class DomainController extends AbstractController
         $form->add(new Field('active', 'Active', 'checkbox'));
         $form->add(new Field('max_aliases', 'Max aliases', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]));
         $form->add(new Field('max_mailboxes', 'Max mailboxes', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]));
-        $form->add(new Field('max_quota', 'Max quota', 'text'));
-        $form->add(new Field('quota', 'Quota', 'text'));
+        $form->add(new Field('max_quota', 'Max quota', 'text', [Validators::nonNegativeNumber()]));
+        $form->add(new Field('quota', 'Quota', 'text', [Validators::nonNegativeNumber()]));
 
         return $form;
     }
@@ -510,8 +510,8 @@ final class DomainController extends AbstractController
         $form->add($this->checkedByDefault(new Field('active', 'Active', 'checkbox')));
         $form->add($this->defaulted(new Field('max_aliases', 'Max aliases', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]), (string) ($d['aliases'] ?? 0)));
         $form->add($this->defaulted(new Field('max_mailboxes', 'Max mailboxes', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]), (string) ($d['mailboxes'] ?? 0)));
-        $form->add($this->defaulted(new Field('max_quota', 'Max quota', 'text'), (string) ($d['maxquota'] ?? 0)));
-        $form->add($this->defaulted(new Field('quota', 'Quota', 'text'), (string) ($d['quota'] ?? 0)));
+        $form->add($this->defaulted(new Field('max_quota', 'Max quota', 'text', [Validators::nonNegativeNumber()]), (string) ($d['maxquota'] ?? 0)));
+        $form->add($this->defaulted(new Field('quota', 'Quota', 'text', [Validators::nonNegativeNumber()]), (string) ($d['quota'] ?? 0)));
 
         return $form;
     }

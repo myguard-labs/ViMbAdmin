@@ -99,30 +99,43 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
         return $fields;
     }
 
-    public function nativeMailboxValidate( array $values, array $options ): ?string
+    /**
+     * The services the form actually has ticked, in config order.
+     *
+     * @return string[]
+     */
+    private function _selected( array $values, array $options ): array
     {
-        if( empty( $values['plugin_accessPermissions'] ) )
-            return null;
-
+        $selected = [];
         foreach( array_keys( $this->_types( $options ) ) as $name )
             if( !empty( $values["plugin_accessPermission_{$name}"] ) )
-                return null; // at least one service selected
+                $selected[] = (string) $name;
 
-        return _( 'You must select which services the user can access if you are choosing to apply specific access permissions' );
+        return $selected;
+    }
+
+    public function nativeMailboxValidate( array $values, array $options ): ?string
+    {
+        // "Restricted" means the master box is ticked OR at least one service is
+        // ticked (ticking a service alone is enough — the master is just a hint).
+        $wantsRestriction = !empty( $values['plugin_accessPermissions'] );
+        $selected         = $this->_selected( $values, $options );
+
+        if( !$wantsRestriction )
+            return null; // no master, no services -> unrestricted (ALL), valid
+
+        if( $selected === [] )
+            return _( 'You must select which services the user can access if you are choosing to apply specific access permissions' );
+
+        return null;
     }
 
     public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null ): void
     {
-        if( empty( $values['plugin_accessPermissions'] ) )
-        {
-            $mailbox->setAccessRestriction( 'ALL' );
-            return;
-        }
-
-        $selected = [];
-        foreach( array_keys( $this->_types( $options ) ) as $name )
-            if( !empty( $values["plugin_accessPermission_{$name}"] ) )
-                $selected[] = $name;
+        // Apply a restriction when any service is ticked, even if the master
+        // checkbox was left unticked (matches user intent: ticking SMTP/IMAP/…
+        // clearly asks to restrict). Nothing ticked -> ALL (no restriction).
+        $selected = $this->_selected( $values, $options );
 
         $mailbox->setAccessRestriction( $selected === [] ? 'ALL' : implode( ',', $selected ) );
     }

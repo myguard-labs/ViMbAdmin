@@ -767,7 +767,7 @@ final class MailboxController extends AbstractController
         $name->setValue((string) $mailbox->getName());
         $form->add($name);
 
-        $quota = new Field('quota', 'Quota', 'text');
+        $quota = new Field('quota', 'Quota', 'text', [Validators::nonNegativeNumber()]);
         $quota->setValue((string) \OSS_Filter_FileSize::unfilter((int) $mailbox->getQuota()));
         $form->add($quota);
 
@@ -832,7 +832,7 @@ final class MailboxController extends AbstractController
             Validators::minLength($minPw),
         ]));
 
-        $quota = new Field('quota', 'Quota', 'text');
+        $quota = new Field('quota', 'Quota', 'text', [Validators::nonNegativeNumber()]);
         $quota->setValue($preferred !== null
             ? (string) \OSS_Filter_FileSize::unfilter((int) $preferred->getQuota())
             : '0');

@@ -106,4 +106,47 @@ final class Validators
             return $value === $other() ? null : $message;
         };
     }
+
+    /**
+     * A non-negative number (integer or decimal). Used for size/quota fields,
+     * where a negative or non-numeric value otherwise flows through
+     * OSS_Filter_FileSize + (int) and yields a garbage quota. Empty passes
+     * (combine with required() where the field is mandatory); 0 is allowed
+     * (it means "unlimited" for quotas).
+     */
+    public static function nonNegativeNumber(string $message = 'Please enter a number of 0 or more.'): callable
+    {
+        return static function (mixed $value) use ($message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            $s = trim((string) $value);
+            if (!is_numeric($s) || (float) $s < 0) {
+                return $message;
+            }
+
+            return null;
+        };
+    }
+
+    /**
+     * A non-negative integer (whole number, 0 or more). For count limits such as
+     * max mailboxes / max aliases. Empty passes; 0 is allowed (= unlimited).
+     */
+    public static function nonNegativeInt(string $message = 'Please enter a whole number of 0 or more.'): callable
+    {
+        return static function (mixed $value) use ($message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            $s = trim((string) $value);
+            if (preg_match('/^\d+$/', $s) !== 1) {
+                return $message;
+            }
+
+            return null;
+        };
+    }
 }

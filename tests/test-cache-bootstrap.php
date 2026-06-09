@@ -1,19 +1,21 @@
 <?php
 /**
- * Regression smoke test: Doctrine ORM cache wiring.
+ * Regression smoke test: Doctrine ORM 3 cache wiring.
  *
- * Exercises the exact call shape used by OSS_Resource_Doctrine2cache and
- * OSS_Resource_Doctrine2 so a dependency bump that breaks the cache layer
- * (e.g. symfony/cache or doctrine/orm major) fails CI instead of fataling at
- * runtime in production.
+ * Exercises the exact call shape used by
+ * {@see \ViMbAdmin\Kernel\Doctrine\EntityManagerFactory} so a dependency bump
+ * that breaks the cache/proxy layer (symfony/cache, doctrine/orm,
+ * doctrine/dbal) fails CI instead of fataling at runtime in production.
  *
- * Covers:
+ * Covers (ORM 3.x API):
  *   - symfony/cache adapters construct (Array always; Apcu when ext present)
- *   - Doctrine\Common\Cache\Psr6\DoctrineProvider::wrap() accepts the pool
- *   - the wrapped cache does a real save()/fetch() round-trip
- *   - Doctrine\ORM\Configuration accepts the cache via set*CacheImpl()
- *     and EntityManager::create() is callable (ORM 2.x API the app relies on;
- *     this line is exactly what dies under an accidental ORM 3 bump)
+ *     and do a real PSR-6 save()/get() round-trip
+ *   - Doctrine\ORM\Configuration accepts the PSR-6 pool directly via
+ *     setMetadataCache()/setQueryCache()/setResultCache() (no more
+ *     doctrine/cache DoctrineProvider wrapper — that package was removed)
+ *   - native lazy objects can be enabled and a real EntityManager is
+ *     constructible (the ORM 3 proxy backend; the old EntityManager::create()
+ *     static factory is gone)
  *
  * Exit 0 = all good, non-zero = regression.
  */
@@ -27,7 +29,9 @@ require $autoload;
 
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Cache\Adapter\ApcuAdapter;
-use Doctrine\Common\Cache\Psr6\DoctrineProvider;
+use Doctrine\ORM\Configuration;
+use Doctrine\ORM\EntityManager;
+use Doctrine\DBAL\DriverManager;
 
 $failures = 0;
 function check(string $label, callable $fn): void {
@@ -41,38 +45,55 @@ function check(string $label, callable $fn): void {
     }
 }
 
-check('ArrayAdapter wrap + save/fetch round-trip', function () {
-    $c = DoctrineProvider::wrap(new ArrayAdapter());
-    $c->save('k', 'v-array', 10);
-    if ($c->fetch('k') !== 'v-array') {
+/** PSR-6 round-trip helper (replaces the old Doctrine save/fetch). */
+function psr6RoundTrip(\Psr\Cache\CacheItemPoolInterface $pool, string $key, string $val): void {
+    $item = $pool->getItem($key);
+    $item->set($val);
+    $pool->save($item);
+    if ($pool->getItem($key)->get() !== $val) {
         throw new RuntimeException('round-trip value mismatch');
     }
+}
+
+check('ArrayAdapter PSR-6 save/get round-trip', function () {
+    psr6RoundTrip(new ArrayAdapter(), 'k', 'v-array');
 });
 
 if (extension_loaded('apcu') && (PHP_SAPI === 'cli' ? ini_get('apc.enable_cli') : apcu_enabled())) {
-    check('ApcuAdapter wrap + save/fetch round-trip', function () {
-        $c = DoctrineProvider::wrap(new ApcuAdapter('vmbtest'));
-        $c->save('k2', 'v-apcu', 10);
-        if ($c->fetch('k2') !== 'v-apcu') {
-            throw new RuntimeException('apcu round-trip value mismatch');
-        }
+    check('ApcuAdapter PSR-6 save/get round-trip', function () {
+        psr6RoundTrip(new ApcuAdapter('vmbtest'), 'k2', 'v-apcu');
     });
 } else {
     echo "SKIP ApcuAdapter (apcu ext/cli not enabled)\n";
 }
 
-check('ORM Configuration + set*CacheImpl + EntityManager::create callable', function () {
-    $c = DoctrineProvider::wrap(new ArrayAdapter());
-    $config = new Doctrine\ORM\Configuration();
-    $config->setMetadataCacheImpl($c);
-    $config->setQueryCacheImpl($c);
-    $config->setResultCacheImpl($c);
+check('ORM3 Configuration accepts PSR-6 pools + native lazy + EntityManager constructible', function () {
+    $pool   = new ArrayAdapter();
+    $config = new Configuration();
+    $config->enableNativeLazyObjects(true);
+    $config->setMetadataCache($pool);
+    $config->setQueryCache($pool);
+    $config->setResultCache($pool);
     $config->setProxyDir(sys_get_temp_dir());
     $config->setProxyNamespace('Proxies');
-    // Do not actually connect; just prove the ORM 2.x static factory exists.
-    // (ORM 3 removed EntityManager::create — this is the canary for that bump.)
-    if (!method_exists(Doctrine\ORM\EntityManager::class, 'create')) {
-        throw new RuntimeException('EntityManager::create() is gone — doctrine/orm 3 detected');
+    $config->setMetadataDriverImpl(
+        new Doctrine\ORM\Mapping\Driver\XmlDriver([realpath(__DIR__ . '/../doctrine2/xml')])
+    );
+
+    // ORM 3 removed EntityManager::create(); construction now takes a DBAL
+    // connection. Pin serverVersion so this never opens a socket.
+    $connection = DriverManager::getConnection([
+        'driver'        => 'pdo_mysql',
+        'host'          => '127.0.0.1',
+        'dbname'        => 'unused',
+        'user'          => 'unused',
+        'password'      => 'unused',
+        'serverVersion' => '11.0.0-MariaDB',
+    ], $config);
+
+    $em = new EntityManager($connection, $config);
+    if (!$em->getConfiguration()->isNativeLazyObjectsEnabled()) {
+        throw new RuntimeException('native lazy objects not enabled on the EM');
     }
 });
 

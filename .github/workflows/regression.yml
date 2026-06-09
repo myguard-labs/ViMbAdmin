@@ -149,14 +149,15 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist --no-dev
 
-      - name: Assert doctrine/orm stayed on 2.x (ORM 3 removes APIs we use)
+      - name: Assert doctrine/orm is on 3.x (migrated; ORM 2 APIs are gone)
         run: |
           ver=$(composer show doctrine/orm --no-interaction 2>/dev/null \
                 | awk '/^versions/ {print $4}')
           echo "doctrine/orm = $ver"
           case "$ver" in
-            2.*|v2.*) echo "OK: ORM 2.x" ;;
-            *) echo "::error::doctrine/orm is $ver — ORM 3 removes EntityManager::create / set*CacheImpl that this codebase relies on"; exit 1 ;;
+            3.*|v3.*) echo "OK: ORM 3.x" ;;
+            2.*|v2.*) echo "::error::doctrine/orm is $ver — codebase migrated to ORM 3 (native lazy objects, PSR-6 cache, LegacyObjectType); a 2.x downgrade is unsupported"; exit 1 ;;
+            *) echo "::error::doctrine/orm is $ver — unexpected major; this codebase targets ORM 3.x"; exit 1 ;;
           esac
 
       - name: Cache + ORM bootstrap smoke

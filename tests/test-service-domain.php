@@ -54,15 +54,16 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     public function persist(object $object): void { $this->persisted[] = $object; }
     public function flush(): void { $this->flushes++; }
 
-    public function find(string $className, $id) { return null; }
+    public function find(string $className, mixed $id): ?object { return null; }
     public function remove(object $object): void {}
     public function clear(): void {}
     public function detach(object $object): void {}
     public function refresh(object $object): void {}
-    public function getRepository(string $className) { throw new \RuntimeException('not used'); }
-    public function getClassMetadata(string $className) { throw new \RuntimeException('not used'); }
-    public function getMetadataFactory() { throw new \RuntimeException('not used'); }
+    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository { throw new \RuntimeException('not used'); }
+    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata { throw new \RuntimeException('not used'); }
+    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory { throw new \RuntimeException('not used'); }
     public function initializeObject(object $obj): void {}
+    public function isUninitializedObject(mixed $value): bool { return false; }
     public function contains(object $object): bool { return false; }
 
     /** Most recently persisted \Entities\Log, or null. */

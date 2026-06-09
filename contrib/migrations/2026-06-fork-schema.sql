@@ -102,18 +102,28 @@ PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
 -- dovecot_quota / dovecot_last_login are read-only, username-keyed, Dovecot-
 -- written, with NO Doctrine association (Mailbox PK is `id`, not `username`),
 -- so the schema-tool can't add these. Cascade-delete the rows with the mailbox.
--- An FK needs identical type AND collation: align dovecot_quota.username
--- (created utf8mb4_uca1400_ai_ci on MariaDB 11.4) to mailbox's
--- utf8mb3_unicode_ci first, or ADD CONSTRAINT fails errno 150.
+-- An FK needs identical type AND collation. mailbox.username's collation is
+-- whatever the schema-tool + server produced: DBAL 4 (unlike DBAL 3) no longer
+-- pins COLLATE on the column, so it inherits the server default — e.g.
+-- utf8mb3_unicode_ci on the production server but utf8mb3_uca1400_ai_ci on
+-- MariaDB 11.4. dovecot_quota is hand-created utf8mb4, so align its username to
+-- whatever mailbox.username actually is (derived live) rather than hardcoding a
+-- collation that drifts per server/DBAL version, or ADD CONSTRAINT fails errno 150.
+SET @mb_cs := ( SELECT CHARACTER_SET_NAME FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'username' );
+SET @mb_co := ( SELECT COLLATION_NAME FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'username' );
+
 SET @bad_coll := (
     SELECT COUNT(*) FROM information_schema.COLUMNS
-    WHERE TABLE_SCHEMA   = DATABASE()
-      AND TABLE_NAME     = 'dovecot_quota'
-      AND COLUMN_NAME    = 'username'
-      AND COLLATION_NAME <> 'utf8mb3_unicode_ci'
+    WHERE TABLE_SCHEMA     = DATABASE()
+      AND TABLE_NAME       = 'dovecot_quota'
+      AND COLUMN_NAME      = 'username'
+      AND ( COLLATION_NAME <> @mb_co OR CHARACTER_SET_NAME <> @mb_cs )
 );
-SET @ddl := IF( @bad_coll > 0,
-    'ALTER TABLE `dovecot_quota` MODIFY `username` VARCHAR(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL',
+SET @ddl := IF( @bad_coll > 0 AND @mb_co IS NOT NULL,
+    CONCAT('ALTER TABLE `dovecot_quota` MODIFY `username` VARCHAR(255) CHARACTER SET ',
+           @mb_cs, ' COLLATE ', @mb_co, ' NOT NULL'),
     'DO 0 /* dovecot_quota.username collation already aligned */' );
 PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
 

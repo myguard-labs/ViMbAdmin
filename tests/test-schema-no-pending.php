@@ -67,6 +67,18 @@ if ($xmlDir === false) {
 // 1. EM from the XML mappings — same source of truth the app uses.
 //    simplified=false: file names are the FQCN form (Entities.Mailbox.dcm.xml).
 $config = ORMSetup::createXMLMetadataConfiguration([$xmlDir], true);
+// ORM 3 on PHP 8.4+: native lazy objects are the proxy backend the app uses
+// (see EntityManagerFactory); the EM ctor instantiates ProxyFactory eagerly.
+$config->enableNativeLazyObjects(true);
+
+// DBAL 4 dropped the `object` type that DirectoryEntry.jpegPhoto maps to;
+// register the same compat shim the app does so SchemaTool can declare it.
+if (!\Doctrine\DBAL\Types\Type::hasType(\ViMbAdmin\Kernel\Doctrine\Type\LegacyObjectType::NAME)) {
+    \Doctrine\DBAL\Types\Type::addType(
+        \ViMbAdmin\Kernel\Doctrine\Type\LegacyObjectType::NAME,
+        \ViMbAdmin\Kernel\Doctrine\Type\LegacyObjectType::class
+    );
+}
 
 $connection = DriverManager::getConnection([
     'driver'   => 'pdo_mysql',

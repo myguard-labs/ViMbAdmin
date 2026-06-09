@@ -493,6 +493,7 @@ trait OSS_Doctrine2_WithPreferences
                     if( !$ignoreExpired && $pref->getExpire() != 0 && $pref->getExpire() < time() )
                         continue;
 
+                    $key = null;
                     if( strpos( $pref->getAttribute(), "." ) !== false )
                         $key = substr( $pref->getAttribute(), strlen( $attribute )+1 );
 

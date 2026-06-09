@@ -40,6 +40,11 @@ class ViMbAdmin_BruteForce
      */
     public function __construct( $em = null, array $opts = [] )
     {
+        // $em is accepted only for call-site compatibility with the historic
+        // (EntityManager-backed) signature; this file-state implementation does
+        // not use it. Explicitly discard so it isn't flagged as dead.
+        unset( $em );
+
         if( isset( $opts['enabled'] ) )      $this->_enabled = (bool) $opts['enabled'];
         if( isset( $opts['max_attempts'] ) ) $this->_max     = (int) $opts['max_attempts'];
         if( isset( $opts['window'] ) )       $this->_window  = (int) $opts['window'];

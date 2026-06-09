@@ -59,7 +59,7 @@
 function smarty_function_tmplinclude( $params, $smarty )
 {
     if( !isset( $params['file'] ) )
-        throw new SmartyCompilerException( "Missing 'file' attribute in tmplinclude tag" );
+        throw new \Smarty\CompilerException( "Missing 'file' attribute in tmplinclude tag" );
 
     // Smarty 5 passes a \Smarty\Template (not the engine) to function plugins;
     // templateExists()/fetch() live on the engine, so resolve it.
@@ -108,9 +108,10 @@ function smarty_function_tmplinclude( $params, $smarty )
     if( $skin && $engine->templateExists( '_skins/' . $skin . '/' . $params['file'] ) )
         $params['file'] = '_skins/' . $skin . '/' . $params['file'];
     elseif( !$engine->templateExists( $params['file'] ) )
-        throw new SmartyCompilerException( "Template file does not exist - [{$params['file']}]" );
+        throw new \Smarty\CompilerException( "Template file does not exist - [{$params['file']}]" );
 
 
+    $output = '';
     if( isset( $params['assign'] ) )
         $smarty->assign( $params['assign'], $engine->fetch( $params['file'] ) );
     else

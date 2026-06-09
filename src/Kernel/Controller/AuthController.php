@@ -674,7 +674,8 @@ final class AuthController extends AbstractController
     {
         $opts = $options['bruteforce'] ?? [];
         if (empty($opts['statedir'])) {
-            $opts['statedir'] = APPLICATION_PATH . '/../var/bruteforce';
+            $appPath = defined('APPLICATION_PATH') ? APPLICATION_PATH : '';
+            $opts['statedir'] = $appPath . '/../var/bruteforce';
         }
         if (isset($options['trustedproxy'])) {
             $opts['trustedproxy'] = $options['trustedproxy'];

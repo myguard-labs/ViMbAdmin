@@ -318,6 +318,8 @@ class Mailbox extends EntityRepository
 
         if( $alias->getGoto() != $alias->getAddress() )
             $alias->getDomain()->decreaseAliasCount();
+
+        return true;
     }
 
     /**

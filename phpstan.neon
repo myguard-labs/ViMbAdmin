@@ -11,8 +11,8 @@ parameters:
         - application/Proxies/__CG__*.php
     bootstrapFiles:
         - vendor/autoload.php
-    # ZF1-future and the legacy Zend autoloader register classes outside
-    # Composer's PSR-0 map; ignore the unavoidable unknown-symbol noise so the
-    # report focuses on real defects. Tighten as the codebase is modernised.
+    # Level 1 is clean and enforced (CI fails on regressions). ZF1 is gone, so
+    # the old "ignore Zend autoloader noise" rationale no longer applies; raise
+    # the level incrementally (level 2 currently surfaces ~178 findings).
     reportUnmatchedIgnoredErrors: false
     treatPhpDocTypesAsCertain: false

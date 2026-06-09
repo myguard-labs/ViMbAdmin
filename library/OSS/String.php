@@ -362,7 +362,7 @@ class OSS_String
 
         foreach( $input as $key => $item )
         {
-            if ( is_scalar( $vItem ) )
+            if ( is_scalar( $item ) )
                 $input[ $key ] = html_entity_decode( $item );
             else
                 $input[ $key ] = self::htmlEntityDecode( $item );

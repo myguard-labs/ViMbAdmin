@@ -18,10 +18,9 @@ jobs:
   phpstan:
     name: PHPStan
     runs-on: ubuntu-latest
-    # Legacy ZF1-future / PSR-0 codebase: PHPStan surfaces real issues but is
-    # not allowed to block the build until a baseline is committed. Drop the
-    # continue-on-error once `phpstan.neon` carries a clean baseline.
-    continue-on-error: true
+    # PHPStan level 1 is clean and now BLOCKING — a regression fails the build.
+    # (ZF1 is gone, so the old "advisory until a baseline lands" exemption no
+    # longer applies. Raise the level incrementally in follow-up PRs.)
     steps:
       - uses: actions/checkout@v4
 

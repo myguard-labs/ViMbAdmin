@@ -47,8 +47,17 @@ class ViMbAdmin_Plugin
      */
     private $name = null;
 
+    /**
+     * The controller (ZF1 controller or native plugin context) that created
+     * this plugin. Kept available to subclasses that need their host context.
+     * @var object
+     */
+    protected $controller;
+
     public function __construct( object $controller, $classname )
     {
+        $this->controller = $controller;
+
         // set the plugin name
         $this->name = strtolower( substr( $classname, 16 ) );
     }

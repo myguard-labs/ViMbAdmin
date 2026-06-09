@@ -291,8 +291,14 @@ class Domain extends EntityRepository
      */
     public function purgeDomainAdmins( $domain )
     {
+        $count = 0;
         foreach( $domain->getAdmins() as $a )
+        {
             $domain->removeAdmin( $a );
+            $count++;
+        }
+
+        return $count;
     }
 
     /**

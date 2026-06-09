@@ -10,7 +10,7 @@
 *Virtual Mailbox Administration that runs on a PHP version released this decade.*
 
 [![PHP](https://img.shields.io/badge/PHP-8.4%2B-777bb4)]()
-[![Stack](https://img.shields.io/badge/Native%20kernel%20%C2%B7%20Doctrine%202.20%20%C2%B7%20Smarty%205-informational)]()
+[![Stack](https://img.shields.io/badge/Native%20kernel%20%C2%B7%20Doctrine%20ORM%203%20%C2%B7%20Smarty%205-informational)]()
 
 **ViMbAdmin** (*vim-be-admin*, and yes the editor war is intentional) is a web
 panel for managing the virtual domains, mailboxes and aliases in a
@@ -72,8 +72,9 @@ only optional cron left is the panel's own queue-runner.
   `nofilter` flag, the `{if}`-can't-call-PHP-functions rule, and the
   delightful clone bug where Smarty 5's BC plugin loader drops every custom
   plugin from a cloned view — which is why your forms used to render blank).
-- **Doctrine ORM 2.8 → 2.20** (latest 2.x LTS) + DBAL 3. CLI and query API
-  rewritten to match.
+- **Doctrine ORM 2.8 → 3.x** (currently orm 3.6 / dbal 4) + persistence 4. CLI
+  and query API rewritten to match; the ORM 3 jump needed native lazy-loading
+  proxies (`enableNativeLazyObjects`), PSR-6 caches and an `object`-type shim.
 - **Cache layer rebuilt on Symfony Cache.** `doctrine/cache` 2.x dropped the
   old concrete `*Cache` providers, so the metadata/query cache now wraps a
   Symfony PSR-6 pool (`ArrayAdapter` / `ApcuAdapter` / `RedisAdapter`) in
@@ -187,7 +188,7 @@ panel around the edges. The stock upstream shipped none of it.
 
 ### Dependencies
 
-- On current LTS lines (doctrine/orm 2.20, DBAL 3, symfony/cache 6.4/7/8,
+- On current release lines (doctrine/orm 3.6, DBAL 4, symfony/cache 6.4/7/8,
   Smarty 5, robthree/twofactorauth 3, bacon/bacon-qr-code 3);
   the application kernel, routing, forms, sessions and CLI are native and ZF1-free;
   `composer audit` reports **no advisories**.
@@ -281,9 +282,9 @@ extra FK/collation/index steps the schema-tool can't express, and is idempotent:
 You invoke it once after an upgrade. Where it's invoked *for* you depends on the
 deployment:
 
-- **Docker** — the image runs it automatically at **every container start** (see
-  `bootstrap.sh`), so pulling a newer image and `docker compose up -d` brings the
-  schema forward with no manual step.
+- **Docker** — the image runs it automatically at **every container start** (the
+  s6 init-bootstrap step), so pulling a newer image and `docker compose up -d`
+  brings the schema forward with no manual step.
 - **From source / bare metal** — run the command above (or click **Maintenance →
   schema update**) yourself after each `git pull`. Wire it into your own
   deploy/cron if you want it automatic.
@@ -555,8 +556,9 @@ container start, so the first request after a (re)start isn't cold:
 
 - **Server-side pagination.** For large installs the list pages (mailbox, alias,
   domain, log, archive) can page/sort/search **server-side** — the browser
-  fetches only the visible page instead of every row. Off by default; enable per
-  list in `application.ini`:
+  fetches only the visible page instead of every row. **On by default** (the
+  log table is unbounded, so client-side paging there loads the whole history);
+  set any to `false` in `application.ini` to revert a given list to client-side:
 
   ```ini
   defaults.server_side.pagination.enable         = true   ; mailbox + alias
@@ -565,7 +567,7 @@ container start, so the first request after a (re)start isn't cold:
   defaults.server_side.pagination.archive.enable = true
   ```
 
-  The Docker image enables all of them. Behind a positive-security WAF, allow the
+  Behind a positive-security WAF, allow the
   DataTables query args (`sEcho`, `iDisplayStart`, `sSearch`, `iSortCol_0`,
   `mDataProp_*`, …) on the `/*/list-data` routes.
 
@@ -600,14 +602,24 @@ the filesystem with the panel).
 
 ### Scheduling the queue runner
 
-**ViMbAdmin runs no daemon — you MUST install a cron.** The queue is only
-drained when something invokes `queue.cli-run`. As a convenience the panel also
-*trigger-checks* (spawns a background runner if there's pending work and a free
-slot) on five events — **container start, any login, opening the Maintenance
-tab, an MCP archive call, and the HTTP trigger** — but those are best-effort
-nudges, **not** a substitute for the cron. Pick **one** cron form below; every
-2 minutes is typical. Full requirements + an autoprune cron are in
-[`contrib/cron/`](contrib/cron/).
+The queue is only drained when something invokes `queue.cli-run`. How that gets
+scheduled depends on how you run ViMbAdmin:
+
+- **Docker image — nothing to set up.** The image supervises a `queue-runner`
+  service (s6) that runs `queue.cli-run` **every 5 minutes**, and fires it once
+  on container start. No host cron needed.
+- **Bare metal / source — you MUST install a cron.** There is no daemon; add a
+  cron calling `queue.cli-run` (every 2 minutes is typical — see form 2 below).
+
+On top of the scheduled runner, two on-demand nudges exist (both *best-effort*,
+**not** a substitute for the periodic runner):
+
+- the **`POST /queue/trigger`** HTTP endpoint (Bearer key + source-IP allowlist)
+  spawns a one-off background runner — for off-box cron hosts that can't run the
+  CLI (form 3 below);
+- the in-panel **Run now** button on the Queue page drains it interactively.
+
+Full requirements + an autoprune cron are in [`contrib/cron/`](contrib/cron/).
 
 Concurrency is capped by **`queue.runner.max_concurrent`** (default **1** =
 strictly serial). A DB lease (`queue_runner` table) enforces it across CLI, web
@@ -615,21 +627,25 @@ and containers, so overlapping cron ticks or trigger-checks never run more than
 the configured number of runners at once; a crashed runner's lease is reaped
 after a timeout so a slot is never lost.
 
-**1. Docker (`docker exec`)** — run from the *host* crontab against the
-container:
+> The Docker image needs **none** of the forms below — its built-in s6
+> `queue-runner` already drains the queue every 5 minutes. These are for
+> bare-metal/source installs, or to add an *extra* off-box trigger.
 
-```cron
-*/2 * * * *  root  docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
-```
-
-**2. Bare metal / inside the container** — plain PHP CLI, from an
+**1. Bare metal / inside the container** — plain PHP CLI, from an
 `application.ini` that points at the panel's DB + doveadm HTTP endpoint:
 
 ```cron
 */2 * * * *  vmail  php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
 ```
 
-**3. HTTP trigger** — when the cron host can't run the CLI at all. Set
+If you do run the upstream image without the s6 runner for some reason, the old
+host-crontab form still works:
+
+```cron
+*/2 * * * *  root  docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
+```
+
+**2. HTTP trigger** — when the cron host can't run the CLI at all. Set
 `queue.runner.key` + `queue.runner.allowed_ips` in `application.ini`, then have
 any host on the allowlist `POST` the key as a Bearer token:
 
@@ -641,10 +657,15 @@ any host on the allowlist `POST` the key as a Bearer token:
 (Empty `queue.runner.key` disables the HTTP endpoint; the CLI runner and the
 in-panel "Run now" button always work.)
 
-A separate, default-off **CLI on-disk purge** (`mailbox_deletion_fs_enabled`,
-`binary.path.rm_rf`) still exists for direct maildir removal on a host that can
-see the mail; it is unrelated to the queue archive/delete flow above and the
-hardened Docker image deliberately can't use it.
+A separate, legacy **on-disk purge** path still exists for direct maildir
+removal on a host that can see the mail, unrelated to the queue archive/delete
+flow above (that backs up via doveadm and prunes from the Archives/Maintenance
+tabs). Two pieces: the **web** purge UI is gated by `mailbox_deletion_fs_enabled`
+(default **false**); the **CLI** `mailbox.cli-delete-pending` shells out via
+`binary.path.rm_rf` over each mailbox's maildir + homedir. In the hardened
+Docker image it is effectively inert — the mail lives in the Dovecot container,
+not here, so the maildir paths don't exist, and the FPM pool's `open_basedir`
+confines PHP to the app's own dirs anyway.
 
 Mailbox **usage** in the panel does *not* need a maildir scan — it is fed live
 by Dovecot's quota-clone plugin. See below.
@@ -785,7 +806,7 @@ libmodsecurity.
 Originally written by [Open Solutions](https://www.opensolutions.ie/) on Zend
 Framework 1, Doctrine ORM and Smarty. This fork has **removed Zend Framework
 entirely** — kernel, routing, forms, config loader, sessions and auth are native
-PHP 8 — while keeping Doctrine (2.20) and Smarty (5). GPLv3 — same as it always
+PHP 8 — while keeping Doctrine (ORM 3) and Smarty (5). GPLv3 — same as it always
 was. This fork keeps the licence and the gratitude; it just keeps the lights on
 too.
 

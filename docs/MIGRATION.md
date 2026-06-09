@@ -2,7 +2,7 @@
 
 > **Audience:** an operator running an **old ViMbAdmin** (a stock 3.x install,
 > or an earlier build of this fork) who is upgrading to **ViMbAdmin 4.0.0 — the
-> Modernised Edition** (`VERSION 4.0.0-rc1`, schema `DBVERSION 4`).
+> Modernised Edition** (`VERSION 4.0.0`, schema `DBVERSION 4`).
 >
 > **The one big change to understand:** the Modernised Edition **never touches
 > the mail filesystem any more — not in any way.** The old ViMbAdmin read and

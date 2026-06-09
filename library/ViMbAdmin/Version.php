@@ -55,7 +55,7 @@ final class ViMbAdmin_Version
      * DBVERSION is independent — bump it ONLY when the schema (entity mappings)
      * changes, not on every release.
      */
-    const VERSION = '4.0.0-rc1';
+    const VERSION = '4.0.0';
 
     /**
      * Upstream GitHub repository (owner/repo) for the Maintenance update checks.

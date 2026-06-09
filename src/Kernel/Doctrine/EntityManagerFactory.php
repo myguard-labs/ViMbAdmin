@@ -173,6 +173,27 @@ final class EntityManagerFactory
     private static function buildCache(array $cfg): object
     {
         $namespace = isset($cfg['namespace']) ? (string) $cfg['namespace'] : '';
+
+        // Version the cache namespace by the running build so a code bump that
+        // changes the entity mappings can never serve STALE ClassMetadata.
+        //
+        // APCu is a persistent, cross-request store (unlike opcache it is not
+        // gated by validate_timestamps), so the FPM master keeps the metadata it
+        // computed under the *previous* image alive across a redeploy. With a
+        // fixed namespace ('ViMbAdmin3'), getUpdateSchemaSql() then diffs that
+        // stale mapping against the live DB and emits phantom ALTERs forever —
+        // the Maintenance tab shows "N pending statement(s)" that the CLI
+        // auto-migrator (apc.enable_cli=0 -> fresh ArrayAdapter -> 0 pending)
+        // can never clear. Suffixing the namespace with the build identity makes
+        // a new build land on a fresh APCu key, so the metadata is recomputed
+        // from the current mappings automatically. DBVERSION moves on every
+        // schema change; the git commit moves on every build (belt and braces).
+        if (class_exists(\ViMbAdmin_Version::class)) {
+            $ver = (defined('ViMbAdmin_Version::DBVERSION') ? (string) \ViMbAdmin_Version::DBVERSION : '0')
+                 . '.' . ((\ViMbAdmin_Version::gitCommitShort() ?? \ViMbAdmin_Version::VERSION));
+            $namespace .= '_' . preg_replace('/[^A-Za-z0-9._]/', '', $ver);
+        }
+
         $pool      = null;
 
         try {

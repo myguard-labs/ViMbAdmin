@@ -59,23 +59,27 @@
     // for dev-only classes (PHPUnit constraints, DI compiler passes) that will
     // never be reachable in production. These are benign — preload is
     // best-effort and the worker compiles such a file lazily on first use — but
-    // they flood the FPM log on every master start. The warning is raised by
-    // the engine, not by the function call, so a leading `@` on
-    // opcache_compile_file does not suppress it; lower error_reporting around
-    // the whole loop instead and restore it after.
-    $prevReporting = error_reporting(0);
-    try {
-        foreach (array_unique($files) as $file) {
-            if (is_string($file) && is_file($file)) {
-                try {
-                    @opcache_compile_file($file);
-                } catch (\Throwable $e) {
-                    // A file that cannot be preloaded (missing optional dependency,
-                    // conditional class def, …) is skipped — never fatal.
-                }
+    // they flood the FPM log on every master start.
+    //
+    // Crucially these warnings are NOT raised by opcache_compile_file(): opcache
+    // defers class *linking* to a final pass that runs after this preload script
+    // returns. Suppressing error_reporting only around the compile loop (and
+    // restoring it afterwards) therefore leaves the link pass running at the
+    // original level — which is exactly why the warnings still flooded the log.
+    //
+    // So we lower error_reporting and DO NOT restore it. This runs in the
+    // FPM *master* process at startup; workers are forked later and read their
+    // error_reporting fresh from php.ini, so leaving the master's level at 0 has
+    // no effect on request handling — it only silences opcache's own link pass.
+    error_reporting(0);
+    foreach (array_unique($files) as $file) {
+        if (is_string($file) && is_file($file)) {
+            try {
+                @opcache_compile_file($file);
+            } catch (\Throwable $e) {
+                // A file that cannot be preloaded (missing optional dependency,
+                // conditional class def, …) is skipped — never fatal.
             }
         }
-    } finally {
-        error_reporting($prevReporting);
     }
 })();

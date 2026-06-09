@@ -264,6 +264,12 @@ immediately, on a trusted network.
 
 ## Upgrading & schema migrations
 
+> **Coming from an old ViMbAdmin (3.x or an earlier fork build)?** Follow the
+> step-by-step **[migration plan in docs/MIGRATION.md](docs/MIGRATION.md)** —
+> minimum requirements, database backup + schema update, `application.ini`
+> re-seed, retiring the legacy filesystem scripts, and wiring Dovecot for the
+> REST-API model. The sections below are the reference detail it builds on.
+
 ### The panel upgrades its own schema
 
 **ViMbAdmin knows how to migrate its own database** — one self-contained command,

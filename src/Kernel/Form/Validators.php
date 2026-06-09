@@ -45,6 +45,78 @@ final class Validators
         };
     }
 
+    /**
+     * A syntactically valid email *local part* (the bit before the @): an RFC
+     * 5321 dot-atom of the unreserved/permitted characters, with no leading,
+     * trailing or consecutive dot. This is stricter than the old
+     * `/^[A-Za-z0-9._%+\-]+$/` which let through `.foo`, `foo.`, `a..b` and `%`
+     * — shapes that are invalid addresses and can also map to surprising
+     * Dovecot maildir paths. Length capped at 64 (RFC 5321 §4.5.3.1.1). Empty
+     * passes (combine with required()).
+     */
+    public static function localPart(string $message = 'Please enter a valid local part (the bit before the @).'): callable
+    {
+        return static function (mixed $value) use ($message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            $s = (string) $value;
+            if (strlen($s) > 64) {
+                return $message;
+            }
+            // dot-atom: one or more atoms of permitted chars, joined by single
+            // dots; no leading/trailing/double dot.
+            $atom = '[A-Za-z0-9!#$&\'*+\/=?^_`{|}~\-]+';
+
+            return preg_match('/^' . $atom . '(\.' . $atom . ')*$/', $s) === 1 ? null : $message;
+        };
+    }
+
+    /**
+     * A valid DNS hostname / domain name (labels of letters, digits and hyphens,
+     * not starting/ending with a hyphen, joined by dots; at least two labels).
+     * Rejects spaces, slashes, '@', control characters and other shapes that
+     * would corrupt a Postfix/Dovecot lookup key. Empty passes (combine with
+     * required()).
+     */
+    public static function hostname(string $message = 'Please enter a valid domain name.'): callable
+    {
+        return static function (mixed $value) use ($message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            $s = (string) $value;
+            if (strlen($s) > 253) {
+                return $message;
+            }
+
+            return preg_match(
+                '/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i',
+                $s
+            ) === 1 ? null : $message;
+        };
+    }
+
+    /**
+     * Reject control characters (CR, LF, NUL, …) in a free-text field. Names,
+     * descriptions and transport strings flow into mail headers, Postfix maps
+     * and Dovecot config lookups, where an embedded newline is a header- /
+     * lookup-injection vector. Empty passes (combine with required()).
+     */
+    public static function noControlChars(string $message = 'This value contains illegal control characters.'): callable
+    {
+        return static function (mixed $value) use ($message): ?string {
+            if ($value === null || $value === '') {
+                return null;
+            }
+
+            // \p{Cc} = Unicode control chars; covers CR/LF/NUL/tab/etc.
+            return preg_match('/[\x00-\x1F\x7F]/', (string) $value) === 1 ? $message : null;
+        };
+    }
+
     /** At least $min characters (empty passes — combine with required()). */
     public static function minLength(int $min, ?string $message = null): callable
     {

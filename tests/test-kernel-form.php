@@ -55,6 +55,34 @@ check('minLength: ok',              Validators::minLength(3)('abc') === null);
 check('regex: no match -> error',   Validators::regex('/^\d+$/')('a1') !== null);
 check('regex: match -> ok',         Validators::regex('/^\d+$/')('123') === null);
 
+// --- localPart (RFC dot-atom; no leading/trailing/double dot, <=64) --- //
+$lp = Validators::localPart();
+check('localPart: empty passes',       $lp('') === null);
+check('localPart: simple ok',          $lp('john.doe') === null);
+check('localPart: tag (+) ok',         $lp('john+tag') === null);
+check('localPart: leading dot -> err', $lp('.foo') !== null);
+check('localPart: trailing dot -> err',$lp('foo.') !== null);
+check('localPart: double dot -> err',  $lp('a..b') !== null);
+check('localPart: space -> err',       $lp('a b') !== null);
+check('localPart: percent -> err',     $lp('a%b') !== null);
+check('localPart: >64 -> err',         $lp(str_repeat('a', 65)) !== null);
+
+// --- hostname (>=2 labels, no slash/space/leading-hyphen) ------------- //
+$hn = Validators::hostname();
+check('hostname: empty passes',        $hn('') === null);
+check('hostname: fqdn ok',             $hn('sub.example.co.uk') === null);
+check('hostname: single label -> err', $hn('foo') !== null);
+check('hostname: slash -> err',        $hn('bad/host') !== null);
+check('hostname: leading hyphen -> err',$hn('-foo.com') !== null);
+check('hostname: leading space -> err',$hn(' x.com') !== null);
+
+// --- noControlChars (CR/LF/NUL/tab header-injection guard) ------------ //
+$cc = Validators::noControlChars();
+check('noControlChars: empty passes',  $cc('') === null);
+check('noControlChars: plain ok',      $cc('Jane Doe') === null);
+check('noControlChars: newline -> err',$cc("Jane\nBcc: evil") !== null);
+check('noControlChars: tab -> err',    $cc("a\tb") !== null);
+
 // --- form validation -------------------------------------------------- //
 $form = new Form();
 $form->add(new Field('username', 'Username', 'text', [Validators::required(), Validators::email()]))

@@ -460,7 +460,9 @@ final class AliasController extends AbstractController
 
         // local_part is optional: a blank value makes a catch-all @domain alias
         // (ZF1 `setRequired(false)`); the assembled address is validated on POST.
-        $form->add(new Field('local_part', 'Local Part', 'text'));
+        // localPart() passes on empty, so the catch-all case is preserved while a
+        // non-blank value must be a syntactically valid local part.
+        $form->add(new Field('local_part', 'Local Part', 'text', [Validators::localPart()]));
 
         $domainKeys  = array_map('strval', array_keys($choices));
         $domainField = new Field('domain', 'Domain', 'select', [
@@ -518,7 +520,14 @@ final class AliasController extends AbstractController
                 continue;
             }
 
-            if ($goto[0] !== '@' && filter_var($goto, FILTER_VALIDATE_EMAIL) === false) {
+            if ($goto[0] === '@') {
+                // Domain wildcard (@example.com): not an email, so email-validate
+                // the part after the '@' as a hostname rather than waving it
+                // through. Rejects '@', '@ foo', '@bad/host', embedded controls.
+                if (Validators::hostname()(substr($goto, 1)) !== null) {
+                    return [[], 'Invalid domain wildcard in goto (use @example.com).'];
+                }
+            } elseif (filter_var($goto, FILTER_VALIDATE_EMAIL) === false) {
                 return [[], 'Invalid email address(es).'];
             }
 

@@ -763,7 +763,7 @@ final class MailboxController extends AbstractController
     ): Form {
         $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
 
-        $name = new Field('name', 'Name', 'text');
+        $name = new Field('name', 'Name', 'text', [Validators::noControlChars()]);
         $name->setValue((string) $mailbox->getName());
         $form->add($name);
 
@@ -809,7 +809,7 @@ final class MailboxController extends AbstractController
 
         $form->add(new Field('local_part', 'Local Part', 'text', [
             Validators::required(),
-            Validators::regex('/^[a-zA-Z0-9._%+\-]+$/', 'Please enter a valid local part (the bit before the @).'),
+            Validators::localPart(),
         ]));
 
         $domainKeys = array_map('strval', array_keys($choices));
@@ -823,7 +823,7 @@ final class MailboxController extends AbstractController
         }
         $form->add($domainField);
 
-        $form->add(new Field('name', 'Name', 'text'));
+        $form->add(new Field('name', 'Name', 'text', [Validators::noControlChars()]));
 
         // ZF1 renders the password as a visible text field; keep that (type=text)
         // so the generated password stays readable on screen.

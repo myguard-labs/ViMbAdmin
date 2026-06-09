@@ -451,8 +451,8 @@ final class DomainController extends AbstractController
     {
         $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add((new Field('domain', 'Domain', 'text'))->setReadonly());
-        $form->add(new Field('description', 'Description', 'textarea'));
-        $form->add(new Field('transport', 'Transport', 'text', [Validators::required()]));
+        $form->add(new Field('description', 'Description', 'textarea', [Validators::noControlChars()]));
+        $form->add(new Field('transport', 'Transport', 'text', [Validators::required(), Validators::noControlChars()]));
         $form->add(new Field('backupmx', 'Backup MX', 'checkbox'));
         $form->add(new Field('active', 'Active', 'checkbox'));
         $form->add(new Field('max_aliases', 'Max aliases', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]));
@@ -501,11 +501,11 @@ final class DomainController extends AbstractController
         $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add((new Field('domain', 'Domain', 'text', [
                 Validators::required(),
-                Validators::regex('/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i', 'Please enter a valid domain name.'),
+                Validators::hostname(),
                 $unique,
             ])));
-        $form->add(new Field('description', 'Description', 'textarea'));
-        $form->add($this->defaulted(new Field('transport', 'Transport', 'text', [Validators::required()]), $d['transport'] ?? 'virtual'));
+        $form->add(new Field('description', 'Description', 'textarea', [Validators::noControlChars()]));
+        $form->add($this->defaulted(new Field('transport', 'Transport', 'text', [Validators::required(), Validators::noControlChars()]), $d['transport'] ?? 'virtual'));
         $form->add(new Field('backupmx', 'Backup MX', 'checkbox'));
         $form->add($this->checkedByDefault(new Field('active', 'Active', 'checkbox')));
         $form->add($this->defaulted(new Field('max_aliases', 'Max aliases', 'text', [Validators::regex('/^\d+$/', 'Must be a number.')]), (string) ($d['aliases'] ?? 0)));

@@ -85,9 +85,23 @@ $threw = false;
 try { IniConfig::parse("[a : b : c]\nx=1\n", 'a'); } catch (\RuntimeException) { $threw = true; }
 check('more than one parent throws', $threw);
 
+// --- section-less base layer (flattened config) ----------------------------
+$flat = "a.b = 1\nshared = base\nlist[] = x\nlist[] = y\n";
+$g1 = IniConfig::parse($flat, 'production'); // no such section -> base only
+check('flat file loads under any env',        ($g1['a']['b'] ?? null) === '1');
+check('flat file: scalar global present',     ($g1['shared'] ?? null) === 'base');
+check('flat file: key[] append nests as list',($g1['list'] ?? null) === ['x', 'y']);
+
+$mixed = "base.k = G\nshared = global\n[docker : production]\nshared = docker\n[production]\nshared = prod\n";
+$d = IniConfig::parse($mixed, 'docker');
+check('globals form the base under a section', ($d['base']['k'] ?? null) === 'G');
+check('section overrides a global key',        ($d['shared'] ?? null) === 'docker');
+
 // --- smoke test against the real shipped dist file --------------------------
 $distPath = __DIR__ . '/../application/configs/application.ini.dist';
 $dist = IniConfig::load($distPath, 'production');
+check('flat dist is env-independent (docker == production)',
+    IniConfig::load($distPath, 'docker') === $dist);
 check('dist: doctrine2 driver resolved',
     ($dist['resources']['doctrine2']['connection']['options']['driver'] ?? null) === 'pdo_mysql');
 check('dist: APPLICATION_PATH expanded in a path key',

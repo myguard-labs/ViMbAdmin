@@ -629,13 +629,20 @@ final class AuthController extends AbstractController
         // 2FA gate: an enabled (or force-enrolled) admin is parked and sent to
         // the native TOTP flow (totpAction/totpSetupAction) — the identity is NOT
         // granted here.
-        if ($tfa->isEnabled($admin) && !$session->totp_verified) {
+        //
+        // Demo exception: the public demo account skips the second-factor CHECK
+        // at login (visitors can't supply its TOTP). Enrolment is NOT disabled —
+        // a real admin can still set up/verify 2FA; we just don't park the demo
+        // login behind it.
+        $isDemo = \ViMbAdmin_Demo::isLocked($options, (string) $admin->getUsername());
+
+        if (!$isDemo && $tfa->isEnabled($admin) && !$session->totp_verified) {
             $session->totp_pending_admin_id = $admin->getId();
             $session->totp_pending_via      = 'auth';
             return $this->redirect('auth/totp');
         }
 
-        if ($tfa->isForced($admin) && !$tfa->isEnabled($admin) && !$session->totp_verified) {
+        if (!$isDemo && $tfa->isForced($admin) && !$tfa->isEnabled($admin) && !$session->totp_verified) {
             $session->totp_pending_admin_id = $admin->getId();
             $session->totp_pending_via      = 'auth';
             return $this->redirect('auth/totp-setup');

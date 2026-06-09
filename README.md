@@ -386,10 +386,18 @@ Full method list, auth model and examples: **[docs/mcp-auth.md](docs/mcp-auth.md
 
 ## Performance
 
-The panel is light, but two things keep it snappy:
+The panel is light, and a few things keep it snappy — most of them warm at
+container start, so the first request after a (re)start isn't cold:
 
-- **OPcache** — caches compiled PHP bytecode. The Docker image tunes it for an
-  immutable codebase (`opcache.validate_timestamps=0`, no stat() per include).
+- **OPcache + preload.** OPcache caches compiled PHP bytecode; the Docker image
+  tunes it for an immutable codebase (`opcache.validate_timestamps=0`, no stat()
+  per include) and sizes it to the measured footprint. `opcache.preload` runs
+  [`preload.php`](preload.php) in the PHP-FPM master at startup, compiling the
+  whole app + vendor tree (plus the precompiled templates) into shared memory, so
+  worker processes never compile on the first request. Preload is the only way to
+  warm OPcache without an HTTP request (it is per-SAPI) — a few `Can't preload
+  unlinked class …` notices for Doctrine console/annotation classes are expected
+  and harmless.
 - **Doctrine metadata/query cache.** Without a persistent cache Doctrine
   re-parses the XML entity mappings on **every request**. Set a real backend in
   `application.ini`:
@@ -408,6 +416,29 @@ The panel is light, but two things keep it snappy:
   beats Redis (in-process, no socket); reach for Redis only when you run
   multiple replicas that must share a cache. A configured backend whose PHP
   extension is missing degrades to `ArrayCache` instead of fataling.
+
+- **Precompiled Smarty templates.** Smarty compiles each template to PHP on
+  first use. The CLI command **`maintenance.cli-precompile-templates`** compiles
+  every template up front into the persistent `var/templates_c`; the Docker
+  bootstrap runs it at start so the first page render compiles nothing. (The
+  compiled output persists across restarts — it is not wiped; Smarty's
+  `compile_check` recompiles only what changed.)
+
+- **Server-side pagination.** For large installs the list pages (mailbox, alias,
+  domain, log, archive) can page/sort/search **server-side** — the browser
+  fetches only the visible page instead of every row. Off by default; enable per
+  list in `application.ini`:
+
+  ```ini
+  defaults.server_side.pagination.enable         = true   ; mailbox + alias
+  defaults.server_side.pagination.domain.enable  = true
+  defaults.server_side.pagination.log.enable     = true
+  defaults.server_side.pagination.archive.enable = true
+  ```
+
+  The Docker image enables all of them. Behind a positive-security WAF, allow the
+  DataTables query args (`sEcho`, `iDisplayStart`, `sSearch`, `iSortCol_0`,
+  `mDataProp_*`, …) on the `/*/list-data` routes.
 
 ## Archiving, quotas & disk deletion
 

@@ -15,6 +15,9 @@ use Doctrine\ORM\Mapping as ORM;
  * The PENDING -> RUNNING transition is performed under an atomic guard
  * (claim()) so two runners cannot pick up the same task.
  */
+#[ORM\Entity(repositoryClass: \Repositories\MailboxTask::class)]
+#[ORM\Table(name: 'mailbox_task')]
+#[ORM\Index(name: 'mailbox_task_status_idx', columns: ['status'])]
 class MailboxTask
 {
     // ---- task types -----------------------------------------------------
@@ -77,39 +80,55 @@ class MailboxTask
     ];
 
     /** @var integer */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /** @var string */
+    #[ORM\Column(type: 'string', length: 32)]
     private ?string $type = null;
 
     /** @var string */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $username = null;
 
     /** @var string */
+    #[ORM\Column(type: 'string', length: 32)]
     private ?string $status = null;
 
     /** @var integer */
+    #[ORM\Column(type: 'integer')]
     private int $priority = 0;
 
     /** @var \DateTime */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $created_at = null;
 
     /** @var \DateTime|null */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $started_at = null;
 
     /** @var \DateTime|null */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $finished_at = null;
 
     /** @var string|null */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $log = null;
 
     /** @var string|null */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $data = null;
 
     /** @var \Entities\Domain|null */
+    #[ORM\ManyToOne(targetEntity: \Entities\Domain::class)]
+    #[ORM\JoinColumn(name: 'Domain_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
     private ?\Entities\Domain $Domain = null;
 
     /** @var \Entities\Admin|null */
+    #[ORM\ManyToOne(targetEntity: \Entities\Admin::class)]
+    #[ORM\JoinColumn(name: 'Admin_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
     private ?\Entities\Admin $RequestedBy = null;
 
     public function getId()                 { return $this->id; }

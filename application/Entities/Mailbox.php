@@ -7,6 +7,10 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entities\Mailbox
  */
+#[ORM\Entity(repositoryClass: \Repositories\Mailbox::class)]
+#[ORM\Table(name: 'mailbox')]
+#[ORM\Index(name: 'IX_Mailbox_active', columns: ['active'])]
+#[ORM\UniqueConstraint(name: 'IX_Username_mailbox', columns: ['username'])]
 class Mailbox
 {
     use \OSS_Doctrine2_WithPreferences;
@@ -14,81 +18,99 @@ class Mailbox
     /**
      * @var string $username
      */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $username = null;
 
     /**
      * @var string $password
      */
+    #[ORM\Column(type: 'string')]
     private ?string $password = null;
 
     /**
      * @var string $name
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $name = null;
 
     /**
      * @var string $alt_email
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $alt_email = null;
 
     /**
      * @var integer $quota
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private ?int $quota = null;
 
     /**
      * @var string $local_part
      */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $local_part = null;
 
     /**
      * @var boolean $active
      */
+    #[ORM\Column(type: 'boolean', options: ['default' => 0])]
     private ?bool $active = null;
 
     /**
      * @var string $access_restriction
      */
+    #[ORM\Column(type: 'string', length: 100, options: ['default' => 'ALL'])]
     private string $access_restriction = 'ALL';
 
     /**
      * @var string $homedir
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $homedir = null;
 
     /**
      * @var string $maildir
      */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
     private ?string $maildir = null;
 
     /**
      * @var integer $uid
      */
+    #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $uid = null;
 
     /**
      * @var integer $gid
      */
+    #[ORM\Column(type: 'bigint', nullable: true)]
     private ?int $gid = null;
 
     /**
      * @var \DateTime $created
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $modified = null;
 
     /**
      * @var integer $id
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
      * @var \Doctrine\Common\Collections\ArrayCollection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\MailboxPreference::class, mappedBy: 'Mailbox')]
     private $Preferences;
 
     /**
@@ -477,6 +499,8 @@ class Mailbox
     /**
      * @var Entities\Domain
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Domain::class, inversedBy: 'Mailboxes')]
+    #[ORM\JoinColumn(name: 'Domain_id', referencedColumnName: 'id')]
     private ?\Entities\Domain $Domain = null;
 
 
@@ -605,6 +629,7 @@ class Mailbox
     /**
      * @var \Entities\DirectoryEntry
      */
+    #[ORM\OneToOne(targetEntity: \Entities\DirectoryEntry::class, mappedBy: 'Mailbox')]
     private ?\Entities\DirectoryEntry $DirectoryEntry = null;
 
 
@@ -633,6 +658,7 @@ class Mailbox
     /**
      * @var boolean
      */
+    #[ORM\Column(type: 'boolean', nullable: true, options: ['default' => 0])]
     private ?bool $delete_pending = null;
 
 

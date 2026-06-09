@@ -544,7 +544,6 @@ alias_autocomplete_min_length = 2
 resources.doctrine2.models_path        = APPLICATION_PATH
 resources.doctrine2.proxies_path       = APPLICATION_PATH "/Proxies"
 resources.doctrine2.repositories_path  = APPLICATION_PATH
-resources.doctrine2.xml_schema_path    = APPLICATION_PATH "/../doctrine2/xml"
 resources.doctrine2.autogen_proxies    = 0
 resources.doctrine2.logger             = 1
 resources.doctrine2.models_namespace       = "Entities"

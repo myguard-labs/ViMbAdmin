@@ -26,26 +26,33 @@ use Doctrine\ORM\Mapping as ORM;
  *
  * @see https://doc.dovecot.org/2.4.4/core/plugins/quota_clone.html
  */
+#[ORM\Entity]
+#[ORM\Table(name: 'dovecot_quota')]
 class Quota
 {
     /**
      * @var string $username
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'string')]
     private ?int $username = null;
 
     /**
      * @var integer $bytes
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $bytes = 0;
 
     /**
      * @var integer $messages
      */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $messages = 0;
 
     /**
      * @var \DateTime $updated_at
      */
+    #[ORM\Column(type: 'datetime', columnDefinition: 'timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()')]
     private ?\DateTime $updated_at = null;
 
     /**

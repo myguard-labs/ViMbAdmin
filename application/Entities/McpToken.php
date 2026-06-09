@@ -2,6 +2,8 @@
 
 namespace Entities;
 
+use Doctrine\ORM\Mapping as ORM;
+
 /**
  * Entities\McpToken
  *
@@ -9,36 +11,51 @@ namespace Entities;
  * stored -- the raw token is shown once at generation and never persisted.
  * Tokens are scoped, can be IP/CIDR restricted, expired and revoked.
  */
+#[ORM\Entity(repositoryClass: \Repositories\McpToken::class)]
+#[ORM\Table(name: 'mcp_token')]
+#[ORM\Index(name: 'mcp_token_hash_idx', columns: ['token_hash'])]
 class McpToken
 {
     /** @var integer */
+    #[ORM\Id]
+    #[ORM\Column(type: 'integer')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /** @var string  Human label for the token (e.g. "agent1"). */
+    #[ORM\Column(type: 'string', length: 255)]
     private ?string $name = null;
 
     /** @var string  hex sha256 of the raw token. */
+    #[ORM\Column(type: 'string', length: 64, unique: true)]
     private ?string $token_hash = null;
 
     /** @var string  space/comma separated scopes (e.g. "read" or "read write"). */
+    #[ORM\Column(type: 'string', length: 255)]
     private string $scope = 'read';
 
     /** @var string|null  space/comma separated IP/CIDR allowlist; null = any (rely on the edge). */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $allowed_ips = null;
 
     /** @var string|null  space/comma separated domain allowlist; null = all domains. */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $allowed_domains = null;
 
     /** @var \DateTime */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $created = null;
 
     /** @var \DateTime|null */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $expires_at = null;
 
     /** @var \DateTime|null */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $last_used_at = null;
 
     /** @var boolean */
+    #[ORM\Column(type: 'boolean')]
     private bool $revoked = false;
 
     public function getId()                 { return $this->id; }

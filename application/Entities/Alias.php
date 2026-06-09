@@ -7,6 +7,10 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entities\Alias
  */
+#[ORM\Entity(repositoryClass: \Repositories\Alias::class)]
+#[ORM\Table(name: 'alias')]
+#[ORM\Index(name: 'IX_Alias_active', columns: ['active'])]
+#[ORM\UniqueConstraint(name: 'IX_Address_1', columns: ['address'])]
 class Alias
 {
     use \OSS_Doctrine2_WithPreferences;
@@ -14,36 +18,46 @@ class Alias
     /**
      * @var string $address
      */
+    #[ORM\Column(type: 'string', length: 255, unique: true)]
     private ?string $address = null;
 
     /**
      * @var string $goto
      */
+    #[ORM\Column(type: 'text')]
     private ?string $goto = null;
 
     /**
      * @var boolean $active
      */
+    #[ORM\Column(type: 'boolean', options: ['default' => 1])]
     private ?bool $active = null;
 
     /**
      * @var \DateTime $created
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $created = null;
 
     /**
      * @var \DateTime $modified
      */
+    #[ORM\Column(type: 'datetime', nullable: true)]
     private ?\DateTime $modified = null;
 
     /**
      * @var integer $id
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
      * @var Entities\Domain
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Domain::class, inversedBy: 'Aliases')]
+    #[ORM\JoinColumn(name: 'Domain_id', referencedColumnName: 'id')]
     private ?\Entities\Domain $Domain = null;
 
 
@@ -197,6 +211,7 @@ class Alias
     /**
      * @var \Doctrine\Common\Collections\Collection
      */
+    #[ORM\OneToMany(targetEntity: \Entities\AliasPreference::class, mappedBy: 'Alias')]
     private $Preferences;
 
     /**

@@ -2,6 +2,8 @@
 
 namespace Entities;
 
+use Doctrine\ORM\Mapping as ORM;
+
 /**
  * Entities\LastLogin
  *
@@ -28,12 +30,17 @@ namespace Entities;
  *
  * @see https://doc.dovecot.org/main/core/plugins/last_login.html
  */
+#[ORM\Entity]
+#[ORM\Table(name: 'dovecot_last_login')]
 class LastLogin
 {
     /** @var string  full email address (mailbox username) */
+    #[ORM\Id]
+    #[ORM\Column(type: 'string')]
     private ?int $username = null;
 
     /** @var integer  unix timestamp (seconds) of the last login */
+    #[ORM\Column(type: 'bigint', options: ['default' => 0])]
     private int $last_login = 0;
 
     public function setUsername( $username )

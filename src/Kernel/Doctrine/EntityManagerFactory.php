@@ -17,12 +17,14 @@ namespace ViMbAdmin\Kernel\Doctrine;
  * registry/logger side effects that only made sense inside the framework:
  *
  *   - {@see self::create()} mirrors `OSS_Resource_Doctrine2::getDoctrine2()`:
- *     a `Configuration` wired with the cache, the XML metadata driver over
- *     `xml_schema_path`, the proxy dir/namespace/autogen flag, then the ORM 2.x
- *     `EntityManager::create()` over `connection.options`.
+ *     a `Configuration` wired with the cache, the attribute metadata driver over
+ *     `application/Entities` (mapping lives in #[ORM\...] attributes), the proxy
+ *     dir/namespace/autogen flag, then (ORM 3.x) a DBAL connection from
+ *     `DriverManager::getConnection()` and `new EntityManager(...)`.
  *   - {@see self::buildCache()} mirrors `OSS_Resource_Doctrine2cache`: a PSR-6
- *     pool (Apcu / Redis / per-request Array) wrapped by `DoctrineProvider`,
- *     degrading to the Array pool when an extension/server is unavailable.
+ *     pool (Apcu / Redis / per-request Array) handed straight to the ORM 3.x
+ *     cache setters, degrading to the Array pool when an extension/server is
+ *     unavailable.
  *   - {@see self::registerEntityAutoloaders()} replaces the Doctrine
  *     `ClassLoader`s the resource pushed onto the ZF1 autoloader, since the
  *     `Entities`/`Repositories` namespaces are not in Composer's map. Proxy
@@ -63,8 +65,10 @@ final class EntityManagerFactory
         $config->enableNativeLazyObjects(true);
         $config->setMetadataCache($cache);
 
-        $driver = new \Doctrine\ORM\Mapping\Driver\XmlDriver(
-            [(string) $dconfig['xml_schema_path']]
+        // Mapping now lives in #[ORM\...] attributes on the entity classes
+        // (was XML under doctrine2/xml). Scan the Entities directory.
+        $driver = new \Doctrine\ORM\Mapping\Driver\AttributeDriver(
+            [rtrim((string) $dconfig['models_path'], '/\\') . '/Entities']
         );
         $config->setMetadataDriverImpl($driver);
 

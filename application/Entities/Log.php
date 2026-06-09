@@ -7,6 +7,9 @@ use Doctrine\ORM\Mapping as ORM;
 /**
  * Entities\Log
  */
+#[ORM\Entity(repositoryClass: \Repositories\Log::class)]
+#[ORM\Table(name: 'log')]
+#[ORM\Index(name: 'IX_Log_timestamp', columns: ['timestamp'])]
 class Log
 {
     const ACTION_ARCHIVE_REQUEST      = 'ARCHIVE_REQUEST';
@@ -42,31 +45,41 @@ class Log
     /**
      * @var string $action
      */
+    #[ORM\Column(type: 'string', length: 100)]
     private ?string $action = null;
 
     /**
      * @var string $data
      */
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $data = null;
 
     /**
      * @var \DateTime $timestamp
      */
+    #[ORM\Column(type: 'datetime')]
     private ?\DateTime $timestamp = null;
 
     /**
      * @var integer $id
      */
+    #[ORM\Id]
+    #[ORM\Column(type: 'bigint')]
+    #[ORM\GeneratedValue(strategy: 'AUTO')]
     private ?int $id = null;
 
     /**
      * @var Entities\Admin
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Admin::class, inversedBy: 'Logs')]
+    #[ORM\JoinColumn(name: 'Admin_id', referencedColumnName: 'id')]
     private ?\Entities\Admin $Admin = null;
 
     /**
      * @var Entities\Domain
      */
+    #[ORM\ManyToOne(targetEntity: \Entities\Domain::class, inversedBy: 'Logs')]
+    #[ORM\JoinColumn(name: 'Domain_id', referencedColumnName: 'id')]
     private ?\Entities\Domain $Domain = null;
 
 

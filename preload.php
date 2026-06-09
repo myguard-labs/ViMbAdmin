@@ -39,7 +39,7 @@
     // var/templates_c holds the Smarty-compiled templates (the bootstrap
     // precompiles them before FPM starts), so they are opcached at master start
     // too — the first render then compiles nothing.
-    foreach (['src', 'library', 'application/Entities', 'application/Repositories', 'application/Proxies', 'var/templates_c'] as $dir) {
+    foreach (['src', 'library', 'application/Entities', 'application/Repositories', 'application/Proxies', 'application/plugins', 'var/templates_c'] as $dir) {
         $path = $root . '/' . $dir;
         if (!is_dir($path)) {
             continue;

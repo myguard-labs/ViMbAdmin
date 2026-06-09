@@ -112,7 +112,7 @@ class OSS_Doctrine2_EntitySerializer
         $className = get_class( $entity );
         $metadata = $this->_em->getClassMetadata( $className );
 
-        $data = array();
+        $data = [];
 
         foreach( $metadata->fieldMappings as $field => $mapping )
         {

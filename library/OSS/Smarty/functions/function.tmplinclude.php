@@ -65,14 +65,14 @@ function smarty_function_tmplinclude( $params, $smarty )
     // templateExists()/fetch() live on the engine, so resolve it.
     $engine = method_exists( $smarty, 'getSmarty' ) ? $smarty->getSmarty() : $smarty;
 
-    $original_values = array();
+    $original_values = [];
     
     foreach( $params as $arg => $value )
     {
         if( is_bool( $value ) )
             $params[ $arg ] = $value ? 'true' : 'false';
         
-        if( !in_array( $arg, array( 'file', 'assign' ) ) )
+        if( !in_array( $arg, [ 'file', 'assign' ] ) )
         {
             $original_values[ $arg ] = $value;
             $smarty->assign( $arg, $value );
@@ -98,7 +98,7 @@ function smarty_function_tmplinclude( $params, $smarty )
         $params['file'] = $smarty->getTemplateVars( $params['file'] );
     }
     else
-        $params['file'] = str_replace( array( '\'', '"' ), '', $params['file'] );
+        $params['file'] = str_replace( [ '\'', '"' ], '', $params['file'] );
 
     if( $smarty->getTemplateVars( '___SKIN' ) )
         $skin = $smarty->getTemplateVars( '___SKIN' );

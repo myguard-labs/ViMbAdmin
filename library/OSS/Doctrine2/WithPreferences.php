@@ -420,7 +420,7 @@ trait OSS_Doctrine2_WithPreferences
      */
     public function getIndexedPreference( $attribute, $withIndex = false, $ignoreExpired = true )
     {
-        $values = array();
+        $values = [];
 
         foreach( $this->getPreferences() as $pref )
         {
@@ -430,13 +430,13 @@ trait OSS_Doctrine2_WithPreferences
                     continue;
 
                 if( $withIndex )
-                    $values[ $pref->getIx() ] = array( 'p_index' => $pref->getIx(), 'p_value' => $pref->getValue() );
+                    $values[ $pref->getIx() ] = [ 'p_index' => $pref->getIx(), 'p_value' => $pref->getValue() ];
                 else
                     $values[ $pref->getIx() ] = $pref->getValue();
             }
         }
 
-        if( $values === array() )
+        if( $values === [] )
             return false;
 
         ksort( $values, SORT_NUMERIC );
@@ -482,7 +482,7 @@ trait OSS_Doctrine2_WithPreferences
      */
     public function getAssocPreference( $attribute, $index = null, $ignoreExpired = true )
     {
-        $values = array();
+        $values = [];
 
         foreach( $this->_getPreferences() as $pref )
         {
@@ -508,7 +508,7 @@ trait OSS_Doctrine2_WithPreferences
             }
         }
 
-        if( $values === array() )
+        if( $values === [] )
             return false;
 
         return $values;
@@ -635,9 +635,9 @@ trait OSS_Doctrine2_WithPreferences
                 if( !isset( $config[ $pieces[0] ] ) )
                 {
                     if( $pieces[0] === '0' && !empty( $config ) )
-                        $config = array($pieces[0] => $config);
+                        $config = [$pieces[0] => $config];
                     else
-                        $config[ $pieces[0] ] = array();
+                        $config[ $pieces[0] ] = [];
                 }
                 elseif( !is_array( $config[$pieces[0]] ) )
                 {

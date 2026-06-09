@@ -78,7 +78,7 @@ class OSS_Message_Pop_Up extends OSS_Message
     public function addAction( $str )
     {
         if( $this->actions === null )
-            $this->actions = array();
+            $this->actions = [];
             
         $this->actions[] = $str;
     }

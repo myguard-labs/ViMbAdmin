@@ -1,3 +1,17 @@
+Upgrading this fork
+===================
 
-See: https://github.com/opensolutions/ViMbAdmin/wiki/Updating
+Schema and config migrations are documented in the README, under
+"Upgrading & schema migrations":
 
+    https://github.com/eilandert/ViMbAdmin#upgrading--schema-migrations
+
+Short version: the panel migrates its own database — run
+
+    ./bin/vimbtool.php -a maintenance.cli-schema-update
+
+after pulling a newer version (the Docker image runs this automatically at
+container start). See the README for the manual routes and the
+application.ini config-migration notes.
+
+(The old upstream wiki at opensolutions/ViMbAdmin is no longer maintained.)

@@ -2,8 +2,6 @@
 .project
 .gitmodules
 .settings/
-.gitmodules
-.vagrant/
 *.DS_Store
 application/configs/application.ini
 application/configs/application.ini.old
@@ -16,7 +14,6 @@ var/tmp
 # Doctrine proxies are generated build artifacts (bin/generate-proxies.php runs
 # at image build). Do not commit them — they silently drift from the entities.
 application/Proxies/__CG__*.php
-library/Minify/
 *~
 vendor/[a-zA-Z0-9]*
 vimbadmin.sublime-project

@@ -22,9 +22,11 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * legacy `preDispatch` super gate is reproduced inline on every action.
  *
  * `run-now`/`run-task` drive the queue through the shared framework-free
- * {@see \ViMbAdmin_Service_QueueRunner} (the same engine the ZF1 cron runner uses).
- * The unauthenticated `trigger` / `cli-run` endpoints (remote-key / cron CLI, not
- * browser UI) stay on ZF1.
+ * {@see \ViMbAdmin_Service_QueueRunner} (the same engine the cron runner uses).
+ * `trigger` is the unauthenticated remote endpoint (bearer key + IP allowlist)
+ * that drains the queue SYNCHRONOUSLY in-request. The other path is the
+ * out-of-band `queue.cli-run` CLI (container cron / s6 service). ViMbAdmin
+ * never forks a background runner from a web request.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -250,12 +252,17 @@ final class QueueController extends AbstractController
 
     /**
      * GET|POST /queue/trigger — the unauthenticated remote-cron endpoint that
-     * kicks the queue runner. Native port of the ZF1 `triggerAction`: NOT
-     * session-authenticated — it is gated by a Bearer key (compared by SHA-256,
-     * constant-time) and a source-IP allowlist, then spawns a background runner
-     * (non-blocking, via {@see \ViMbAdmin_QueueRunner::triggerCheck}) and returns
-     * JSON immediately. With no `queue.runner.key` configured the endpoint is
-     * disabled (404).
+     * kicks the queue. NOT session-authenticated: gated by a Bearer key
+     * (compared by SHA-256, constant-time) plus a source-IP allowlist.
+     *
+     * It is a pure TRIGGER: on a valid request it returns `{"triggered":true}`
+     * immediately, then — once the response is flushed and the caller has
+     * disconnected (`fastcgi_finish_request()`, run from public/index.php) —
+     * drains the queue autonomously in the same FPM worker. No blocking of the
+     * caller, no forked process, no shell-out. The lease cap
+     * (`queue.runner.max_concurrent`) still serialises concurrent triggers, so
+     * a flood of triggers cannot pile up runners. With no `queue.runner.key`
+     * configured the endpoint is disabled (404).
      */
     public function triggerAction(): Response
     {
@@ -274,7 +281,7 @@ final class QueueController extends AbstractController
             return $this->json(['error' => 'bad key'], 403);
         }
 
-        // Proxy-aware client IP + the CIDR allowlist (same resolver/check as ZF1).
+        // Proxy-aware client IP + the CIDR allowlist.
         $proxy = $options['trustedproxy'] ?? [];
         $ip    = \ViMbAdmin_Net::clientIp(
             $_SERVER,
@@ -286,8 +293,28 @@ final class QueueController extends AbstractController
             return $this->json(['error' => "source IP {$ip} not allowed"], 403);
         }
 
-        $spawned = \ViMbAdmin_QueueRunner::triggerCheck($this->em(), $options);
-        return $this->json(['triggered' => $spawned], 200);
+        // Accept now; drain after the caller disconnects (see Response::afterSend
+        // + public/index.php). Drain in batches until the backlog is clear (or a
+        // batch is lease-throttled), so one trigger autonomously empties the
+        // queue. The EntityManager + options are captured for the detached run.
+        $em      = $this->em();
+        $max     = (int) ($options['queue']['runner']['max_per_run'] ?? 5);
+        $afterSend = static function () use ($em, $options, $max): void {
+            $runner = new \ViMbAdmin_Service_QueueRunner($em, $options);
+            // Each drain() is itself lease-gated; loop to clear a backlog larger
+            // than one batch. Stop on 0 (queue empty) or -1 (all slots busy).
+            do {
+                $n = $runner->drain($max);
+            } while ($n > 0);
+        };
+
+        return new Response(
+            (string) json_encode(['triggered' => true]),
+            200,
+            'application/json; charset=utf-8',
+            [],
+            $afterSend,
+        );
     }
 
     /**

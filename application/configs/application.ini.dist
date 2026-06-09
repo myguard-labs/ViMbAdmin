@@ -20,14 +20,9 @@
 ; installation as well as provide security for cookies and passwords.
 
 securitysalt                       = ""
-defaults.mailbox.password_salt     = ""
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; When installing for the first time, it may be useful to set the following
-; to 1 BUT ensure you set it to zero again in a production system
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; You database and caching connection.
@@ -48,6 +43,9 @@ resources.doctrine2.connection.options.charset  = 'utf8'
 ;;   ApcuCache  - force in-process shared memory; best for a single host (ext-apcu)
 ;;   RedisCache - shared across hosts/replicas (ext-redis)
 ;;   ArrayCache - force per-request only (no caching across requests); dev / debugging
+;; Under Doctrine ORM 3 the cache is a PSR-6 pool (symfony/cache adapter), not
+;; the old doctrine/cache class. 'ArrayCache' (and any unrecognised value) maps
+;; to ArrayAdapter via the switch default - per-request, no persistence.
 ;; A missing/unusable backend degrades to ArrayCache (it won't fatal).
 
 resources.doctrine2cache.type      = 'auto'
@@ -116,25 +114,12 @@ defaults.list_size.multiplier = 'GB'
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Default values for creating mailboxes
-
-; This sets the uid and gid columns in the mailbox table to the below values
-defaults.mailbox.uid = 2000
-defaults.mailbox.gid = 2000
-
-
-; Set the homedir and maildir values in the mailbox table where the
-; following substitutions apply:
 ;
-;     %d      -> domain part of email address
-;     %u      -> user part of email address
-;     %m      -> full email address
-;     %atmail -> substitutes an email address (test@example.com) with t/e/test@example.com
-;
-;
-; http://wiki2.dovecot.org/VirtualUsers/Home
-
-defaults.mailbox.maildir = "maildir:/srv/vmail/%d/%u/mail:LAYOUT=fs"
-defaults.mailbox.homedir = "/srv/vmail/%d/%u"
+; NOTE: ViMbAdmin no longer stores per-mailbox uid/gid/homedir/maildir. Those
+; columns were dropped from the mailbox table — Dovecot owns mailbox ownership
+; and storage location entirely via its own config (mail_uid / mail_gid /
+; mail_home / mail_path, see contrib/dovecot/). ViMbAdmin only writes the
+; identity + quota + active rows; Dovecot derives everything physical.
 
 ;minimum mailbox password length
 defaults.mailbox.min_password_length = 8
@@ -142,10 +127,6 @@ defaults.mailbox.min_password_length = 8
 ; The password hashing function to use. Set to one of:
 ;
 ;   "plain"       - password stored as clear text
-;   "md5"         - password hashed using MD5 without salt (PHP md5())
-;   "md5-salted"  - password hashed using MD5 with salt (salt set in defaults.mailbox.password_salt above)
-;   "sha1"        - password hashed using sha1 without salt
-;   "sha1-salted" - password hashed using sha1 with salt (salt set in defaults.mailbox.password_salt above)
 ;   "crypt:XXX"   - call the PHP crypt function (with random salt) where XXX is one of: md5, blowfish, sha256, sha512
 ;   "dovecot:XXX" - produce a Dovecot-compatible hash for scheme XXX. Hashing is
 ;                      done natively in PHP (no external doveadm binary), so XXX
@@ -184,19 +165,6 @@ mailboxAliases = 1
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Misc / legacy
-;; (Archiving in this fork is queue-driven — see the doveadm/queue section below
-;;  and the Archives + Maintenance tabs; there is no tar/bzip2 archive.path.)
-
-
-; rm binary for the optional CLI on-disk mailbox purge (mailbox_deletion_fs_*).
-; This is a SEPARATE, default-off legacy feature that shells out on a host with
-; direct maildir access — NOT the queue archive/delete flow (that backs up via
-; doveadm and prunes via the Archives/Maintenance tabs, no local shell tools).
-binary.path.rm_rf     = "/bin/rm -rf"
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; doveadm HTTP API + mailbox-task queue
 ;;
 ;; ViMbAdmin can run Dovecot mailbox operations (repair/optimize/archive/delete)
@@ -217,7 +185,7 @@ doveadm.http.timeout = 900
 
 ; Where the safety backup is written before an archive/delete task removes mail.
 ; %d = domain, %u = full username. A dsync (doveadm backup) destination.
-doveadm.backup.dest  = "maildir:/srv/vmail-backup/%d/%u"
+doveadm.backup.dest  = "maildir:/backups/%d/%u"
 
 ; How many queued tasks a single queue-runner invocation drains. Caps load.
 queue.runner.max_per_run = 5
@@ -228,12 +196,18 @@ queue.runner.max_per_run = 5
 ; to drain more in parallel when doveadm work is the bottleneck.
 queue.runner.max_concurrent = 1
 
-; IMPORTANT: ViMbAdmin does NOT run a daemon. The queue is only drained when a
-; runner is invoked. The in-app trigger-checks (on login, from the Maintenance
-; tab, via MCP, on container start, or the HTTP endpoint below) are best-effort
-; nudges — you still MUST install a cron that runs the queue periodically:
-;   */2 * * * *  docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
-; See README "Scheduling the queue runner" + contrib/cron/ for all three forms.
+; IMPORTANT: ViMbAdmin does NOT run a daemon and never forks a process / shells
+; out to drain. The queue is run by two triggers, both using the same
+; framework-free runner, and both AUTONOMOUS (the caller gets an immediate OK
+; and disconnects; the drain then clears the whole backlog on its own):
+;   1. CRON / s6: `queue.cli-run` via vimbtool.php (the guaranteed periodic path).
+;        */2 * * * *  docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a queue.cli-run
+;      Loops until the backlog is empty; pass --once to drain a single batch.
+;   2. REMOTE: POST /queue/trigger, bearer-key + IP-allowlist gated (below).
+;      Returns {"triggered":true} immediately, then drains the backlog AFTER the
+;      connection closes (fastcgi_finish_request) — non-blocking, no spawn.
+; The lease cap (queue.runner.max_concurrent) serialises overlapping triggers.
+; The Maintenance tab "Run now" button drains on demand. See README + contrib/cron/.
 
 ; Auto-prune window for DELETE backups, in DAYS. When a mailbox is DELETEd (not
 ; archived) the queue takes a safety backup and records an archive row flagged
@@ -246,8 +220,10 @@ queue.autoprune.days = 90
 
 ; Remote queue-runner trigger endpoint (POST /queue/trigger). Lets an off-box
 ; cron kick the runner. Authenticated by a bearer key (only its SHA-256 hash is
-; compared) plus an IP/CIDR allowlist. Leave the key empty to DISABLE the
-; remote endpoint entirely (the CLI runner and UI button still work).
+; compared, constant-time) plus an IP/CIDR allowlist. The endpoint drains the
+; queue SYNCHRONOUSLY in the request (capped by queue.runner.max_per_run) and
+; returns JSON — it does NOT spawn a background process. Leave the key empty to
+; DISABLE the remote endpoint (the CLI runner and Maintenance button still work).
 ;   curl -X POST -H 'Authorization: Bearer <key>' https://host/vimbadmin/queue/trigger
 queue.runner.key         = ""
 ; Comma- or whitespace-separated IPs / CIDRs allowed to hit /queue/trigger.
@@ -255,15 +231,6 @@ queue.runner.key         = ""
 ; internal cron works out of the box; a bearer key is still required on top.
 ; Set to "" to deny all (endpoint effectively off even if a key is set).
 queue.runner.allowed_ips = "10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, ::1/128, fc00::/7"
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Enable mailbox deletion on the file system
-;
-; See: https://github.com/opensolutions/ViMbAdmin/wiki/Deleting-Mailboxes
-;
-
-mailbox_deletion_fs_enabled = false
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -366,36 +333,6 @@ resources.mail.transport.verify_peer_name = 1
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Local filesystem logging.
-;;
-;; We log various things to var/log/YYYY/MM/ if you enable the logger here.
-;;
-;; It is useful to use the email logger to be alerted of serious errors.
-;;
-
-
-;ondemand_resources.logger.writers.email.from   = "admin@example.com"
-;ondemand_resources.logger.writers.email.to     = "admin@example.com"
-;ondemand_resources.logger.writers.email.prefix = "ViMbAdmin_Error"
-;ondemand_resources.logger.writers.email.level  = 3
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; ViMbAdmin performs a version check on administrator login and alerts the
-;; user if there is a newer version available.
-;;
-;; This can be disabled by setting the below to 1
-;;
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Install pingback to the upstream authors. The endpoint is long dead, so
-;; this is disabled by default in the fork.
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MCP adapter (JSON-RPC at /mcp). OFF by default; opt in here.
 ;;
@@ -432,7 +369,7 @@ mcp.ratelimit.destructive.window = 3600
 ; This is handled via a plugin
 ;
 
-vimbadmin_plugins.AccessPermissions.disabled = false
+vimbadmin_plugins.AccessPermissions.enabled = true
 
 ; specify the options which should be allowed for access restrictions
 vimbadmin_plugins.AccessPermissions.type.SMTP  = "SMTP"
@@ -445,11 +382,12 @@ vimbadmin_plugins.AccessPermissions.type.SIEVE = "SIEVE"
 ; Allow admins to force that for a mailbox/domain basic aliases are existing
 ; If a new mailbox is created the system will check if the aliases are existing, if not they are created.
 
-vimbadmin_plugins.MailboxAutomaticAliases.disabled = true
+vimbadmin_plugins.MailboxAutomaticAliases.enabled = false
 
 ; These aliases should always exist, it is not recommened to delete it
 vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "postmaster"
 vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "abuse"
+vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "info"
 
 ; These aliases are optional, but it recommended to not remove them
 vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "hostmaster"
@@ -459,27 +397,6 @@ vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "webmaster"
 ;vimbadmin_plugins.MailboxAutomaticAliases.defaultMapping.postmaster = "@other.tld"
 ;vimbadmin_plugins.MailboxAutomaticAliases.defaultMapping.abuse = "postmaster"
 ;vimbadmin_plugins.MailboxAutomaticAliases.defaultMapping.* = "root@domain.tld"
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-;; Proceed onwards with caution.
-;;
-;; The params above are the main ones of consequence.
-;;
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Optional plugins. All disabled by default. DirectoryEntry and AdditionalInfo
-; add extra per-mailbox form fields (LDAP-style metadata); if you enable one,
-; define its form elements here -- see the wiki for the element syntax. Left
-; out of this template to keep it lean.
-;
-vimbadmin_plugins.DirectoryEntry.disabled = true
-vimbadmin_plugins.AdditionalInfo.disabled = true
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -503,25 +420,23 @@ vimbadmin_plugins.AdditionalInfo.disabled = true
 temporary_directory = APPLICATION_PATH "/../var/tmp"
 
 
-; doctrine2
-resources.doctrine2.models_path        = APPLICATION_PATH
-resources.doctrine2.proxies_path       = APPLICATION_PATH "/Proxies"
-resources.doctrine2.repositories_path  = APPLICATION_PATH
-resources.doctrine2.autogen_proxies    = 0
-resources.doctrine2.models_namespace       = "Entities"
-resources.doctrine2.proxies_namespace      = "Proxies"
-resources.doctrine2.repositories_namespace = "Repositories"
+;; doctrine2 model/proxy/repository paths + namespaces default off
+;; APPLICATION_PATH (Entities / Proxies / Repositories), so they need not be
+;; configured here. Uncomment a key only to override the standard layout.
+;resources.doctrine2.proxies_path    = APPLICATION_PATH "/Proxies"
+;resources.doctrine2.autogen_proxies = 0
 
 
 ;; Cache backend + namespace are set near the top of this file
 ;; (ArrayCache / ApcuCache / RedisCache).
 
 
+;; Admin-account password hashing (NOT mailbox passwords — those use
+;; defaults.mailbox.password_scheme). bcrypt cost 12.
 resources.auth.oss.pwhash  = "bcrypt"
 resources.auth.oss.hash_cost  = 12
-resources.auth.oss.entity  = "\\Entities\\Admin"
-resources.auth.oss.disabled.lost-username = 1
-resources.auth.oss.disabled.lost-password = 0
+;; Auth entity defaults to \Entities\Admin; uncomment to override.
+;resources.auth.oss.entity  = "\\Entities\\Admin"
 
 resources.auth.oss.lost_password.use_captcha = true
 
@@ -602,7 +517,9 @@ trustedproxy.mode = "auto"
 ;; If you do that, leave trustedproxy.mode = "auto" (REMOTE_ADDR is then already
 ;; the client) or "off".
 
-resources.session.save_path = APPLICATION_PATH "/../var/session"
+;; Session files default to PHP's session.save_path; set this only to override
+;; (e.g. a writable app-local dir). Unset = PHP/SAPI default.
+;resources.session.save_path = APPLICATION_PATH "/../var/session"
 resources.session.use_only_cookies = true
 resources.session.remember_me_seconds = 3600
 resources.session.name = 'VIMBADMIN3'
@@ -622,24 +539,13 @@ resources.session.cookie_samesite = "Lax"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Smarty View
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-resources.smarty.enabled   = 1
-resources.smarty.templates = APPLICATION_PATH "/views"
-; resources.smarty.skin      = "myskin"
-resources.smarty.compiled  = APPLICATION_PATH "/../var/templates_c"
-resources.smarty.cache     = APPLICATION_PATH "/../var/cache"
-resources.smarty.config    = APPLICATION_PATH "/configs/smarty"
-resources.smarty.plugins[] = APPLICATION_PATH "/../library/ViMbAdmin/Smarty/functions"
-resources.smarty.plugins[] = APPLICATION_PATH "/../library/OSS/Smarty/functions"
-; Smarty 5 ships its core plugins as namespaced classes via Composer; the
-; legacy libs/plugins and libs/sysplugins directories no longer exist.
-resources.smarty.debugging = 0
+;
+;; All Smarty paths default off APPLICATION_PATH (views / ../var/templates_c /
+;; ../var/cache / configs/smarty + the ViMbAdmin & OSS plugin dirs), so the
+;; stock layout needs no config here. Uncomment a key only to override it.
+;resources.smarty.templates = APPLICATION_PATH "/views"
+;resources.smarty.compiled  = APPLICATION_PATH "/../var/templates_c"
+;resources.smarty.cache     = APPLICATION_PATH "/../var/cache"
+;resources.smarty.config    = APPLICATION_PATH "/configs/smarty"
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; UI
-;;
-;; Hide the footer branding block (copyright / version / source links).
-;; Default (unset) shows it. The upstream authors ask that you keep their
-;; credit; set this only if you have reason to.
-;;; footer.hide = 1

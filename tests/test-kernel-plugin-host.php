@@ -3,7 +3,7 @@
  * Unit test: ViMbAdmin\Kernel\Plugin\PluginHost (Phase 4c of docs/ZF1-REMOVAL.md).
  *
  * Proves the native plugin host loads the enabled plugins from a directory,
- * honours the `vimbadmin_plugins.<name>.disabled` switch, constructs each plugin
+ * honours the `vimbadmin_plugins.<name>.enabled` opt-in switch, constructs each plugin
  * with the context, fans notify() out in registration order, and short-circuits
  * (returns false) on the first observer veto — the contract the mutation
  * services' pre-hooks rely on. No ZF1, no database: fixture plugin classes are
@@ -68,7 +68,12 @@ PHP);
 $context = new class {
     public function getOptions(): array
     {
-        return ['vimbadmin_plugins' => ['Disabled' => ['disabled' => true]]];
+        // Opt-in: only Recorder + Veto are enabled; Disabled is left off.
+        return ['vimbadmin_plugins' => [
+            'Recorder' => ['enabled' => true],
+            'Veto'     => ['enabled' => true],
+            'Disabled' => ['enabled' => false],
+        ]];
     }
 };
 

@@ -236,7 +236,11 @@ final class MailboxController extends AbstractController
         $aliasRepo = $this->em()->getRepository('\\Entities\\Alias');
 
         if ($this->isPost() && (($this->postData()['purge'] ?? null) === 'purge')) {
-            $deleteFiles = (bool) $this->param('delete_files', false);
+            // On-disk file deletion removed: ViMbAdmin has no shared maildir
+            // filesystem (mail lives in the Dovecot container, reached over the
+            // doveadm HTTP API). Real mail removal goes through the doveadm
+            // queue TYPE_DELETE task. Purge only ever drops the DB rows here.
+            $deleteFiles = false;
 
             $context = new MailboxContext(
                 $this->em(),
@@ -650,7 +654,6 @@ final class MailboxController extends AbstractController
         if ($this->isPost() && $form->isValid($this->postData())) {
             $pwOpts = [
                 'pwhash'   => $options['defaults']['mailbox']['password_scheme'] ?? null,
-                'pwsalt'   => $options['defaults']['mailbox']['password_salt'] ?? null,
                 'username' => $mailbox->getUsername(),
             ];
             $mailbox->setPassword(\OSS_Auth_Password::hash((string) $form->values()['password'], $pwOpts));

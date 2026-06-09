@@ -51,9 +51,33 @@ final class EntityManagerFactory
      *
      * @param array<string,mixed> $options the full options array
      */
+    /**
+     * Fill in the standard doctrine2 path/namespace layout so application.ini
+     * need not spell it out. All paths derive from APPLICATION_PATH and the
+     * namespaces are fixed (Entities / Proxies / Repositories). Any explicitly
+     * configured key still wins.
+     *
+     * @param array<string,mixed> $dconfig the `resources.doctrine2` sub-array
+     * @return array<string,mixed>
+     */
+    private static function withLayoutDefaults(array $dconfig): array
+    {
+        $app = defined('APPLICATION_PATH') ? APPLICATION_PATH : '.';
+
+        return $dconfig + [
+            'models_path'            => $app,
+            'proxies_path'           => $app . '/Proxies',
+            'repositories_path'      => $app,
+            'models_namespace'       => 'Entities',
+            'proxies_namespace'      => 'Proxies',
+            'repositories_namespace' => 'Repositories',
+            'autogen_proxies'        => 0,
+        ];
+    }
+
     public static function create(array $options): object
     {
-        $dconfig = $options['resources']['doctrine2'];
+        $dconfig = self::withLayoutDefaults($options['resources']['doctrine2'] ?? []);
         $cache   = self::buildCache($options['resources']['doctrine2cache'] ?? []);
 
         self::registerLegacyTypes();
@@ -100,7 +124,7 @@ final class EntityManagerFactory
      */
     public static function registerEntityAutoloaders(array $options): void
     {
-        $dconfig = $options['resources']['doctrine2'];
+        $dconfig = self::withLayoutDefaults($options['resources']['doctrine2'] ?? []);
 
         $map = [
             (string) $dconfig['models_namespace']       => (string) $dconfig['models_path'],

@@ -1,13 +1,15 @@
 <?php
 
 /**
- * Queue-runner concurrency control + trigger-check.
+ * Queue-runner concurrency control.
  *
- * ViMbAdmin has no daemon: the mailbox-task queue is only drained when a runner
- * (`queue.cli-run`) is invoked. A cron MUST do that periodically. On top of the
- * cron, several in-app events "trigger-check": if there is pending work and a
- * runner slot is free, they spawn a runner in the BACKGROUND so the queue
- * starts draining immediately without making the user wait.
+ * ViMbAdmin has no daemon and never forks a runner from a web request. The
+ * mailbox-task queue is drained by two triggers, both running the same engine
+ * synchronously: (1) the `queue.cli-run` CLI invoked out-of-band by the
+ * container cron / s6 service, and (2) the bearer-key + IP-gated remote
+ * `POST /queue/trigger` endpoint (drains in-request). The Maintenance tab's
+ * "Run now" button drains in-request too. This class only arbitrates how many
+ * of those drains may run at once.
  *
  * Concurrency (`queue.runner.max_concurrent`, default 1) is enforced with a DB
  * lease: each active drain holds a row in `queue_runner`, heartbeats it, and
@@ -19,40 +21,6 @@ class ViMbAdmin_QueueRunner
 {
     /** Seconds after which a lease with no heartbeat is considered dead. */
     const LEASE_TTL = 1800;
-
-    /**
-     * Trigger-check: if the queue has pending work and a runner slot is free,
-     * spawn `vimbtool.php -a queue.cli-run` in the background (non-blocking) and
-     * return true. Best-effort — any failure is swallowed (the cron is the
-     * guaranteed path). NEVER throws.
-     *
-     * @param \Doctrine\ORM\EntityManager $em
-     * @param array $options  the merged application.ini options
-     * @return bool  true if a runner was spawned
-     */
-    public static function triggerCheck( $em, array $options )
-    {
-        try
-        {
-            // Anything to do?
-            $pending = (int) $em->createQuery(
-                'SELECT COUNT(t.id) FROM \Entities\MailboxTask t WHERE t.status = :s' )
-                ->setParameter( 's', \Entities\MailboxTask::STATUS_PENDING )
-                ->getSingleScalarResult();
-            if( $pending === 0 )
-                return false;
-
-            // Slot free?
-            if( !self::slotAvailable( $em, $options ) )
-                return false;
-
-            return self::spawn();
-        }
-        catch( \Throwable $e )
-        {
-            return false;
-        }
-    }
 
     /**
      * Are we below queue.runner.max_concurrent active (non-stale) runners?
@@ -163,56 +131,5 @@ class ViMbAdmin_QueueRunner
             'DELETE FROM \Entities\QueueRunner r WHERE r.heartbeat_at < :cutoff' )
             ->setParameter( 'cutoff', $cutoff )
             ->execute();
-    }
-
-    /**
-     * Spawn `vimbtool.php -a queue.cli-run` detached from the current process,
-     * so the caller (a web request or another CLI) returns immediately. Uses the
-     * same PHP binary + the vimbtool next to APPLICATION_PATH. Returns false if
-     * the tools needed to spawn aren't available (e.g. exec disabled) — the
-     * trigger-check is best-effort and the cron remains the guaranteed path.
-     *
-     * @return bool
-     */
-    public static function spawn()
-    {
-        if( !function_exists( 'proc_open' ) && !function_exists( 'exec' ) )
-            return false;
-        if( !defined( 'APPLICATION_PATH' ) )
-            return false;
-
-        $vimbtool = realpath( APPLICATION_PATH . '/../bin/vimbtool.php' );
-        if( !$vimbtool )
-            return false;
-
-        // Prefer the running PHP binary; fall back to "php" on PATH.
-        $php = defined( 'PHP_BINARY' ) && PHP_BINARY && strpos( PHP_BINARY, 'fpm' ) === false
-             ? PHP_BINARY : 'php';
-
-        $env = 'APPLICATION_ENV=' . escapeshellarg( defined( 'APPLICATION_ENV' ) ? APPLICATION_ENV : 'production' );
-        $cmd = sprintf(
-            '%s %s %s -a queue.cli-run',
-            $env,
-            escapeshellarg( $php ),
-            escapeshellarg( $vimbtool )
-        );
-
-        // Detach: redirect IO and background it so we never block.
-        if( function_exists( 'proc_open' ) )
-        {
-            $spec = [ 0 => [ 'file', '/dev/null', 'r' ],
-                      1 => [ 'file', '/dev/null', 'a' ],
-                      2 => [ 'file', '/dev/null', 'a' ] ];
-            $p = @proc_open( '/bin/sh -c ' . escapeshellarg( $cmd . ' &' ), $spec, $pipes );
-            if( is_resource( $p ) )
-            {
-                proc_close( $p );
-                return true;
-            }
-            return false;
-        }
-
-        @exec( $cmd . ' >/dev/null 2>&1 &' );
-        return true;
     }
 }

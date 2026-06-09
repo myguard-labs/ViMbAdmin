@@ -134,8 +134,6 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
                 'active'     => (bool) $m->getActive(),
                 'quota'      => $m->getQuota(),
                 'local_part' => $m->getLocalPart(),
-                'homedir'    => $m->getHomedir(),
-                'maildir'    => $m->getMaildir(),
             ];
         return [ 'domain' => $domain->getDomain(), 'mailboxes' => $out ];
     }
@@ -207,17 +205,12 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $m->setUsername( $username );
         $m->setName( $this->_str( $params, 'name' ) ?: $username );
         $m->setDomain( $domain );
-        $m->setUid( $this->options()['defaults']['mailbox']['uid'] );
-        $m->setGid( $this->options()['defaults']['mailbox']['gid'] );
-        $m->formatHomedir( $this->options()['defaults']['mailbox']['homedir'] );
-        $m->formatMaildir( $this->options()['defaults']['mailbox']['maildir'] );
         $m->setQuota( (int) ( $params['quota'] ?? 0 ) );
         $m->setActive( isset( $params['active'] ) ? (bool) $params['active'] : true );
         $m->setDeletePending( false );
         $m->setCreated( new \DateTime() );
         $m->setPassword( OSS_Auth_Password::hash( $password, [
             'pwhash'    => $this->options()['defaults']['mailbox']['password_scheme'],
-            'pwsalt'    => $this->options()['defaults']['mailbox']['password_salt'] ?? null,
             'username'  => $username,
         ] ) );
 
@@ -358,9 +351,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             $mailbox = new \Entities\Mailbox();
             $mailbox->setUsername( $mb['username'] )->setLocalPart( $mb['local_part'] )
                     ->setName( $mb['name'] )->setPassword( $mb['password'] )
-                    ->setQuota( $mb['quota'] )->setHomedir( $mb['homedir'] )
-                    ->setMaildir( $mb['maildir'] )->setUid( $mb['uid'] )
-                    ->setGid( $mb['gid'] )->setActive( $mb['active'] )
+                    ->setQuota( $mb['quota'] )->setActive( $mb['active'] )
                     ->setDomain( $archive->getDomain() )->setCreated( new \DateTime() );
             $archive->getDomain()->increaseMailboxCount();
             $em->persist( $mailbox );

@@ -86,12 +86,20 @@ final class SmartyView
     {
         $o = $options['resources']['smarty'] ?? [];
 
+        // Sensible defaults derived from APPLICATION_PATH so a lean
+        // application.ini need not spell out the standard layout. Any
+        // resources.smarty.* key still overrides its default.
+        $app = defined('APPLICATION_PATH') ? APPLICATION_PATH : '.';
+
         $view = new self([
-            'templates' => $o['templates'] ?? null,
-            'compiled'  => $o['compiled'] ?? null,
-            'cache'     => $o['cache'] ?? null,
-            'config'    => $o['config'] ?? null,
-            'plugins'   => $o['plugins'] ?? null,
+            'templates' => $o['templates'] ?? $app . '/views',
+            'compiled'  => $o['compiled']  ?? $app . '/../var/templates_c',
+            'cache'     => $o['cache']     ?? $app . '/../var/cache',
+            'config'    => $o['config']    ?? $app . '/configs/smarty',
+            'plugins'   => $o['plugins']   ?? [
+                $app . '/../library/ViMbAdmin/Smarty/functions',
+                $app . '/../library/OSS/Smarty/functions',
+            ],
         ]);
 
         if (isset($o['skin']) && (string) $o['skin'] !== '') {

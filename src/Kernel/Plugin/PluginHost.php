@@ -46,9 +46,9 @@ final class PluginHost
         foreach (glob(rtrim($pluginsDir, '/') . '/*.php') ?: [] as $file) {
             $name = basename($file, '.php');
 
-            // Honour the same `vimbadmin_plugins.<name>.disabled` switch the ZF1
-            // host reads, so a plugin disabled in application.ini stays disabled.
-            if (!empty($options['vimbadmin_plugins'][$name]['disabled'])) {
+            // Opt-in: a plugin runs only when `vimbadmin_plugins.<name>.enabled`
+            // is explicitly true in application.ini. Absent or false = off.
+            if (empty($options['vimbadmin_plugins'][$name]['enabled'])) {
                 continue;
             }
 

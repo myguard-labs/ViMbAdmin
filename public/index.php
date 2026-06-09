@@ -55,3 +55,15 @@ foreach ($response->headers as $name => $value) {
     header($name . ': ' . $value);
 }
 echo $response->body;
+
+// Detached after-send work (e.g. the queue trigger draining autonomously):
+// flush the response, close the client connection, THEN run the callback so
+// the caller gets its OK and disconnects while the work continues in this same
+// FPM worker — no forked process, no shell-out. Falls back to running inline
+// when fastcgi_finish_request() is unavailable (CLI / non-FPM SAPI).
+if (is_callable($response->afterSend)) {
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    }
+    ($response->afterSend)();
+}

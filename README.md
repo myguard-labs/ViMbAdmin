@@ -397,7 +397,6 @@ session or authenticates — every command works against the Doctrine EM directl
 | Action | What it does | Options |
 |---|---|---|
 | `queue.cli-run` | Drain the **mailbox-task queue** — claims up to `queue.runner.max_per_run` PENDING tasks (repair / optimize / archive / delete) and runs them against Dovecot over the doveadm HTTP API. The periodic runner (the image fires it on start + every 5 min; also triggered on login / Maintenance / MCP). Concurrency capped by the `queue.runner.max_concurrent` DB lease. | — |
-| `mailbox.cli-delete-pending` | Purge mailboxes flagged **delete-pending**: removes the on-disk maildir + homedir (via `binary.path.rm_rf`, each path `escapeshellarg`'d) then the DB row. Run from cron after a deletion grace period. | — |
 | `maintenance.cli-schema-update` | Apply pending **Doctrine schema migrations** (DDL). Same code as the in-panel **Maintenance → Update schema** button. Run on deploy/upgrade; the Docker image runs it automatically on every start. | `--verbose` → also print the SQL + resulting DB version |
 | `maintenance.cli-precompile-templates` | Compile every **Smarty template** ahead of time into the persistent `var/templates_c`, so the first web request pays no compile cost. Idempotent; the image runs it on start. | — |
 | `admin.cli-reset-totp` | **Disable two-factor** for a locked-out admin (recovery path). | `--username=<email>` (one admin) **or** `--all` (every admin) |
@@ -647,15 +646,12 @@ any host on the allowlist `POST` the key as a Bearer token:
 (Empty `queue.runner.key` disables the HTTP endpoint; the CLI runner and the
 in-panel "Run now" button always work.)
 
-A separate, legacy **on-disk purge** path still exists for direct maildir
-removal on a host that can see the mail, unrelated to the queue archive/delete
-flow above (that backs up via doveadm and prunes from the Archives/Maintenance
-tabs). Two pieces: the **web** purge UI is gated by `mailbox_deletion_fs_enabled`
-(default **false**); the **CLI** `mailbox.cli-delete-pending` shells out via
-`binary.path.rm_rf` over each mailbox's maildir + homedir. In the hardened
-Docker image it is effectively inert — the mail lives in the Dovecot container,
-not here, so the maildir paths don't exist, and the FPM pool's `open_basedir`
-confines PHP to the app's own dirs anyway.
+There is no direct-filesystem mailbox deletion: ViMbAdmin never touches the
+maildir itself. Real mail removal is a doveadm queue `TYPE_DELETE` task over
+the HTTP API (backup + `mailbox delete`); the web purge only drops the DB rows.
+The old `mailbox.cli-delete-pending` CLI + `binary.path.rm_rf` shell-out and
+`mailbox_deletion_fs_enabled` web checkbox were removed — they required a shared
+maildir filesystem this fork no longer has.
 
 Mailbox **usage** in the panel does *not* need a maildir scan — it is fed live
 by Dovecot's quota-clone plugin. See below.

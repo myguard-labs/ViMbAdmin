@@ -166,7 +166,7 @@ class ViMbAdmin_Service_Mailbox
      * callables so either dispatch path can thread its plugin notify in.
      *
      * @param array $options the merged application options (needs
-     *        `defaults.mailbox.{homedir,maildir,uid,gid,password_scheme[,password_salt]}`
+     *        `defaults.mailbox.password_scheme`
      *        and the top-level `mailboxAliases` switch)
      * @param callable():void|null $preFlush  fires after the log, before flush
      * @param callable():void|null $postFlush fires after flush
@@ -182,18 +182,12 @@ class ViMbAdmin_Service_Mailbox
         $mb = $options['defaults']['mailbox'];
 
         $mailbox->setDomain($domain);
-        $mailbox->setHomedir($mb['homedir']);
-        $mailbox->setUid($mb['uid']);
-        $mailbox->setGid($mb['gid']);
-        $mailbox->formatHomedir($mb['homedir']);
-        $mailbox->formatMaildir($mb['maildir']);
         $mailbox->setActive(1);
         $mailbox->setDeletePending(false);
         $mailbox->setCreated(new \DateTime());
 
         $mailbox->setPassword(\OSS_Auth_Password::hash($mailbox->getPassword(), [
             'pwhash'   => $mb['password_scheme'],
-            'pwsalt'   => $mb['password_salt'] ?? null,
             'username' => $mailbox->getUsername(),
         ]));
 

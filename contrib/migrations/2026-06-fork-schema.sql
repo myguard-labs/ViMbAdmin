@@ -187,3 +187,32 @@ CREATE TABLE IF NOT EXISTS `queue_runner` (
     PRIMARY KEY (`id`),
     INDEX `queue_runner_heartbeat_idx` (`heartbeat_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- ---------------------------------------------------------------------
+-- 6) Drop per-mailbox uid / gid / homedir / maildir columns
+-- ---------------------------------------------------------------------
+-- ViMbAdmin no longer stores mailbox ownership or storage location: Dovecot
+-- owns those entirely via its own config (mail_uid / mail_gid / mail_home /
+-- mail_path), and the userdb query stops SELECTing these columns. Drop them so
+-- the schema matches the entity (guarded per-column; re-runs no-op). Run AFTER
+-- the Dovecot userdb query has been updated to not reference them.
+SET @col_uid := ( SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'uid' );
+SET @d := IF( @col_uid = 1, 'ALTER TABLE `mailbox` DROP COLUMN `uid`', 'DO 0' );
+PREPARE _x FROM @d; EXECUTE _x; DEALLOCATE PREPARE _x;
+
+SET @col_gid := ( SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'gid' );
+SET @d := IF( @col_gid = 1, 'ALTER TABLE `mailbox` DROP COLUMN `gid`', 'DO 0' );
+PREPARE _x FROM @d; EXECUTE _x; DEALLOCATE PREPARE _x;
+
+SET @col_home := ( SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'homedir' );
+SET @d := IF( @col_home = 1, 'ALTER TABLE `mailbox` DROP COLUMN `homedir`', 'DO 0' );
+PREPARE _x FROM @d; EXECUTE _x; DEALLOCATE PREPARE _x;
+
+SET @col_mail := ( SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'maildir' );
+SET @d := IF( @col_mail = 1, 'ALTER TABLE `mailbox` DROP COLUMN `maildir`', 'DO 0' );
+PREPARE _x FROM @d; EXECUTE _x; DEALLOCATE PREPARE _x;

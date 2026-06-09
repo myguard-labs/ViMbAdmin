@@ -3,7 +3,6 @@ MAILTO=someone@example.com
 
 
 */5 *	* * *	/usr/local/vimbadmin.git/bin/vimbtool.php -a archive.cli-archive-pendings
-*/5 *	* * *	/usr/local/vimbadmin.git/bin/vimbtool.php -a archive.cli-delete-pendings
 */5 *	* * *	/usr/local/vimbadmin.git/bin/vimbtool.php -a archive.cli-restore-pendings
 
 # Drain the mailbox-task queue (repair/optimize/archive/delete via doveadm HTTP).

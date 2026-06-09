@@ -49,20 +49,9 @@ class OSS_Auth_Password
     const HASH_PLAINTEXT    = 'plaintext';
     const HASH_PLAIN        = 'plain';
     const HASH_BCRYPT       = 'bcrypt';
-    const HASH_MD5          = 'md5';
-    const HASH_MD5_SALTED   = 'md5-salted';
-    const HASH_SHA1         = 'sha1';
-    const HASH_SHA1_SALTED  = 'sha1-salted';
     const HASH_DOVECOT      = 'dovecot:';
     const HASH_CRYPT        = 'crypt:';
     const HASH_UNKNOWN      = '*unknown*';
-
-    // Bad salts - in April 2016 it was pointed out that a typo in the code below meant that
-    // md5.salted and sha1.salted didn't actually use the requested salt string but a fixed
-    // salt of "md5.salted" and "sha1.salted" respectivily.
-    // These constants are for backwards compatibility for anyone that used those:
-    const HASH_MD5_BADSALT  = 'md5.salted';
-    const HASH_SHA1_BADSALT = 'sha1.salted';
 
     /**
      * A generic password hashing method using a given configuration array
@@ -70,7 +59,6 @@ class OSS_Auth_Password
      * The parameters expected in `$config` are:
      *
      * * `pwhash`      - a hashing method from the `HASH_` constants in this class
-     * * `pwsalt`      - a hashing salt for HASH_SHA1_SALTED and HASH_MD5_SALTED
      * * `hash_cost`   - a *cost* parameter for certain hashing functions - e.g. bcrypt (defaults to 9)
      *
      * @param string $pw The plaintext password to hash
@@ -138,32 +126,6 @@ class OSS_Auth_Password
 
                     $bcrypt = new OSS_Crypt_Bcrypt( $config['hash_cost'] );
                     return $bcrypt->hash( $pw );
-                    break;
-
-                case self::HASH_MD5:
-                    return md5( $pw );
-                    break;
-
-                case self::HASH_MD5_SALTED:
-                    return md5( $pw . $config['pwsalt'] );
-                    break;
-
-                case self::HASH_SHA1:
-                    return sha1( $pw );
-                    break;
-
-                case self::HASH_SHA1_SALTED:
-                    return sha1( $pw . $config['pwsalt'] );
-                    break;
-
-
-
-                case self::HASH_MD5_BADSALT:
-                    return md5( $pw . $config['pwhash'] );
-                    break;
-
-                case self::HASH_SHA1_BADSALT:
-                    return sha1( $pw . $config['pwhash'] );
                     break;
 
                 // UPDATE PHPDOC ABOVE WHEN ADDING NEW METHODS!

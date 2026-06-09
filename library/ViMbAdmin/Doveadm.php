@@ -228,7 +228,7 @@ class ViMbAdmin_Doveadm
 
     /**
      * One-way dsync backup of a user's whole mailbox to a destination location
-     * (e.g. "maildir:/srv/vmail-backup/domain/user"). Used as the safety copy
+     * (e.g. "maildir:/backups/domain/user"). Used as the safety copy
      * before archive/delete.
      *
      * @param string $user

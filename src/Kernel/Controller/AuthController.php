@@ -160,7 +160,6 @@ final class AuthController extends AbstractController
             return $this->view('auth/native-setup-salt.phtml', [
                 'randomSalt'   => \OSS_String::salt(64),
                 'rememberSalt' => \OSS_String::salt(64),
-                'passwordSalt' => \OSS_String::salt(64),
             ]);
         }
 
@@ -355,7 +354,6 @@ final class AuthController extends AbstractController
 
             $pwOpts = [
                 'pwhash'   => $options['defaults']['mailbox']['password_scheme'] ?? null,
-                'pwsalt'   => $options['defaults']['mailbox']['password_salt'] ?? null,
                 'username' => (string) $v['username'],
             ];
 

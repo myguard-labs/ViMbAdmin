@@ -10,11 +10,15 @@ use ViMbAdmin\Kernel\Container;
 /**
  * `queue.cli-run` — drain the mailbox-task queue (WALL #2, docs/ZF1-REMOVAL.md).
  *
- * Native port of `QueueController::cliRunAction`: claims up to
- * `queue.runner.max_per_run` PENDING tasks and runs them, through the SAME
- * framework-free {@see \ViMbAdmin_Service_QueueRunner} engine the ZF1 cron runner
- * (and the native runNow/runTask + the trigger endpoint) use. This is the
- * every-2-minutes cron entrypoint (`vimbtool.php -a queue.cli-run`).
+ * Drains through the SAME framework-free {@see \ViMbAdmin_Service_QueueRunner}
+ * engine the native runNow/runTask + the remote trigger endpoint use. This is
+ * the cron / s6 entrypoint (`vimbtool.php -a queue.cli-run`).
+ *
+ * By default it autonomously clears the whole backlog: it drains batches of
+ * `queue.runner.max_per_run` until the queue is empty (or a batch is
+ * lease-throttled). Pass `--once` to drain a single batch and exit (the lease
+ * cap serialises overlapping runs either way, so a long run is safe — the next
+ * cron tick simply finds the slot busy and returns).
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -29,14 +33,23 @@ final class QueueRunCommand implements CliCommand
     public function run(Container $container, array $args): int
     {
         $verbose = array_key_exists('v', $args) || array_key_exists('verbose', $args);
+        $once    = array_key_exists('once', $args);
 
         $options = $container->options();
         $max     = (int) ($options['queue']['runner']['max_per_run'] ?? 5);
 
-        $n = (new \ViMbAdmin_Service_QueueRunner($container->entityManager(), $options))->drain($max, $verbose);
+        $runner = new \ViMbAdmin_Service_QueueRunner($container->entityManager(), $options);
 
-        if ($verbose && $n >= 0) {
-            echo "Processed {$n} task(s).\n";
+        $total = 0;
+        do {
+            $n = $runner->drain($max, $verbose);
+            if ($n > 0) {
+                $total += $n;
+            }
+        } while (!$once && $n > 0);
+
+        if ($verbose) {
+            echo "Processed {$total} task(s).\n";
         }
 
         return 0;

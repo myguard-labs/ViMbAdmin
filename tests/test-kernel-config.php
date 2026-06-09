@@ -105,8 +105,8 @@ check('flat dist is env-independent (docker == production)',
 check('dist: doctrine2 driver resolved',
     ($dist['resources']['doctrine2']['connection']['options']['driver'] ?? null) === 'pdo_mysql');
 check('dist: APPLICATION_PATH expanded in a path key',
-    is_string($dist['resources']['doctrine2']['proxies_path'] ?? null)
-        && str_starts_with((string) $dist['resources']['doctrine2']['proxies_path'], '/app/'));
+    is_string($dist['temporary_directory'] ?? null)
+        && str_starts_with((string) $dist['temporary_directory'], '/app/'));
 check('dist: removed legacy bootstrap config stays absent',
     !isset($dist['bootstrap']));
 

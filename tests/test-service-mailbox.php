@@ -249,10 +249,6 @@ $mkDomain = static function (int $count): \Entities\Domain {
 $createOptions = [
     'mailboxAliases' => 1,
     'defaults' => ['mailbox' => [
-        'homedir'         => '/var/vmail/%d/',
-        'maildir'         => '/var/vmail/%d/%u/',
-        'uid'             => 5000,
-        'gid'             => 5000,
         'password_scheme' => 'crypt:sha512',
     ]],
 ];
@@ -278,9 +274,6 @@ check('create returns the mailbox',           $created === $mbC);
 check('create set the domain',                $mbC->getDomain() === $domC);
 check('create set active',                    (bool) $mbC->getActive() === true);
 check('create cleared delete-pending',        (bool) $mbC->getDeletePending() === false);
-check('create set uid/gid from options',      (int) $mbC->getUid() === 5000 && (int) $mbC->getGid() === 5000);
-check('create formatted homedir (%d)',        $mbC->getHomedir() === '/var/vmail/example.com/');
-check('create formatted maildir (%d/%u)',     $mbC->getMaildir() === '/var/vmail/example.com/new/');
 check('create hashed the password',           $mbC->getPassword() !== 's3cr3t-plaintext');
 check('create password verifies',             OSS_Auth_Password::verify('s3cr3t-plaintext', $mbC->getPassword(), ['pwhash' => 'crypt:sha512']) === true);
 check('create persisted the mailbox',         in_array($mbC, $emC->persisted, true));

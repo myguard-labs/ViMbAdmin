@@ -64,30 +64,6 @@ class Mailbox
     private string $access_restriction = 'ALL';
 
     /**
-     * @var string $homedir
-     */
-    #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    private ?string $homedir = null;
-
-    /**
-     * @var string $maildir
-     */
-    #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    private ?string $maildir = null;
-
-    /**
-     * @var integer $uid
-     */
-    #[ORM\Column(type: 'bigint', nullable: true)]
-    private ?int $uid = null;
-
-    /**
-     * @var integer $gid
-     */
-    #[ORM\Column(type: 'bigint', nullable: true)]
-    private ?int $gid = null;
-
-    /**
      * @var \DateTime $created
      */
     #[ORM\Column(type: 'datetime')]
@@ -306,108 +282,6 @@ class Mailbox
     }
 
     /**
-     * Set homedir
-     *
-     * @param string $homedir
-     * @return Mailbox
-     */
-    public function setHomedir($homedir)
-    {
-        $this->homedir = $homedir;
-
-        return $this;
-    }
-
-    /**
-     * Get homedir
-     *
-     * @return string
-     */
-    public function getHomedir()
-    {
-        return $this->homedir;
-    }
-
-    /**
-     * Set maildir
-     *
-     * @param string $maildir
-     * @return Mailbox
-     */
-    public function setMaildir($maildir)
-    {
-        $this->maildir = $maildir;
-
-        return $this;
-    }
-
-    /**
-     * Get maildir
-     *
-     * @return string
-     */
-    public function getMaildir()
-    {
-        return $this->maildir;
-    }
-
-    /**
-     * Get maildir
-     *
-     * @return string
-     */
-    public function getCleanedMaildir()
-    {
-        return self::cleanMaildir( $this->getMaildir() );
-    }
-
-    /**
-     * Set uid
-     *
-     * @param integer $uid
-     * @return Mailbox
-     */
-    public function setUid($uid)
-    {
-        $this->uid = $uid;
-
-        return $this;
-    }
-
-    /**
-     * Get uid
-     *
-     * @return integer
-     */
-    public function getUid()
-    {
-        return $this->uid;
-    }
-
-    /**
-     * Set gid
-     *
-     * @param integer $gid
-     * @return Mailbox
-     */
-    public function setGid($gid)
-    {
-        $this->gid = $gid;
-
-        return $this;
-    }
-
-    /**
-     * Get gid
-     *
-     * @return integer
-     */
-    public function getGid()
-    {
-        return $this->gid;
-    }
-
-    /**
      * Set created
      *
      * @param \DateTime $created
@@ -540,48 +414,6 @@ class Mailbox
     }
 
     /**
-     * Set the maildir
-     *
-     * Replaces the following characters in the $maildir parameter:
-     *
-     * %u - the local part of the username (email address)
-     * %d - the domain part of the username (email address)
-     * %m - the username (email address)
-     *
-     * FIXME refactor formatMaildir/Homedir()
-     * FIXME allow for multiple storage formats including uniform hashing
-     *
-     * @param string $maildir The maildir format
-     * @return string The newly created maildir (also set in the object)
-     */
-    public function formatMaildir( $maildir = '' )
-    {
-        $this->setMaildir( self::substitute( $this->getUsername(), $maildir ) );
-        return $this->getMaildir();
-    }
-
-    /**
-     * Set the homedir
-     *
-     * Replaces the following characters in the $homedir parameter:
-     *
-     * %u - the local part of the username (email address)
-     * %d - the domain part of the username (email address)
-     * %m - the username (email address)
-     *
-     * FIXME refactor formatMaildir/Homedir()
-     * FIXME allow for multiple storage formats including uniform hashing
-     *
-     * @param string $homedir The homedir format
-     * @return string The newly created homedir (also set in the object)
-     */
-    public function formatHomedir( $homedir = '' )
-    {
-        $this->setHomedir( self::substitute( $this->getUsername(), $homedir ) );
-        return $this->getHomedir();
-    }
-
-    /**
      * Replaces the following characters in the $str parameter:
      *
      * %u - the local part of the username (email address)
@@ -604,28 +436,6 @@ class Mailbox
         return $str;
     }
 
-
-    /**
-     * Clean a maildir string into a standard filesystem path
-     *
-     * For example, turns: ''maildir:/srv/vmail/example.com/jbloggs/mail:LAYOUT=fs''
-     * into: /srv/vmail/example.com/jbloggs/mail
-     *
-     * @param string $maildir The maildir string
-     * @return string The path from $maildir
-     */
-    public static function cleanMaildir( $maildir )
-    {
-        // typical maildir that needs to be cleaned:
-        //     maildir:/srv/vmail/example.com/jbloggs/mail:LAYOUT=fs
-        if( substr( $maildir, 0, 8 ) == 'maildir:' )
-        $maildir = substr( $maildir, 8 );
-
-        if( substr( $maildir, strrpos( $maildir, ':' ) + 1, 6 ) == 'LAYOUT' )
-        $maildir = substr( $maildir, 0, strrpos( $maildir, ':' ) );
-
-        return $maildir;
-    }
     /**
      * @var \Entities\DirectoryEntry
      */

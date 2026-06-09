@@ -27,7 +27,7 @@ if (isset($opts['h']) || isset($opts['help'])) {
     echo SCRIPT_NAME . "\n";
     echo "Usage: vimbtool.php -a controller.action [options]\n\n";
     echo "Actions:\n";
-    echo "  queue.cli-run\n  admin.cli-reset-totp\n  mailbox.cli-delete-pending\n";
+    echo "  queue.cli-run\n  admin.cli-reset-totp\n";
     echo "  maintenance.cli-schema-update\n  maintenance.cli-precompile-templates\n  mcp.cli-token-generate\n";
     echo "  mcp.cli-token-list\n  mcp.cli-token-revoke\n";
     exit(0);

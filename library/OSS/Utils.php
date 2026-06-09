@@ -68,67 +68,6 @@ class OSS_Utils
 
 
     /**
-     * Converts a HTML file to PDF using htmldoc. Please note that the current stable version of htmldoc (v1.8.27) does not support CSS. Make sure PHP has write permission in the
-     * output directory. Also don't forget that relative paths are relative to the currently executing PHP script (include() and require() doesn't count in that).
-     * Using command line OpenOffice might be a better solution (a necessary macro and a tiny, one line shell script are available on the internet), as it supports everything in the HTML,
-     * CSS, images, etc, while the htmldoc 1.9.x is still in "developer snapshot" state.
-     *
-     * @param string $html the input HTML file name
-     * @param string $pdf the output PDF file name
-     * @param bool $embedFonts default false embed the used fonts to the genereated PDF or not - can save 100's of kBytes even in a plain PDF (think of email sending)
-     * @return bool
-     */
-    public static function HtmlToPdf( $html, $pdf, $embedFonts = false )
-    {
-        $tempFile = OSS_Utils::getTempDir() . '/html_to_pdf_' . md5( mt_rand() ) . '.html';
-
-        $res = file_put_contents( $tempFile, mb_convert_encoding( file_get_contents( $html ), 'HTML-ENTITIES' ) );
-
-        if( !$res )
-            return false;
-
-        // a ' &> /dev/null' at the end of the command should work, but it doesn't
-        $command = 'htmldoc --webpage --continuous --compression=9' .
-                    ($embedFonts == false ? ' --no-embedfonts' : '') .
-                    ' --fontsize 10 --size A4 --top 2cm --bottom 2cm --left 2cm --right 2cm -t pdf14 -f '
-                    . escapeshellarg( $pdf ) . ' ' . escapeshellarg( $tempFile );
-
-        //print "\n\n" . $vCommand . "\n\n"; die();
-        //file_put_contents('../var/tmp/command.txt', $vCommand);
-
-        $res = @exec( $command );
-
-        if( !$res )
-            return false;
-
-        return @file_exists( $pdf );
-    }
-
-    /**
-     * Converts a HTML file to PDF using wkhtmltopdf
-     *
-     * @param string $html the input HTML file name
-     * @param string $pdf the output PDF file name
-     * @return bool
-     */
-    public static function wkhtmltopdf( $html, $pdf )
-    {
-        // WARNING: You have to use the static version of wkhtmltopdf
-
-        $command = dirname( __FILE__ ) . '/../../bin/wkhtmltopdf -q -n -O Portrait -s A4 ' . escapeshellarg( $html ) . ' ' . escapeshellarg( $pdf );
-
-        @unlink( $pdf );
-
-        $res = @exec( $command, $output, $ret );
-
-        if( $res === false )
-            return false;
-
-        return @file_exists( $pdf );
-    }
-
-
-    /**
      * A generally available function to retrieve options from the application.ini, anywhere in the program. Don't need to use this
      * in the controllers, the $this->_options array is available there, this is useful in models, forms and other places.
      *

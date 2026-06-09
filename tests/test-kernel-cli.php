@@ -31,7 +31,6 @@ $kernel = new CliKernel('/nonexistent', 'testing');
 $expected = [
     'queue.cli-run',
     'admin.cli-reset-totp',
-    'mailbox.cli-delete-pending',
     'maintenance.cli-schema-update',
     'maintenance.cli-precompile-templates',
     'mcp.cli-token-generate',

@@ -9,7 +9,7 @@ namespace ViMbAdmin\Kernel\Plugin;
  * docs/ZF1-REMOVAL.md) — the form-build counterpart of {@see PluginHost}.
  *
  * It loads the enabled plugins from the plugin directory (honouring the same
- * `vimbadmin_plugins.<name>.disabled` switch) and keeps the ones that implement
+ * `vimbadmin_plugins.<name>.enabled` opt-in switch) and keeps the ones that implement
  * {@see \ViMbAdmin_Plugin_MailboxFormExtension}. A native mailbox controller asks
  * it for the extra form fields, validates the submitted section values, and
  * applies the writebacks onto the mailbox entity — so a plugin's form section
@@ -42,7 +42,8 @@ final class FormPluginHost
         foreach (glob(rtrim($pluginsDir, '/') . '/*.php') ?: [] as $file) {
             $name = basename($file, '.php');
 
-            if (!empty($this->options['vimbadmin_plugins'][$name]['disabled'])) {
+            // Opt-in: load only when `vimbadmin_plugins.<name>.enabled` is true.
+            if (empty($this->options['vimbadmin_plugins'][$name]['enabled'])) {
                 continue;
             }
 

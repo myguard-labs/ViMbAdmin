@@ -221,7 +221,7 @@ class ViMbAdmin_Service_QueueRunner
 
     private function backupDest(\Entities\MailboxTask $task)
     {
-        $tpl  = (string) ($this->options['doveadm']['backup']['dest'] ?? 'maildir:/srv/vmail-backup/%d/%u');
+        $tpl  = (string) ($this->options['doveadm']['backup']['dest'] ?? 'maildir:/backups/%d/%u');
         $user = $task->getUsername();
         $dom  = $task->getDomain() ? $task->getDomain()->getDomain() : (strstr($user, '@') ? substr(strrchr($user, '@'), 1) : '');
         return str_replace(['%d', '%u'], [$dom, $user], $tpl);
@@ -261,10 +261,6 @@ class ViMbAdmin_Service_QueueRunner
                 'name'       => $mb->getName(),
                 'password'   => $mb->getPassword(),
                 'quota'      => $mb->getQuota(),
-                'homedir'    => $mb->getHomedir(),
-                'maildir'    => $mb->getMaildir(),
-                'uid'        => $mb->getUid(),
-                'gid'        => $mb->getGid(),
                 'active'     => $mb->getActive(),
             ];
         }
@@ -453,7 +449,6 @@ class ViMbAdmin_Service_QueueRunner
             ? rtrim((string) $this->options['doveadm']['maildir_root'], '/')
             : '/opt/myguard/dovecot/maildir';
         $home      = $root . '/' . $user;
-        $maildir   = 'maildir:' . $home;
         $localPart = strstr($user, '@', true) ?: $user;
         $tempId    = null;
 
@@ -465,10 +460,6 @@ class ViMbAdmin_Service_QueueRunner
                 'quota'      => 0,
                 'active'     => 0,
                 'created'    => (new \DateTime())->format('Y-m-d H:i:s'),
-                'homedir'    => $home,
-                'maildir'    => $maildir,
-                'uid'        => 5000,
-                'gid'        => 5000,
                 'Domain_id'  => $domain->getId(),
             ]);
             $tempId = (int) $conn->lastInsertId();

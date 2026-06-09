@@ -6,7 +6,6 @@ namespace ViMbAdmin\Kernel\Cli;
 
 use ViMbAdmin\Kernel\Bootstrap;
 use ViMbAdmin\Kernel\Container;
-use ViMbAdmin\Kernel\Cli\Command\DeletePendingCommand;
 use ViMbAdmin\Kernel\Cli\Command\McpTokenGenerateCommand;
 use ViMbAdmin\Kernel\Cli\Command\McpTokenListCommand;
 use ViMbAdmin\Kernel\Cli\Command\McpTokenRevokeCommand;
@@ -47,7 +46,6 @@ final class CliKernel
         $registered = [
             new QueueRunCommand(),
             new ResetTotpCommand(),
-            new DeletePendingCommand(),
             new SchemaUpdateCommand(),
             new PrecompileTemplatesCommand(),
             new McpTokenGenerateCommand(),

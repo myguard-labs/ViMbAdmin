@@ -20,13 +20,21 @@ namespace ViMbAdmin\Kernel\Http;
 final class Response
 {
     /**
-     * @param array<string,string> $headers extra headers beyond Content-Type
+     * @param array<string,string>  $headers   extra headers beyond Content-Type
+     * @param (callable():void)|null $afterSend work to run AFTER the response is
+     *        flushed to the client and the connection closed
+     *        (`fastcgi_finish_request()`), so the caller gets its OK and
+     *        disconnects while this runs detached. The entry point
+     *        (public/index.php) is the only place that invokes it — used by the
+     *        queue trigger to drain autonomously without blocking the caller and
+     *        without forking a process.
      */
     public function __construct(
         public readonly string $body,
         public readonly int $status = 200,
         public readonly string $contentType = 'text/html; charset=utf-8',
         public readonly array $headers = [],
+        public readonly mixed $afterSend = null,
     ) {
     }
 

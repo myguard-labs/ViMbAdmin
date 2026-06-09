@@ -75,7 +75,11 @@ class ViMbAdminPlugin_Off implements ViMbAdmin_Plugin_MailboxFormExtension
 }
 PHP);
 
-$options = ['vimbadmin_plugins' => ['Off' => ['disabled' => true]]];
+// Opt-in: only Ext is enabled; Off is left off (no enabled flag).
+$options = ['vimbadmin_plugins' => [
+    'Ext' => ['enabled' => true],
+    'Off' => ['enabled' => false],
+]];
 $host = new FormPluginHost($options, $dir);
 
 check('host keeps only extension, enabled', $host->extensionCount() === 1);

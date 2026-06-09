@@ -19,3 +19,17 @@ updates:
       php-deps:
         patterns:
           - "*"
+
+  # Keep the GitHub Actions used by the CI / SAST / regression workflows current
+  # — security patches to checkout/setup-php/codeql-action land here, and the
+  # bumps move the `uses:` refs forward (toward pinned digests) instead of
+  # sitting on a stale mutable tag.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"

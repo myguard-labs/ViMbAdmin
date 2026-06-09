@@ -121,6 +121,15 @@ final class Bootstrap
             session_name((string) $session['name']);
         }
 
+        // session.use_strict_mode rejects attacker-seeded session IDs (a core
+        // session-fixation defence). The hardened FPM pool sets it too, but a
+        // from-source / bare-metal install has no such pool — so enforce a safe
+        // default HERE rather than relying on the deployment. A config value, if
+        // present, still wins (cast '1'/'' from IniConfig booleans).
+        ini_set('session.use_strict_mode', array_key_exists('use_strict_mode', $session)
+            ? (string) $session['use_strict_mode']
+            : '1');
+
         // The remaining keys map one-to-one onto `session.*` php.ini settings
         // (the cookie + lookup hardening ViMbAdmin configures). Zend-specific
         // keys without a session.* analogue (e.g. remember_me_seconds) are

@@ -650,9 +650,11 @@ resources.session.name = 'VIMBADMIN3'
 ;; Cookie / fixation hardening. cookie_secure REQUIRES the panel be served over
 ;; HTTPS (set it to false only for a plain-HTTP dev box, or the session cookie
 ;; is never sent and login loops).
-;; NOTE: session.use_strict_mode (rejects attacker-seeded SIDs) is enforced at
-;; the PHP level by the FPM pool (contrib/php-fpm/vimbadmin.conf) — it is NOT a
-;; resources.session.* key. Keep it in the FPM pool rather than duplicating it.
+;; session.use_strict_mode (rejects attacker-seeded SIDs) defaults to ON in the
+;; application bootstrap, so a from-source install is protected without the FPM
+;; pool. The hardened pool (contrib/php-fpm/vimbadmin.conf) also sets it. Set
+;; this to false ONLY if you have a deliberate reason; leaving it unset = ON.
+;resources.session.use_strict_mode = true
 resources.session.cookie_httponly = true
 resources.session.cookie_secure   = true
 resources.session.cookie_samesite = "Lax"

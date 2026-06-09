@@ -3,26 +3,40 @@
  eilandert fork (https://github.com/eilandert/ViMbAdmin)
 ===========================================
 
+fork   2026-06-09
+
 Modernisation + hardening on top of upstream V3:
 
+ - Zend Framework 1 removed entirely: the HTTP/CLI kernel, routing, forms,
+   config loader, sessions and auth are now native PHP 8 (no Zend_* class, and
+   shardj/zf1-future dropped from composer). The one remaining ZF1-ism is the
+   application.ini config *format*, read by a small native IniConfig loader.
  - Runs clean on PHP 8.4/8.5; Smarty 4 -> 5, Doctrine ORM 2.8 -> 2.20 (+ DBAL 3),
    cache layer rebuilt on symfony/cache (ArrayCache/ApcuCache/RedisCache, with a
    graceful fallback to ArrayCache when the extension is missing).
  - Security: two-factor auth (TOTP, encrypted secrets, backup codes, super-admin
    management, force-on-login), per-IP brute-force lockout with allowlist,
-   constant-time password checks, session-fixation regeneration, CSRF on every
-   form + destructive link, Smarty XSS auto-escaping, a Snuffleupagus ruleset,
-   and hardened FPM-pool / Angie-vhost configs in contrib/. Dead code + a latent
-   SQLi removed.
+   constant-time password checks, session-fixation regeneration (incl. a
+   use_strict_mode default enforced in the app, not just the FPM pool), CSRF on
+   every form + destructive link, Smarty XSS auto-escaping, a Snuffleupagus
+   ruleset, and hardened FPM-pool / Angie-vhost configs in contrib/. Dead code +
+   a latent SQLi removed.
+ - Mailbox passwords hashed natively in PHP (BLF-CRYPT / SHA512-CRYPT /
+   SHA256-CRYPT) — the external `doveadm pw` binary is no longer required.
  - MCP adapter (optional, off by default): bearer-token JSON-RPC API at /mcp with
    SHA-256-hashed scoped/expirable/revocable tokens, per-token IP allowlist, and
    a rate limit on destructive operations. See docs/mcp-auth.md.
  - Real client IP behind a proxy: spoof-resistant trustedproxy.mode (default
    auto), feeding the brute-force limiter + MCP IP checks.
- - Schema: UNIQUE index on mailbox.username (mail daemons query it per
-   login/delivery); migration in contrib/migrations/.
+ - Schema: the panel migrates its own database (maintenance.cli-schema-update;
+   the Docker image runs it at container start). UNIQUE index on mailbox.username
+   (mail daemons query it per login/delivery); consolidated fork migration in
+   contrib/migrations/.
  - Mail defaults: outgoing transport 587/STARTTLS, optional TLS cert-ignore for
    the smarthost; mail-host archive/quota cron examples in contrib/cron/.
+ - CI: PHPStan level 1 clean + blocking, composer audit (--locked) + validate,
+   Semgrep SAST, and a regression suite. Removed the unused Vagrant dev box and
+   other obsolete upstream artifacts.
 
 For V3 change logs, please see the GitHub releases tab at:
 

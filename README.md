@@ -344,24 +344,15 @@ change. The Docker image generates a fresh `application.ini` from the `.dist`
 template at first run (injecting the DB env + a per-deployment salt) and leaves
 it alone thereafter, so the same "diff against `.dist`" rule applies there.
 
-> **`application.ini` is a ZF1 leftover and will likely change.** Its
-> `[child : parent]` section-inheritance and `resources.*` key namespace are a
-> Zend Framework 1 convention. ZF1 itself is gone (a small native
-> [`IniConfig`](src/Kernel/Config/IniConfig.php) loader reads the file now), so
-> the format is a candidate to be **replaced** in a future release — likely with
-> a plain PHP-array or env-driven config and a one-shot converter. The keys and
-> their meanings will be preserved across any such change; only the on-disk
-> *shape* would move. Treat the `application.ini` filename/format as **not yet
-> final**.
+> **`application.ini`'s format may change.** Its `[child : parent]` section
+> inheritance and `resources.*` namespace are a Zend Framework 1 convention; ZF1
+> is gone (a small native [`IniConfig`](src/Kernel/Config/IniConfig.php) reads
+> the file now), so the on-disk *shape* is a candidate to be replaced later. The
+> keys and their meanings would be preserved across any such change.
 
-The **`dovecot_quota`** part of that migration lets this fork retire the old
-nightly maildir-scan (`mailbox.cli-get-sizes`) and get **live** mailbox usage
-straight from Dovecot's quota-clone plugin instead: it creates the
-`dovecot_quota` table, seeds it from the old `maildir_size` values, then drops
-the retired `maildir_size` / `homedir_size` /
-`size_at` columns. See
-[Live quota usage (Dovecot quota-clone)](#live-quota-usage-dovecot-quota-clone)
-for the Dovecot config.
+(The `dovecot_quota` part of that migration is what lets the fork retire the old
+nightly maildir-scan for live usage — see
+[Live quota usage](#live-quota-usage-dovecot-quota-clone).)
 
 ## Day-to-day
 
@@ -579,8 +570,8 @@ filesystem; it writes a `mailbox_task` row and the queue runner does the work on
 the Dovecot side:
 
 - **Archive** (keeps the account) — `doveadm backup` copies the store to a
-  zstd-compressed maildir under `doveadm.backup.dest` (e.g. `/backups/%d/%u`),
-  then the live store is emptied. An `archive` row (status *Archived*) appears on
+  maildir under `doveadm.backup.dest` (e.g. `/backups/%d/%u`; compressed if your
+  Dovecot enables `mail_compress`), then the live store is emptied. An `archive` row (status *Archived*) appears on
   the **Archives** tab.
 - **Delete** (removes the account) — same backup, then the mailbox + account row
   are removed. The archive row is flagged **autoprune**, so the backup is pruned
@@ -623,13 +614,12 @@ Full requirements + an autoprune cron are in [`contrib/cron/`](contrib/cron/).
 
 Concurrency is capped by **`queue.runner.max_concurrent`** (default **1** =
 strictly serial). A DB lease (`queue_runner` table) enforces it across CLI, web
-and containers, so overlapping cron ticks or trigger-checks never run more than
-the configured number of runners at once; a crashed runner's lease is reaped
-after a timeout so a slot is never lost.
+and containers, so overlapping ticks never run more than the configured number
+of runners at once; a crashed runner's lease is reaped after a timeout so a slot
+is never lost.
 
-> The Docker image needs **none** of the forms below — its built-in s6
-> `queue-runner` already drains the queue every 5 minutes. These are for
-> bare-metal/source installs, or to add an *extra* off-box trigger.
+The forms below are for **bare-metal/source** installs (the Docker image already
+self-runs) or to add an *extra* off-box trigger:
 
 **1. Bare metal / inside the container** — plain PHP CLI, from an
 `application.ini` that points at the panel's DB + doveadm HTTP endpoint:

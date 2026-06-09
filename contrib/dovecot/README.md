@@ -20,9 +20,8 @@ lexically).
 |---|---|---|
 | **Mailbox-task queue** (repair / optimize / archive / delete) | `95-doveadm-http.conf` | Exposes the doveadm HTTP API on `:8081` with a bearer key. ViMbAdmin POSTs `force-resync`, `index`, `purge`, `backup`, `mailbox delete`, `quota recalc`, `sync` (restore) here. **Never publish 8081 to the host** — the docker network + the key are the perimeter. |
 | **Archive autoprune** (delete the `/backups` maildir) | `96-fs-posix.conf` | A named `fs posix` filter so `doveadm fs delete -R` can remove a backup directory over the API. Required by doveadm 2.4 `fs` commands. |
-| **Live quota → ViMbAdmin** (mailbox size, archive size) | `99-zzz-quotaclone.conf` + `30-dict-server.conf` | `quota_clone` writes real-time usage into a dedicated `dovecot_quota` table (username, bytes, messages); a DB trigger mirrors it into `mailbox.maildir_size`. Replaces the daily `du` scan (`USE_VIMBADMIN=no`). The archive size column reads this (a recalc runs at archive time). |
+| **Live quota → ViMbAdmin** (mailbox size, archive size) | `99-zzz-quotaclone.conf` | `quota_clone` writes real-time usage into a dedicated `dovecot_quota` table (username, bytes, messages); a DB trigger mirrors it into `mailbox.maildir_size`. Replaces the daily `du` scan (`USE_VIMBADMIN=no`). The archive size column reads this (a recalc runs at archive time). The SQL `dict_server` map it needs is self-contained in this same file. |
 | **Last-login tracking** | `99-zzz-lastlogin.conf` | Writes `last_login` into `dovecot_last_login` (IMAP/POP3 only — scope it tightly or every doveadm action counts as a login). |
-| **Compressed backups** | `99-zzz-zstd.conf` | Global `mail_compress = zstd` level 9, so `doveadm backup` writes zstd-compressed maildirs to `/backups`. |
 
 ## Caveats learned the hard way
 

@@ -9,16 +9,6 @@
 
 *Virtual Mailbox Administration that runs on a PHP version released this decade.*
 
-**ZF1 is completely gone.** Upstream was built on Zend Framework 1 (EOL since
-2016). This fork rips it out **entirely** — the HTTP/CLI kernel, routing, forms,
-config loader, sessions and auth are all native PHP 8 now. Not a single line of
-Zend Framework, nor any `Zend_*` class, remains in the tree or the dependency
-graph; `composer.json` no longer requires it. The one visible ZF1 leftover is
-the `application.ini` config *format* (its `[child : parent]` section
-inheritance and `resources.*` keys are a ZF1 convention) — read by a small
-native loader now, and a candidate to be replaced in a future release. See
-[Upgrading & schema migrations](#upgrading--schema-migrations).
-
 [![PHP](https://img.shields.io/badge/PHP-8.4%2B-777bb4)]()
 [![Stack](https://img.shields.io/badge/Native%20kernel%20%C2%B7%20Doctrine%202.20%20%C2%B7%20Smarty%205-informational)]()
 
@@ -67,6 +57,15 @@ only optional cron left is the panel's own queue-runner.
 
 **Brought into this decade**
 
+- **ZF1 is completely gone.** Upstream was built on Zend Framework 1 (EOL since
+  2016). This fork rips it out **entirely** — the HTTP/CLI kernel, routing,
+  forms, config loader, sessions and auth are all native PHP 8 now. Not a single
+  line of Zend Framework, nor any `Zend_*` class, remains in the tree or the
+  dependency graph; `composer.json` no longer requires it. The one visible ZF1
+  leftover is the `application.ini` config *format* (its `[child : parent]`
+  section inheritance and `resources.*` keys are a ZF1 convention) — read by a
+  small native loader now, and a candidate to be replaced in a future release.
+  See [Upgrading & schema migrations](#upgrading--schema-migrations).
 - **PHP 8.1 → 8.5** clean. Every implicit-nullable parameter fixed, every
   PHP-8-removed function call replaced.
 - **Smarty 4 → 5.** Templating bridge ported to the new API (setters, the

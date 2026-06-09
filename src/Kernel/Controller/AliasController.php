@@ -524,7 +524,10 @@ final class AliasController extends AbstractController
                 // Domain wildcard (@example.com): not an email, so email-validate
                 // the part after the '@' as a hostname rather than waving it
                 // through. Rejects '@', '@ foo', '@bad/host', embedded controls.
-                if (Validators::hostname()(substr($goto, 1)) !== null) {
+                // hostname() passes on empty (the "optional field" convention),
+                // so a bare '@' must be rejected explicitly first.
+                $host = substr($goto, 1);
+                if ($host === '' || Validators::hostname()($host) !== null) {
                     return [[], 'Invalid domain wildcard in goto (use @example.com).'];
                 }
             } elseif (filter_var($goto, FILTER_VALIDATE_EMAIL) === false) {

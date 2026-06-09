@@ -112,8 +112,20 @@ final class Validators
                 return null;
             }
 
-            // \p{Cc} = Unicode control chars; covers CR/LF/NUL/tab/etc.
-            return preg_match('/[\x00-\x1F\x7F]/', (string) $value) === 1 ? $message : null;
+            $s = (string) $value;
+
+            // Reject invalid UTF-8 outright: it has no business in a name/domain
+            // field and would make the /u match below return false (mis-read as
+            // "clean" by a === 1 test).
+            if (preg_match('//u', $s) !== 1) {
+                return $message;
+            }
+
+            // C0 controls + DEL + C1 controls, plus the Unicode line/paragraph
+            // separators (U+2028/U+2029) — all newline-equivalents a header- or
+            // lookup-injection could ride on. The /u flag makes \x{…} match the
+            // decoded code points, so this catches their UTF-8 encodings too.
+            return preg_match('/[\x00-\x1F\x7F-\x9F\x{2028}\x{2029}]/u', $s) === 1 ? $message : null;
         };
     }
 

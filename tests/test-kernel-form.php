@@ -81,7 +81,16 @@ $cc = Validators::noControlChars();
 check('noControlChars: empty passes',  $cc('') === null);
 check('noControlChars: plain ok',      $cc('Jane Doe') === null);
 check('noControlChars: newline -> err',$cc("Jane\nBcc: evil") !== null);
+check('noControlChars: CR -> err',     $cc("a\rb") !== null);
 check('noControlChars: tab -> err',    $cc("a\tb") !== null);
+check('noControlChars: C1 NEL -> err', $cc("a\x85b") !== null);
+check('noControlChars: U+2028 -> err', $cc("a\xE2\x80\xA8b") !== null);
+check('noControlChars: bad UTF8 -> err',$cc("a\xFFb") !== null);
+check('noControlChars: utf8 name ok',  $cc('Renée') === null);
+
+// bare '@' must NOT pass the goto domain-wildcard check (hostname() empty-passes,
+// so the substr('@',1)=='' case needs an explicit guard in parseGotos).
+check('hostname: empty (bare @ host) passes by convention', $hn('') === null);
 
 // --- form validation -------------------------------------------------- //
 $form = new Form();

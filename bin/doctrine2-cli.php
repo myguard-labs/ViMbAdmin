@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+error_reporting(E_ALL & ~E_DEPRECATED);
 
 require_once dirname(__FILE__) . '/../vendor/autoload.php';
 

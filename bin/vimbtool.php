@@ -10,7 +10,7 @@ defined('APPLICATION_PATH') || define('APPLICATION_PATH', realpath(dirname(__FIL
 const SCRIPT_NAME = 'vimbadtool - ViMbAdmin CLI Management Tool';
 define('SCRIPT_COPY', '(c) Copyright 2010 - ' . date('Y') . ' Open Source Solutions Limited');
 
-error_reporting(E_ALL & ~E_DEPRECATED & ~E_STRICT);
+error_reporting(E_ALL & ~E_DEPRECATED);
 ini_set('display_errors', '1');
 
 set_include_path(implode(PATH_SEPARATOR, [

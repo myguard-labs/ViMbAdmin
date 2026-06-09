@@ -11,7 +11,7 @@
 --
 --  Everything here is IDEMPOTENT (information_schema-guarded / IF NOT EXISTS /
 --  INSERT IGNORE), so it is safe to re-run. Equivalent to:
---       doctrine2-cli.php orm:schema-tool:update --force
+--       doctrine-cli.php orm:schema-tool:update --force
 --  for the Doctrine-managed parts, plus the FK/collation steps that the
 --  schema-tool cannot express.
 --

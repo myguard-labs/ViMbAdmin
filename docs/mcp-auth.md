@@ -51,7 +51,7 @@ Flags: `--name` (label, required), `--scope` (default `read`; space-separated,
 edge), `--days` (validity; omit = no expiry).
 
 Schema: fresh installs get the `mcp_token` table from
-`./bin/doctrine2-cli.php orm:schema-tool:create`; on an existing DB run
+`./bin/doctrine-cli.php orm:schema-tool:create`; on an existing DB run
 `orm:schema-tool:update --force`.
 
 ## Calling it

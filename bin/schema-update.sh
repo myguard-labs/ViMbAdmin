@@ -8,9 +8,9 @@ exit
 # generate-from-XML step any more, and orm:generate-entities/-repositories were
 # removed in Doctrine ORM 3 — edit the entity classes directly, then regenerate
 # proxies:
-./doctrine2-cli.php orm:generate-proxies
+./doctrine-cli.php orm:generate-proxies
 
 
-echo "####   ./doctrine2-cli.php orm:schema-tool:drop --force && ./doctrine2-cli.php orm:schema-tool:create "
-echo "####   ./doctrine2-cli.php orm:schema-tool:create "
+echo "####   ./doctrine-cli.php orm:schema-tool:drop --force && ./doctrine-cli.php orm:schema-tool:create "
+echo "####   ./doctrine-cli.php orm:schema-tool:create "
 

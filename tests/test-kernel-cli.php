@@ -33,6 +33,7 @@ $expected = [
     'admin.cli-reset-totp',
     'mailbox.cli-delete-pending',
     'maintenance.cli-schema-update',
+    'maintenance.cli-precompile-templates',
     'mcp.cli-token-generate',
     'mcp.cli-token-list',
     'mcp.cli-token-revoke',

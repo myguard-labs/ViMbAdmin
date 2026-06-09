@@ -129,6 +129,25 @@ final class SmartyView
     }
 
     /**
+     * Pre-compile every template in the template dir to the compile dir, so the
+     * first request never pays the per-template Smarty compile. Covers both the
+     * page templates (`.phtml`) and the JS templates pulled via `{tmplinclude}`
+     * (`.js`). Returns the number of files compiled. Run at deploy/boot; the
+     * compiled output lives in the persistent `var/templates_c`.
+     */
+    public function compileAll(): int
+    {
+        // force_compile = false: compile only what is missing or whose source
+        // changed (mtime), so a re-run on a warm templates_c is cheap.
+        $count = 0;
+        foreach (['.phtml', '.js'] as $ext) {
+            $count += (int) $this->smarty->compileAllTemplates($ext, false);
+        }
+
+        return $count;
+    }
+
+    /**
      * Resolve a template name to its skin override if one exists under
      * `_skins/<skin>/`, else the default — identical to the ZF1 view.
      */

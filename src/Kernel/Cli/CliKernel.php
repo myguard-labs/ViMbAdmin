@@ -10,6 +10,7 @@ use ViMbAdmin\Kernel\Cli\Command\DeletePendingCommand;
 use ViMbAdmin\Kernel\Cli\Command\McpTokenGenerateCommand;
 use ViMbAdmin\Kernel\Cli\Command\McpTokenListCommand;
 use ViMbAdmin\Kernel\Cli\Command\McpTokenRevokeCommand;
+use ViMbAdmin\Kernel\Cli\Command\PrecompileTemplatesCommand;
 use ViMbAdmin\Kernel\Cli\Command\QueueRunCommand;
 use ViMbAdmin\Kernel\Cli\Command\ResetTotpCommand;
 use ViMbAdmin\Kernel\Cli\Command\SchemaUpdateCommand;
@@ -48,6 +49,7 @@ final class CliKernel
             new ResetTotpCommand(),
             new DeletePendingCommand(),
             new SchemaUpdateCommand(),
+            new PrecompileTemplatesCommand(),
             new McpTokenGenerateCommand(),
             new McpTokenListCommand(),
             new McpTokenRevokeCommand(),

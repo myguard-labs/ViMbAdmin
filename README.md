@@ -237,65 +237,6 @@ immediately, on a trusted network.
 > minimum requirements, DB backup + schema update, `application.ini` re-seed,
 > retiring legacy filesystem scripts, wiring Dovecot for the REST-API model.
 
-### The panel upgrades its own schema
-
-ViMbAdmin migrates its own database — one self-contained command, no Doctrine
-Migrations files. It tracks `DBVERSION` and applies pending schema changes
-through `maintenance.cli-schema-update` (`ViMbAdmin_Schema::migrate()`, same code
-the in-panel **Maintenance → schema update** button runs). It bundles the
-Doctrine `SchemaTool` diff with the extra foreign-key/collation/index steps the
-schema-tool can't express, and is safe to re-run:
-
-```sh
-./bin/vimbtool.php -a maintenance.cli-schema-update            # apply
-./bin/vimbtool.php -a maintenance.cli-schema-update --verbose  # apply + print SQL + DB version
-```
-
-**It does not run on its own** — invoke it once after an upgrade. Where it's
-invoked *for* you:
-
-- **Docker** — the image runs it at **every container start** (s6
-  init-bootstrap), so pulling a newer image + `docker compose up -d` brings the
-  schema forward with no manual step.
-- **From source / bare metal** — run the command (or click **Maintenance →
-  schema update**) after each `git pull`. Wire it into your own deploy/cron if
-  you want it automatic.
-
-Always back up first — it changes the database structure.
-
-### Doing it by hand instead
-
-Two equivalent manual routes:
-
-```sh
-# A) let Doctrine reconcile the DB with the entity mappings (shows the SQL):
-./bin/doctrine-cli.php orm:schema-tool:update --dump-sql      # preview
-./bin/doctrine-cli.php orm:schema-tool:update --force         # apply
-```
-
-```sh
-# B) apply the consolidated fork-schema migration from contrib/migrations/
-mysql -u<user> -p <database> < contrib/migrations/2026-06-fork-schema.sql
-```
-
-`contrib/migrations/` holds one consolidated, safe-to-re-run SQL file —
-[`2026-06-fork-schema.sql`](contrib/migrations/2026-06-fork-schema.sql) — the
-standalone mirror of everything the fork adds above upstream (DBVERSION 3),
-equivalent to `orm:schema-tool:update --force` plus the foreign-key/collation steps the
-schema-tool can't express, safe to re-run. In dependency order: (1) the
-**`dovecot_quota`** table + retirement of legacy maildir-scan columns; (2) the
-**`UNIQUE` index on `mailbox.username`** (Postfix/Dovecot look it up on every
-delivery and login; foreign-key target in step 3); (3) **`ON DELETE CASCADE` foreign keys**
-`dovecot_quota` / `dovecot_last_login` → `mailbox(username)` plus collation
-alignment; (4) the **`archive.autoprune`** column. Fresh installs build all of
-this automatically; only DBs seeded from older dumps need the file. Back up
-first; step 2's index is `UNIQUE`, so dedupe duplicate usernames before
-applying:
-
-```sh
-SELECT username, COUNT(*) c FROM mailbox GROUP BY username HAVING c > 1;
-```
-
 ### Config (`application.ini`) migration
 
 A newer version may add config keys. Your live `application.ini` is **never
@@ -594,14 +535,6 @@ The table is created on fresh installs by the entity mapping
 [`contrib/migrations/2026-06-fork-schema.sql`](contrib/migrations/2026-06-fork-schema.sql)
 (step 1 creates `dovecot_quota`, seeds it from the old `maildir_size`, and drops
 the retired `maildir_size` / `homedir_size` / `size_at` columns).
-
-## What it is *not*
-
-Not a mail-server appliance. It manages the user database; it does not install
-or configure Postfix or Dovecot, and it does not filter spam (for that,
-[Rspamd](https://deb.myguard.nl/2026/05/rspamd-explained-modern-spam-filtering-bayes-neural-rbl/)).
-A deliberately narrow component — which is exactly why it can be audited and
-trusted.
 
 ## Layout
 

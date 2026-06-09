@@ -37,7 +37,7 @@ require __DIR__ . '/../library/OSS/Auth/Password.php';
  * Records purgeMailbox() calls so the service's orchestration can be asserted
  * without the real (DB-backed) repository.
  */
-final class FakeMailboxRepo
+final class FakeMailboxRepo implements \Doctrine\Persistence\ObjectRepository
 {
     /** @var array<int,array{mailbox:object,admin:?object,removeMailbox:bool}> */
     public array $purges = [];
@@ -47,6 +47,11 @@ final class FakeMailboxRepo
         $this->purges[] = ['mailbox' => $mailbox, 'admin' => $admin, 'removeMailbox' => $removeMailbox];
         return true;
     }
+    public function findOneBy(array $criteria): ?object { return null; }
+    public function find(mixed $id): ?object { return null; }
+    public function findAll(): array { return []; }
+    public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array { return []; }
+    public function getClassName(): string { return ''; }
 }
 
 /**
@@ -54,14 +59,18 @@ final class FakeMailboxRepo
  * configurable findOneBy() result lets the create() test exercise both the
  * "no clashing alias -> create one" and "alias already exists -> skip" branches.
  */
-final class FakeAliasRepo
+final class FakeAliasRepo implements \Doctrine\Persistence\ObjectRepository
 {
     public ?object $existing = null;
 
-    public function findOneBy(array $criteria)
+    public function findOneBy(array $criteria): ?object
     {
         return $this->existing;
     }
+    public function find(mixed $id): ?object { return null; }
+    public function findAll(): array { return []; }
+    public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array { return []; }
+    public function getClassName(): string { return ''; }
 }
 
 final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
@@ -75,11 +84,11 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     public function persist(object $object): void { $this->persisted[] = $object; }
     public function remove(object $object): void { $this->removed[] = $object; }
     public function flush(): void { $this->flushes++; }
-    public function find(string $className, $id) { return null; }
+    public function find(string $className, mixed $id): ?object { return null; }
     public function clear(): void {}
     public function detach(object $object): void {}
     public function refresh(object $object): void {}
-    public function getRepository(string $className) {
+    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository {
         if ($this->aliasRepo !== null && str_contains($className, 'Alias')) {
             return $this->aliasRepo;
         }
@@ -103,9 +112,10 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     {
         return count(array_filter($this->persisted, static fn($o) => $o instanceof $class));
     }
-    public function getClassMetadata(string $className) { throw new \RuntimeException('not used'); }
-    public function getMetadataFactory() { throw new \RuntimeException('not used'); }
+    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata { throw new \RuntimeException('not used'); }
+    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory { throw new \RuntimeException('not used'); }
     public function initializeObject(object $obj): void {}
+    public function isUninitializedObject(mixed $value): bool { return false; }
     public function contains(object $object): bool { return false; }
 
     public function lastLog(): ?\Entities\Log

@@ -40,17 +40,20 @@ resources.doctrine2.connection.options.password = 'xxx'
 resources.doctrine2.connection.options.host     = 'localhost'
 resources.doctrine2.connection.options.charset  = 'utf8'
 
-;; Doctrine metadata/query cache. Without a persistent backend the XML entity
-;; mappings are re-parsed on every request. Pick one:
-;;   ArrayCache - per-request only (no caching across requests); fine for dev
-;;   ApcuCache  - in-process shared memory; best for a single host (ext-apcu)
+;; Doctrine metadata/query cache. Without a persistent backend the entity
+;; attribute mappings are re-reflected on every request. Pick one:
+;;   auto       - (default) use APCu when the extension is loaded + enabled,
+;;                otherwise fall back to ArrayCache. Zero-config persistent
+;;                caching on any host that has ext-apcu.
+;;   ApcuCache  - force in-process shared memory; best for a single host (ext-apcu)
 ;;   RedisCache - shared across hosts/replicas (ext-redis)
-;; A missing extension degrades to ArrayCache (it won't fatal). The Docker
-;; image installs APCu and defaults to ApcuCache.
+;;   ArrayCache - force per-request only (no caching across requests); dev / debugging
+;; A missing/unusable backend degrades to ArrayCache (it won't fatal).
 
-resources.doctrine2cache.type      = 'ArrayCache'
+resources.doctrine2cache.type      = 'auto'
 ;resources.doctrine2cache.type      = 'ApcuCache'
 ;resources.doctrine2cache.type      = 'RedisCache'
+;resources.doctrine2cache.type      = 'ArrayCache'
 ;resources.doctrine2cache.redis.dsn = 'redis://127.0.0.1:6379'
 resources.doctrine2cache.namespace = 'ViMbAdmin3'
 

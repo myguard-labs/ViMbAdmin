@@ -49,7 +49,7 @@ class MailboxPreference extends EntityRepository
                 ->setParameter( 'admin', $admin );
                 
         $data = $qb->getQuery()
-            ->useResultCache( true, 3600, self::VALUES_CACHE_KEY . '_' . $admin->getId() . '_' . $attribute )
+            ->enableResultCache( 3600, self::VALUES_CACHE_KEY . '_' . $admin->getId() . '_' . $attribute )
             ->getScalarResult();
             
         $values = [];

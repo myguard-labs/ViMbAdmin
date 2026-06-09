@@ -48,6 +48,7 @@ if (!is_dir($xmlDir)) {
 @mkdir($proxyDir, 0o755, true);
 
 $config = ORMSetup::createXMLMetadataConfiguration([$xmlDir], true);
+$config->enableNativeLazyObjects(true); // ORM 3.x on PHP 8.4: native lazy-object proxies
 $config->setProxyDir($proxyDir);
 $config->setProxyNamespace('Proxies');
 

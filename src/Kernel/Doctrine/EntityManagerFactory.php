@@ -54,21 +54,35 @@ final class EntityManagerFactory
         $dconfig = $options['resources']['doctrine2'];
         $cache   = self::buildCache($options['resources']['doctrine2cache'] ?? []);
 
+        self::registerLegacyTypes();
+
         $config = new \Doctrine\ORM\Configuration();
-        $config->setMetadataCacheImpl($cache);
+        // ORM 3.x on PHP 8.4: use native lazy objects for proxies. The old
+        // Symfony var-exporter "LazyGhost" route was removed in Symfony 8, so on
+        // this stack native lazy objects are the only working proxy backend.
+        $config->enableNativeLazyObjects(true);
+        $config->setMetadataCache($cache);
 
         $driver = new \Doctrine\ORM\Mapping\Driver\XmlDriver(
             [(string) $dconfig['xml_schema_path']]
         );
         $config->setMetadataDriverImpl($driver);
 
-        $config->setQueryCacheImpl($cache);
-        $config->setResultCacheImpl($cache);
+        $config->setQueryCache($cache);
+        $config->setResultCache($cache);
         $config->setProxyDir((string) $dconfig['proxies_path']);
         $config->setProxyNamespace((string) $dconfig['proxies_namespace']);
         $config->setAutoGenerateProxyClasses((int) ($dconfig['autogen_proxies'] ?? 0));
 
-        return \Doctrine\ORM\EntityManager::create($dconfig['connection']['options'], $config);
+        // ORM 3.x dropped EntityManager::create(): build the DBAL connection
+        // explicitly, then hand it to the constructor. Connection stays lazy —
+        // no socket opens until the first query.
+        $connection = \Doctrine\DBAL\DriverManager::getConnection(
+            $dconfig['connection']['options'],
+            $config
+        );
+
+        return new \Doctrine\ORM\EntityManager($connection, $config);
     }
 
     /**
@@ -101,6 +115,22 @@ final class EntityManagerFactory
                 }
             }
         });
+    }
+
+    /**
+     * Register custom DBAL types ViMbAdmin's mappings rely on but DBAL 4
+     * dropped. Currently just the legacy `object` type (see
+     * {@see \ViMbAdmin\Kernel\Doctrine\Type\LegacyObjectType}); idempotent so
+     * it is safe to call on every EM build.
+     */
+    private static function registerLegacyTypes(): void
+    {
+        if (! \Doctrine\DBAL\Types\Type::hasType(\ViMbAdmin\Kernel\Doctrine\Type\LegacyObjectType::NAME)) {
+            \Doctrine\DBAL\Types\Type::addType(
+                \ViMbAdmin\Kernel\Doctrine\Type\LegacyObjectType::NAME,
+                \ViMbAdmin\Kernel\Doctrine\Type\LegacyObjectType::class
+            );
+        }
     }
 
     /**
@@ -142,6 +172,8 @@ final class EntityManagerFactory
             $pool = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
         }
 
-        return \Doctrine\Common\Cache\Psr6\DoctrineProvider::wrap($pool);
+        // ORM 3.x consumes PSR-6 pools directly; the old doctrine/cache
+        // DoctrineProvider wrapper was removed with that package.
+        return $pool;
     }
 }

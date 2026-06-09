@@ -23,7 +23,7 @@ jobs:
       matrix:
         php: ['8.4', '8.5']   # 8.4 = composer floor, 8.5 = deployed container runtime
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -44,7 +44,7 @@ jobs:
     name: Dependency security audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2

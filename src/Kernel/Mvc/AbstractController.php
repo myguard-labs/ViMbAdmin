@@ -45,14 +45,20 @@ abstract class AbstractController
     }
 
     /**
-     * A decoded `/key/value` route parameter, or $default when absent/dangling.
+     * A request parameter, or $default when absent.
      *
-     * Mirrors ZF1's `getParam()` for the URL-path params the router decodes
-     * (query-string params are handled separately as they are migrated).
+     * Mirrors ZF1's `getParam()` precedence: a decoded `/key/value` route
+     * segment wins, then a POST body field, then a query-string field. The
+     * AJAX toggles (ossToggle) post their id in the body (e.g. `did`), so the
+     * POST fallback is required — without it those handlers saw a null id and
+     * returned `ko`.
      */
     protected function param(string $key, mixed $default = null): mixed
     {
-        return $this->route->params[$key] ?? $default;
+        return $this->route->params[$key]
+            ?? $_POST[$key]
+            ?? $_GET[$key]
+            ?? $default;
     }
 
     /**

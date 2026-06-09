@@ -611,6 +611,19 @@ final class AuthController extends AbstractController
         $tfa     = new \ViMbAdmin_TwoFactor('ViMbAdmin', (string) ($options['securitysalt'] ?? ''));
         $session = $this->session();
 
+        // Lost-device recovery without DB surgery: application.ini
+        // `twofactor.force_disable = "user@dom"` (or "*" for everyone) wipes the
+        // matching admin's 2FA (secret + backup codes + replay state) and clears
+        // any forced-enrolment flag at login, so they get back in. Remove the
+        // setting again once recovered.
+        $forceDisable = trim((string) ($options['twofactor']['force_disable'] ?? ''));
+        if ($forceDisable !== ''
+            && ($forceDisable === '*' || strcasecmp($forceDisable, (string) $admin->getUsername()) === 0)) {
+            $tfa->disable($admin);
+            $tfa->clearForce($admin);
+            $this->em()->flush();
+        }
+
         // 2FA gate: an enabled (or force-enrolled) admin is parked and sent to
         // the native TOTP flow (totpAction/totpSetupAction) — the identity is NOT
         // granted here.

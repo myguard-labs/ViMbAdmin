@@ -124,7 +124,8 @@ By layer. Stock upstream had **none** of the application-layer items below.
 ### Contrib
 
 Everything under [`contrib/`](contrib/) hardens the panel around the edges;
-upstream shipped none of it.
+upstream shipped none of it. All of it ships pre-wired in the
+[vimbadmin Docker image](https://github.com/eilandert/dockerized/tree/master/src/vimbadmin).
 
 - **Runtime Snuffleupagus ruleset** — code-derived
   [`vimbadmin-strict.list`](contrib/snuffleupagus/vimbadmin-strict.list): bans

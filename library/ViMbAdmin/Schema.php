@@ -35,8 +35,8 @@ class ViMbAdmin_Schema
     }
 
     /**
-     * Pending additive schema statements (saveMode=true → no DROP TABLE for
-     * tables Doctrine doesn't manage).
+     * Pending additive schema statements (no DROP TABLE for tables Doctrine
+     * doesn't manage).
      *
      * @return string[]
      */
@@ -44,7 +44,20 @@ class ViMbAdmin_Schema
     {
         $tool = new \Doctrine\ORM\Tools\SchemaTool( $this->_em );
         $meta = $this->_em->getMetadataFactory()->getAllMetadata();
-        $sql  = $tool->getUpdateSchemaSql( $meta, true );
+        $sql  = $tool->getUpdateSchemaSql( $meta );
+
+        // Strip table drops. Doctrine ORM 3 removed the $saveMode argument from
+        // getUpdateSchemaSql() (ORM 2 accepted a second `true` to emit only the
+        // safe, drop-free subset); it now always returns the FULL diff. That
+        // diff includes DROP TABLE for any table without an entity mapping --
+        // notably the hand-managed `setting` KV store created in extraSql()
+        // below -- surfacing a destructive "DROP TABLE `setting`;" as a phantom
+        // pending statement in the Maintenance tab. This is an ADDITIVE
+        // migrator: it must never drop a table, so filter every table drop
+        // (mirrors the old saveMode=true behaviour).
+        $sql = array_values( array_filter( $sql, function( $stmt ) {
+            return !preg_match( '/^\s*DROP\s+TABLE\b/i', $stmt );
+        } ) );
 
         // Drop no-op ALTERs against Dovecot-owned tables. These are read-only
         // entities (dovecot_quota / dovecot_last_login); their timestamp column

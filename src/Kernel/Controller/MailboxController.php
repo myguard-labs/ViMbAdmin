@@ -746,7 +746,26 @@ final class MailboxController extends AbstractController
             $this->flash(sprintf('A %s task is already queued for %s.', strtolower($label), $username), FlashMessages::INFO);
         }
 
-        return $this->redirect('mailbox/list');
+        // Kick the queue immediately instead of waiting for the */2-min cron.
+        // Same non-blocking mechanism as QueueController::triggerAction: the
+        // drain runs from public/index.php AFTER the redirect is flushed and the
+        // browser has disconnected (fastcgi_finish_request via Response::
+        // afterSend) — no shell-out (Snuffleupagus blocks exec), no forked
+        // process. The runner lease (queue.runner.max_concurrent) still
+        // serialises against the cron runner, so a click during a cron run is a
+        // no-op (-1), not a pile-up. Only nudge when work is actually pending
+        // (a new task was enqueued, or an identical one is already queued).
+        $em      = $this->em();
+        $options = $this->container->options();
+        $max     = (int) ($options['queue']['runner']['max_per_run'] ?? 5);
+        $afterSend = static function () use ($em, $options, $max): void {
+            $runner = new \ViMbAdmin_Service_QueueRunner($em, $options);
+            do {
+                $n = $runner->drain($max);
+            } while ($n > 0);
+        };
+
+        return $this->redirect('mailbox/list', $afterSend);
     }
 
     /**

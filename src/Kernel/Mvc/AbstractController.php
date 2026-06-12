@@ -128,13 +128,13 @@ abstract class AbstractController
      * `/vimbadmin/` deployment redirects to the proxy root (`/auth/login`) and
      * lands on whatever else lives there (here: Roundcube).
      */
-    protected function redirect(string $path): Response
+    protected function redirect(string $path, ?callable $afterSend = null): Response
     {
         $base = rtrim((string) \OSS_Runtime::baseUrl(), '/');
 
         return new Response('', 302, 'text/html; charset=utf-8', [
             'Location' => $base . '/' . ltrim($path, '/'),
-        ]);
+        ], $afterSend);
     }
 
     /**

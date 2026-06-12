@@ -437,12 +437,33 @@ class ViMbAdmin_Service_QueueRunner
         }
 
         $domainPart = strstr($user, '@') ? substr(strrchr($user, '@'), 1) : null;
-        $domain = $domainPart
-            ? $em->getRepository('\\Entities\\Domain')->findOneBy(['domain' => $domainPart])
-            : null;
-        if (!$domain) {
-            $task->appendLog("backup-orphan: domain '{$domainPart}' not in ViMbAdmin — cannot create temp user");
+        if (!$domainPart) {
+            $task->appendLog("backup-orphan: '{$user}' has no domain part — cannot create temp user");
             return;
+        }
+        $domain = $em->getRepository('\\Entities\\Domain')->findOneBy(['domain' => $domainPart]);
+
+        // If the orphan's domain isn't in ViMbAdmin we still want to back it up
+        // and reap it. The temp mailbox row below needs a NOT NULL Domain_id, so
+        // create a transient INACTIVE domain row (active=0 -> postfix/dovecot SQL
+        // auth filter on active=1, so no mail/routing effect). It is removed
+        // again in the finally block UNLESS an Archive row ends up referencing
+        // it: Archive.Domain_id has no onDelete (-> RESTRICT) and the archive is
+        // EM-persisted then flushed AFTER this method, so deleting the domain
+        // here would make that later flush fail with an FK error. Hence the
+        // has-mail path keeps the (inactive) domain; only the empty-skeleton
+        // path (no archive) drops it again.
+        $tempDomainId = null;
+        if (!$domain) {
+            $conn->insert('domain', [
+                'domain'      => $domainPart,
+                'description' => 'auto-created for orphan backup',
+                'active'      => 0,
+                'created'     => (new \DateTime())->format('Y-m-d H:i:s'),
+            ]);
+            $tempDomainId = (int) $conn->lastInsertId();
+            $domain = $em->getRepository('\\Entities\\Domain')->findOneBy(['domain' => $domainPart]);
+            $task->appendLog("backup-orphan: domain '{$domainPart}' not in ViMbAdmin — created transient inactive domain row #{$tempDomainId}");
         }
 
         $root      = isset($this->options['doveadm']['maildir_root'])
@@ -451,6 +472,7 @@ class ViMbAdmin_Service_QueueRunner
         $home      = $root . '/' . $user;
         $localPart = strstr($user, '@', true) ?: $user;
         $tempId    = null;
+        $keepDomain = false;   // set true once an Archive row references $domain
 
         try {
             $conn->insert('mailbox', [
@@ -485,6 +507,9 @@ class ViMbAdmin_Service_QueueRunner
 
                 $task->appendLog('orphan: recording archive row');
                 $this->recordArchive($task, $dest, false);
+                // Archive row now references $domain (FK RESTRICT, flushed after
+                // this method) -> a transient domain must NOT be deleted.
+                $keepDomain = true;
 
                 $task->appendLog('orphan: empty store + remove maildir home');
                 try {
@@ -511,6 +536,27 @@ class ViMbAdmin_Service_QueueRunner
                     error_log("backup-orphan temp-row cleanup {$user}: " . $e->getMessage());
                 }
                 $task->appendLog('backup-orphan: temp user row removed');
+            }
+            // Remove the transient domain (created above) AFTER the temp mailbox
+            // row that FK-references it. Keep it when an archive references it.
+            if ($tempDomainId !== null) {
+                if ($keepDomain) {
+                    $task->appendLog("backup-orphan: transient domain '{$domainPart}' kept (referenced by archive), left inactive");
+                } else {
+                    // Drop the in-memory reference first: the task FK is
+                    // onDelete SET NULL at the DB, but the EM still holds the
+                    // transient Domain entity and would re-write Domain_id on the
+                    // task's later flush (-> FK error against the deleted row).
+                    $task->setDomain(null);
+                    try { $em->detach($domain); } catch (\Throwable $e) {}
+                    try {
+                        $conn->delete('domain', ['id' => $tempDomainId]);
+                        $task->appendLog('backup-orphan: transient domain row removed');
+                    } catch (\Throwable $e) {
+                        error_log("backup-orphan temp-domain cleanup {$domainPart}: " . $e->getMessage());
+                        $task->appendLog('backup-orphan: transient domain kept (cleanup failed: ' . $e->getMessage() . ')');
+                    }
+                }
             }
             try {
                 $doveadm->authCacheFlush();

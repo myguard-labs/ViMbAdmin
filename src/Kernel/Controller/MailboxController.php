@@ -746,26 +746,88 @@ final class MailboxController extends AbstractController
             $this->flash(sprintf('A %s task is already queued for %s.', strtolower($label), $username), FlashMessages::INFO);
         }
 
-        // Kick the queue immediately instead of waiting for the */2-min cron.
-        // Same non-blocking mechanism as QueueController::triggerAction: the
-        // drain runs from public/index.php AFTER the redirect is flushed and the
-        // browser has disconnected (fastcgi_finish_request via Response::
-        // afterSend) — no shell-out (Snuffleupagus blocks exec), no forked
-        // process. The runner lease (queue.runner.max_concurrent) still
-        // serialises against the cron runner, so a click during a cron run is a
-        // no-op (-1), not a pile-up. Only nudge when work is actually pending
-        // (a new task was enqueued, or an identical one is already queued).
-        $em      = $this->em();
-        $options = $this->container->options();
-        $max     = (int) ($options['queue']['runner']['max_per_run'] ?? 5);
-        $afterSend = static function () use ($em, $options, $max): void {
-            $runner = new \ViMbAdmin_Service_QueueRunner($em, $options);
-            do {
-                $n = $runner->drain($max);
-            } while ($n > 0);
-        };
+        // Kick the queue immediately instead of waiting for the */2-min cron,
+        // WITHOUT draining in this request. We fire a fire-and-forget HTTP POST
+        // at the local /queue/trigger endpoint and return at once; the drain
+        // (slow doveadm backup/delete) then runs in the TRIGGER's FPM worker via
+        // its own afterSend — not here. This keeps the delete/archive request
+        // snappy and, critically, releases this request's session lock promptly
+        // (an in-request afterSend drain holds the file-session flock for the
+        // whole backup, so the browser's follow-up GET /mailbox/list blocks on
+        // session_start() until it finishes -> 504). No shell-out (Snuffleupagus
+        // blocks exec), no fork. If the trigger is disabled (no queue.runner.key)
+        // the call is a silent no-op and the */2-min cron drains the backlog.
+        $this->kickQueueAsync($this->container->options());
 
-        return $this->redirect('mailbox/list', $afterSend);
+        return $this->redirect('mailbox/list');
+    }
+
+    /**
+     * Fire-and-forget nudge of the local POST /queue/trigger endpoint so a
+     * just-enqueued task is drained now instead of at the next cron tick — in
+     * the trigger's own worker, never in the caller's request.
+     *
+     * Connects to loopback (127.0.0.1) on the same port/scheme this request
+     * arrived on, carrying the real vhost in the Host header (and as TLS SNI) so
+     * the web server routes to the right server block and sub-path mount. Writes
+     * the bearer-authenticated request and closes immediately without reading the
+     * response — the trigger accepts, returns {"triggered":true} and drains after
+     * its own connection closes. Best-effort: any failure (endpoint disabled,
+     * connect error) is swallowed; the cron runner remains the guaranteed path.
+     *
+     * @param array<string,mixed> $options the merged application options
+     */
+    private function kickQueueAsync(array $options): void
+    {
+        $key = (string) ($options['queue']['runner']['key'] ?? '');
+        if ($key === '') {
+            return; // remote trigger disabled — the */2-min cron will drain
+        }
+
+        $https = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+            || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443;
+        $host  = (string) ($_SERVER['HTTP_HOST'] ?? '127.0.0.1');
+        $sni   = preg_replace('/:\d+$/', '', $host) ?: '127.0.0.1';
+        $port  = (int) ($_SERVER['SERVER_PORT'] ?? ($https ? 443 : 80));
+
+        $path = rtrim((string) \OSS_Runtime::baseUrl(), '/') . '/queue/trigger';
+
+        $ctx = stream_context_create($https ? ['ssl' => [
+            // Loopback self-call; the bearer key is the real authentication, so
+            // peer verification only gets in the way (the cert is for the public
+            // name, we connect to 127.0.0.1). SNI/peer_name still set so the
+            // TLS handshake + vhost routing pick the right server block.
+            'peer_name'         => $sni,
+            'verify_peer'       => false,
+            'verify_peer_name'  => false,
+            'SNI_enabled'       => true,
+        ]] : []);
+
+        $errno = 0;
+        $errstr = '';
+        $fp = @stream_socket_client(
+            ($https ? 'ssl' : 'tcp') . '://127.0.0.1:' . $port,
+            $errno,
+            $errstr,
+            1.0,
+            STREAM_CLIENT_CONNECT,
+            $ctx
+        );
+        if ($fp === false) {
+            error_log("kickQueueAsync: connect 127.0.0.1:{$port} failed ({$errno} {$errstr}) — cron will drain");
+            return;
+        }
+
+        $req = "POST {$path} HTTP/1.1\r\n"
+             . "Host: {$host}\r\n"
+             . "Authorization: Bearer {$key}\r\n"
+             . "Content-Length: 0\r\n"
+             . "Connection: close\r\n\r\n";
+
+        @stream_set_timeout($fp, 1);
+        @fwrite($fp, $req);
+        // Fire-and-forget: do not read the body — the trigger drains on its own.
+        @fclose($fp);
     }
 
     /**

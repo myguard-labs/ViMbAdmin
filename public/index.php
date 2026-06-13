@@ -61,7 +61,19 @@ echo $response->body;
 // the caller gets its OK and disconnects while the work continues in this same
 // FPM worker — no forked process, no shell-out. Falls back to running inline
 // when fastcgi_finish_request() is unavailable (CLI / non-FPM SAPI).
+//
+// Release the PHP session lock FIRST. With file-based sessions PHP holds an
+// exclusive flock on the session file for the whole request and only frees it
+// at script end. fastcgi_finish_request() flushes the response but the script
+// keeps running the (potentially slow) drain, so without this the session stays
+// locked for the entire backup/delete. The browser then follows the 302 to
+// mailbox/list, whose session_start() blocks on that lock until the drain
+// finishes — and times out as a 504. The detached work needs $em + options, not
+// $_SESSION, so closing the session here is safe.
 if (is_callable($response->afterSend)) {
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_write_close();
+    }
     if (function_exists('fastcgi_finish_request')) {
         fastcgi_finish_request();
     }

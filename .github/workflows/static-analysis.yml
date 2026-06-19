@@ -22,7 +22,7 @@ jobs:
     # (ZF1 is gone, so the old "advisory until a baseline lands" exemption no
     # longer applies. Raise the level incrementally in follow-up PRs.)
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2

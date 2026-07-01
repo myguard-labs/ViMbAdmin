@@ -122,6 +122,9 @@ jobs:
       - name: Native MCP transport
         run: php tests/test-kernel-mcp.php
 
+      - name: ViMbAdmin_Dovecot::passwordVerify (scheme-prefixed hashes)
+        run: php tests/test-dovecot-password.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

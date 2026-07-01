@@ -98,12 +98,15 @@ class ViMbAdmin_Dovecot
     /**
      * Verify a plaintext password against a stored bare hash.
      *
-     * Works directly off the crypt() string regardless of scheme — bcrypt via
-     * password_verify(), the $5$/$6$ families via a constant-time crypt()
-     * re-hash compare — so $scheme is advisory only.
+     * Accepts either a bare hash or the Dovecot "{SCHEME}hash" form. A leading
+     * {SCHEME} prefix (as written by doveadm pw / the dovecot SQL driver) is
+     * stripped and used to drive dispatch — bcrypt via password_verify(), the
+     * crypt families ($1$/$5$/$6$) via a constant-time crypt() re-hash compare,
+     * and the base64 digest schemes ({SHA*}, {SSHA*}) by re-hashing. When no
+     * prefix is present the $scheme argument is used instead.
      *
-     * @param string $scheme The Dovecot scheme (advisory)
-     * @param string $pwhash The stored bare hash (no {SCHEME} prefix)
+     * @param string $scheme The Dovecot scheme (used only when $pwhash has no {SCHEME} prefix)
+     * @param string $pwhash The stored hash, with or without a leading {SCHEME} prefix
      * @param string $pwplain The plaintext password
      * @param string $user The username (unused for crypt schemes; kept for API)
      * @return bool True if the password matches
@@ -113,12 +116,50 @@ class ViMbAdmin_Dovecot
         if( !is_string( $pwhash ) || $pwhash === '' )
             return false;
 
-        // bcrypt: password_verify handles $2y$/$2a$/$2b$.
+        // Dovecot stores hashes with a leading {SCHEME} prefix
+        // (e.g. "{SHA512-CRYPT}$6$...", "{SHA512}<base64>"). Strip it and let
+        // it drive dispatch when present — crypt() cannot parse "{SCHEME}..."
+        // as a salt (it returns "*0"), so an un-stripped prefix makes EVERY
+        // verify fail. The prefix wins over the advisory $scheme argument.
+        if( $pwhash[0] === '{' && ( $close = strpos( $pwhash, '}' ) ) !== false )
+        {
+            $scheme = strtoupper( substr( $pwhash, 1, $close - 1 ) );
+            $pwhash = substr( $pwhash, $close + 1 );
+        }
+        else
+        {
+            $scheme = strtoupper( (string) $scheme );
+        }
+
+        // bcrypt: password_verify handles $2y$/$2a$/$2b$ (also {BLF-CRYPT}).
         if( strncmp( $pwhash, '$2', 2 ) === 0 )
             return password_verify( $pwplain, $pwhash );
 
-        // $5$ (SHA-256) / $6$ (SHA-512): re-crypt with the stored hash as the
-        // salt template and compare in constant time.
+        // {SHA256}/{SHA512}: base64( digest ), optionally with a trailing salt
+        // appended to the raw digest ({SSHA256}/{SSHA512}). Compare the raw
+        // digest bytes; for the salted variants re-hash pw+salt.
+        if( $scheme === 'SHA256' || $scheme === 'SHA512'
+            || $scheme === 'SSHA256' || $scheme === 'SSHA512' )
+        {
+            $algo = ( strpos( $scheme, '256' ) !== false ) ? 'sha256' : 'sha512';
+            $raw  = base64_decode( $pwhash, true );
+            if( $raw === false )
+                return false;
+
+            $dlen = ( $algo === 'sha256' ) ? 32 : 64;
+            if( $scheme[0] === 'S' && strlen( $scheme ) > 6 ) // salted (SSHA*)
+            {
+                $salt   = substr( $raw, $dlen );
+                $digest = substr( $raw, 0, $dlen );
+                return hash_equals( $digest, hash( $algo, $pwplain . $salt, true ) );
+            }
+
+            return hash_equals( $raw, hash( $algo, $pwplain, true ) );
+        }
+
+        // crypt families: {CRYPT}, {SHA256-CRYPT} ($5$), {SHA512-CRYPT} ($6$),
+        // {MD5-CRYPT} ($1$) — re-crypt with the stored hash as the salt
+        // template and compare in constant time.
         return hash_equals( $pwhash, (string) crypt( $pwplain, $pwhash ) );
     }
 

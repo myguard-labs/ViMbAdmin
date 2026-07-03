@@ -20,7 +20,7 @@ jobs:
   # ------------------------------------------------------------------ #
   static:
     name: Static regression lints
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, builder02, lxc]
     steps:
       - uses: actions/checkout@v7
 
@@ -37,7 +37,7 @@ jobs:
   # ------------------------------------------------------------------ #
   unit:
     name: Service unit tests (PHP ${{ matrix.php }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, builder02, lxc]
     strategy:
       fail-fast: false
       matrix:
@@ -132,7 +132,7 @@ jobs:
   # ------------------------------------------------------------------ #
   cache-wiring:
     name: Cache wiring (PHP ${{ matrix.php }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, builder02, lxc]
     strategy:
       fail-fast: false
       matrix:
@@ -178,7 +178,7 @@ jobs:
   # ------------------------------------------------------------------ #
   schema-drift:
     name: Schema has no phantom pending changes
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, builder02, docker]
     services:
       mariadb:
         image: mariadb:11

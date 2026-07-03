@@ -17,7 +17,7 @@ concurrency:
 jobs:
   lint:
     name: PHP syntax lint (PHP ${{ matrix.php }})
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, builder02, lxc]
     strategy:
       fail-fast: false
       matrix:
@@ -42,7 +42,7 @@ jobs:
 
   audit:
     name: Dependency security audit
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, builder02, lxc]
     steps:
       - uses: actions/checkout@v7
 

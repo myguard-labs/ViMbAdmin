@@ -21,7 +21,7 @@ concurrency:
 jobs:
   semgrep:
     name: Semgrep
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, builder02, lxc]
     # CodeQL has no PHP support; Semgrep is the SAST engine for this codebase.
     container:
       image: semgrep/semgrep

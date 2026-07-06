@@ -204,6 +204,14 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist --no-dev
 
+      # The self-hosted docker runner image ships no mysql client.
+      - name: ensure mysql client
+        run: |
+          command -v mysql >/dev/null || {
+            sudo apt-get update
+            sudo apt-get install -y mariadb-client
+          }
+
       - name: Wait for MariaDB
         run: |
           for i in $(seq 1 30); do

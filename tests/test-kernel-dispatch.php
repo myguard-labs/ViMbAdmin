@@ -58,6 +58,9 @@ final class BootstrapFake
     {
         return $name === 'doctrine2' ? $this->em : null;
     }
+    /** Real Bootstrap exposes getOptions(); AbstractController::admin() reads
+     *  resources.session.idle_timeout through it. Empty options = idle disabled. */
+    public function getOptions(): array { return []; }
 }
 
 /** A native controller exercising every AbstractController helper. */

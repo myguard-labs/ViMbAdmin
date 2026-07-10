@@ -61,7 +61,11 @@ final class LegacyObjectType extends Type
         });
 
         try {
-            return unserialize((string) $value);
+            // The column only ever holds a serialized SCALAR (DirectoryEntry
+            // jpegPhoto bytes), so forbid object instantiation — neutralises the
+            // PHP object-injection (POP-gadget) sink if a row ever carries crafted
+            // `O:` bytes, with no behaviour change for the legitimate scalar case.
+            return unserialize((string) $value, ['allowed_classes' => false]);
         } finally {
             restore_error_handler();
         }

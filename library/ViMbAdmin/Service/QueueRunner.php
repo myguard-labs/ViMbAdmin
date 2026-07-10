@@ -222,9 +222,30 @@ class ViMbAdmin_Service_QueueRunner
     private function backupDest(\Entities\MailboxTask $task)
     {
         $tpl  = (string) ($this->options['doveadm']['backup']['dest'] ?? 'maildir:/backups/%d/%u');
-        $user = $task->getUsername();
+        $user = self::assertPathSafe($task->getUsername());
         $dom  = $task->getDomain() ? $task->getDomain()->getDomain() : (strstr($user, '@') ? substr(strrchr($user, '@'), 1) : '');
+        $dom  = self::assertPathSafe((string) $dom);
         return str_replace(['%d', '%u'], [$dom, $user], $tpl);
+    }
+
+    /**
+     * Defence in depth against a maildir/backup path escaping its jail. A
+     * username/domain is substituted into filesystem paths ('%d/%u', maildir
+     * home) that doveadm then reads/writes/recursively-deletes. Creation is
+     * validated (web form + MCP), but a legacy or externally-inserted row could
+     * still hold a traversal-shaped value — reject any path separator or
+     * parent-dir reference here rather than trusting the input.
+     *
+     * @throws ViMbAdmin_Exception
+     */
+    private static function assertPathSafe($value)
+    {
+        $s = (string) $value;
+        if ($s === '' || strpos($s, '/') !== false || strpos($s, "\0") !== false
+            || $s === '..' || strpos($s, '..') !== false) {
+            throw new ViMbAdmin_Exception('refusing unsafe path component in mailbox task: ' . $s);
+        }
+        return $s;
     }
 
     private function recordArchive(\Entities\MailboxTask $task, $dest, $autoprune)
@@ -311,7 +332,7 @@ class ViMbAdmin_Service_QueueRunner
         $root = isset($this->options['doveadm']['maildir_root'])
             ? rtrim((string) $this->options['doveadm']['maildir_root'], '/')
             : '/opt/myguard/dovecot/maildir';
-        $home = $root . '/' . $user;
+        $home = $root . '/' . self::assertPathSafe($user);
 
         try {
             if ($doveadm->maildirHasMail($home)) {

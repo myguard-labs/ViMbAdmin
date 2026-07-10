@@ -30,6 +30,9 @@ jobs:
       - name: ZF1 surface must not grow (Phase 0 guard, docs/ZF1-REMOVAL.md)
         run: bash tests/lint-no-new-zend.sh
 
+      - name: 2FA session-hygiene invariants (audit 2026-07-10 MAJOR)
+        run: bash tests/lint-2fa-session-hygiene.sh
+
   # ------------------------------------------------------------------ #
   # Framework-free service unit tests (Phase 1 of docs/ZF1-REMOVAL.md).#
   # No DB: the services depend on the minimal ObjectManager port and   #
@@ -73,6 +76,12 @@ jobs:
 
       - name: ViMbAdmin\Kernel\Router
         run: php tests/test-kernel-router.php
+
+      - name: MCP create input validation (audit 2026-07-10 MAJOR)
+        run: php tests/test-mcp-input-validation.php
+
+      - name: QueueRunner path-safety guard (audit 2026-07-10 MAJOR)
+        run: php tests/test-queuerunner-path-safe.php
 
       - name: ViMbAdmin\Kernel\Security\Csrf
         run: php tests/test-kernel-csrf.php

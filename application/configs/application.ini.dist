@@ -522,6 +522,10 @@ trustedproxy.mode = "auto"
 ;resources.session.save_path = APPLICATION_PATH "/../var/session"
 resources.session.use_only_cookies = true
 resources.session.remember_me_seconds = 3600
+;; Idle timeout (seconds): an authenticated session with no activity for this
+;; long is dropped on the next request (identity + session wiped, back to login).
+;; 0 or unset disables idle expiry (sessions then live to session.gc_maxlifetime).
+resources.session.idle_timeout = 1800
 resources.session.name = 'VIMBADMIN3'
 ;; Cookie / fixation hardening. cookie_secure REQUIRES the panel be served over
 ;; HTTPS (set it to false only for a plain-HTTP dev box, or the session cookie

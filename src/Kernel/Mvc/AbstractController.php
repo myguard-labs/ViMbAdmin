@@ -95,7 +95,33 @@ abstract class AbstractController
      */
     protected function admin(): ?object
     {
-        return $this->container->auth()->admin();
+        $auth = $this->container->auth();
+
+        // Idle-timeout enforcement: an authenticated session untouched for longer
+        // than resources.session.idle_timeout is dropped (identity + session
+        // wiped) before the action sees an admin. `timeOfLastAction` was written
+        // at login but never enforced, so sessions previously lived to
+        // gc_maxlifetime. 0/unset disables. Cheap + idempotent per request.
+        if ($auth->isAuthenticated()) {
+            $options = $this->container->options();
+            $idle    = (int) ($options['resources']['session']['idle_timeout'] ?? 0);
+            if ($idle > 0) {
+                $session = $this->container->session();
+                $last    = (int) ($session->timeOfLastAction ?? 0);
+                if ($last > 0 && (time() - $last) > $idle) {
+                    $auth->clear();
+                    if (session_status() === PHP_SESSION_ACTIVE) {
+                        $_SESSION = [];
+                        session_regenerate_id(true);
+                        session_destroy();
+                    }
+                    return null;
+                }
+                $session->timeOfLastAction = time();
+            }
+        }
+
+        return $auth->admin();
     }
 
     /**

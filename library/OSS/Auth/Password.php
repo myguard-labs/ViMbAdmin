@@ -122,7 +122,7 @@ class OSS_Auth_Password
 
                 case self::HASH_BCRYPT:
                     if( !isset( $config['hash_cost'] ) )
-                        $config['hash_cost'] = 9;
+                        $config['hash_cost'] = 12;
 
                     $bcrypt = new OSS_Crypt_Bcrypt( $config['hash_cost'] );
                     return $bcrypt->hash( $pw );
@@ -165,7 +165,7 @@ class OSS_Auth_Password
         {
             case self::HASH_BCRYPT:
                 if( !isset( $config['hash_cost'] ) )
-                    $config['hash_cost'] = 9;
+                    $config['hash_cost'] = 12;
 
                 $bcrypt = new OSS_Crypt_Bcrypt( $config['hash_cost'] );
                 return $bcrypt->verify( $pwplain, $pwhash );

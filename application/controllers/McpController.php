@@ -156,6 +156,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
     private function _domainCreate( array $params )
     {
         $name = $this->_str( $params, 'domain', true );
+        $this->_validate( $name, \ViMbAdmin\Kernel\Form\Validators::hostname(), 'domain' );
         // Bind the per-token domain allowlist to creation too: a token scoped to
         // specific domains must not be able to create one outside that list.
         $this->_assertDomainAllowed( $name );
@@ -193,6 +194,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
     {
         $domain    = $this->_requireDomain( $params );
         $localPart = $this->_str( $params, 'local_part', true );
+        $this->_validate( $localPart, \ViMbAdmin\Kernel\Form\Validators::localPart(), 'local_part' );
         $password  = $this->_str( $params, 'password', true );
         $username  = $localPart . '@' . $domain->getDomain();
 
@@ -255,7 +257,13 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $address = $this->_str( $params, 'address', true );
         $goto    = $this->_str( $params, 'goto', true );
         if( strpos( $address, '@' ) === false )
+        {
+            $this->_validate( $address, \ViMbAdmin\Kernel\Form\Validators::localPart(), 'address local part' );
             $address .= '@' . $domain->getDomain();
+        }
+        else
+            $this->_validateEmail( $address, 'address' );
+        $this->_validateEmail( $goto, 'goto' );
 
         $repo = $this->em()->getRepository( '\\Entities\\Alias' );
         if( $repo->findOneBy( [ 'address' => $address ] ) )
@@ -417,6 +425,36 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         if( $v === '' && $required )
             throw new ViMbAdmin_Mcp_Exception( "param \"{$key}\" required" );
         return $v;
+    }
+
+    /**
+     * Run a value through one of the kernel form validators (pure callables that
+     * return null on success or an error string). The web forms validate every
+     * created local_part / domain / address; the MCP create path MUST enforce the
+     * same shape, or a crafted value (path-traversal "../", '/', spaces, control
+     * chars) flows unvalidated into the Dovecot maildir/backup paths
+     * (QueueRunner::backupDest %d/%u, removeMaildirHome) and mail routing keys.
+     *
+     * @param callable(mixed):?string $validator
+     * @throws ViMbAdmin_Mcp_Exception on a validation miss
+     */
+    private function _validate( string $value, callable $validator, string $label )
+    {
+        $err = $validator( $value );
+        if( $err !== null )
+            throw new ViMbAdmin_Mcp_Exception( "invalid {$label}: {$err}" );
+        return $value;
+    }
+
+    /** Validate a full email address (localpart@hostname) shape for MCP input. */
+    private function _validateEmail( string $addr, string $label )
+    {
+        $at = strrpos( $addr, '@' );
+        if( $at === false || $at === 0 || $at === strlen( $addr ) - 1 )
+            throw new ViMbAdmin_Mcp_Exception( "invalid {$label}: must be local@domain" );
+        $this->_validate( substr( $addr, 0, $at ), \ViMbAdmin\Kernel\Form\Validators::localPart(), "{$label} local part" );
+        $this->_validate( substr( $addr, $at + 1 ), \ViMbAdmin\Kernel\Form\Validators::hostname(), "{$label} domain" );
+        return $addr;
     }
 
     // ---- scope / rate-limit routing ------------------------------------

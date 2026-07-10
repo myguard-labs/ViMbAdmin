@@ -66,8 +66,11 @@ final class Validators
                 return $message;
             }
             // dot-atom: one or more atoms of permitted chars, joined by single
-            // dots; no leading/trailing/double dot.
-            $atom = '[A-Za-z0-9!#$&\'*+\/=?^_`{|}~\-]+';
+            // dots; no leading/trailing/double dot. '/' is intentionally NOT
+            // permitted — it is a path separator that would create a nested
+            // maildir segment (see backupDest/removeMaildirHome), and RFC 5321
+            // dot-atoms do not include it.
+            $atom = '[A-Za-z0-9!#$&\'*+=?^_`{|}~\-]+';
 
             return preg_match('/^' . $atom . '(\.' . $atom . ')*$/', $s) === 1 ? null : $message;
         };

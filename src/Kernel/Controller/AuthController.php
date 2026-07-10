@@ -381,8 +381,14 @@ final class AuthController extends AbstractController
     {
         $this->container->auth()->clear();
 
+        // Fully drop the session on logout — clearing only the identity left
+        // second-factor state behind (`totp_verified` is never reset), so a
+        // later password-only login IN THE SAME SESSION skipped the 2FA gate.
+        // Wipe all session data, then start a fresh empty session id.
         if (session_status() === PHP_SESSION_ACTIVE) {
+            $_SESSION = [];
             session_regenerate_id(true);
+            session_destroy();
         }
 
         return $this->redirect('auth/login');
@@ -610,6 +616,11 @@ final class AuthController extends AbstractController
     {
         $tfa     = new \ViMbAdmin_TwoFactor('ViMbAdmin', (string) ($options['securitysalt'] ?? ''));
         $session = $this->session();
+
+        // Every password authentication demands a fresh second factor: drop any
+        // stale `totp_verified` (e.g. left in a shared-browser session by a prior
+        // 2FA login) BEFORE the gate below reads it, so it can never bypass 2FA.
+        unset($session->totp_verified);
 
         // Lost-device recovery without DB surgery: application.ini
         // `twofactor.force_disable = "user@dom"` (or "*" for everyone) wipes the

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require __DIR__ . '/support/resolve-bundle-v.php';
+
 $failures = 0;
 $check = static function (string $label, bool $condition) use (&$failures): void {
     echo ($condition ? '  ok   ' : '  FAIL ') . $label . "\n";
@@ -23,7 +25,15 @@ $check('shared transport suppresses short nonempty server requests with feedback
 $check('shared transport counts Unicode code points like the server',
     is_string($helper)
         && str_contains($helper, "replace( /[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]/g, '_' ).length"));
-$bundle = file_get_contents(__DIR__ . '/../public/js/min.bundle-v24.js');
+
+try {
+    $bundleFile = resolveBundleV();
+    $bundlePath = __DIR__ . '/../public/js/' . $bundleFile;
+    $bundle = file_get_contents($bundlePath);
+} catch (RuntimeException $e) {
+    $bundle = null;
+}
+
 $check('production minified bundle exposes the shared transport',
     is_string($bundle)
         && str_contains($bundle, 'function vmDataTableServerData(')

@@ -41,6 +41,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Source the bundle resolver
+source tests/support/resolve-bundle-v.sh
+
 browser=${CHROMIUM_BIN:-}
 readonly http_runner=.github/scripts/run-chrome-http-fixture.sh
 if [[ -z $browser ]]; then
@@ -57,13 +60,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+bundle_file=$(resolve_bundle_v) || exit $?
+
 for asset in \
   100-jquery.js 120-jquery.validate.js \
   150-jquery.datatables.js 151-jquery.datatables.ext.js \
   152-jquery.datatables.bootstrap5.js \
   800-bootstrap.js 850-bootbox.js 900-vimbadmin.validate.js \
   910-vimbadmin.functions.js 990-vimbadmin.js \
-  min.bundle-v24.js; do
+  "$bundle_file"; do
   if ! cp "public/js/$asset" "$tmp/$asset" 2>/dev/null; then
     echo "FAIL: required asset public/js/$asset not found" >&2
     exit 1
@@ -86,7 +91,7 @@ console.warn = function() {
 };
 window.onerror = function(message) { failures.push('page error: ' + message); };
 var scripts = mode === 'production'
-    ? ['min.bundle-v24.js','view-admin-domains.js']
+    ? ['@@VIMBADMIN_TEST_BUNDLE_FILE@@','view-admin-domains.js']
     : ['100-jquery.js','120-jquery.validate.js',
        '150-jquery.datatables.js','151-jquery.datatables.ext.js',
        '152-jquery.datatables.bootstrap5.js',
@@ -316,6 +321,16 @@ $(function() {
 });
 </script></body></html>
 HTML
+
+if ! grep -q '@@VIMBADMIN_TEST_BUNDLE_FILE@@' "$tmp/regression.html"; then
+  echo "FAIL: bundle-file placeholder not found in generated fixture" >&2
+  exit 1
+fi
+sed -i "s/@@VIMBADMIN_TEST_BUNDLE_FILE@@/$bundle_file/" "$tmp/regression.html"
+if grep -q '@@VIMBADMIN_TEST_BUNDLE_FILE@@' "$tmp/regression.html"; then
+  echo "FAIL: bundle-file placeholder substitution did not apply" >&2
+  exit 1
+fi
 
 run_mode() {
   local mode=$1

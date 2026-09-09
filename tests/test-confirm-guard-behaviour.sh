@@ -14,6 +14,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Source the bundle resolver
+source tests/support/resolve-bundle-v.sh
+
 browser="${CHROMIUM_BIN:-}"
 if [[ -z "$browser" ]]; then
   browser="$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)"
@@ -160,6 +163,8 @@ HTML
 }
 
 run_case "source (990-vimbadmin.js)" public/js/990-vimbadmin.js
-run_case "minified bundle (min.bundle-v24.js)" public/js/min.bundle-v24.js
+
+bundle_file=$(resolve_bundle_v) || exit $?
+run_case "minified bundle ($bundle_file)" "public/js/$bundle_file"
 
 echo "ALL PASSED"

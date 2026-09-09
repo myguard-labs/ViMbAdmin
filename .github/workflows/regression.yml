@@ -109,6 +109,11 @@ jobs:
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
           bash tests/test-jquery-migrate-compat.sh
 
+      - name: jQuery Validation grouped-field path survives jQuery 4 (VIM-A15.59)
+        run: >-
+          CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
+          bash tests/test-jquery-validate-group-fixture.sh
+
       - name: Migrated Bootstrap 5 controls operate in a browser (VIM-A15.25)
         run: >-
           PHP_RENDERER="$GITHUB_WORKSPACE/.github/scripts/run-static-php-container.sh"

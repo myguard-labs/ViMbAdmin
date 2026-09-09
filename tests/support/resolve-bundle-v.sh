@@ -9,22 +9,38 @@
 #   bundle=$(source tests/support/resolve-bundle-v.sh && resolve_bundle_v)
 
 resolve_bundle_v() {
-  local matches
-  matches=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && ls -1 public/js/min.bundle-v*.js 2>/dev/null | xargs -n1 basename)
+  local -a matches_array
+  local saved_nullglob
 
-  local count
-  count=$(echo "$matches" | grep -c . || true)
+  cd "$(dirname "${BASH_SOURCE[0]}")/../.." || return 2
 
-  if [[ $count -eq 0 ]]; then
+  # Save the current nullglob state to restore it later
+  saved_nullglob=$(shopt -p nullglob)
+
+  # Disable nullglob to detect no-match case explicitly
+  shopt -u nullglob
+
+  # Use array to handle filenames with spaces correctly
+  matches_array=(public/js/min.bundle-v*.js)
+
+  # Restore the original nullglob state
+  eval "$saved_nullglob"
+
+  # Check if the glob matched anything (unmatched glob returns literal pattern)
+  if [[ "${matches_array[0]}" == "public/js/min.bundle-v*.js" ]]; then
     echo "FAIL: no JS bundle found matching public/js/min.bundle-v*.js" >&2
     return 2
   fi
 
+  local count=${#matches_array[@]}
+
   if [[ $count -gt 1 ]]; then
     echo "FAIL: ambiguous bundle name; multiple matches found:" >&2
-    echo "$matches" | sed 's/^/  /' >&2
+    for match in "${matches_array[@]}"; do
+      echo "  $(basename "$match")" >&2
+    done
     return 2
   fi
 
-  echo "$matches"
+  basename "${matches_array[0]}"
 }

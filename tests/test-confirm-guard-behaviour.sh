@@ -160,6 +160,6 @@ HTML
 }
 
 run_case "source (990-vimbadmin.js)" public/js/990-vimbadmin.js
-run_case "minified bundle (min.bundle-v23.js)" public/js/min.bundle-v23.js
+run_case "minified bundle (min.bundle-v24.js)" public/js/min.bundle-v24.js
 
 echo "ALL PASSED"

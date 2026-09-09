@@ -63,7 +63,7 @@ for asset in \
   152-jquery.datatables.bootstrap5.js \
   800-bootstrap.js 850-bootbox.js 900-vimbadmin.validate.js \
   910-vimbadmin.functions.js 990-vimbadmin.js \
-  min.bundle-v23.js; do
+  min.bundle-v24.js; do
   if ! cp "public/js/$asset" "$tmp/$asset" 2>/dev/null; then
     echo "FAIL: required asset public/js/$asset not found" >&2
     exit 1
@@ -86,7 +86,7 @@ console.warn = function() {
 };
 window.onerror = function(message) { failures.push('page error: ' + message); };
 var scripts = mode === 'production'
-    ? ['min.bundle-v23.js','view-admin-domains.js']
+    ? ['min.bundle-v24.js','view-admin-domains.js']
     : ['100-jquery.js','120-jquery.validate.js',
        '150-jquery.datatables.js','151-jquery.datatables.ext.js',
        '152-jquery.datatables.bootstrap5.js',

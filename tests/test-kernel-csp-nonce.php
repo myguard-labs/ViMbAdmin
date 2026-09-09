@@ -252,8 +252,8 @@ if (is_string($appJs)) {
 // Production serves the prebuilt bundle when use_minified_js is on, so the guard
 // has to be in there too -- shipping it only in 990-vimbadmin.js would leave
 // every minified deployment with unguarded destructive actions.
-$bundle = file_get_contents(__DIR__ . '/../public/js/min.bundle-v23.js');
-check('min.bundle-v23.js readable', is_string($bundle));
+$bundle = file_get_contents(__DIR__ . '/../public/js/min.bundle-v24.js');
+check('min.bundle-v24.js readable', is_string($bundle));
 if (is_string($bundle)) {
     check(
         'the minified bundle carries the delegated confirm guard',

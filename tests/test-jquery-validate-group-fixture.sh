@@ -122,7 +122,7 @@ HTML
 
 run_case() {
   local output=$tmp/output.html
-  chrome_args=(
+  local -a chrome_args=(
     --headless --disable-gpu --virtual-time-budget=3000
     --user-data-dir="$tmp/profile" --dump-dom
     "http://127.0.0.1:8765/regression.html"

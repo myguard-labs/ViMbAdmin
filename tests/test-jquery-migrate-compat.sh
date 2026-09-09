@@ -79,7 +79,7 @@ done
 sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' \
   application/views/admin/js/domains.js >"$tmp/view-admin-domains.js"
 
-cat >"$tmp/regression.html" <<HTML
+cat >"$tmp/regression.html" <<'HTML'
 <!doctype html><html><head><meta charset="utf-8">
 <script>
 var mode = location.search.slice(1) || 'development';
@@ -91,7 +91,7 @@ console.warn = function() {
 };
 window.onerror = function(message) { failures.push('page error: ' + message); };
 var scripts = mode === 'production'
-    ? ['${bundle_file}','view-admin-domains.js']
+    ? ['@@VIMBADMIN_TEST_BUNDLE_FILE@@','view-admin-domains.js']
     : ['100-jquery.js','120-jquery.validate.js',
        '150-jquery.datatables.js','151-jquery.datatables.ext.js',
        '152-jquery.datatables.bootstrap5.js',
@@ -321,6 +321,16 @@ $(function() {
 });
 </script></body></html>
 HTML
+
+if ! grep -q '@@VIMBADMIN_TEST_BUNDLE_FILE@@' "$tmp/regression.html"; then
+  echo "FAIL: bundle-file placeholder not found in generated fixture" >&2
+  exit 1
+fi
+sed -i "s/@@VIMBADMIN_TEST_BUNDLE_FILE@@/$bundle_file/" "$tmp/regression.html"
+if grep -q '@@VIMBADMIN_TEST_BUNDLE_FILE@@' "$tmp/regression.html"; then
+  echo "FAIL: bundle-file placeholder substitution did not apply" >&2
+  exit 1
+fi
 
 run_mode() {
   local mode=$1

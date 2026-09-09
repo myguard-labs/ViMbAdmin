@@ -41,6 +41,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Source the bundle resolver
+source tests/support/resolve-bundle-v.sh
+
 browser=${CHROMIUM_BIN:-}
 readonly http_runner=.github/scripts/run-chrome-http-fixture.sh
 if [[ -z $browser ]]; then
@@ -57,13 +60,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
+bundle_file=$(resolve_bundle_v) || exit $?
+
 for asset in \
   100-jquery.js 120-jquery.validate.js \
   150-jquery.datatables.js 151-jquery.datatables.ext.js \
   152-jquery.datatables.bootstrap5.js \
   800-bootstrap.js 850-bootbox.js 900-vimbadmin.validate.js \
   910-vimbadmin.functions.js 990-vimbadmin.js \
-  min.bundle-v24.js; do
+  "$bundle_file"; do
   if ! cp "public/js/$asset" "$tmp/$asset" 2>/dev/null; then
     echo "FAIL: required asset public/js/$asset not found" >&2
     exit 1
@@ -74,7 +79,7 @@ done
 sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' \
   application/views/admin/js/domains.js >"$tmp/view-admin-domains.js"
 
-cat >"$tmp/regression.html" <<'HTML'
+cat >"$tmp/regression.html" <<HTML
 <!doctype html><html><head><meta charset="utf-8">
 <script>
 var mode = location.search.slice(1) || 'development';
@@ -86,7 +91,7 @@ console.warn = function() {
 };
 window.onerror = function(message) { failures.push('page error: ' + message); };
 var scripts = mode === 'production'
-    ? ['min.bundle-v24.js','view-admin-domains.js']
+    ? ['${bundle_file}','view-admin-domains.js']
     : ['100-jquery.js','120-jquery.validate.js',
        '150-jquery.datatables.js','151-jquery.datatables.ext.js',
        '152-jquery.datatables.bootstrap5.js',

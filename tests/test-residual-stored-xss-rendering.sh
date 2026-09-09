@@ -4,6 +4,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# Source the bundle resolver
+source tests/support/resolve-bundle-v.sh
+
 browser="${CHROMIUM_BIN:-}"
 if [[ -z "$browser" ]]; then
   browser="$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)"
@@ -16,8 +19,9 @@ fi
 tmp="$(mktemp -d /tmp/vimbadmin-residual-stored-xss.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 
-cp public/js/min.bundle-v24.js "$tmp/min.bundle-v24.js"
-bundle_uri="file://$tmp/min.bundle-v24.js"
+bundle_file=$(resolve_bundle_v) || exit $?
+cp "public/js/$bundle_file" "$tmp/$bundle_file"
+bundle_uri="file://$tmp/$bundle_file"
 if [[ -n ${PHP_RENDERER:-} ]]; then
   PHP_CONTAINER_WRITE_DIR=$tmp \
     "$PHP_RENDERER" tests/render-residual-stored-xss-fixture.php \

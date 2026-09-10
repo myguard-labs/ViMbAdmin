@@ -6,6 +6,30 @@
  * Copyright (c) 2026 Jörn Zaefferer
  * Released under the MIT license
  */
+/*
+ * MyGuard provenance: upstream 1.22.0 + 1 recorded local patch.
+ *
+ * Base artifact: jQuery Validation Plugin 1.22.0 upstream release,
+ * sha256 7a59dfe5f8d5422799f3e3859a2bbd48af2a60c03525d94d56bb6a352b7a21ca
+ * -- re-verified against the jsDelivr artifact for jquery-validation@1.22.0
+ * (dist/jquery.validate.js), which is byte-identical to the pre-patch blob at
+ * origin/master. Note that upstream 1.22.0 genuinely carries a "Copyright (c)
+ * 2026" line; that year is upstream's, not a local edit.
+ *
+ * This file is no longer byte-identical to that base artifact because of the
+ * patch below. To verify the local deviation, diff this file against the base
+ * artifact; the diff should contain exactly this header and the patch listed
+ * under "Local patches".
+ *
+ * Local patches:
+ *   1. VIM-A15.61 -- Validator.element()'s grouped-field branch called
+ *      v.currentElements.pushStack( cleanElement ), discarding the return
+ *      value (pushStack() does not mutate the receiver), so a grouped
+ *      sibling that became valid was never added to currentElements and
+ *      never had its error class cleared by defaultShowErrors(). Changed
+ *      to `v.currentElements = v.currentElements.add( cleanElement );`.
+ *      See the inline comment at that call site for detail.
+ */
 (function( factory ) {
 	if ( typeof define === "function" && define.amd ) {
 		define( ["jquery"], factory );
@@ -503,7 +527,11 @@ $.extend( $.validator, {
 
 							// Don't want to check fields if a user hasn't gotten to them yet
 							if ( cleanElement && cleanElement.name in v.invalid ) {
-								v.currentElements.pushStack( cleanElement );
+
+								// VIM-A15.61 local patch: upstream's pushStack() call
+								// discards its return value. See the provenance header at
+								// the top of this file.
+								v.currentElements = v.currentElements.add( cleanElement );
 								result = v.check( cleanElement ) && result;
 							}
 						}

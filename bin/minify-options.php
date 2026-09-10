@@ -102,7 +102,15 @@ defined( 'SCRIPTDIR' ) || define( 'SCRIPTDIR', __DIR__ );
 // NB: SCRIPTDIR is the vendor script's OWN directory
 // (vendor/opensolutions/minify), not this config file's. The per-machine build
 // prerequisites live next to this file in bin/, so they are anchored on __DIR__.
-$js_compiler = "java -jar " . escapeshellarg( __DIR__ . '/compiler.jar' ) . " --compilation_level WHITESPACE_ONLY --warning_level QUIET --language_in ECMASCRIPT_2018";
+// --charset UTF-8: Closure Compiler's own default is "accept UTF-8 as input,
+// emit US-ASCII (with \uXXXX escapes) as output". That silently mangles any
+// non-ASCII byte a vendored source legitimately carries -- e.g. the "ö" in
+// 120-jquery.validate.js's licence header and the "©" in
+// 150-jquery.datatables.js's -- into `?` once concatenated through PHP's
+// escapeshellarg()/exec() pipeline (VIM-A15.60). Setting --charset explicitly
+// makes both directions UTF-8, so those bytes survive unmodified into
+// min.bundle-v<N>.js.
+$js_compiler = "java -jar " . escapeshellarg( __DIR__ . '/compiler.jar' ) . " --compilation_level WHITESPACE_ONLY --warning_level QUIET --language_in ECMASCRIPT_2018 --charset UTF-8";
 
 
 // JavaScript files to compress.

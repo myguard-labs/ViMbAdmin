@@ -15,17 +15,27 @@
 # each one closed the shape a review had just named and silently reopened the
 # defect class in a different shape (multiple call sites per line, a receiver
 # split across lines, an unrecognised receiver form). A line-oriented shell
-# scanner cannot judge arbitrary JavaScript reachability; every attempt to
-# make it do so produced a new silent pass.
+# scanner cannot judge arbitrary JavaScript reachability.
 #
-# So this gate does not parse JavaScript at all. It asserts a NORMAL FORM.
+# So this gate runs a two-stage contract instead of parsing JavaScript:
+#   1. DISCOVERY deliberately OVER-MATCHES by construction -- any spelling
+#      variant of `.clear(...)` or `["clear"](...)`, any whitespace between
+#      tokens, must be caught here. A discovery miss is invisible to stage 2
+#      and silently passes -- that is the failure this gate exists to close.
+#   2. Only the anchored NORMAL-FORM check in stage 2 is exact. Everything
+#      discovery finds that does not match the normal form byte-for-byte
+#      fails loudly -- there is no "cannot judge" branch.
+# This invariant (over-match, then judge exactly) must never regress: widen
+# discovery's regex freely, never relax the normal-form regex.
+#
 # All six real call sites in the tree are the identical exact spelling:
 #
 #     vmDataTableApi( oDataTable ).clear().draw();
 #
-# Every line containing the literal `.clear()` must match that form
-# (whitespace-tolerant), or the gate fails -- there is no "cannot judge"
-# branch. A genuinely different, legitimate call form must update this gate
+# The normal form is tolerant of indentation and of the spacing inside the
+# `vmDataTableApi( ... )` argument parentheses, and of trailing space; every
+# other byte -- including any space around `.clear()` or `.draw()` itself --
+# is exact. A genuinely different, legitimate call form must update this gate
 # deliberately; it is never silently accepted. The only skip is a whole-line
 # `//` comment; comments are not otherwise reasoned about. The gate also
 # hard-fails unless it finds EXACTLY the count of compliant sites recorded
@@ -33,8 +43,10 @@
 # or rewritten out of the approved form) must update that number, which is
 # the tripwire that replaces judging reachability.
 #
-# Exit 0 = every `.clear()` matches the approved form and the count matches.
-# Exit 1 = an unrecognised `.clear()` form, or the compliant count is wrong.
+# Exit 0 = every discovered candidate matches the approved form and the count
+#          matches, no CRLF line endings, and no `.phtml` is in scope.
+# Exit 1 = an unrecognised candidate, a wrong compliant count, a CRLF file, or
+#          a `.phtml` file that has entered this gate's scope.
 
 set -euo pipefail
 export LC_ALL=C
@@ -42,6 +54,7 @@ export LC_ALL=C
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 views_root='application/views'
+# Six approved sites: two each in the domain, mailbox and alias list views.
 expected_count=6
 
 if [ ! -d "$views_root" ]; then
@@ -59,10 +72,35 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# This gate's scope is *.js only. A .phtml gaining an inline <script> call
+# site would be invisible to discovery above AND would not move the count
+# tripwire. Assert the scope assumption still holds every run.
+phtml_hits=()
+while IFS= read -r -d '' file; do
+  phtml_hits+=("$file")
+done < <(grep -lZE 'vmDataTableApi|dataTable' "$views_root" -r --include='*.phtml' 2>/dev/null || true)
+
+if [ "${#phtml_hits[@]}" -gt 0 ]; then
+  echo "FAIL: .phtml file(s) under '$views_root' now reference vmDataTableApi" >&2
+  echo "      or dataTable -- this gate's scope assumption (call sites live" >&2
+  echo "      only in *.js) has stopped holding. Discovery must be extended" >&2
+  echo "      to cover .phtml <script> blocks before this gate can judge:" >&2
+  printf '      %s\n' "${phtml_hits[@]}" >&2
+  exit 1
+fi
+
+# Discovery: deliberately over-match. Any `.clear` call however spelled --
+# whitespace or a tab between the dot and `clear`, whitespace inside the
+# call parens, or bracket/string member access -- must be caught here so
+# stage 2 can judge it. Verified against: `.clear ()`, `.clear( )`,
+# `.clear\t()`, and `["clear"]()`, plus the plain `.clear()` form.
+discovery_re='\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"']clear'
+
 normal_form_re='^[[:space:]]*vmDataTableApi\([[:space:]]*[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*\)\.clear\(\)\.draw\(\);[[:space:]]*$'
 
 compliant=0
 violations=0
+compliant_sites=()
 
 for file in "${files[@]}"; do
   if [ ! -r "$file" ]; then
@@ -70,8 +108,16 @@ for file in "${files[@]}"; do
     exit 1
   fi
 
+  if LC_ALL=C grep -q $'\r$' "$file"; then
+    echo "FAIL: '$file' has CRLF line endings." >&2
+    echo "      this gate is exact about spelling and refuses to silently" >&2
+    echo "      normalise line endings -- convert the file to LF first." >&2
+    exit 1
+  fi
+
   while IFS=: read -r lineno line; do
     [ -n "$lineno" ] || continue
+    line="${line%$'\r'}"
 
     if [[ "$line" =~ ^[[:space:]]*// ]]; then
       continue
@@ -79,6 +125,7 @@ for file in "${files[@]}"; do
 
     if [[ "$line" =~ $normal_form_re ]]; then
       compliant=$((compliant + 1))
+      compliant_sites+=("$file:$lineno")
       continue
     fi
 
@@ -89,7 +136,7 @@ for file in "${files[@]}"; do
     echo "      A genuinely different, legitimate call form requires this" >&2
     echo "      gate to be updated deliberately, not worked around." >&2
     violations=$((violations + 1))
-  done < <(grep -n '\.clear()' "$file")
+  done < <(grep -nE "$discovery_re" "$file")
 done
 
 if [ "$violations" -ne 0 ]; then
@@ -102,7 +149,9 @@ if [ "$compliant" -ne "$expected_count" ]; then
   echo "      expected exactly $expected_count. A deliberate change in the" >&2
   echo "      number of clear() call sites must update this gate's" >&2
   echo "      expected_count -- this is the tripwire that catches a call" >&2
-  echo "      site being added, removed, or going dark." >&2
+  echo "      site being added, removed, or going dark. Compliant sites" >&2
+  echo "      found this run:" >&2
+  printf '      %s\n' "${compliant_sites[@]}" >&2
   exit 1
 fi
 

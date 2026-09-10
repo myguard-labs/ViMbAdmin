@@ -125,6 +125,17 @@ $(function() {
     // one assertion in this fixture that distinguishes the discarded-pushStack
     // behaviour from the fixed .add()-assignment behaviour -- every check above
     // it passes on both.
+    // Precondition, asserted rather than assumed: the check below only
+    // exercises the patched line while "second" is still tracked in
+    // validator.invalid (the grouped branch is guarded by
+    // `cleanElement.name in v.invalid`). That state is left behind by the
+    // block above; asserting it here means a later reorder or an inserted
+    // resetForm() fails loudly instead of silently turning the next check
+    // into a tautology that passes under both behaviours.
+    check('precondition: second is still tracked in validator.invalid', function() {
+        return 'second' in validator.invalid;
+    });
+
     $('#second').addClass('error');
     check('grouped sibling error class clears once that sibling becomes valid', function() {
         validator.element('#first');

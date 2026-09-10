@@ -11,8 +11,15 @@
  *
  * Base artifact: jQuery Validation Plugin 1.22.0 upstream release,
  * sha256 7a59dfe5f8d5422799f3e3859a2bbd48af2a60c03525d94d56bb6a352b7a21ca
- * (recorded verbatim from PR #197 / VIM-A15.59; this file is no longer
- * byte-identical to that artifact because of the patch below).
+ * -- re-verified against the jsDelivr artifact for jquery-validation@1.22.0
+ * (dist/jquery.validate.js), which is byte-identical to the pre-patch blob at
+ * origin/master. Note that upstream 1.22.0 genuinely carries a "Copyright (c)
+ * 2026" line; that year is upstream's, not a local edit.
+ *
+ * This file is no longer byte-identical to that base artifact because of the
+ * patch below. To verify the local deviation, diff this file against the base
+ * artifact; the diff should contain exactly this header and the patch listed
+ * under "Local patches".
  *
  * Local patches:
  *   1. VIM-A15.61 -- Validator.element()'s grouped-field branch called
@@ -521,17 +528,9 @@ $.extend( $.validator, {
 							// Don't want to check fields if a user hasn't gotten to them yet
 							if ( cleanElement && cleanElement.name in v.invalid ) {
 
-								// VIM-A15.61 local patch (deviation from stock 1.22.0):
-								// upstream calls v.currentElements.pushStack( cleanElement ),
-								// but pushStack() returns a NEW jQuery object rather than
-								// mutating the receiver, so the return value here was
-								// discarded and cleanElement never actually joined
-								// currentElements. defaultShowErrors() only clears error
-								// classes for elements it finds in currentElements, so a
-								// grouped sibling that becomes valid kept its error styling
-								// until an unrelated full revalidation ran. Assigning the
-								// result of .add() (which also returns a new set, but here
-								// the assignment is what makes it take effect) fixes this.
+								// VIM-A15.61 local patch: upstream's pushStack() call
+								// discards its return value. See the provenance header at
+								// the top of this file.
 								v.currentElements = v.currentElements.add( cleanElement );
 								result = v.check( cleanElement ) && result;
 							}

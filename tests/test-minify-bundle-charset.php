@@ -6,22 +6,14 @@ declare(strict_types=1);
  * The shipped JS bundle must carry real UTF-8 bytes, not Closure Compiler's
  * default US-ASCII output.
  *
- * bin/minify-options.php builds $js_compiler with `java -jar compiler.jar
- * --compilation_level WHITESPACE_ONLY ...`. Closure Compiler's own default
- * (undocumented until `--help`) is "accept UTF-8 input, emit US-ASCII output"
- * -- so any vendored source carrying a legitimate non-ASCII byte (the "ö" in
- * 120-jquery.validate.js's licence header, the "©" in
- * 150-jquery.datatables.js's) came out mangled into `?` once concatenated
- * through vimbadminBuildBundle()'s exec() pipeline (VIM-A15.60). The fix adds
- * `--charset UTF-8` to $js_compiler so both directions are UTF-8.
+ * Closure Compiler defaults to "accept UTF-8 input, emit US-ASCII output", which
+ * mangled the "ö" in 120-jquery.validate.js's licence header and the "©" in
+ * 150-jquery.datatables.js's into `?`; bin/minify-options.php now passes
+ * `--charset UTF-8` so both directions are UTF-8 (VIM-A15.60).
  *
- * This test asserts the SHIPPED bundle at the byte level, not by grepping for
- * a spelling: a mojibake bundle (UTF-8 bytes misread as Latin-1, then
- * re-emitted) contains a *different*, also non-ASCII-but-wrong byte sequence
- * ("JÃ¶rn", "Â©") that a naive `str_contains($bundle, 'Jörn')` check cannot
- * distinguish from the correct one if the test file itself is saved in the
- * wrong encoding. Comparing raw byte sequences constructed from explicit code
- * points removes that ambiguity entirely.
+ * Assertions compare raw byte sequences built from explicit code points, so
+ * they also distinguish a correct bundle from a mojibake one (UTF-8 read as
+ * Latin-1 and re-encoded: "JÃ¶rn", "Â©"), which is non-ASCII but still wrong.
  *
  * Requires the JS bundle to have been (re)built via
  * `php bin/minify-bundle.php --version <N> --js-only` against a compiler.jar

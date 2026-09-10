@@ -1,7 +1,8 @@
 <?php
 
 /**
- * See bin/minify-bundle-files.php and vimbadminResolveBundleInputs() for the enumeration rationale.
+ * See bin/minify-bundle-files.php and vimbadminResolveBundleInputs() in
+ * bin/minify-bundle.php for the enumeration rationale.
  *
  * This test pins the replacement: bin/minify-bundle-files.php enumerates the
  * inputs, bin/minify-bundle.php resolves them, every live asset is present

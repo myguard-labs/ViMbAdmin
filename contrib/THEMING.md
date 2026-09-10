@@ -77,8 +77,9 @@ keep in sync across upgrades.
   (`.navbar-dark`, `.card`, `.btn-primary`, `.table`, …). The `dark`
   example shows the selectors that matter.
 - **Colorbox removed.** The Colorbox lightbox library and its image set
-  (`public/images/colorbox/`) were removed in VIM-A15.56. If you have a
-  custom skin that references Colorbox images, you will need to update it.
+  (`public/images/colorbox/`) were removed in PR #200. Colorbox has no
+  replacement; a custom skin that styles `.cbox*` classes or references those
+  images should drop those rules.
 - **Caching.** After changing a `.phtml` override, clear the Smarty compile
   cache (`var/templates_c/`). CSS changes are picked up on reload (bump a
   query string if a proxy caches aggressively).

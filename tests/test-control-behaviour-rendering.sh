@@ -45,6 +45,9 @@
 #     data-bs-toggle), which only shows nobody had checked reachability, not
 #     that the feature was live. There was never a Bootstrap-migration
 #     regression to fix, so there is nothing left here to assert against.
+#   - ALSO NOT ASSERTED HERE -- select and lightbox controls. Chosen and
+#     Colorbox were the only implementations; both were deleted in PR #200, so
+#     there is no invocation to assert against.
 #
 #   The dropdown-menu ($action_list_menu/$alias_actions) case above is a
 #   different failure shape: gated behind a plugin variable core code never

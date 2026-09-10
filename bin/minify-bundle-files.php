@@ -72,7 +72,9 @@ return [
     // can tell "deliberately excluded" from "someone forgot to list it" and
     // fail loudly on the latter (see vimbadminResolveBundleInputs() in
     // bin/minify-bundle.php).
-    // The lists stay declared empty because bin/minify-bundle.php requires them.
+    // Kept declared, though empty: bin/minify-bundle.php requires all four
+    // keys, and an asset dropped from the application but kept on disk for a
+    // time is a recurring situation.
     'jsExcluded' => [
     ],
 

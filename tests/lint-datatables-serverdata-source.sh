@@ -42,10 +42,23 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# The matchers below are the ONLY place these patterns are written. The
+# self-test calls these same functions, so changing a pattern here changes what
+# the self-test exercises -- a self-test holding its own copy of the regex would
+# keep passing against the old pattern and prove nothing about the live scan.
+has_option() {
+  # $1 = option name, $2 = file
+  grep -qE "^[[:space:]]*['\"]?${1}['\"]?[[:space:]]*:" "$2"
+}
+
+has_serverside_true() {
+  grep -qE "^[[:space:]]*['\"]?serverSide['\"]?[[:space:]]*:[[:space:]]*true" "$1"
+}
+
 # --- 1. the removed 1.x options must not reappear ---
 for f in "${files[@]}"; do
   for opt in sAjaxSource fnServerData; do
-    if grep -qE "^[[:space:]]*['\"]?${opt}['\"]?[[:space:]]*:" "$f"; then
+    if has_option "$opt" "$f"; then
       echo "  $f: uses '${opt}', removed in DataTables 2.x"
       echo "    -> 2.3.4 has zero occurrences of it; the option is ignored"
       echo "       entirely and the table silently loads no data."
@@ -56,9 +69,9 @@ done
 
 # --- 2. a server-side initialiser must declare an ajax source ---
 for f in "${files[@]}"; do
-  grep -qE "^[[:space:]]*['\"]?serverSide['\"]?[[:space:]]*:[[:space:]]*true" "$f" || continue
+  has_serverside_true "$f" || continue
 
-  if ! grep -qE "^[[:space:]]*['\"]?ajax['\"]?[[:space:]]*:" "$f"; then
+  if ! has_option ajax "$f"; then
     echo "  $f: declares serverSide but supplies no 'ajax' option"
     echo "    -> DataTables falls back to reading the DOM; the table renders"
     echo "       empty with no error."
@@ -79,7 +92,7 @@ t = {
 EOF
 hits=0
 for opt in sAjaxSource fnServerData; do
-  grep -qE "^[[:space:]]*['\"]?${opt}['\"]?[[:space:]]*:" "$selftest_dir/dirty_legacy.js" && hits=$((hits + 1))
+  has_option "$opt" "$selftest_dir/dirty_legacy.js" && hits=$((hits + 1))
 done
 if [ "$hits" -eq 2 ]; then
   echo "  OK: both removed 1.x options are detected"
@@ -94,8 +107,8 @@ t = {
     'processing': true
 };
 EOF
-if grep -qE "^[[:space:]]*['\"]?serverSide['\"]?[[:space:]]*:[[:space:]]*true" "$selftest_dir/dirty_noajax.js" \
-   && ! grep -qE "^[[:space:]]*['\"]?ajax['\"]?[[:space:]]*:" "$selftest_dir/dirty_noajax.js"; then
+if has_serverside_true "$selftest_dir/dirty_noajax.js" \
+   && ! has_option ajax "$selftest_dir/dirty_noajax.js"; then
   echo "  OK: a serverSide initialiser with no ajax option is detected"
 else
   echo "  FAIL: a serverSide initialiser without ajax was not detected" >&2
@@ -110,9 +123,9 @@ t = {
 EOF
 clean_ok=1
 for opt in sAjaxSource fnServerData; do
-  grep -qE "^[[:space:]]*['\"]?${opt}['\"]?[[:space:]]*:" "$selftest_dir/clean.js" && clean_ok=0
+  has_option "$opt" "$selftest_dir/clean.js" && clean_ok=0
 done
-grep -qE "^[[:space:]]*['\"]?ajax['\"]?[[:space:]]*:" "$selftest_dir/clean.js" || clean_ok=0
+has_option ajax "$selftest_dir/clean.js" || clean_ok=0
 if [ "$clean_ok" -eq 1 ]; then
   echo "  OK: a migrated 2.x initialiser is not flagged"
 else

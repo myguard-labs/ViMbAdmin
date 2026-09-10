@@ -109,11 +109,31 @@ registered_pagers=$(
 # still *documents* the old `renderer.pageButton` spelling in a comment while
 # registering nothing under it, which previously let this gate report the
 # renderer half clean without any renderer being registered at all.
+# Harvest renderer registrations. Both patterns require a real ASSIGNMENT (the
+# trailing `=` lookahead) so a bare mention is rejected, and both are applied to
+# comment-stripped input so a COMMENTED assignment is rejected too -- 2.3.4's
+# engine documents `renderer.pageButton` in a comment, and a commented example
+# with an `=` in it would otherwise read as a registration. Defined as functions
+# so the self-tests below exercise these exact patterns rather than a copy.
+strip_line_comments() { sed 's://.*::'; }
+
+harvest_renderers_dot() {
+  grep -hPo 'DataTable\.ext\.renderer\.pag(?:e|ing)Button\.\K[A-Za-z_][A-Za-z0-9_]*(?=\s*=)' "$@"
+}
+
+harvest_renderers_bracket() {
+  grep -hPo "renderer\.pag(?:e|ing)Button\[\s*['\"]\K[^'\"]+(?=['\"]\s*\]\s*=)" "$@"
+}
+
+renderer_scan_input=$(mktemp)
+cat public/js/*.js | strip_line_comments >"$renderer_scan_input"
+
 registered_renderers=$(
-  { strict_grep grep -hPo 'DataTable\.ext\.renderer\.pag(?:e|ing)Button\.\K[A-Za-z_][A-Za-z0-9_]*(?=\s*=)' public/js/*.js
-    strict_grep grep -hPo "renderer\.pag(?:e|ing)Button\[\s*['\"]\K[^'\"]+(?=['\"]\s*\]\s*=)"            public/js/*.js
+  { strict_grep harvest_renderers_dot     "$renderer_scan_input"
+    strict_grep harvest_renderers_bracket "$renderer_scan_input"
   } | sort -u
 )
+rm -f "$renderer_scan_input"
 
 known_pagers=$(printf '%s\n%s\n' "$builtin_pagers" "$registered_pagers" | sed '/^$/d' | sort -u)
 # DataTables' own default renderer name when none is registered explicitly.
@@ -202,14 +222,40 @@ fi
 mention_only=$(mktemp)
 cat >"$mention_only" <<'EOF'
 // $.fn.dataTable.ext.renderer.pageButton.mentioned_only_in_a_comment
+// $.fn.dataTable.ext.renderer.pagingButton.commented_assignment = function () {};
+// $.fn.dataTable.ext.renderer.pagingButton['commented_bracket'] = function () {};
 EOF
-if grep -qPo 'DataTable\.ext\.renderer\.pag(?:e|ing)Button\.\K[A-Za-z_][A-Za-z0-9_]*(?=\s*=)' "$mention_only"; then
+mention_stripped=$(mktemp)
+strip_line_comments <"$mention_only" >"$mention_stripped"
+if harvest_renderers_dot "$mention_stripped" 2>/dev/null | grep -q . \
+  || harvest_renderers_bracket "$mention_stripped" 2>/dev/null | grep -q .; then
   echo "  FAIL: the renderer harvest accepts a commented mention as a registration" >&2
   fail=1
 else
-  echo "  OK: a commented mention of a renderer name is not harvested as registered"
+  echo "  OK: neither a commented mention nor a commented assignment is harvested"
 fi
-rm -f "$mention_only"
+
+# ...and the same patterns must still FIND a genuine registration, or the check
+# above would pass simply by matching nothing at all.
+real_registration=$(mktemp)
+cat >"$real_registration" <<'EOF'
+$.fn.dataTable.ext.renderer.pagingButton.genuine = function () {};
+$.fn.dataTable.ext.renderer.pagingButton['genuine_bracket'] = function () {};
+EOF
+real_stripped=$(mktemp)
+strip_line_comments <"$real_registration" >"$real_stripped"
+found_real=$(
+  { harvest_renderers_dot     "$real_stripped" 2>/dev/null
+    harvest_renderers_bracket "$real_stripped" 2>/dev/null
+  } | sort -u | tr '\n' ' '
+)
+if [[ $found_real == *genuine* && $found_real == *genuine_bracket* ]]; then
+  echo "  OK: a genuine renderer registration is still harvested"
+else
+  echo "  FAIL: the renderer harvest missed a genuine registration ($found_real)" >&2
+  fail=1
+fi
+rm -f "$mention_only" "$mention_stripped" "$real_registration" "$real_stripped"
 
 # The scan-error path must ABORT, not fall through to a clean verdict. Assert it
 # by running this same script with a deliberately broken regex and requiring a

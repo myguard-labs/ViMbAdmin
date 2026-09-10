@@ -204,9 +204,7 @@ $(function() {
     // modern names must NOT survive, or every server-side table silently
     // paginates and sorts against a server that ignores the request.
     check('server-side ajax request carries the legacy 1.9 parameter names', function() {
-        var ajax = vmDataTableServerData('/unused/source', 3, '#list_table');
-        if (typeof ajax !== 'object' || typeof ajax.data !== 'function') return false;
-        var sent = ajax.data({
+        var sent = vmDataTableLegacyRequest({
             draw: 4,
             start: 30,
             length: 15,
@@ -221,6 +219,43 @@ $(function() {
         // The modern names must not leak through alongside them.
         if ('draw' in sent || 'start' in sent || 'length' in sent) return false;
         return true;
+    });
+    // The shim must be able to DECLINE a request, not merely blank the search
+    // term: a search shorter than the minimum has to resolve to an empty result
+    // set locally. If it reached the server with sSearch blanked, the server
+    // would answer with the full unfiltered page while the hint claimed more
+    // characters were needed.
+    check('a search shorter than the minimum never reaches the server', function() {
+        var ajax = vmDataTableServerData('/unused/source', 3, '#list_table');
+        if (typeof ajax !== 'function') return false;
+
+        var requested = false;
+        var originalAjax = $.ajax;
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+
+        var answered = null;
+        try {
+            ajax({
+                draw: 9,
+                start: 0,
+                length: 10,
+                search: { value: 'ab' },
+                order: []
+            }, function(json) { answered = json; }, { sServerMethod: 'GET' });
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (requested) return false;
+        if (!answered) return false;
+        if (answered.sEcho !== 9) return false;
+        if (answered.iTotalDisplayRecords !== 0) return false;
+        return answered.aaData.length === 0;
+    });
+    // The single sort column the PHP side reads is only honest if the client
+    // cannot select more than one.
+    check('multi-column ordering is disabled while the legacy bridge exists', function() {
+        return $.fn.dataTable.defaults.orderMulti === false;
     });
     // Chosen and Colorbox coverage was dropped here; see the file header.
     // bootbox 3.3.0 is gone (it built Bootstrap 2 modal markup and drove the

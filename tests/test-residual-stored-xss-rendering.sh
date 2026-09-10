@@ -104,12 +104,19 @@ $(function () {
 
     // The shim's ajax object, driven through DataTables exactly as a migrated
     // view initialiser drives it.
+    let probeCounter = 0;
     function drawServerSideTable(source, onData) {
         // Park the probe table in its own container so its cells cannot be
         // picked up by the document-wide `#log-fixture td` / `svg` / `[onload]`
         // sweeps below.
+        // The probe gets its own id: the third argument of
+        // vmDataTableServerData() is the selector the "enter at least N
+        // characters" hint is written into, and pointing that at #list_table
+        // would aim the probe at the log fixture whose escaping this file
+        // asserts on.
+        const probeId = 'serverside-probe-table-' + (++probeCounter);
         const $host = $('<div class="serverside-probe" style="display:none"></div>');
-        const $table = $('<table><thead><tr><th>Col</th></tr></thead><tbody></tbody></table>');
+        const $table = $('<table id="' + probeId + '"><thead><tr><th>Col</th></tr></thead><tbody></tbody></table>');
         $host.append($table);
         $('body').append($host);
         const api = $table.DataTable({
@@ -117,7 +124,7 @@ $(function () {
             paging: false,
             searching: false,
             info: false,
-            ajax: vmDataTableServerData(source, 3, '#list_table'),
+            ajax: vmDataTableServerData(source, 3, '#' + probeId),
             drawCallback: function () { if (onData) onData(this.api()); }
         });
         return { api: api, $table: $table };

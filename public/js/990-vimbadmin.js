@@ -592,37 +592,124 @@ function vmDataTableLegacyRequest( data )
  * @param {string} tableSelector table selector, for the "type more" hint.
  * @return {object} A DataTables 2.x `ajax` option.
  */
+/**
+ * Report an Ajax failure the way DataTables' own _fnLog() would.
+ *
+ * 2.x exposes no internals at all -- `$.fn.dataTableExt.oApi` carried
+ * _fnLog/_fnCallbackFire/_fnProcessingDisplay under 1.x, and `ext.internal` is
+ * gone -- so a caller that runs its own transport has to reproduce the public
+ * half of that reporting itself: fire the `dt-error` event and honour
+ * `ext.errMode`, with the same technical-note numbers the core uses (1 for a
+ * malformed JSON body, 7 for a transport failure).
+ */
+function vmDataTableLogAjaxError( api, technicalNote, message )
+{
+	var settings = api.settings()[0];
+	var ext      = $.fn.dataTable.ext;
+	var mode     = ext.sErrMode || ext.errMode;
+	var full     = 'DataTables warning: table id=' + settings.sTableId
+		+ ' - ' + message + ' - ' + 'https://datatables.net/tn/' + technicalNote;
+
+	$( settings.nTable ).trigger( 'dt-error', [ settings, technicalNote, message ] );
+
+	if ( typeof mode === 'function' ) {
+		mode( settings, technicalNote, full );
+	}
+	else if ( mode === 'throw' ) {
+		throw new Error( full );
+	}
+	else if ( mode === 'alert' ) {
+		alert( full );
+	}
+	else if ( window.console && console.log ) {
+		console.log( full );
+	}
+}
+
 function vmDataTableServerData( source, minimum, tableSelector )
 {
-        return {
-                url: source,
-                dataType: 'json',
-                data: function( data ) {
-                        var search = ( data.search && data.search.value )
-                                ? String( data.search.value ).trim()
-                                : '';
+	// The FUNCTION form of `ajax`, not the object form, because this helper has
+	// to be able to DECLINE a request: a search shorter than `minimum` must
+	// resolve to an empty result set without touching the server. An
+	// `ajax: { data: ... }` callback can only rewrite parameters, so blanking
+	// the search term there would still issue the XHR and the server would
+	// answer with the full unfiltered page -- the opposite of the intent, and
+	// with no empty row for the hint below to be written into. 2.3.4's `preXhr`
+	// cannot stand in for this either: its handlers' return value is discarded
+	// (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
+	// offers no way to cancel.
+	return function( data, callback, settings )
+	{
+		var api = new $.fn.dataTable.Api( settings );
 
-                        // Count a surrogate pair as one character, so an astral
-                        // character is not mistaken for a long enough search.
-                        var searchLength = search
-                                .replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
+		var search = ( data.search && data.search.value )
+			? String( data.search.value ).trim()
+			: '';
 
-                        var legacy = vmDataTableLegacyRequest( data );
+		// Count a surrogate pair as one character, so an astral
+		// character is not mistaken for a long enough search.
+		var searchLength = search
+			.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
 
-                        if ( searchLength > 0 && searchLength < minimum ) {
-                                legacy.sSearch = '';
-                                setTimeout( function() {
-                                        // 2.x renamed the empty-row class from
-                                        // `dataTables_empty` to `dt-empty`.
-                                        $( tableSelector + ' tbody td.dt-empty' )
-                                                .text( 'Enter at least ' + minimum
-                                                        + ' characters to search.' );
-                                }, 0 );
-                        }
+		if ( searchLength > 0 && searchLength < minimum ) {
+			// Answer in the LEGACY response shape the rest of this
+			// bridge deals in; 2.x maps it natively (see the header).
+			callback( {
+				sEcho:                data.draw,
+				iTotalRecords:        0,
+				iTotalDisplayRecords: 0,
+				aaData:               []
+			} );
 
-                        return legacy;
-                }
-        };
+			setTimeout( function() {
+				// 2.x renamed the empty-row class from
+				// `dataTables_empty` to `dt-empty`.
+				$( tableSelector + ' tbody td.dt-empty' )
+					.text( 'Enter at least ' + minimum
+						+ ' characters to search.' );
+			}, 0 );
+
+			return;
+		}
+
+		return $.ajax( {
+			url:      source,
+			type:     settings.sServerMethod || 'GET',
+			dataType: 'json',
+			cache:    false,
+			data:     vmDataTableLegacyRequest( data ),
+			success:  callback,
+			error:    function( xhr, error ) {
+				// Mirrors the core's own baseAjax error handler: let an
+				// `xhr` listener claim the failure first, and otherwise
+				// log it, then always clear the processing indicator.
+				// The core treats a handler returning true as "claimed";
+				// jQuery reports only the LAST handler's return value, so
+				// collect them through the event object instead.
+				var event = $.Event( 'xhr.dt' );
+				event.vmHandled = false;
+
+				$( settings.nTable ).trigger(
+					event, [ settings, null, xhr ]
+				);
+
+				if ( ! event.vmHandled && event.result !== true ) {
+					if ( error === 'parsererror' ) {
+						vmDataTableLogAjaxError(
+							api, 1, 'Invalid JSON response'
+						);
+					}
+					else if ( xhr.readyState === 4 ) {
+						vmDataTableLogAjaxError(
+							api, 7, 'Ajax error'
+						);
+					}
+				}
+
+				api.processing( false );
+			}
+		} );
+	};
 }
 
 /* ------------------------------------------------------------------------- */
@@ -674,7 +761,16 @@ function vmDataTableApi( table )
  * in this project called it outside the deleted plugin.
  */
 $.extend( $.fn.dataTable.defaults, {
-        pagingType: 'simple_numbers'
+	pagingType: 'simple_numbers',
+
+	// The legacy request bridge forwards ONE sort column, because the PHP side
+	// reads only `iSortCol_0` / `sSortDir_0` -- there is no `iSortingCols` loop
+	// anywhere in src/Kernel (DataTableQuery reads the single pair). 2.x enables
+	// `orderMulti` by default, so without this a shift-click would paint sort
+	// indicators on several columns while the server sorted by exactly one,
+	// showing the user an ordering that was never applied. VIM-A15.56a2 removes
+	// this along with the rest of the bridge.
+	orderMulti: false
 } );
 
 // The old plugin hard-coded a five-number window (`iListLength = 5`). In 2.x

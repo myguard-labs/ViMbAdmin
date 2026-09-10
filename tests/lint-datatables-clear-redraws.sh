@@ -29,9 +29,12 @@
 #        - `.clear.apply(...)` / `.clear.call(...)`
 #        - `var f=api.clear; f()` (method torn off before calling)
 #        - destructuring: `var {clear}=api;`
-#        - a unicode-escaped property (`clear` or the ES6 code-point
+#        - a unicode-escaped property (`\u0063lear` or the ES6 code-point
 #          form `\u{63}lear`) in place of the literal identifier `clear`
 #        - `[` then a newline then `"clear"]()`
+#        - a comment anywhere inside a bracket computed call, e.g.
+#          `["clear"]/*c*/()` or `[/*c*/"clear"]()`
+#        - `]` and `(` split across lines, e.g. `["clear"]` newline `();`
 #      A discovery miss in any of these shapes is invisible to stage 2 and
 #      silently passes. The exact-count tripwire below only catches
 #      CONVERSION of an already-approved site into a wrong form; it does NOT
@@ -64,11 +67,11 @@
 # Exit 0 = every discovered candidate matches the approved form (or is skipped
 #          as a whole-line `//` comment) and the count matches, no in-scope
 #          file with a discovered call has a carriage return, and no
-#          JS-executing non-.js view file has entered this gate's scope with
-#          a call shape.
+#          non-.js view file containing a literal `<script` tag has entered
+#          this gate's scope with a call shape.
 # Exit 1 = an unrecognised candidate, a wrong compliant count, a CRLF/CR file
-#          that has a discovered call, or a JS-executing non-.js view file
-#          with a call shape that has entered scope.
+#          that has a discovered call, or a non-.js view file containing a
+#          literal `<script` tag with a call shape that has entered scope.
 
 set -euo pipefail
 export LC_ALL=C
@@ -99,20 +102,31 @@ fi
 # would be invisible to discovery above AND would not move the count
 # tripwire. Assert the scope assumption still holds every run, generalised
 # to every extension rather than a per-extension list that must be extended
-# by hand. Only a file that can actually execute JS (one containing a
-# `<script` tag) is even considered, so a plain CSS/text/HTML-doc/JSON file
-# can never trip this check regardless of what it contains. The check then
-# matches a CALL SHAPE (`vmDataTableApi(` or an identifier/`)`/`]` followed
-# by `.clear(`), not a bare word or a bare CSS selector, so prose like "the
-# dataTable is nice", a CSS class like `mydataTableWrapper`, or a CSS rule
-# like `.clear (min-width: 0)` does not false-positive the gate.
-scope_call_re='vmDataTableApi[[:space:]]*\(|[A-Za-z0-9_$)\]][[:space:]]*\.[[:space:]]*clear[[:space:]]*\('
+# by hand. Only a file containing a literal `<script` tag (any case) is even
+# considered, so a plain CSS/text/HTML-doc/JSON file can never trip this
+# check regardless of what it contains. The check then matches a CALL SHAPE
+# (`vmDataTableApi(` or an identifier/`)`/`]` followed by `.clear(`, or a
+# bracket computed call `["clear"](`/`['clear'](`/`` [`clear`]( ``), not a
+# bare word or a bare CSS selector, so prose like "the dataTable is nice", a
+# CSS class like `mydataTableWrapper`, or a CSS rule like
+# `.clear (min-width: 0)` does not false-positive the gate.
+#
+# Scope-assertion known-uncovered (distinct from discovery's known-uncovered
+# list above): a `<script` tag emitted by PHP/echo/string concatenation
+# rather than written literally in the source (e.g.
+# `<?php echo "<scr"."ipt>"; ?>`) is invisible to the literal-substring
+# prefilter below and is a known, accepted hole in this assertion.
+scope_call_re='vmDataTableApi[[:space:]]*\(|[]A-Za-z0-9_$)][[:space:]]*\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"'\`]clear["'"'"'\`][[:space:]]*\][[:space:]]*\('
 scope_hits=()
 while IFS= read -r -d '' file; do
   case "$file" in
   *.js | *.md) continue ;;
   esac
-  grep -qF '<script' "$file" 2>/dev/null || continue
+  [ -r "$file" ] || {
+    echo "FAIL: '$file' is not readable; cannot judge scope." >&2
+    exit 1
+  }
+  grep -qiF '<script' "$file" || continue
   scope_hits+=("$file")
 done < <(grep -lZE "$scope_call_re" "$views_root" -r 2>/dev/null || true)
 
@@ -132,15 +146,16 @@ fi
 # inside the call parens, or bracket/string member access (double, single,
 # or backtick quoted) -- must be caught here so stage 2 can judge it.
 # Verified against: `.clear ()`, `.clear( )`, `.clear\t()`, `["clear"]()`,
-# `['clear']()`, `` [`clear`]() ``, and the plain `.clear()` form. The
-# bracket alternative requires the full computed-call shape -- closing
-# quote, `]`, `(` -- so a mere property read or write like `obj["clearance"]`
+# `['clear']()`, `` [`clear`]() ``, `[ "clear" ]()`, `["clear"] ()`, and the
+# plain `.clear()` form. The bracket alternative requires the full
+# computed-call shape -- closing quote, `]`, `(` -- so a mere property read
+# or write like `obj["clearance"]`
 # or `css["clear"] = "both"` does not drag a non-call into stage 2.
 # Known-uncovered (see header): `.clear/**/()`, `.clear`/`()` split across
 # lines, an aliased/indirect call (`var m='clear'; x[m]()`), a concatenated
 # string (`["cle"+"ar"]()`), `.clear.apply(...)`/`.clear.call(...)`, a torn-off
 # method reference (`var f=api.clear; f()`), destructuring (`var {clear}=api`),
-# a unicode-escaped property (`clear` or `\u{63}lear`), or `[` newline
+# a unicode-escaped property (`\u0063lear` or `\u{63}lear`), or `[` newline
 # `"clear"]()`.
 discovery_re='\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"'\`]clear["'"'"'\`][[:space:]]*\][[:space:]]*\('
 
@@ -167,7 +182,8 @@ for file in "${files[@]}"; do
     echo "FAIL: '$file' contains a carriage return (CRLF line endings, a" >&2
     echo "      lone CR, or a literal CR in the source)." >&2
     echo "      this gate is exact about spelling and refuses to silently" >&2
-    echo "      normalise line endings -- convert the file to LF first." >&2
+    echo "      normalise line endings -- convert CRLF line endings to LF," >&2
+    echo "      or remove the literal carriage return from the source." >&2
     exit 1
   fi
 

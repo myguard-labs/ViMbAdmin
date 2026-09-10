@@ -760,6 +760,7 @@ function vmDataTableServerData( source, minimum )
 				// this shim is a bridge, and behaving differently from the
 				// engine it wraps would be the worse surprise.
 				var event = $.Event( 'xhr.dt' );
+				event.dt  = settings.api;
 
 				$( settings.nTable ).trigger(
 					event, [ settings, null, xhr ]

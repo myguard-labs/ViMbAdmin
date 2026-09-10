@@ -53,18 +53,6 @@
 #   asserting it would mean fabricating input no real deployment of this repo
 #   alone ever supplies.
 #
-# ALSO NOT ASSERTED HERE -- select (Chosen, public/js/300-chosen.jquery.js) and
-# lightbox (Colorbox, public/js/130-jquery.colorbox.js). Both libraries load on
-# every page (application/views/header-js.phtml); neither is ever invoked:
-#
-#   grep -rn '\.chosen(\|chzn' application public/js/*.js   (excl. 300-chosen)  -> zero
-#   grep -rn '\.colorbox('     application public/js/*.js   (excl. 130-jquery)  -> zero
-#
-# They are not "a control that doesn't exist" -- they are pure page-weight
-# shipped on every request with no caller. That finding is recorded in
-# memory/labs/vimbadmin/TODO.md (VIM-A15.38) rather than asserted here, since
-# there is no invocation to assert against.
-
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

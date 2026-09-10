@@ -72,16 +72,7 @@ return [
     // can tell "deliberately excluded" from "someone forgot to list it" and
     // fail loudly on the latter (see vimbadminResolveBundleInputs() in
     // bin/minify-bundle.php).
-    //
-    // Empty now: Chosen (300-chosen.jquery.js / 300-chosen.css) and Colorbox
-    // (130-jquery.colorbox.js / 130-colorbox.css) were the only entries this
-    // ever held, kept here after PR #180 made them dead in the application.
-    // VIM-A15.56 deleted both vendor files, their CSS, the Chosen sprite
-    // images and the Colorbox image directory from the repository instead of
-    // continuing to carry them unbundled. The keys stay declared -- empty --
-    // because bin/minify-bundle.php requires them, and because the same
-    // situation (an asset dropped from the application but kept on disk for a
-    // time) can recur.
+    // The lists stay declared empty because bin/minify-bundle.php requires them.
     'jsExcluded' => [
     ],
 

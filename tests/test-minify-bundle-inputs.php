@@ -1,18 +1,7 @@
 <?php
 
 /**
- * The bundle's input list is repo-owned, and the dead Chosen/Colorbox assets
- * it used to carry unbundled are gone from the tree entirely.
- *
- * bin/minify-options.php used to hand vendor/opensolutions/minify/minify.php a
- * glob, and the vendor script expanded it only after require_once()ing the
- * config, so nothing could keep a file on disk without shipping it. Chosen and
- * Colorbox were removed from the application in PR #180 but stayed on disk,
- * retained-but-unused, so every regeneration both re-shipped them and rewrote
- * the header .phtml files from the glob, reverting PR #180. VIM-A15.56 deleted
- * both vendor files, their CSS, the Chosen sprite images and the Colorbox
- * image directory outright, so bin/minify-bundle-files.php's jsExcluded /
- * cssExcluded lists are now empty.
+ * See bin/minify-bundle-files.php and vimbadminResolveBundleInputs() for the enumeration rationale.
  *
  * This test pins the replacement: bin/minify-bundle-files.php enumerates the
  * inputs, bin/minify-bundle.php resolves them, every live asset is present

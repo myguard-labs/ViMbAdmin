@@ -45,6 +45,9 @@
 #     data-bs-toggle), which only shows nobody had checked reachability, not
 #     that the feature was live. There was never a Bootstrap-migration
 #     regression to fix, so there is nothing left here to assert against.
+#   - ALSO NOT ASSERTED HERE -- select and lightbox controls. Chosen and
+#     Colorbox were the only implementations; both were deleted in PR #200, so
+#     there is no invocation to assert against.
 #
 #   The dropdown-menu ($action_list_menu/$alias_actions) case above is a
 #   different failure shape: gated behind a plugin variable core code never
@@ -52,18 +55,6 @@
 #   class-selector gates a control this repo's own code can never produce, so
 #   asserting it would mean fabricating input no real deployment of this repo
 #   alone ever supplies.
-#
-# ALSO NOT ASSERTED HERE -- select (Chosen, public/js/300-chosen.jquery.js) and
-# lightbox (Colorbox, public/js/130-jquery.colorbox.js). Both libraries load on
-# every page (application/views/header-js.phtml); neither is ever invoked:
-#
-#   grep -rn '\.chosen(\|chzn' application public/js/*.js   (excl. 300-chosen)  -> zero
-#   grep -rn '\.colorbox('     application public/js/*.js   (excl. 130-jquery)  -> zero
-#
-# They are not "a control that doesn't exist" -- they are pure page-weight
-# shipped on every request with no caller. That finding is recorded in
-# memory/labs/vimbadmin/TODO.md (VIM-A15.38) rather than asserted here, since
-# there is no invocation to assert against.
 
 set -euo pipefail
 

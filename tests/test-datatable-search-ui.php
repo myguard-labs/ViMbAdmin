@@ -21,7 +21,10 @@ $check('shared transport suppresses short nonempty server requests with feedback
         && str_contains($helper, 'iTotalDisplayRecords: 0,')
         && str_contains($helper, "'Enter at least ' + minimum")
         && str_contains($helper, "error === 'parsererror'")
-        && str_contains($helper, "xhr.readyState === 4"));
+        && str_contains($helper, "'Invalid JSON response'")
+        && str_contains($helper, "xhr.readyState === 4")
+        && str_contains($helper, "'Ajax error'")
+        && !str_contains($helper, 'error: function() { callback( emptyResult ); }'));
 $check('shared transport counts Unicode code points like the server',
     is_string($helper)
         && str_contains($helper, "replace( /[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]/g, '_' ).length"));
@@ -37,7 +40,9 @@ try {
 $check('production minified bundle exposes the shared transport',
     is_string($bundle)
         && str_contains($bundle, 'function vmDataTableServerData(')
-        && str_contains($bundle, "parsererror"));
+        && str_contains($bundle, 'Invalid JSON response')
+        && str_contains($bundle, 'Ajax error')
+        && !str_contains($bundle, 'error:function(){callback(emptyResult)}'));
 
 $lists = [
     'alias' => ['controller' => 'AliasController', 'resolver' => 'dataTableMinimumSearchLength()', 'fn' => 'vmAliasServerData'],

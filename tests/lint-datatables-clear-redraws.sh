@@ -109,14 +109,18 @@ fi
 # bracket computed call `["clear"](`/`['clear'](`/`` [`clear`]( ``), not a
 # bare word or a bare CSS selector, so prose like "the dataTable is nice", a
 # CSS class like `mydataTableWrapper`, or a CSS rule like
-# `.clear (min-width: 0)` does not false-positive the gate.
+# `.clear (min-width: 0)` does not false-positive the gate. The receiver
+# must abut its member dot on both sides (no space before or after the dot),
+# so English prose with an abbreviation -- `e.g. clear (temp)` -- is not read
+# as a call. Scope-assertion known-uncovered, consequently: a call written
+# `obj. clear()` or `obj .clear()` with space around the dot.
 #
 # Scope-assertion known-uncovered (distinct from discovery's known-uncovered
 # list above): a `<script` tag emitted by PHP/echo/string concatenation
 # rather than written literally in the source (e.g.
 # `<?php echo "<scr"."ipt>"; ?>`) is invisible to the literal-substring
 # prefilter below and is a known, accepted hole in this assertion.
-scope_call_re='vmDataTableApi[[:space:]]*\(|[]A-Za-z0-9_$)][[:space:]]*\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"'\`]clear["'"'"'\`][[:space:]]*\][[:space:]]*\('
+scope_call_re='vmDataTableApi[[:space:]]*\(|[]A-Za-z0-9_$)]\.clear[[:space:]]*\(|\[[[:space:]]*["'"'"'\`]clear["'"'"'\`][[:space:]]*\][[:space:]]*\('
 scope_hits=()
 while IFS= read -r -d '' file; do
   case "$file" in
@@ -132,7 +136,8 @@ done < <(grep -lZE "$scope_call_re" "$views_root" -r 2>/dev/null || true)
 
 if [ "${#scope_hits[@]}" -gt 0 ]; then
   echo "FAIL: non-.js file(s) under '$views_root' now contain a" >&2
-  echo "      vmDataTableApi(...)/.clear(...) call shape inside a <script>" >&2
+  echo "      vmDataTableApi(...)/.clear(...)/[\"clear\"](...) call shape" >&2
+  echo "      inside a <script>" >&2
   echo "      block -- this gate's scope assumption (call sites live only" >&2
   echo "      in *.js) has stopped holding. Discovery must be extended to" >&2
   echo "      cover these files' inline <script> blocks before this gate" >&2
@@ -150,7 +155,10 @@ fi
 # plain `.clear()` form. The bracket alternative requires the full
 # computed-call shape -- closing quote, `]`, `(` -- so a mere property read
 # or write like `obj["clearance"]`
-# or `css["clear"] = "both"` does not drag a non-call into stage 2.
+# or `css["clear"] = "both"` does not drag a non-call into stage 2. The one
+# exception, in both stages: a property read whose very next token is `(`
+# -- `T["clear"] ( "en" )` -- is indistinguishable from a call by regex and
+# is deliberately treated as one.
 # Known-uncovered (see header): `.clear/**/()`, `.clear`/`()` split across
 # lines, an aliased/indirect call (`var m='clear'; x[m]()`), a concatenated
 # string (`["cle"+"ar"]()`), `.clear.apply(...)`/`.clear.call(...)`, a torn-off

@@ -109,11 +109,7 @@ $(function () {
         // Park the probe table in its own container so its cells cannot be
         // picked up by the document-wide `#log-fixture td` / `svg` / `[onload]`
         // sweeps below.
-        // The probe gets its own id: the third argument of
-        // vmDataTableServerData() is the selector the "enter at least N
-        // characters" hint is written into, and pointing that at #list_table
-        // would aim the probe at the log fixture whose escaping this file
-        // asserts on.
+        // The probe still gets its own id so repeated draws cannot collide.
         const probeId = 'serverside-probe-table-' + (++probeCounter);
         const $host = $('<div class="serverside-probe" style="display:none"></div>');
         const $table = $('<table id="' + probeId + '"><thead><tr><th>Col</th></tr></thead><tbody></tbody></table>');
@@ -124,7 +120,7 @@ $(function () {
             paging: false,
             searching: false,
             info: false,
-            ajax: vmDataTableServerData(source, 3, '#' + probeId),
+            ajax: vmDataTableServerData(source, 3),
             drawCallback: function () { if (onData) onData(this.api()); }
         });
         return { api: api, $table: $table };

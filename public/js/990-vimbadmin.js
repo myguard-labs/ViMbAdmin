@@ -600,13 +600,20 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
 
 	table.trigger( e, [ settings, technicalNote, message ] );
 
-	// Mirror _fnCallbackFire's own bubble fallback: if the table is not
-	// yet attached to the document, the trigger above never reaches
-	// `body`, so re-fire there to simulate the bubble. Unlike the core we
-	// dispatch a fresh event: a jQuery.Event carries isPropagationStopped()
-	// as instance state, so re-triggering the same object is a silent no-op
-	// once any handler on the detached table has stopped propagation -- and
-	// that is exactly the case this fallback exists to serve.
+	// Stand in for _fnCallbackFire's bubble fallback: if the table is not
+	// yet attached to the document, the trigger above never reaches `body`,
+	// so re-fire there to simulate the bubble. Two deliberate differences
+	// from the core:
+	//
+	//   - we dispatch a FRESH event, because a jQuery.Event carries
+	//     isPropagationStopped() as instance state, so re-triggering the
+	//     same object is a silent no-op once any handler on the detached
+	//     table has stopped propagation -- exactly the case this fallback
+	//     exists to serve;
+	//   - we skip the fallback entirely when propagation was stopped. The
+	//     core re-fires unconditionally, which still reaches handlers bound
+	//     directly on `body`; we treat a stopped propagation as stopped,
+	//     which is what an attached table would have done.
 	if ( table.parents( 'body' ).length === 0 && ! e.isPropagationStopped() ) {
 		var bubbled = $.Event( 'dt-error.dt' );
 		bubbled.dt = settings.api;
@@ -642,12 +649,12 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
  * (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
  * offers no way to cancel.
  *
- * @param {string} source        list-data URL.
- * @param {number} minimum       minimum search string length.
  * `settings.oLanguage` is required: the core always supplies it (it is deep
  * copied per table at 150-jquery.datatables.js:174), so a caller that builds a
  * settings object by hand has to provide one too.
  *
+ * @param {string} source  list-data URL.
+ * @param {number} minimum minimum search string length.
  * @return {function} A DataTables 2.x `ajax` option.
  */
 function vmDataTableServerData( source, minimum )
@@ -702,8 +709,7 @@ function vmDataTableServerData( source, minimum )
 			// synchronously, so the hint has already been painted by the
 			// time this returns and the borrowed keys can go straight
 			// back. Restoring here rather than on the next call is what
-			// keeps the mutation from outliving the draw it was for --
-			// nothing calls this transport again after a teardown.
+			// keeps the mutation from outliving the draw it was for.
 			oLanguage.sZeroRecords = originalZeroRecords;
 			oLanguage.sEmptyTable  = originalEmptyTable;
 
@@ -719,11 +725,21 @@ function vmDataTableServerData( source, minimum )
 			success:  callback,
 			error:    function( xhr, error ) {
 				// Mirrors the core's own baseAjax error handler: let an
-				// `xhr` listener claim the failure first, and otherwise
-				// log it, then always clear the processing indicator.
-				// The core treats a handler returning true as "claimed";
-				// jQuery reports only the LAST handler's return value, so
-				// collect them through the event object instead.
+				// `xhr` listener claim the failure first, and otherwise log
+				// it, then always clear the processing indicator.
+				//
+				// The core suppresses when any entry of `ret` is true
+				// (150-jquery.datatables.js:4230). For EVENT listeners that
+				// array holds exactly one entry, `e.result`
+				// (_fnCallbackFire, 150-jquery.datatables.js:6705), which is
+				// jQuery's last-non-undefined handler return -- so a later
+				// listener returning false un-claims what an earlier one
+				// claimed, in the core exactly as here. The core's remaining
+				// entries come from `settings.aoXhrCallbacks`, a registry
+				// 2.x no longer exposes (`_ext.internal` is gone), so
+				// `vmHandled` is the replacement claim channel: a listener
+				// that sets it wins regardless of what any later listener
+				// returns.
 				var event = $.Event( 'xhr.dt' );
 				event.vmHandled = false;
 

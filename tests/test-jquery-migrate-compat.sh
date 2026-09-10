@@ -226,7 +226,7 @@ $(function() {
     // would answer with the full unfiltered page while the hint claimed more
     // characters were needed.
     check('a search shorter than the minimum never reaches the server', function() {
-        var ajax = vmDataTableServerData('/unused/source', 3, '#list_table');
+        var ajax = vmDataTableServerData('/unused/source', 3);
         if (typeof ajax !== 'function') return false;
 
         var requested = false;
@@ -303,9 +303,11 @@ $(function() {
         if (atPaint.zero  !== 'Enter at least 3 characters to search.') return false;
         if (atPaint.empty !== 'Enter at least 3 characters to search.') return false;
 
-        // ...and a second consecutive decline must capture the ORIGINALS,
-        // not the hint it just installed. Without the restore-before-return
-        // this is where the hint would become permanent.
+        // ...and the capture must read LIVE state on each call, not a value
+        // memoised from the first decline. Rotate sEmptyTable to a sentinel
+        // between declines: the second decline has to restore the sentinel,
+        // which only holds if it captured at call time.
+        settings.oLanguage.sEmptyTable = 'Rotated sentinel.';
         $.ajax = function() { requested = true; return { abort: function() {} }; };
         try {
             ajax({
@@ -320,7 +322,9 @@ $(function() {
         }
 
         if (settings.oLanguage.sZeroRecords !== originalZeroRecords) return false;
-        if (settings.oLanguage.sEmptyTable  !== originalEmptyTable) return false;
+        if (settings.oLanguage.sEmptyTable  !== 'Rotated sentinel.') return false;
+
+        settings.oLanguage.sEmptyTable = originalEmptyTable;
 
         // A following successful (long-enough) search must leave both keys
         // as the view configured them, and must actually hit the network.

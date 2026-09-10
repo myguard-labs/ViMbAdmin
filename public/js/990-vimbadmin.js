@@ -528,7 +528,9 @@ function randPasword( len, id )
  *       `json.aaData || json.data`, and _fnAjaxDataSrcParam maps sEcho ->
  *       draw, iTotalRecords -> recordsTotal, iTotalDisplayRecords ->
  *       recordsFiltered. The legacy response body is consumed natively, so
- *       adding our own mapper would be dead code.
+ *       adding our own mapper would be dead code -- and only while no
+ *       `ajax.dataSrc` is configured; setting one disables the `aaData`
+ *       fallback.
  *
  *   request (client -> server)   handled here, by vmDataTableLegacyRequest.
  *       2.x emits ONLY the modern parameter names (_fnAjaxParameters); it has
@@ -563,7 +565,6 @@ function vmDataTableLegacyRequest( data )
         };
 
         if ( order ) {
-                legacy.iSortingCols = 1;
                 legacy.iSortCol_0   = order.column;
                 legacy.sSortDir_0   = order.dir;
         }
@@ -572,35 +573,17 @@ function vmDataTableLegacyRequest( data )
 }
 
 /**
- * Build the shared `ajax` option for a server-side list table.
- *
- * Replaces the 1.9 `sAjaxSource` + `fnServerData` pair, which DataTables 2.x
- * removed outright (zero occurrences in 2.3.4). Returned as an OBJECT rather
- * than a function so DataTables keeps its own request lifecycle -- including
- * its error handling, `xhr` event and processing-indicator teardown, which in
- * 1.x this project had to reimplement by reaching into the `_ext.internal`
- * export table (`$.fn.dataTableExt.oApi._fnCallbackFire` / `_fnLog` /
- * `_fnProcessingDisplay`). That table no longer exists in 2.x; letting the
- * core own the request is what replaces it.
- *
- * The minimum-search-length rule is enforced in `data`: a search shorter than
- * the configured minimum is still sent, but as an empty search, so the server
- * answers with the unfiltered page instead of scanning on one character.
- *
- * @param {string} source        list-data URL.
- * @param {number} minimum       minimum search string length.
- * @param {string} tableSelector table selector, for the "type more" hint.
- * @return {object} A DataTables 2.x `ajax` option.
- */
-/**
  * Report an Ajax failure the way DataTables' own _fnLog() would.
  *
  * 2.x exposes no internals at all -- `$.fn.dataTableExt.oApi` carried
  * _fnLog/_fnCallbackFire/_fnProcessingDisplay under 1.x, and `ext.internal` is
  * gone -- so a caller that runs its own transport has to reproduce the public
- * half of that reporting itself: fire the `dt-error` event and honour
- * `ext.errMode`, with the same technical-note numbers the core uses (1 for a
- * malformed JSON body, 7 for a transport failure).
+ * half of that reporting itself: build a real event carrying `e.dt` (the way
+ * `_fnCallbackFire` does) and trigger the `.dt`-namespaced `dt-error` event,
+ * honour `ext.errMode`, and use the same technical-note numbers the core uses
+ * (1 for a malformed JSON body, 7 for a transport failure). A falsy/unhandled
+ * mode reports nothing further, matching `_fnLog`'s own silence outside
+ * alert/throw/function -- so `errMode: 'none'` stays silent here too.
  */
 function vmDataTableLogAjaxError( api, technicalNote, message )
 {
@@ -608,9 +591,13 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
 	var ext      = $.fn.dataTable.ext;
 	var mode     = ext.sErrMode || ext.errMode;
 	var full     = 'DataTables warning: table id=' + settings.sTableId
-		+ ' - ' + message + ' - ' + 'https://datatables.net/tn/' + technicalNote;
+		+ ' - ' + message + '. For more information about this error, please see '
+		+ 'https://datatables.net/tn/' + technicalNote;
 
-	$( settings.nTable ).trigger( 'dt-error', [ settings, technicalNote, message ] );
+	var e = $.Event( 'dt-error.dt' );
+	e.dt = api;
+
+	$( settings.nTable ).trigger( e, [ settings, technicalNote, message ] );
 
 	if ( typeof mode === 'function' ) {
 		mode( settings, technicalNote, full );
@@ -621,26 +608,46 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
 	else if ( mode === 'alert' ) {
 		alert( full );
 	}
-	else if ( window.console && console.log ) {
-		console.log( full );
-	}
 }
 
+/**
+ * Build the shared `ajax` option for a server-side list table.
+ *
+ * Replaces the 1.9 `sAjaxSource` + `fnServerData` pair, which DataTables 2.x
+ * removed outright (zero occurrences in 2.3.4).
+ *
+ * Returns the FUNCTION form of `ajax`, not the object form, because this
+ * helper has to be able to DECLINE a request: a search shorter than `minimum`
+ * must resolve to an empty result set without touching the server. An
+ * `ajax: { data: ... }` callback can only rewrite parameters, so blanking the
+ * search term there would still issue the XHR and the server would answer
+ * with the full unfiltered page -- the opposite of the intent, and with no
+ * empty row for the hint below to be written into. 2.3.4's `preXhr` cannot
+ * stand in for this either: its handlers' return value is discarded
+ * (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
+ * offers no way to cancel.
+ *
+ * The minimum-search-length rule is enforced in `data`: a search shorter than
+ * the configured minimum is still sent, but as an empty search, so the server
+ * answers with the unfiltered page instead of scanning on one character.
+ *
+ * @param {string} source        list-data URL.
+ * @param {number} minimum       minimum search string length.
+ * @param {string} tableSelector table selector, for the "type more" hint.
+ * @return {object} A DataTables 2.x `ajax` option.
+ */
 function vmDataTableServerData( source, minimum, tableSelector )
 {
-	// The FUNCTION form of `ajax`, not the object form, because this helper has
-	// to be able to DECLINE a request: a search shorter than `minimum` must
-	// resolve to an empty result set without touching the server. An
-	// `ajax: { data: ... }` callback can only rewrite parameters, so blanking
-	// the search term there would still issue the XHR and the server would
-	// answer with the full unfiltered page -- the opposite of the intent, and
-	// with no empty row for the hint below to be written into. 2.3.4's `preXhr`
-	// cannot stand in for this either: its handlers' return value is discarded
-	// (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
-	// offers no way to cancel.
+	// Captured once, the first time we need to restore it, so the restore is
+	// faithful to whatever this table's view configured (e.g. list.js's
+	// `language.emptyTable`) rather than a hard-coded guess.
+	var originalZeroRecords;
+	var haveOriginalZeroRecords = false;
+
 	return function( data, callback, settings )
 	{
 		var api = new $.fn.dataTable.Api( settings );
+		var oLanguage = settings.oLanguage || {};
 
 		var search = ( data.search && data.search.value )
 			? String( data.search.value ).trim()
@@ -652,6 +659,18 @@ function vmDataTableServerData( source, minimum, tableSelector )
 			.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
 
 		if ( searchLength > 0 && searchLength < minimum ) {
+			if ( ! haveOriginalZeroRecords ) {
+				originalZeroRecords = oLanguage.sZeroRecords;
+				haveOriginalZeroRecords = true;
+			}
+
+			// Set the zero-records text BEFORE calling back, so the
+			// "type more" hint renders in the first paint instead of
+			// flashing the view's configured `emptyTable`/`zeroRecords`
+			// text (e.g. "No log entries.") first.
+			oLanguage.sZeroRecords = 'Enter at least ' + minimum
+				+ ' characters to search.';
+
 			// Answer in the LEGACY response shape the rest of this
 			// bridge deals in; 2.x maps it natively (see the header).
 			callback( {
@@ -661,15 +680,11 @@ function vmDataTableServerData( source, minimum, tableSelector )
 				aaData:               []
 			} );
 
-			setTimeout( function() {
-				// 2.x renamed the empty-row class from
-				// `dataTables_empty` to `dt-empty`.
-				$( tableSelector + ' tbody td.dt-empty' )
-					.text( 'Enter at least ' + minimum
-						+ ' characters to search.' );
-			}, 0 );
-
 			return;
+		}
+
+		if ( haveOriginalZeroRecords ) {
+			oLanguage.sZeroRecords = originalZeroRecords;
 		}
 
 		return $.ajax( {
@@ -755,13 +770,29 @@ function vmDataTableApi( table )
  * hard-coded as `iListLength`.
  *
  * So the custom plugin is not ported -- it is replaced by the stock 2.x pager
- * plus the vendored Bootstrap 5 renderer, which is the same visual result with
- * none of the private-API coupling. `fnPagingInfo` has no 2.x counterpart and
- * is not reintroduced; the public `page.info()` API supersedes it and nothing
- * in this project called it outside the deleted plugin.
+ * plus the vendored Bootstrap 5 renderer, none of which needs the old
+ * private-API coupling. It is not, however, the same visual result: the old
+ * plugin emitted literal `&larr; Previous` / `Next &rarr;` arrows and always
+ * rendered exactly `iListLength` numbers with no ellipsis. 2.x's
+ * `simple_numbers` pager emits plain Previous/Next text and inserts
+ * `ellipsis` spans once the page count exceeds the number window -- that
+ * ellipsis behaviour is new in 2.x, not a port of anything the old plugin
+ * did. The arrows are restored below via `language.paginate.previous`/`next`.
+ * `fnPagingInfo` has no 2.x counterpart and is not reintroduced; the public
+ * `page.info()` API supersedes it and nothing in this project called it
+ * outside the deleted plugin.
  */
 $.extend( $.fn.dataTable.defaults, {
 	pagingType: 'simple_numbers',
+
+	// Restore the old plugin's literal arrows; 2.x's stock default is plain
+	// "Previous" / "Next" text.
+	language: {
+		paginate: {
+			previous: '&larr; Previous',
+			next:     'Next &rarr;'
+		}
+	},
 
 	// The legacy request bridge forwards ONE sort column, because the PHP side
 	// reads only `iSortCol_0` / `sSortDir_0` -- there is no `iSortingCols` loop

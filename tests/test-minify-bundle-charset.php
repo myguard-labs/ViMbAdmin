@@ -81,7 +81,10 @@ if (is_string($bundle)) {
         !str_contains($bundle, 'J?rn') && !str_contains($bundle, '?2008-2024')
     );
 } else {
-    $failures++;
+    // The readability check above has already counted this as a failure; do not
+    // count it twice. Say plainly that the six byte assertions never ran, so a
+    // missing bundle cannot be mistaken for a passing charset check.
+    echo "  ---- bundle unreadable; the six byte-level assertions did not run\n";
 }
 
 echo $failures === 0 ? "\nALL PASSED\n" : "\n{$failures} FAILED\n";

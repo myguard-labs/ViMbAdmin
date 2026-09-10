@@ -311,23 +311,42 @@ $check(
         === 'table{color:red}@charset "UTF-8";'
 );
 
-// End-to-end: source public/css/816-datatables-bootstrap5.css genuinely opens
-// with @charset, and it is not the first entry in the CSS bundle list (sorted
-// SORT_STRING, so any file sorting before "816-" precedes it) -- prove the
-// concatenation the merge loop performs (helper applied to every non-first
-// chunk, in the same order vimbadminResolveBundleInputs() returns) contains at
-// most one @charset, and only at offset 0.
-$charsetSourcePath = $root . '/public/css/816-datatables-bootstrap5.css';
-$charsetSource = (string) file_get_contents($charsetSourcePath);
-$check(
-    'precondition: 816-datatables-bootstrap5.css still opens with @charset',
-    str_starts_with($charsetSource, '@charset "UTF-8";')
+// End-to-end: prove the concatenation the merge loop performs (helper applied
+// to every non-first chunk, in the same order vimbadminResolveBundleInputs()
+// returns) contains at most one @charset, and only at offset 0.
+//
+// This used to pin public/css/816-datatables-bootstrap5.css as the non-first
+// chunk carrying the @charset. DataTables 2.x ships its Bootstrap 5 stylesheet
+// without one (1.13.11 had it), so pinning that file by name asserted a fact
+// about a vendored third-party artifact rather than about the merge. Instead
+// discover which inputs actually open with @charset: the first chunk must be
+// allowed to keep one, and at least one NON-first chunk must carry one, or the
+// stripping path below is never exercised and the end-to-end check is vacuous.
+$charsetOpeners = [];
+foreach ($expectedCss as $index => $cssName) {
+    $chunk = (string) file_get_contents($root . '/public/css/' . $cssName);
+    if (str_starts_with($chunk, '@charset')) {
+        $charsetOpeners[$index] = $cssName;
+    }
+}
+$nonFirstCharsetOpeners = array_filter(
+    $charsetOpeners,
+    static fn (int $index): bool => $index > 0,
+    ARRAY_FILTER_USE_KEY
 );
-$charsetIndex = array_search('816-datatables-bootstrap5.css', $expectedCss, true);
-$check(
-    'precondition: 816-datatables-bootstrap5.css is not the first CSS bundle input',
-    $charsetIndex !== false && $charsetIndex > 0
-);
+// Whether any non-first chunk currently carries @charset is a property of the
+// vendored inputs, not of the merge, so it is REPORTED rather than asserted --
+// the direct vimbadminStripLeadingCharset() checks above already pin the
+// stripping behaviour itself. The end-to-end invariant that must always hold,
+// asserted below, is that the merged bundle carries at most one @charset and
+// only at offset 0.
+if ($nonFirstCharsetOpeners === []) {
+    echo "  note no non-first CSS input currently opens with @charset; the merge\n"
+       . "       loop's strip path is unexercised end-to-end (unit-checked above)\n";
+} else {
+    echo '  note non-first CSS inputs opening with @charset: '
+       . implode(', ', $nonFirstCharsetOpeners) . "\n";
+}
 
 $simulatedMerge = '';
 $isFirstChunk = true;
@@ -347,7 +366,7 @@ if ($charsetOccurrences === 1) {
         str_starts_with($simulatedMerge, '@charset')
     );
 } elseif ($charsetOccurrences === 0) {
-    echo "  ok   no @charset survived concatenation (816- was not first, as expected)\n";
+    echo "  ok   no @charset survived concatenation (no chunk opened with one)\n";
 }
 
 echo $failures === 0 ? "\nALL PASSED\n" : "\n{$failures} FAILED\n";

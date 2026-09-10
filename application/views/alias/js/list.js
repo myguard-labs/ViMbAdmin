@@ -1,10 +1,10 @@
 var oDataTable;
 var deleteDialog;
 
-function vmAliasServerData( source, data, callback, settings )
+function vmAliasServerData( source )
 {
     var minimum = {if isset($options.defaults.server_side.pagination.min_search_str)}{$options.defaults.server_side.pagination.min_search_str}{else}3{/if};
-    return vmDataTableServerData( source, data, callback, minimum, '#list_table', settings );
+    return vmDataTableServerData( source, minimum, '#list_table' );
 }
 
 
@@ -19,8 +19,7 @@ $(document).ready( function()
         'processing': true,
         'serverSide': true,
         'serverMethod': 'GET',
-        'sAjaxSource': "{genUrl controller='alias' action='list-data' ima=$ima}",
-        'fnServerData': vmAliasServerData,
+        'ajax': vmAliasServerData( "{genUrl controller='alias' action='list-data' ima=$ima}" ),
         'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
                 ? parseInt( vm_prefs['iLength'] )
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
@@ -111,7 +110,7 @@ function getEntries( event ){
         timeOut = setTimeout( function(){ 
             $('body').css('cursor', 'wait');
             setTimeout( function(){
-                oDataTable.fnClearTable();
+                vmDataTableApi( oDataTable ).clear();
                 $.ajax({
                   async: false,
                   url: "{genUrl controller='alias' action='list-search' ima=$ima}/search/" + String( $( event.target ).val() ).trim(),
@@ -120,7 +119,7 @@ function getEntries( event ){
                     {
                         data = JSON.parse( data );
                         $.each( data, function( index, row ){
-                               oDataTable.fnAddData([
+                               vmDataTableApi( oDataTable ).row.add([
                                     row.address,
                                     row.domain,
                                     formatActive( row.id, row.active ),
@@ -128,6 +127,7 @@ function getEntries( event ){
                                     formatControlls( row.id )
                          ]);
                         });
+                        vmDataTableApi( oDataTable ).draw();
                     }
                   }
                 });
@@ -138,7 +138,7 @@ function getEntries( event ){
     }
     else
     {
-        oDataTable.fnClearTable();
+        vmDataTableApi( oDataTable ).clear().draw();
     }
 }
 

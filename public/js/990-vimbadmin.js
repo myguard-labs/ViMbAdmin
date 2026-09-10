@@ -499,143 +499,188 @@ function randPasword( len, id )
 //****************************************************************************
 
 
-/* Default class modification */
-function vmDataTableServerData( source, data, callback, minimum, tableSelector, settings )
-{
-        var search = '', echo = 1;
-        $.each( data, function( _, parameter ) {
-                if( parameter.name === 'sSearch' ) search = String( parameter.value || '' ).trim();
-                if( parameter.name === 'sEcho' ) echo = parseInt( parameter.value, 10 ) || 1;
-        } );
+/* ---------------------------------------------------------------------------
+ * TEMPORARY legacy wire-protocol shim  --  remove in VIM-A15.56a2
+ * ---------------------------------------------------------------------------
+ * DataTables 2.x speaks the modern server-side protocol:
+ *
+ *     request   draw / start / length / search[value]
+ *               / order[0][column] / order[0][dir]
+ *     response  draw / recordsTotal / recordsFiltered / data
+ *
+ * The PHP side of this application still speaks the DataTables 1.9 protocol:
+ * src/Kernel/DataTable/DataTableResult.php emits sEcho / iTotalRecords /
+ * iTotalDisplayRecords / aaData, and src/Kernel/DataTable/DataTableQuery.php
+ * plus the Domain/Mailbox/Archive controllers parse sEcho / iDisplayStart /
+ * iDisplayLength / sSearch / iSortCol_0 / sSortDir_0.
+ *
+ * VIM-A15.56a1 (this change) migrates the CLIENT ONLY. The two ends therefore
+ * disagree on purpose, and this shim is the deliberate bridge between them so
+ * a 2.x client can keep talking to the unchanged 1.9 server. It is a planned
+ * two-step, not an accident: VIM-A15.56a2 retires the legacy protocol in PHP,
+ * and when it lands this block is deleted and every list table collapses to a
+ * plain `ajax: { url: ..., data: ... }` with no translation at all.
+ *
+ * The bridge is ASYMMETRIC, and only one half is ours:
+ *
+ *   response (server -> client)  NOT handled here. DataTables 2.3.4 still
+ *       carries its own legacy fallbacks -- _fnAjaxDataSrc reads
+ *       `json.aaData || json.data`, and _fnAjaxDataSrcParam maps sEcho ->
+ *       draw, iTotalRecords -> recordsTotal, iTotalDisplayRecords ->
+ *       recordsFiltered. The legacy response body is consumed natively, so
+ *       adding our own mapper would be dead code.
+ *
+ *   request (client -> server)   handled here, by vmDataTableLegacyRequest.
+ *       2.x emits ONLY the modern parameter names (_fnAjaxParameters); it has
+ *       no legacy request mode, and the PHP side reads no modern name. This
+ *       translation is the one thing keeping the tables working.
+ *
+ * Do not build new behaviour on any of this.
+ * ------------------------------------------------------------------------- */
 
-        var searchLength = search.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
-        var emptyResult = { sEcho: echo, iTotalRecords: 0, iTotalDisplayRecords: 0, aaData: [] };
-        if( searchLength > 0 && searchLength < minimum ) {
-                callback( emptyResult );
-                setTimeout( function() {
-                        $( tableSelector + ' tbody td.dataTables_empty' )
-                                .text( 'Enter at least ' + minimum + ' characters to search.' );
-                }, 0 );
-                return;
+/**
+ * Translate a DataTables 2.x request-parameter object into the legacy 1.9
+ * scalar keys the PHP side still parses.
+ *
+ * Only the parameters this application's server actually reads are mapped.
+ * 2.x also sends a full per-column block (`columns[i][...]`) that the legacy
+ * PHP ignores entirely, so it is dropped rather than forwarded.
+ *
+ * @param {object} data 2.x request parameters.
+ * @return {object} Legacy 1.9 request parameters.
+ */
+function vmDataTableLegacyRequest( data )
+{
+        var order = ( data.order && data.order.length ) ? data.order[0] : null;
+
+        // 2.x `draw` is the 1.9 `sEcho` draw counter: echoed back unchanged by
+        // the server so DataTables can discard out-of-order responses.
+        var legacy = {
+                sEcho:          data.draw,
+                iDisplayStart:  data.start,
+                iDisplayLength: data.length,
+                sSearch:        ( data.search && data.search.value ) ? data.search.value : ''
+        };
+
+        if ( order ) {
+                legacy.iSortingCols = 1;
+                legacy.iSortCol_0   = order.column;
+                legacy.sSortDir_0   = order.dir;
         }
 
-        return $.ajax( {
-                url: source,
-                data: data,
-                dataType: 'json',
-                success: callback,
-                error: function( xhr, error ) {
-                        var api = $.fn.dataTableExt.oApi;
-                        var handled = api._fnCallbackFire(
-                                settings, null, 'xhr', [settings, null, xhr]
-                        );
-                        if( $.inArray( true, handled ) === -1 ) {
-                                api._fnLog(
-                                        settings,
-                                        0,
-                                        error === 'parsererror' ? 'Invalid JSON response' : 'Ajax error',
-                                        error === 'parsererror' ? 1 : 7
-                                );
-                        }
-                        api._fnProcessingDisplay( settings, false );
-                }
-        } );
+        return legacy;
 }
 
-$.extend( $.fn.dataTableExt.oStdClasses, {
-        "sWrapper": "dataTables_wrapper form-inline"
-} );
-
-/* API method to get paging information */
-$.fn.dataTableExt.oApi.fnPagingInfo = function ( oSettings )
+/**
+ * Build the shared `ajax` option for a server-side list table.
+ *
+ * Replaces the 1.9 `sAjaxSource` + `fnServerData` pair, which DataTables 2.x
+ * removed outright (zero occurrences in 2.3.4). Returned as an OBJECT rather
+ * than a function so DataTables keeps its own request lifecycle -- including
+ * its error handling, `xhr` event and processing-indicator teardown, which in
+ * 1.x this project had to reimplement by reaching into the `_ext.internal`
+ * export table (`$.fn.dataTableExt.oApi._fnCallbackFire` / `_fnLog` /
+ * `_fnProcessingDisplay`). That table no longer exists in 2.x; letting the
+ * core own the request is what replaces it.
+ *
+ * The minimum-search-length rule is enforced in `data`: a search shorter than
+ * the configured minimum is still sent, but as an empty search, so the server
+ * answers with the unfiltered page instead of scanning on one character.
+ *
+ * @param {string} source        list-data URL.
+ * @param {number} minimum       minimum search string length.
+ * @param {string} tableSelector table selector, for the "type more" hint.
+ * @return {object} A DataTables 2.x `ajax` option.
+ */
+function vmDataTableServerData( source, minimum, tableSelector )
 {
         return {
-                "iStart":         oSettings._iDisplayStart,
-                "iEnd":           oSettings.fnDisplayEnd(),
-                "iLength":        oSettings._iDisplayLength,
-                "iTotal":         oSettings.fnRecordsTotal(),
-                "iFilteredTotal": oSettings.fnRecordsDisplay(),
-                "iPage":          Math.ceil( oSettings._iDisplayStart / oSettings._iDisplayLength ),
-                "iTotalPages":    Math.ceil( oSettings.fnRecordsDisplay() / oSettings._iDisplayLength )
+                url: source,
+                dataType: 'json',
+                data: function( data ) {
+                        var search = ( data.search && data.search.value )
+                                ? String( data.search.value ).trim()
+                                : '';
+
+                        // Count a surrogate pair as one character, so an astral
+                        // character is not mistaken for a long enough search.
+                        var searchLength = search
+                                .replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
+
+                        var legacy = vmDataTableLegacyRequest( data );
+
+                        if ( searchLength > 0 && searchLength < minimum ) {
+                                legacy.sSearch = '';
+                                setTimeout( function() {
+                                        // 2.x renamed the empty-row class from
+                                        // `dataTables_empty` to `dt-empty`.
+                                        $( tableSelector + ' tbody td.dt-empty' )
+                                                .text( 'Enter at least ' + minimum
+                                                        + ' characters to search.' );
+                                }, 0 );
+                        }
+
+                        return legacy;
+                }
         };
 }
 
-/* Bootstrap style pagination control */
-$.extend( $.fn.dataTableExt.oPagination, {
-        "bootstrap": {
-                "fnInit": function( oSettings, nPaging, fnDraw ) {
-                        var oLang = oSettings.oLanguage.oPaginate;
-                        var fnClickHandler = function ( e ) {
-                                e.preventDefault();
-                                if ( oSettings.oApi._fnPageChange(oSettings, e.data.action) ) {
-                                        fnDraw( oSettings );
-                                }
-                        };
+/* ------------------------------------------------------------------------- */
 
-                        $(nPaging).addClass('pagination').append(
-                                '<ul>'+
-                                        '<li class="prev disabled"><a href="#">&larr; '+oLang.sPrevious+'</a></li>'+
-                                        '<li class="next disabled"><a href="#">'+oLang.sNext+' &rarr; </a></li>'+
-                                '</ul>'
-                        );
-                        var els = $('a', nPaging);
-                        $(els[0]).on( 'click.DT', { action: "previous" }, fnClickHandler );
-                        $(els[1]).on( 'click.DT', { action: "next" }, fnClickHandler );
-                },
+/**
+ * Get the DataTables 2.x API instance for a table.
+ *
+ * DataTables 1.x returned an object carrying the legacy `fn*` methods
+ * (`fnClearTable`, `fnAddData`, ...) directly from `$( sel ).dataTable()`. 2.x
+ * removed that method set -- only the private `_fnClearTable`/`_fnAddData`
+ * internals remain -- so those calls have to go through the modern API
+ * (`clear()`, `row.add()`, `draw()`) instead.
+ *
+ * `$.fn.dataTable.Api` accepts the table node, selector or an existing
+ * instance, so this works whether it is handed the object returned by
+ * `.dataTable()` or a plain selector.
+ *
+ * @param {*} table Table node, selector, or DataTables instance.
+ * @return {object} A DataTables 2.x API instance.
+ */
+function vmDataTableApi( table )
+{
+        return new $.fn.dataTable.Api( table );
+}
 
-                "fnUpdate": function ( oSettings, fnDraw ) {
-                        var iListLength = 5;
-                        var oPaging = oSettings.oInstance.fnPagingInfo();
-                        var an = oSettings.aanFeatures.p;
-                        var i, j, sClass, iStart, iEnd, iHalf=Math.floor(iListLength/2);
-
-                        if ( oPaging.iTotalPages < iListLength) {
-                                iStart = 1;
-                                iEnd = oPaging.iTotalPages;
-                        }
-                        else if ( oPaging.iPage <= iHalf ) {
-                                iStart = 1;
-                                iEnd = iListLength;
-                        } else if ( oPaging.iPage >= (oPaging.iTotalPages-iHalf) ) {
-                                iStart = oPaging.iTotalPages - iListLength + 1;
-                                iEnd = oPaging.iTotalPages;
-                        } else {
-                                iStart = oPaging.iPage - iHalf + 1;
-                                iEnd = iStart + iListLength - 1;
-                        }
-
-                        for ( i=0, iLen=an.length ; i<iLen ; i++ ) {
-                                // Remove the middle elements
-                                $('li:gt(0)', an[i]).filter(':not(:last)').remove();
-
-                                // Add the new list items and their event handlers
-                                for ( j=iStart ; j<=iEnd ; j++ ) {
-                                        sClass = (j==oPaging.iPage+1) ? 'class="active"' : '';
-                                        $('<li '+sClass+'><a href="#">'+j+'</a></li>')
-                                                .insertBefore( $('li:last', an[i])[0] )
-                                                .on('click', function (e) {
-                                                        e.preventDefault();
-                                                        oSettings._iDisplayStart = (parseInt($('a', this).text(),10)-1) * oPaging.iLength;
-                                                        fnDraw( oSettings );
-                                                } );
-                                }
-
-                                // Add / remove disabled classes from the static elements
-                                if ( oPaging.iPage === 0 ) {
-                                        $('li:first', an[i]).addClass('disabled');
-                                } else {
-                                        $('li:first', an[i]).removeClass('disabled');
-                                }
-
-                                if ( oPaging.iPage === oPaging.iTotalPages-1 || oPaging.iTotalPages === 0 ) {
-                                        $('li:last', an[i]).addClass('disabled');
-                                } else {
-                                        $('li:last', an[i]).removeClass('disabled');
-                                }
-                        }
-                }
-        }
+/* Bootstrap 5 pagination.
+ *
+ * 1.x needed a hand-written pager plugin here: it registered a `bootstrap`
+ * entry on `$.fn.dataTableExt.oPagination` implementing the `fnInit`/`fnUpdate`
+ * contract, plus an `fnPagingInfo` API method, to emit a
+ * `<ul class="pagination"><li>` structure with a five-number window and
+ * prev/next controls.
+ *
+ * DataTables 2.x provides that structure natively. `ext.pager` entries are now
+ * plain functions returning a button-name list, and the rendering is done by
+ * `ext.renderer.pagingButton` / `ext.renderer.pagingContainer` -- both of which
+ * the vendored public/js/152-jquery.datatables.bootstrap5.js registers under
+ * the name `bootstrap`, producing exactly the same
+ * `<ul class="pagination"><li class="page-item"><button class="page-link">`
+ * markup with `active`/`disabled` states. The built-in `simple_numbers` pager
+ * supplies the previous / numbers / next button set, and
+ * `ext.pager.numbers_length` carries the number window the old plugin
+ * hard-coded as `iListLength`.
+ *
+ * So the custom plugin is not ported -- it is replaced by the stock 2.x pager
+ * plus the vendored Bootstrap 5 renderer, which is the same visual result with
+ * none of the private-API coupling. `fnPagingInfo` has no 2.x counterpart and
+ * is not reintroduced; the public `page.info()` API supersedes it and nothing
+ * in this project called it outside the deleted plugin.
+ */
+$.extend( $.fn.dataTable.defaults, {
+        pagingType: 'simple_numbers'
 } );
+
+// The old plugin hard-coded a five-number window (`iListLength = 5`). In 2.x
+// that window is `ext.pager.numbers_length` (default 7, and it must be odd),
+// read as the default for the paging feature's `buttons` option.
+$.fn.dataTable.ext.pager.numbers_length = 5;
 
 //Adding more sort filters
 jQuery.extend( jQuery.fn.dataTableExt.oSort, {

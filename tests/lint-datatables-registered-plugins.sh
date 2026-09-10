@@ -21,7 +21,14 @@
 # two our code names by string:
 #
 #   sPaginationType / pagingType -> DataTable.ext.pager[<name>]
-#   renderer (string form)       -> DataTable.ext.renderer.pageButton[<name>]
+#   renderer (string form)       -> DataTable.ext.renderer.pagingButton[<name>]
+#                                   (1.x spelled this extension point
+#                                   `pageButton`; DataTables 2.x renamed it to
+#                                   `pagingButton` and split the container off
+#                                   into `pagingContainer`. Both spellings are
+#                                   harvested so this gate keeps working across
+#                                   the version boundary, but ONLY a real
+#                                   assignment counts -- see below.)
 #
 # Built-ins are taken from the vendored engine itself rather than a
 # hand-written list, so a DataTables version bump cannot leave this gate
@@ -95,9 +102,16 @@ registered_pagers=$(
   } | sort -u
 )
 
+# Only an actual REGISTRATION counts, i.e. the name must be the target of an
+# assignment (`... .pagingButton.bootstrap = function ...`) or appear inside an
+# `$.extend( ..., { bootstrap: ... } )` block. Matching a bare mention would
+# harvest names out of the engine's own doc comments -- 2.3.4's dataTables.js
+# still *documents* the old `renderer.pageButton` spelling in a comment while
+# registering nothing under it, which previously let this gate report the
+# renderer half clean without any renderer being registered at all.
 registered_renderers=$(
-  { strict_grep grep -hPo 'DataTable\.ext\.renderer\.pageButton\.\K[A-Za-z_][A-Za-z0-9_]*' public/js/*.js
-    strict_grep grep -hPo "renderer\.pageButton\[\s*['\"]\K[^'\"]+"                        public/js/*.js
+  { strict_grep grep -hPo 'DataTable\.ext\.renderer\.pag(?:e|ing)Button\.\K[A-Za-z_][A-Za-z0-9_]*(?=\s*=)' public/js/*.js
+    strict_grep grep -hPo "renderer\.pag(?:e|ing)Button\[\s*['\"]\K[^'\"]+(?=['\"]\s*\]\s*=)"            public/js/*.js
   } | sort -u
 )
 
@@ -174,12 +188,28 @@ fi
 
 if [ -r "$integration" ]; then
   if printf '%s\n' "$known_renderers" | grep -qxF -- 'bootstrap'; then
-    echo "  OK: 'bootstrap' pageButton renderer registered by $integration"
+    echo "  OK: 'bootstrap' paging-button renderer registered by $integration"
   else
-    echo "  FAIL: $integration is present but registers no 'bootstrap' pageButton renderer" >&2
+    echo "  FAIL: $integration is present but registers no 'bootstrap' paging-button renderer" >&2
     fail=1
   fi
 fi
+
+# The renderer harvest must reject a mere MENTION of a name. DataTables 2.3.4's
+# engine documents `renderer.pageButton` in a comment but registers nothing
+# under it, and an earlier version of this gate accepted that comment as proof
+# the renderer existed -- a vacuous pass. Assert the harvest discriminates.
+mention_only=$(mktemp)
+cat >"$mention_only" <<'EOF'
+// $.fn.dataTable.ext.renderer.pageButton.mentioned_only_in_a_comment
+EOF
+if grep -qPo 'DataTable\.ext\.renderer\.pag(?:e|ing)Button\.\K[A-Za-z_][A-Za-z0-9_]*(?=\s*=)' "$mention_only"; then
+  echo "  FAIL: the renderer harvest accepts a commented mention as a registration" >&2
+  fail=1
+else
+  echo "  OK: a commented mention of a renderer name is not harvested as registered"
+fi
+rm -f "$mention_only"
 
 # The scan-error path must ABORT, not fall through to a clean verdict. Assert it
 # by running this same script with a deliberately broken regex and requiring a

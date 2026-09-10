@@ -195,6 +195,33 @@ $(function() {
         table.destroy();
         return true;
     });
+    // VIM-A15.56a1: the client is DataTables 2.x but the PHP server side still
+    // speaks the legacy 1.9 wire protocol (sEcho / iDisplayStart /
+    // iDisplayLength / sSearch / iSortCol_0 / sSortDir_0). 2.x emits ONLY the
+    // modern names and has no legacy request mode, so vmDataTableServerData()
+    // in 990-vimbadmin.js supplies an `ajax.data` callback that rewrites them.
+    // Assert the legacy names the untouched PHP side actually reads: the
+    // modern names must NOT survive, or every server-side table silently
+    // paginates and sorts against a server that ignores the request.
+    check('server-side ajax request carries the legacy 1.9 parameter names', function() {
+        var ajax = vmDataTableServerData('/unused/source', 3, '#list_table');
+        if (typeof ajax !== 'object' || typeof ajax.data !== 'function') return false;
+        var sent = ajax.data({
+            draw: 4,
+            start: 30,
+            length: 15,
+            search: { value: 'example' },
+            order: [{ column: 2, dir: 'desc' }]
+        });
+        if (sent.sEcho !== 4) return false;
+        if (sent.iDisplayStart !== 30) return false;
+        if (sent.iDisplayLength !== 15) return false;
+        if (sent.sSearch !== 'example') return false;
+        if (sent.iSortCol_0 !== 2 || sent.sSortDir_0 !== 'desc') return false;
+        // The modern names must not leak through alongside them.
+        if ('draw' in sent || 'start' in sent || 'length' in sent) return false;
+        return true;
+    });
     // Chosen and Colorbox coverage was dropped here; see the file header.
     // bootbox 3.3.0 is gone (it built Bootstrap 2 modal markup and drove the
     // Bootstrap 2 lifecycle). The replacement shim deliberately provides only

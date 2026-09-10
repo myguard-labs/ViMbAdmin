@@ -16,18 +16,21 @@
 # asserts it read `development`'s, `production` asserts it read
 # `second-load`'s. Renamed to say so (VIM-A15.51).
 #
-# DROPPED COVERAGE (approved 2026-09-08): this test used to also load and
-# assert Chosen (public/js/300-chosen.jquery.js) and Colorbox
-# (public/js/130-jquery.colorbox.js) in its non-production lanes. Both are
-# dropped here. jQuery 4.0.0 removed $.trim (https://jquery.com/upgrade-guide/4.0/),
-# which 300-chosen.jquery.js:1240 calls from get_search_text(), reached at
-# runtime from live search filtering at line 351 -- so loading Chosen under
-# jQuery 4 throws and there is no in-scope fix (see bin/minify-bundle-files.php
-# for why Chosen and Colorbox are vendored but unbundled). Both libraries have
-# been dead in the application since PR #180 (no <script>/<link> row, no
-# `.chosen(` call site, no `chzn-*`/colorbox markup) and remain on disk,
-# unbundled, retained-but-unused pending removal. Neither library, nor the
-# $.trim removal, is otherwise exercised by this file any more.
+# DROPPED COVERAGE (approved 2026-09-08, files deleted VIM-A15.56): this test
+# used to also load and assert Chosen (public/js/300-chosen.jquery.js) and
+# Colorbox (public/js/130-jquery.colorbox.js) in its non-production lanes.
+# Both were dropped here first: jQuery 4.0.0 removed $.trim
+# (https://jquery.com/upgrade-guide/4.0/), which 300-chosen.jquery.js:1240
+# called from get_search_text(), reached at runtime from live search
+# filtering -- so loading Chosen under jQuery 4 threw and there was no
+# in-scope fix. Both libraries had been dead in the application since PR #180
+# (no <script>/<link> row, no `.chosen(` call site, no `chzn-*`/colorbox
+# markup) and were kept on disk, unbundled, for a time (see
+# bin/minify-bundle-files.php's history). VIM-A15.56 finished the removal:
+# both vendor files, their CSS, the Chosen sprite images and the Colorbox
+# image directory no longer exist anywhere in the repository. Neither
+# library, nor the $.trim removal, is otherwise exercised by this file any
+# more.
 #
 # The '#missing-dependency' negative control used to remove
 # 300-chosen.jquery.js from the loaded scripts and require this oracle to
@@ -111,7 +114,6 @@ if (location.hash === '#missing-dependency') {
 scripts.forEach(function(file) { document.write('<script src="' + file + '"><\/script>'); });
 </script></head><body>
 <form id="validation"><input id="required" name="required" title="Wrong title priority"></form>
-<select id="choice" multiple><option value="a">Alpha</option><option value="b">Beta</option></select>
 <table id="table"><thead><tr><th>Name</th></tr></thead><tbody><tr><td>Beta</td></tr><tr><td>Alpha</td></tr></tbody></table>
 <table id="list_table"><thead><tr><th>Domain</th><th>Action</th></tr></thead><tbody><tr><td>example.test</td><td><a id="remove-domain-7" ref="example.test">Remove</a></td></tr></tbody></table>
 <!-- Mirrors application/views/domain/list.phtml: Bootstrap 5's Modal requires a
@@ -126,7 +128,6 @@ scripts.forEach(function(file) { document.write('<script src="' + file + '"><\/s
   </div>
 </div>
 <form id="remove_domain_form"><input name="did"></form>
-<a id="colorbox" href="#inline">inline</a><div id="inline">content</div>
 <button id="state-button" type="button" data-loading-text="Working">Ready</button>
 <div id="throb-test"></div>
 <pre id="output">PENDING</pre>
@@ -194,9 +195,7 @@ $(function() {
         table.destroy();
         return true;
     });
-    // Chosen and Colorbox coverage was dropped from this file (2026-09-08) --
-    // see the file header for what and why. They are not loaded or asserted
-    // here any more.
+    // Chosen and Colorbox coverage was dropped here; see the file header.
     // bootbox 3.3.0 is gone (it built Bootstrap 2 modal markup and drove the
     // Bootstrap 2 lifecycle). The replacement shim deliberately provides only
     // `bootbox.alert`, which is the whole of the API the application uses --

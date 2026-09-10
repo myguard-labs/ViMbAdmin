@@ -18,15 +18,32 @@
 # scanner cannot judge arbitrary JavaScript reachability.
 #
 # So this gate runs a two-stage contract instead of parsing JavaScript:
-#   1. DISCOVERY deliberately OVER-MATCHES by construction -- any spelling
-#      variant of `.clear(...)` or `["clear"](...)`, any whitespace between
-#      tokens, must be caught here. A discovery miss is invisible to stage 2
-#      and silently passes -- that is the failure this gate exists to close.
+#   1. DISCOVERY over-matches every SINGLE-LINE `.clear(` or `["clear"](` /
+#      `['clear'](` call shape, with any whitespace between tokens. That is
+#      the COVERED set -- precisely stated, not "any spelling variant":
+#      discovery is a single-line ERE and cannot see, among others:
+#        - `.clear/**/()`  (a comment splitting the tokens)
+#        - `.clear` and `()` split across two lines
+#        - an aliased/indirect call: `var m='clear'; x[m]()`
+#        - a concatenated string: `["cle"+"ar"]()`
+#        - `.clear.apply(...)` / `.clear.call(...)`
+#        - `var f=api.clear; f()` (method torn off before calling)
+#        - destructuring: `var {clear}=api;`
+#        - a unicode-escaped property: `.clear()` written as `clear`
+#        - `[` then a newline then `"clear"]()`
+#      A discovery miss in any of these shapes is invisible to stage 2 and
+#      silently passes. The exact-count tripwire below only catches
+#      CONVERSION of an already-approved site into a wrong form; it does NOT
+#      catch ADDITION of a brand-new site spelled in one of the uncovered
+#      shapes above -- that case is a known, accepted hole, not a covered one.
 #   2. Only the anchored NORMAL-FORM check in stage 2 is exact. Everything
 #      discovery finds that does not match the normal form byte-for-byte
 #      fails loudly -- there is no "cannot judge" branch.
-# This invariant (over-match, then judge exactly) must never regress: widen
-# discovery's regex freely, never relax the normal-form regex.
+# This invariant (over-match the covered set, then judge exactly) must never
+# regress: widen discovery's regex freely, never relax the normal-form regex.
+# Do NOT attempt to turn discovery into a complete JavaScript tokenizer --
+# three prior redesigns tried exactly that and each one closed the shape a
+# review had just named while reopening the defect class in a new shape.
 #
 # All six real call sites in the tree are the identical exact spelling:
 #
@@ -43,10 +60,14 @@
 # or rewritten out of the approved form) must update that number, which is
 # the tripwire that replaces judging reachability.
 #
-# Exit 0 = every discovered candidate matches the approved form and the count
-#          matches, no CRLF line endings, and no `.phtml` is in scope.
-# Exit 1 = an unrecognised candidate, a wrong compliant count, a CRLF file, or
-#          a `.phtml` file that has entered this gate's scope.
+# Exit 0 = every discovered candidate matches the approved form (or is skipped
+#          as a whole-line `//` comment) and the count matches, no in-scope
+#          file with a discovered call has CRLF/CR line endings, no unicode
+#          escape appears in an in-scope file, and no non-.js view file has
+#          entered this gate's scope with a call shape.
+# Exit 1 = an unrecognised candidate, a wrong compliant count, a CRLF/CR file
+#          that has a discovered call, a unicode escape in an in-scope file,
+#          or a non-.js view file with a call shape that has entered scope.
 
 set -euo pipefail
 export LC_ALL=C
@@ -72,28 +93,43 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 
-# This gate's scope is *.js only. A .phtml gaining an inline <script> call
-# site would be invisible to discovery above AND would not move the count
-# tripwire. Assert the scope assumption still holds every run.
-phtml_hits=()
+# This gate's scope is *.js only. Any non-.js, non-.md file under the view
+# root (.phtml, .php, .html, .tpl, ...) gaining an inline <script> call site
+# would be invisible to discovery above AND would not move the count
+# tripwire. Assert the scope assumption still holds every run, generalised
+# to every extension rather than a per-extension list that must be extended
+# by hand. The check matches a CALL SHAPE (`vmDataTableApi(` or `.clear(`),
+# not a bare word, so prose like "the dataTable is nice" or a CSS class like
+# `mydataTableWrapper` does not false-positive the gate.
+scope_call_re='vmDataTableApi[[:space:]]*\(|\.[[:space:]]*clear[[:space:]]*\('
+scope_hits=()
 while IFS= read -r -d '' file; do
-  phtml_hits+=("$file")
-done < <(grep -lZE 'vmDataTableApi|dataTable' "$views_root" -r --include='*.phtml' 2>/dev/null || true)
+  case "$file" in
+  *.js | *.md) continue ;;
+  esac
+  scope_hits+=("$file")
+done < <(grep -lZE "$scope_call_re" "$views_root" -r 2>/dev/null || true)
 
-if [ "${#phtml_hits[@]}" -gt 0 ]; then
-  echo "FAIL: .phtml file(s) under '$views_root' now reference vmDataTableApi" >&2
-  echo "      or dataTable -- this gate's scope assumption (call sites live" >&2
-  echo "      only in *.js) has stopped holding. Discovery must be extended" >&2
-  echo "      to cover .phtml <script> blocks before this gate can judge:" >&2
-  printf '      %s\n' "${phtml_hits[@]}" >&2
+if [ "${#scope_hits[@]}" -gt 0 ]; then
+  echo "FAIL: non-.js file(s) under '$views_root' now contain a" >&2
+  echo "      vmDataTableApi(...)/.clear(...) call shape -- this gate's scope" >&2
+  echo "      assumption (call sites live only in *.js) has stopped holding." >&2
+  echo "      Discovery must be extended to cover these files' inline" >&2
+  echo "      <script> blocks before this gate can judge:" >&2
+  printf '      %s\n' "${scope_hits[@]}" >&2
   exit 1
 fi
 
-# Discovery: deliberately over-match. Any `.clear` call however spelled --
-# whitespace or a tab between the dot and `clear`, whitespace inside the
-# call parens, or bracket/string member access -- must be caught here so
-# stage 2 can judge it. Verified against: `.clear ()`, `.clear( )`,
-# `.clear\t()`, and `["clear"]()`, plus the plain `.clear()` form.
+# Discovery: deliberately over-match every single-line `.clear` call however
+# spelled -- whitespace or a tab between the dot and `clear`, whitespace
+# inside the call parens, or bracket/string member access -- must be caught
+# here so stage 2 can judge it. Verified against: `.clear ()`, `.clear( )`,
+# `.clear\t()`, `["clear"]()`, `['clear']()`, and the plain `.clear()` form.
+# Known-uncovered (see header): `.clear/**/()`, `.clear`/`()` split across
+# lines, an aliased/indirect call (`var m='clear'; x[m]()`), a concatenated
+# string (`["cle"+"ar"]()`), `.clear.apply(...)`/`.clear.call(...)`, a torn-off
+# method reference (`var f=api.clear; f()`), destructuring (`var {clear}=api`),
+# a unicode-escaped property, or `[` newline `"clear"]()`.
 discovery_re='\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"']clear'
 
 normal_form_re='^[[:space:]]*vmDataTableApi\([[:space:]]*[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*\)\.clear\(\)\.draw\(\);[[:space:]]*$'
@@ -108,16 +144,31 @@ for file in "${files[@]}"; do
     exit 1
   fi
 
-  if LC_ALL=C grep -q $'\r$' "$file"; then
-    echo "FAIL: '$file' has CRLF line endings." >&2
+  # Only files that discovery actually hits are judged below, so only those
+  # need exact byte-for-byte spelling; a vendored file with no clear() call
+  # at all must not be taken down by an unrelated line-ending quirk.
+  if ! grep -qE "$discovery_re" "$file"; then
+    continue
+  fi
+
+  if LC_ALL=C grep -q $'\r' "$file"; then
+    echo "FAIL: '$file' has carriage returns in its line endings (CRLF or" >&2
+    echo "      lone CR)." >&2
     echo "      this gate is exact about spelling and refuses to silently" >&2
     echo "      normalise line endings -- convert the file to LF first." >&2
     exit 1
   fi
 
+  if LC_ALL=C grep -qF '\u00' "$file"; then
+    echo "FAIL: '$file' contains a unicode escape (\\u00...)." >&2
+    echo "      this gate judges call sites by exact byte spelling and" >&2
+    echo "      cannot tell whether a unicode-escaped property is 'clear'" >&2
+    echo "      -- rewrite the property access as a literal identifier." >&2
+    exit 1
+  fi
+
   while IFS=: read -r lineno line; do
     [ -n "$lineno" ] || continue
-    line="${line%$'\r'}"
 
     if [[ "$line" =~ ^[[:space:]]*// ]]; then
       continue
@@ -151,7 +202,11 @@ if [ "$compliant" -ne "$expected_count" ]; then
   echo "      expected_count -- this is the tripwire that catches a call" >&2
   echo "      site being added, removed, or going dark. Compliant sites" >&2
   echo "      found this run:" >&2
-  printf '      %s\n' "${compliant_sites[@]}" >&2
+  if [ "${#compliant_sites[@]}" -gt 0 ]; then
+    printf '      %s\n' "${compliant_sites[@]}" >&2
+  else
+    echo "      (none)" >&2
+  fi
   exit 1
 fi
 

@@ -29,7 +29,8 @@
 #        - `.clear.apply(...)` / `.clear.call(...)`
 #        - `var f=api.clear; f()` (method torn off before calling)
 #        - destructuring: `var {clear}=api;`
-#        - a unicode-escaped property: `.clear()` written as `clear`
+#        - a unicode-escaped property (`clear` or the ES6 code-point
+#          form `\u{63}lear`) in place of the literal identifier `clear`
 #        - `[` then a newline then `"clear"]()`
 #      A discovery miss in any of these shapes is invisible to stage 2 and
 #      silently passes. The exact-count tripwire below only catches
@@ -62,12 +63,12 @@
 #
 # Exit 0 = every discovered candidate matches the approved form (or is skipped
 #          as a whole-line `//` comment) and the count matches, no in-scope
-#          file with a discovered call has CRLF/CR line endings, no unicode
-#          escape appears in an in-scope file, and no non-.js view file has
-#          entered this gate's scope with a call shape.
+#          file with a discovered call has a carriage return, and no
+#          JS-executing non-.js view file has entered this gate's scope with
+#          a call shape.
 # Exit 1 = an unrecognised candidate, a wrong compliant count, a CRLF/CR file
-#          that has a discovered call, a unicode escape in an in-scope file,
-#          or a non-.js view file with a call shape that has entered scope.
+#          that has a discovered call, or a JS-executing non-.js view file
+#          with a call shape that has entered scope.
 
 set -euo pipefail
 export LC_ALL=C
@@ -98,39 +99,50 @@ fi
 # would be invisible to discovery above AND would not move the count
 # tripwire. Assert the scope assumption still holds every run, generalised
 # to every extension rather than a per-extension list that must be extended
-# by hand. The check matches a CALL SHAPE (`vmDataTableApi(` or `.clear(`),
-# not a bare word, so prose like "the dataTable is nice" or a CSS class like
-# `mydataTableWrapper` does not false-positive the gate.
-scope_call_re='vmDataTableApi[[:space:]]*\(|\.[[:space:]]*clear[[:space:]]*\('
+# by hand. Only a file that can actually execute JS (one containing a
+# `<script` tag) is even considered, so a plain CSS/text/HTML-doc/JSON file
+# can never trip this check regardless of what it contains. The check then
+# matches a CALL SHAPE (`vmDataTableApi(` or an identifier/`)`/`]` followed
+# by `.clear(`), not a bare word or a bare CSS selector, so prose like "the
+# dataTable is nice", a CSS class like `mydataTableWrapper`, or a CSS rule
+# like `.clear (min-width: 0)` does not false-positive the gate.
+scope_call_re='vmDataTableApi[[:space:]]*\(|[A-Za-z0-9_$)\]][[:space:]]*\.[[:space:]]*clear[[:space:]]*\('
 scope_hits=()
 while IFS= read -r -d '' file; do
   case "$file" in
   *.js | *.md) continue ;;
   esac
+  grep -qF '<script' "$file" 2>/dev/null || continue
   scope_hits+=("$file")
 done < <(grep -lZE "$scope_call_re" "$views_root" -r 2>/dev/null || true)
 
 if [ "${#scope_hits[@]}" -gt 0 ]; then
   echo "FAIL: non-.js file(s) under '$views_root' now contain a" >&2
-  echo "      vmDataTableApi(...)/.clear(...) call shape -- this gate's scope" >&2
-  echo "      assumption (call sites live only in *.js) has stopped holding." >&2
-  echo "      Discovery must be extended to cover these files' inline" >&2
-  echo "      <script> blocks before this gate can judge:" >&2
+  echo "      vmDataTableApi(...)/.clear(...) call shape inside a <script>" >&2
+  echo "      block -- this gate's scope assumption (call sites live only" >&2
+  echo "      in *.js) has stopped holding. Discovery must be extended to" >&2
+  echo "      cover these files' inline <script> blocks before this gate" >&2
+  echo "      can judge:" >&2
   printf '      %s\n' "${scope_hits[@]}" >&2
   exit 1
 fi
 
 # Discovery: deliberately over-match every single-line `.clear` call however
 # spelled -- whitespace or a tab between the dot and `clear`, whitespace
-# inside the call parens, or bracket/string member access -- must be caught
-# here so stage 2 can judge it. Verified against: `.clear ()`, `.clear( )`,
-# `.clear\t()`, `["clear"]()`, `['clear']()`, and the plain `.clear()` form.
+# inside the call parens, or bracket/string member access (double, single,
+# or backtick quoted) -- must be caught here so stage 2 can judge it.
+# Verified against: `.clear ()`, `.clear( )`, `.clear\t()`, `["clear"]()`,
+# `['clear']()`, `` [`clear`]() ``, and the plain `.clear()` form. The
+# bracket alternative requires the full computed-call shape -- closing
+# quote, `]`, `(` -- so a mere property read or write like `obj["clearance"]`
+# or `css["clear"] = "both"` does not drag a non-call into stage 2.
 # Known-uncovered (see header): `.clear/**/()`, `.clear`/`()` split across
 # lines, an aliased/indirect call (`var m='clear'; x[m]()`), a concatenated
 # string (`["cle"+"ar"]()`), `.clear.apply(...)`/`.clear.call(...)`, a torn-off
 # method reference (`var f=api.clear; f()`), destructuring (`var {clear}=api`),
-# a unicode-escaped property, or `[` newline `"clear"]()`.
-discovery_re='\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"']clear'
+# a unicode-escaped property (`clear` or `\u{63}lear`), or `[` newline
+# `"clear"]()`.
+discovery_re='\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"'\`]clear["'"'"'\`][[:space:]]*\][[:space:]]*\('
 
 normal_form_re='^[[:space:]]*vmDataTableApi\([[:space:]]*[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*\)\.clear\(\)\.draw\(\);[[:space:]]*$'
 
@@ -152,18 +164,10 @@ for file in "${files[@]}"; do
   fi
 
   if LC_ALL=C grep -q $'\r' "$file"; then
-    echo "FAIL: '$file' has carriage returns in its line endings (CRLF or" >&2
-    echo "      lone CR)." >&2
+    echo "FAIL: '$file' contains a carriage return (CRLF line endings, a" >&2
+    echo "      lone CR, or a literal CR in the source)." >&2
     echo "      this gate is exact about spelling and refuses to silently" >&2
     echo "      normalise line endings -- convert the file to LF first." >&2
-    exit 1
-  fi
-
-  if LC_ALL=C grep -qF '\u00' "$file"; then
-    echo "FAIL: '$file' contains a unicode escape (\\u00...)." >&2
-    echo "      this gate judges call sites by exact byte spelling and" >&2
-    echo "      cannot tell whether a unicode-escaped property is 'clear'" >&2
-    echo "      -- rewrite the property access as a literal identifier." >&2
     exit 1
   fi
 

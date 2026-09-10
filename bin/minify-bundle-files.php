@@ -10,11 +10,13 @@
  *
  * That is not a hypothetical: Chosen and Colorbox were removed from the
  * application in PR #180 (no `<script>`/`<link>` row, no `.chosen(` call site,
- * no `chzn-*` markup) but their files are still on disk, retained-but-unused
- * pending removal. The glob matched them anyway, so every regeneration
- * re-shipped both libraries to production AND rewrote
- * `application/views/header-js.phtml` / `header-css.phtml` from the glob,
- * silently reverting PR #180.
+ * no `chzn-*` markup) but their files stayed on disk, unbundled, for a time.
+ * The glob matched them anyway, so every regeneration re-shipped both
+ * libraries to production AND rewrote `application/views/header-js.phtml` /
+ * `header-css.phtml` from the glob, silently reverting PR #180. VIM-A15.56
+ * deleted both vendor files, their CSS and their images outright instead of
+ * continuing to carry them unbundled, which is why `jsExcluded` /
+ * `cssExcluded` are empty below.
  *
  * The fix is this file: the bundle inputs are enumerated here, in the
  * repository, where a reviewer can see them in a diff. `bin/minify-bundle.php`
@@ -65,22 +67,24 @@ return [
         '930-popup.css',
     ],
 
-    // Present in public/js and public/css, matched by the retired glob, and
-    // deliberately NOT bundled. They are dead in the application (PR #180) and
-    // are retained-but-unused vendor files on disk pending removal;
-    // tests/test-jquery-migrate-compat.sh no longer loads or asserts them --
-    // see its header comment for what coverage was dropped and why.
-    //
-    // These are enumerated rather than merely omitted so bin/minify-bundle.php
+    // Assets present in public/js / public/css but deliberately NOT bundled
+    // go here, enumerated rather than merely omitted, so bin/minify-bundle.php
     // can tell "deliberately excluded" from "someone forgot to list it" and
-    // fail loudly on the latter.
+    // fail loudly on the latter (see vimbadminResolveBundleInputs() in
+    // bin/minify-bundle.php).
+    //
+    // Empty now: Chosen (300-chosen.jquery.js / 300-chosen.css) and Colorbox
+    // (130-jquery.colorbox.js / 130-colorbox.css) were the only entries this
+    // ever held, kept here after PR #180 made them dead in the application.
+    // VIM-A15.56 deleted both vendor files, their CSS, the Chosen sprite
+    // images and the Colorbox image directory from the repository instead of
+    // continuing to carry them unbundled. The keys stay declared -- empty --
+    // because bin/minify-bundle.php requires them, and because the same
+    // situation (an asset dropped from the application but kept on disk for a
+    // time) can recur.
     'jsExcluded' => [
-        '130-jquery.colorbox.js',
-        '300-chosen.jquery.js',
     ],
 
     'cssExcluded' => [
-        '130-colorbox.css',
-        '300-chosen.css',
     ],
 ];

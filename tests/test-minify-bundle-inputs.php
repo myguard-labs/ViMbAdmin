@@ -1,18 +1,24 @@
 <?php
 
 /**
- * The bundle's input list is repo-owned and excludes the dead assets.
+ * The bundle's input list is repo-owned, and the dead Chosen/Colorbox assets
+ * it used to carry unbundled are gone from the tree entirely.
  *
  * bin/minify-options.php used to hand vendor/opensolutions/minify/minify.php a
  * glob, and the vendor script expanded it only after require_once()ing the
  * config, so nothing could keep a file on disk without shipping it. Chosen and
  * Colorbox were removed from the application in PR #180 but stayed on disk,
- * retained-but-unused pending removal, so every regeneration both re-shipped
- * them and rewrote the header .phtml files from the glob, reverting PR #180.
+ * retained-but-unused, so every regeneration both re-shipped them and rewrote
+ * the header .phtml files from the glob, reverting PR #180. VIM-A15.56 deleted
+ * both vendor files, their CSS, the Chosen sprite images and the Colorbox
+ * image directory outright, so bin/minify-bundle-files.php's jsExcluded /
+ * cssExcluded lists are now empty.
  *
  * This test pins the replacement: bin/minify-bundle-files.php enumerates the
- * inputs, bin/minify-bundle.php resolves them, and the four dead assets are
- * absent while every live asset is present and correctly ordered.
+ * inputs, bin/minify-bundle.php resolves them, every live asset is present
+ * and correctly ordered, the six deleted paths stay gone, and an asset on
+ * disk that is in neither the bundled nor the excluded list still fails
+ * loudly instead of being silently shipped or silently dropped.
  *
  * It runs without Java or clean-css, which is why it asserts against
  * vimbadminResolveBundleInputs() and `--print-inputs` rather than against a
@@ -64,31 +70,34 @@ $css = vimbadminResolveBundleInputs(
 $jsNames = array_map('basename', $js);
 $cssNames = array_map('basename', $css);
 
-// The point of the whole change: these four match the retired glob, are still
-// on disk, and must never reach a bundle again.
+// The point of the whole change (VIM-A15.56): these six paths matched the
+// retired glob or existed only to support the two libraries that did (the
+// Chosen sprite images and the Colorbox image directory), and must never come
+// back. Chosen and Colorbox are no longer bundled, no longer excluded, and no
+// longer on disk at all.
+$deletedPaths = [
+    'public/js/130-jquery.colorbox.js',
+    'public/js/300-chosen.jquery.js',
+    'public/css/130-colorbox.css',
+    'public/css/300-chosen.css',
+    'public/css/chosen-sprite.png',
+    'public/css/chosen-sprite@2x.png',
+];
+foreach ($deletedPaths as $deleted) {
+    $check("dead vendor asset no longer exists on disk: {$deleted}", !file_exists($root . '/' . $deleted));
+}
+$check(
+    'the Colorbox image directory no longer exists on disk',
+    !is_dir($root . '/public/images/colorbox')
+);
 foreach (['130-jquery.colorbox.js', '300-chosen.jquery.js'] as $dead) {
-    $check("dead JS asset is excluded from the bundle: {$dead}", !in_array($dead, $jsNames, true));
-    $check(
-        "dead JS asset is still on disk for the development compat lane: {$dead}",
-        is_file($root . '/public/js/' . $dead)
-    );
-    $check(
-        "dead JS asset is explicitly ledgered as excluded: {$dead}",
-        in_array($dead, $lists['jsExcluded'], true)
-    );
+    $check("dead JS asset is not a bundle input: {$dead}", !in_array($dead, $jsNames, true));
 }
-
 foreach (['130-colorbox.css', '300-chosen.css'] as $dead) {
-    $check("dead CSS asset is excluded from the bundle: {$dead}", !in_array($dead, $cssNames, true));
-    $check(
-        "dead CSS asset is still on disk: {$dead}",
-        is_file($root . '/public/css/' . $dead)
-    );
-    $check(
-        "dead CSS asset is explicitly ledgered as excluded: {$dead}",
-        in_array($dead, $lists['cssExcluded'], true)
-    );
+    $check("dead CSS asset is not a bundle input: {$dead}", !in_array($dead, $cssNames, true));
 }
+$check('jsExcluded is empty now that Chosen and Colorbox are deleted', $lists['jsExcluded'] === []);
+$check('cssExcluded is empty now that Chosen and Colorbox are deleted', $lists['cssExcluded'] === []);
 
 // The live assets, enumerated from the real tree, in bundle concatenation
 // order. An exact comparison rather than a subset check: a bundle that gained
@@ -174,33 +183,68 @@ $rejects = static function (callable $call): bool {
     return false;
 };
 
-$check(
-    'an asset in neither list is rejected rather than silently skipped',
-    $rejects(static fn () => vimbadminResolveBundleInputs(
-        $root . '/public/js',
-        '[0-9][0-9][0-9]-*.js',
-        $lists['js'],
-        [] // Chosen and Colorbox now unaccounted for.
-    ))
-);
-$check(
-    'a listed input that is missing from disk is rejected',
-    $rejects(static fn () => vimbadminResolveBundleInputs(
-        $root . '/public/js',
-        '[0-9][0-9][0-9]-*.js',
-        array_merge($lists['js'], ['999-not-on-disk.js']),
-        $lists['jsExcluded']
-    ))
-);
-$check(
-    'a file that is both bundled and excluded is rejected',
-    $rejects(static fn () => vimbadminResolveBundleInputs(
-        $root . '/public/js',
-        '[0-9][0-9][0-9]-*.js',
-        array_merge($lists['js'], ['300-chosen.jquery.js']),
-        $lists['jsExcluded']
-    ))
-);
+// Stricter than $rejects: confirms the RuntimeException is the SPECIFIC one
+// expected, identified by a substring unique to that failure branch, not
+// merely that some RuntimeException was thrown by some other branch first.
+$rejectsWith = static function (callable $call, string $expectedSubstring): bool {
+    try {
+        $call();
+    } catch (RuntimeException $error) {
+        return str_contains($error->getMessage(), $expectedSubstring);
+    }
+
+    return false;
+};
+
+// The "unaccounted asset" and "bundled-and-excluded" cases used to be
+// exercised against public/js with Chosen/Colorbox playing the disagreeing
+// file; now that both are deleted, real public/js has no unlisted or
+// double-listed file left to borrow, so a tiny throwaway fixture directory
+// stands in for the tree instead.
+$fixtureDir = sys_get_temp_dir() . '/vimbadmin-minify-bundle-fixture-' . bin2hex(random_bytes(6));
+if (!mkdir($fixtureDir, 0700) && !is_dir($fixtureDir)) {
+    throw new RuntimeException("Could not create fixture directory: {$fixtureDir}");
+}
+try {
+    if (file_put_contents($fixtureDir . '/100-listed.js', '// stub') === false) {
+        throw new RuntimeException("Could not write fixture file: {$fixtureDir}/100-listed.js");
+    }
+    if (file_put_contents($fixtureDir . '/200-unlisted.js', '// stub') === false) {
+        throw new RuntimeException("Could not write fixture file: {$fixtureDir}/200-unlisted.js");
+    }
+
+    $check(
+        'an asset in neither list is rejected rather than silently skipped',
+        $rejectsWith(static fn () => vimbadminResolveBundleInputs(
+            $fixtureDir,
+            '[0-9][0-9][0-9]-*.js',
+            ['100-listed.js'],
+            [] // '200-unlisted.js' is on disk but in neither list.
+        ), 'are in neither the bundled nor the excluded')
+    );
+    $check(
+        'a listed input that is missing from disk is rejected',
+        $rejects(static fn () => vimbadminResolveBundleInputs(
+            $root . '/public/js',
+            '[0-9][0-9][0-9]-*.js',
+            array_merge($lists['js'], ['999-not-on-disk.js']),
+            $lists['jsExcluded']
+        ))
+    );
+    $check(
+        'a file that is both bundled and excluded is rejected',
+        $rejects(static fn () => vimbadminResolveBundleInputs(
+            $fixtureDir,
+            '[0-9][0-9][0-9]-*.js',
+            ['100-listed.js', '200-unlisted.js'],
+            ['200-unlisted.js']
+        ))
+    );
+} finally {
+    @unlink($fixtureDir . '/100-listed.js');
+    @unlink($fixtureDir . '/200-unlisted.js');
+    @rmdir($fixtureDir);
+}
 $check(
     'a stale exclusion for a file no longer on disk is rejected',
     $rejects(static fn () => vimbadminResolveBundleInputs(

@@ -55,7 +55,7 @@
 #   class-selector gates a control this repo's own code can never produce, so
 #   asserting it would mean fabricating input no real deployment of this repo
 #   alone ever supplies.
-#
+
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

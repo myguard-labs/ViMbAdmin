@@ -110,7 +110,7 @@ function getEntries( event ){
         timeOut = setTimeout( function(){ 
             $('body').css('cursor', 'wait');
             setTimeout( function(){
-                vmDataTableApi( oDataTable ).clear();
+                vmDataTableApi( oDataTable ).clear().draw();
                 $.ajax({
                   async: false,
                   url: "{genUrl controller='domain' action='list-search'}/search/" + String( $( event.target ).val() ).trim(),

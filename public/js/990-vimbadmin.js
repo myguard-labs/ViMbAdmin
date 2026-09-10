@@ -614,6 +614,13 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
 	//     core re-fires unconditionally, which still reaches handlers bound
 	//     directly on `body`; we treat a stopped propagation as stopped,
 	//     which is what an attached table would have done.
+	//
+	// The fresh event also means a body-bound handler's return value lands
+	// on `bubbled` and is discarded, where the core's single re-fired object
+	// would have carried it back in `e.result`. That is acceptable here only
+	// because `dt-error` has no claim channel -- nothing reads the return.
+	// Do NOT copy this shape to an event whose return value is consulted
+	// (the `xhr.dt` trigger below is exactly such a case).
 	if ( table.parents( 'body' ).length === 0 && ! e.isPropagationStopped() ) {
 		var bubbled = $.Event( 'dt-error.dt' );
 		bubbled.dt = settings.api;
@@ -649,8 +656,9 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
  * (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
  * offers no way to cancel.
  *
- * `settings.oLanguage` is required: the core always supplies it (it is deep
- * copied per table at 150-jquery.datatables.js:174), so a caller that builds a
+ * `settings.oLanguage` is required: the core always supplies it (the per-table deep
+ * copy is at 150-jquery.datatables.js:174 and the language merge onto it at
+ * 150-jquery.datatables.js:453-455), so a caller that builds a
  * settings object by hand has to provide one too.
  *
  * @param {string} source  list-data URL.
@@ -731,23 +739,21 @@ function vmDataTableServerData( source, minimum )
 				// The core suppresses when any entry of `ret` is true
 				// (150-jquery.datatables.js:4230). For EVENT listeners that
 				// array holds exactly one entry, `e.result`
-				// (_fnCallbackFire, 150-jquery.datatables.js:6705), which is
-				// jQuery's last-non-undefined handler return -- so a later
-				// listener returning false un-claims what an earlier one
-				// claimed, in the core exactly as here. The core's remaining
-				// entries come from `settings.aoXhrCallbacks`, a registry
-				// 2.x no longer exposes (`_ext.internal` is gone), so
-				// `vmHandled` is the replacement claim channel: a listener
-				// that sets it wins regardless of what any later listener
-				// returns.
+				// (_fnCallbackFire, 150-jquery.datatables.js:6705) -- the core
+				// passes null for `callbackArr` on this path, so its other
+				// `ret` entries never materialise. `e.result` is jQuery's
+				// last-non-undefined handler return, so a later listener
+				// returning false un-claims what an earlier one claimed -- in
+				// the core exactly as here. Matching that quirk is deliberate:
+				// this shim is a bridge, and behaving differently from the
+				// engine it wraps would be the worse surprise.
 				var event = $.Event( 'xhr.dt' );
-				event.vmHandled = false;
 
 				$( settings.nTable ).trigger(
 					event, [ settings, null, xhr ]
 				);
 
-				if ( ! event.vmHandled && event.result !== true ) {
+				if ( event.result !== true ) {
 					if ( error === 'parsererror' ) {
 						vmDataTableLogAjaxError(
 							api, 1, 'Invalid JSON response'

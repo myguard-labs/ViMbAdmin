@@ -167,6 +167,12 @@ $(function () {
         if (/have-tooltip-long/.test(serverRenderedLogHtml)) {
             failures.push('log data reached an HTML tooltip');
         }
+        // Both probes init with searching:false and no search value, so each
+        // takes the network branch. The count of 2 therefore depends on
+        // vmDataTableServerData's `searchLength > 0` guard short-circuiting
+        // the empty-search case into the network branch rather than declining
+        // it. If that threshold ever starts declining empty searches, this
+        // assertion fails here rather than where the change was made.
         if (ajaxCalls !== 2) failures.push('empty and failed requests did not use AJAX');
         if (emptyCallbacks !== 1) failures.push('legitimate empty response did not reach callback');
         if (failureCallbacks !== 0) failures.push('transport failure reached success callback');

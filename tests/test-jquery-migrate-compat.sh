@@ -233,6 +233,21 @@ $(function() {
         var originalAjax = $.ajax;
         $.ajax = function() { requested = true; return { abort: function() {} }; };
 
+        // A real `oLanguage`, as the core always supplies (150-…js:453
+        // initialises it before any table option is applied) -- unlike the
+        // production path, this is the only object the shim is given, so if
+        // the hint or its restore lands anywhere else, this assertion is the
+        // one place that would notice.
+        var settings = {
+            sServerMethod: 'GET',
+            oLanguage: {
+                sZeroRecords: 'No matching records found',
+                sEmptyTable:  'No log entries.'
+            }
+        };
+        var originalZeroRecords = settings.oLanguage.sZeroRecords;
+        var originalEmptyTable  = settings.oLanguage.sEmptyTable;
+
         var answered = null;
         try {
             ajax({
@@ -241,7 +256,7 @@ $(function() {
                 length: 10,
                 search: { value: 'ab' },
                 order: []
-            }, function(json) { answered = json; }, { sServerMethod: 'GET' });
+            }, function(json) { answered = json; }, settings);
         } finally {
             $.ajax = originalAjax;
         }
@@ -250,7 +265,36 @@ $(function() {
         if (!answered) return false;
         if (answered.sEcho !== 9) return false;
         if (answered.iTotalDisplayRecords !== 0) return false;
-        return answered.aaData.length === 0;
+        if (answered.aaData.length !== 0) return false;
+
+        // The "type more" hint must land on BOTH language keys: the core's
+        // `_emptyRow` only reads `sZeroRecords` when `fnRecordsTotal()` is
+        // non-zero, and a declined request answers `iTotalRecords: 0`, so it
+        // falls through to `sEmptyTable` instead.
+        if (settings.oLanguage.sZeroRecords !== 'Enter at least 3 characters to search.') return false;
+        if (settings.oLanguage.sEmptyTable  !== 'Enter at least 3 characters to search.') return false;
+
+        // A following successful (long-enough) search must restore both
+        // keys to what the view originally configured -- otherwise the hint
+        // sticks around permanently once a short search has ever run.
+        requested = false;
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+        try {
+            ajax({
+                draw: 10,
+                start: 0,
+                length: 10,
+                search: { value: 'example' },
+                order: []
+            }, function() {}, settings);
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (!requested) return false;
+        if (settings.oLanguage.sZeroRecords !== originalZeroRecords) return false;
+        if (settings.oLanguage.sEmptyTable  !== originalEmptyTable) return false;
+        return true;
     });
     // The single sort column the PHP side reads is only honest if the client
     // cannot select more than one.

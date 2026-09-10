@@ -528,9 +528,9 @@ function randPasword( len, id )
  *       `json.aaData || json.data`, and _fnAjaxDataSrcParam maps sEcho ->
  *       draw, iTotalRecords -> recordsTotal, iTotalDisplayRecords ->
  *       recordsFiltered. The legacy response body is consumed natively, so
- *       adding our own mapper would be dead code -- and only while no
- *       `ajax.dataSrc` is configured; setting one disables the `aaData`
- *       fallback.
+ *       adding our own mapper would be dead code. This holds only while no
+ *       `ajax.dataSrc` is configured; setting one replaces the
+ *       `aaData || data` fallback outright.
  *
  *   request (client -> server)   handled here, by vmDataTableLegacyRequest.
  *       2.x emits ONLY the modern parameter names (_fnAjaxParameters); it has
@@ -594,10 +594,18 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
 		+ ' - ' + message + '. For more information about this error, please see '
 		+ 'https://datatables.net/tn/' + technicalNote;
 
-	var e = $.Event( 'dt-error.dt' );
-	e.dt = api;
+	var e     = $.Event( 'dt-error.dt' );
+	var table = $( settings.nTable );
+	e.dt = settings.api;
 
-	$( settings.nTable ).trigger( e, [ settings, technicalNote, message ] );
+	table.trigger( e, [ settings, technicalNote, message ] );
+
+	// Mirror _fnCallbackFire's own bubble fallback: if the table is not
+	// yet attached to the document, the trigger above never reaches
+	// `body`, so re-fire there to simulate the bubble.
+	if ( table.parents( 'body' ).length === 0 ) {
+		$( 'body' ).trigger( e, [ settings, technicalNote, message ] );
+	}
 
 	if ( typeof mode === 'function' ) {
 		mode( settings, technicalNote, full );
@@ -627,27 +635,35 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
  * (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
  * offers no way to cancel.
  *
- * The minimum-search-length rule is enforced in `data`: a search shorter than
- * the configured minimum is still sent, but as an empty search, so the server
- * answers with the unfiltered page instead of scanning on one character.
- *
  * @param {string} source        list-data URL.
  * @param {number} minimum       minimum search string length.
  * @param {string} tableSelector table selector, for the "type more" hint.
- * @return {object} A DataTables 2.x `ajax` option.
+ * @return {function} A DataTables 2.x `ajax` option, in function form.
  */
 function vmDataTableServerData( source, minimum, tableSelector )
 {
-	// Captured once, the first time we need to restore it, so the restore is
-	// faithful to whatever this table's view configured (e.g. list.js's
+	// Captured once, the first time we need to restore them, so the restore
+	// is faithful to whatever this table's view configured (e.g. list.js's
 	// `language.emptyTable`) rather than a hard-coded guess.
 	var originalZeroRecords;
-	var haveOriginalZeroRecords = false;
+	var originalEmptyTable;
+	var haveOriginals = false;
 
 	return function( data, callback, settings )
 	{
 		var api = new $.fn.dataTable.Api( settings );
-		var oLanguage = settings.oLanguage || {};
+		var oLanguage = settings.oLanguage;
+
+		// Restore unconditionally, before the decline/proceed branch below:
+		// otherwise a decline followed by teardown (e.g. the table is
+		// destroyed, or the view is torn down without another search ever
+		// running) leaves the hint permanently installed on the shared
+		// `settings.oLanguage`.
+		if ( haveOriginals ) {
+			oLanguage.sZeroRecords = originalZeroRecords;
+			oLanguage.sEmptyTable  = originalEmptyTable;
+			haveOriginals = false;
+		}
 
 		var search = ( data.search && data.search.value )
 			? String( data.search.value ).trim()
@@ -659,17 +675,25 @@ function vmDataTableServerData( source, minimum, tableSelector )
 			.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
 
 		if ( searchLength > 0 && searchLength < minimum ) {
-			if ( ! haveOriginalZeroRecords ) {
-				originalZeroRecords = oLanguage.sZeroRecords;
-				haveOriginalZeroRecords = true;
-			}
+			originalZeroRecords = oLanguage.sZeroRecords;
+			originalEmptyTable  = oLanguage.sEmptyTable;
+			haveOriginals = true;
 
-			// Set the zero-records text BEFORE calling back, so the
-			// "type more" hint renders in the first paint instead of
-			// flashing the view's configured `emptyTable`/`zeroRecords`
-			// text (e.g. "No log entries.") first.
-			oLanguage.sZeroRecords = 'Enter at least ' + minimum
+			// The core's `_emptyRow` only reads `sZeroRecords` when
+			// `fnRecordsTotal()` is non-zero; a declined request answers
+			// `iTotalRecords: 0`, so it falls through to `sEmptyTable`
+			// instead (when one is configured, as every list.js view's
+			// `language.emptyTable` does) -- so both have to carry the
+			// hint, or it never renders on this path.
+			//
+			// Set the hint text BEFORE calling back, so it renders in the
+			// first paint instead of flashing the view's configured
+			// `emptyTable`/`zeroRecords` text (e.g. "No log entries.")
+			// first.
+			var hint = 'Enter at least ' + minimum
 				+ ' characters to search.';
+			oLanguage.sZeroRecords = hint;
+			oLanguage.sEmptyTable  = hint;
 
 			// Answer in the LEGACY response shape the rest of this
 			// bridge deals in; 2.x maps it natively (see the header).
@@ -681,10 +705,6 @@ function vmDataTableServerData( source, minimum, tableSelector )
 			} );
 
 			return;
-		}
-
-		if ( haveOriginalZeroRecords ) {
-			oLanguage.sZeroRecords = originalZeroRecords;
 		}
 
 		return $.ajax( {
@@ -778,6 +798,11 @@ function vmDataTableApi( table )
  * `ellipsis` spans once the page count exceeds the number window -- that
  * ellipsis behaviour is new in 2.x, not a port of anything the old plugin
  * did. The arrows are restored below via `language.paginate.previous`/`next`.
+ * Rendering plain `&larr;`/`&rarr;` text as literal HTML entities is safe
+ * only because the vendored BS5 renderer writes button labels with
+ * `.html(content)` (public/js/152-jquery.datatables.bootstrap5.js:108); a
+ * renderer that switched to `.text(content)` would surface the raw entity
+ * text instead of the arrow glyph, so this pairing has to move together.
  * `fnPagingInfo` has no 2.x counterpart and is not reintroduced; the public
  * `page.info()` API supersedes it and nothing in this project called it
  * outside the deleted plugin.

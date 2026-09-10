@@ -6,6 +6,23 @@
  * Copyright (c) 2026 Jörn Zaefferer
  * Released under the MIT license
  */
+/*
+ * MyGuard provenance: upstream 1.22.0 + 1 recorded local patch.
+ *
+ * Base artifact: jQuery Validation Plugin 1.22.0 upstream release,
+ * sha256 7a59dfe5f8d5422799f3e3859a2bbd48af2a60c03525d94d56bb6a352b7a21ca
+ * (recorded verbatim from PR #197 / VIM-A15.59; this file is no longer
+ * byte-identical to that artifact because of the patch below).
+ *
+ * Local patches:
+ *   1. VIM-A15.61 -- Validator.element()'s grouped-field branch called
+ *      v.currentElements.pushStack( cleanElement ), discarding the return
+ *      value (pushStack() does not mutate the receiver), so a grouped
+ *      sibling that became valid was never added to currentElements and
+ *      never had its error class cleared by defaultShowErrors(). Changed
+ *      to `v.currentElements = v.currentElements.add( cleanElement );`.
+ *      See the inline comment at that call site for detail.
+ */
 (function( factory ) {
 	if ( typeof define === "function" && define.amd ) {
 		define( ["jquery"], factory );
@@ -503,7 +520,19 @@ $.extend( $.validator, {
 
 							// Don't want to check fields if a user hasn't gotten to them yet
 							if ( cleanElement && cleanElement.name in v.invalid ) {
-								v.currentElements.pushStack( cleanElement );
+
+								// VIM-A15.61 local patch (deviation from stock 1.22.0):
+								// upstream calls v.currentElements.pushStack( cleanElement ),
+								// but pushStack() returns a NEW jQuery object rather than
+								// mutating the receiver, so the return value here was
+								// discarded and cleanElement never actually joined
+								// currentElements. defaultShowErrors() only clears error
+								// classes for elements it finds in currentElements, so a
+								// grouped sibling that becomes valid kept its error styling
+								// until an unrelated full revalidation ran. Assigning the
+								// result of .add() (which also returns a new set, but here
+								// the assignment is what makes it take effect) fixes this.
+								v.currentElements = v.currentElements.add( cleanElement );
 								result = v.check( cleanElement ) && result;
 							}
 						}

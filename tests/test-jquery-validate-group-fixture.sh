@@ -114,6 +114,23 @@ $(function() {
         return validator.element('#first') && validator.element('#second');
     });
 
+    // VIM-A15.61: validating "#first" reaches Validator.element()'s grouped
+    // branch for "second" (still recorded invalid at this point) and revalidates
+    // it as cleanElement via v.currentElements.pushStack/add(cleanElement).
+    // Upstream's pushStack() call discards its return value, so cleanElement
+    // never actually joins currentElements; defaultShowErrors() only
+    // unhighlights elements found via validElements(), which is derived from
+    // currentElements, so "second" would keep its error class forever once it
+    // was set, even though it is filled in and no longer invalid. This is the
+    // one assertion in this fixture that distinguishes the discarded-pushStack
+    // behaviour from the fixed .add()-assignment behaviour -- every check above
+    // it passes on both.
+    $('#second').addClass('error');
+    check('grouped sibling error class clears once that sibling becomes valid', function() {
+        validator.element('#first');
+        return !$('#second').hasClass('error');
+    });
+
     document.getElementById('output').textContent = JSON.stringify({ failures: failures });
     document.body.dataset.verdict = failures.length ? 'FAIL' : 'PASS';
 });

@@ -4,7 +4,7 @@ var oDataTable;
 function vmMailboxServerData( source )
 {
     var minimum = {if isset($options.defaults.server_side.pagination.min_search_str)}{$options.defaults.server_side.pagination.min_search_str}{else}3{/if};
-    return vmDataTableServerData( source, minimum, '#list_table' );
+    return vmDataTableServerData( source, minimum );
 }
 
 $(document).ready( function() {

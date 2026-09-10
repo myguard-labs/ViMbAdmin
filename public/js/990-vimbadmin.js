@@ -602,9 +602,16 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
 
 	// Mirror _fnCallbackFire's own bubble fallback: if the table is not
 	// yet attached to the document, the trigger above never reaches
-	// `body`, so re-fire there to simulate the bubble.
-	if ( table.parents( 'body' ).length === 0 ) {
-		$( 'body' ).trigger( e, [ settings, technicalNote, message ] );
+	// `body`, so re-fire there to simulate the bubble. Unlike the core we
+	// dispatch a fresh event: a jQuery.Event carries isPropagationStopped()
+	// as instance state, so re-triggering the same object is a silent no-op
+	// once any handler on the detached table has stopped propagation -- and
+	// that is exactly the case this fallback exists to serve.
+	if ( table.parents( 'body' ).length === 0 && ! e.isPropagationStopped() ) {
+		var bubbled = $.Event( 'dt-error.dt' );
+		bubbled.dt = settings.api;
+
+		$( 'body' ).trigger( bubbled, [ settings, technicalNote, message ] );
 	}
 
 	if ( typeof mode === 'function' ) {
@@ -637,33 +644,18 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
  *
  * @param {string} source        list-data URL.
  * @param {number} minimum       minimum search string length.
- * @param {string} tableSelector table selector, for the "type more" hint.
- * @return {function} A DataTables 2.x `ajax` option, in function form.
+ * `settings.oLanguage` is required: the core always supplies it (it is deep
+ * copied per table at 150-jquery.datatables.js:174), so a caller that builds a
+ * settings object by hand has to provide one too.
+ *
+ * @return {function} A DataTables 2.x `ajax` option.
  */
-function vmDataTableServerData( source, minimum, tableSelector )
+function vmDataTableServerData( source, minimum )
 {
-	// Captured once, the first time we need to restore them, so the restore
-	// is faithful to whatever this table's view configured (e.g. list.js's
-	// `language.emptyTable`) rather than a hard-coded guess.
-	var originalZeroRecords;
-	var originalEmptyTable;
-	var haveOriginals = false;
-
 	return function( data, callback, settings )
 	{
 		var api = new $.fn.dataTable.Api( settings );
 		var oLanguage = settings.oLanguage;
-
-		// Restore unconditionally, before the decline/proceed branch below:
-		// otherwise a decline followed by teardown (e.g. the table is
-		// destroyed, or the view is torn down without another search ever
-		// running) leaves the hint permanently installed on the shared
-		// `settings.oLanguage`.
-		if ( haveOriginals ) {
-			oLanguage.sZeroRecords = originalZeroRecords;
-			oLanguage.sEmptyTable  = originalEmptyTable;
-			haveOriginals = false;
-		}
 
 		var search = ( data.search && data.search.value )
 			? String( data.search.value ).trim()
@@ -675,9 +667,11 @@ function vmDataTableServerData( source, minimum, tableSelector )
 			.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
 
 		if ( searchLength > 0 && searchLength < minimum ) {
-			originalZeroRecords = oLanguage.sZeroRecords;
-			originalEmptyTable  = oLanguage.sEmptyTable;
-			haveOriginals = true;
+			// Captured per call, so the restore is faithful to whatever
+			// this table's view configured (e.g. list.js's
+			// `language.emptyTable`) rather than a hard-coded guess.
+			var originalZeroRecords = oLanguage.sZeroRecords;
+			var originalEmptyTable  = oLanguage.sEmptyTable;
 
 			// The core's `_emptyRow` only reads `sZeroRecords` when
 			// `fnRecordsTotal()` is non-zero; a declined request answers
@@ -703,6 +697,15 @@ function vmDataTableServerData( source, minimum, tableSelector )
 				iTotalDisplayRecords: 0,
 				aaData:               []
 			} );
+
+			// `callback` drives _fnAjaxUpdateDraw -> _fnDraw -> _emptyRow
+			// synchronously, so the hint has already been painted by the
+			// time this returns and the borrowed keys can go straight
+			// back. Restoring here rather than on the next call is what
+			// keeps the mutation from outliving the draw it was for --
+			// nothing calls this transport again after a teardown.
+			oLanguage.sZeroRecords = originalZeroRecords;
+			oLanguage.sEmptyTable  = originalEmptyTable;
 
 			return;
 		}

@@ -267,16 +267,63 @@ $(function() {
         if (answered.iTotalDisplayRecords !== 0) return false;
         if (answered.aaData.length !== 0) return false;
 
-        // The "type more" hint must land on BOTH language keys: the core's
-        // `_emptyRow` only reads `sZeroRecords` when `fnRecordsTotal()` is
-        // non-zero, and a declined request answers `iTotalRecords: 0`, so it
-        // falls through to `sEmptyTable` instead.
-        if (settings.oLanguage.sZeroRecords !== 'Enter at least 3 characters to search.') return false;
-        if (settings.oLanguage.sEmptyTable  !== 'Enter at least 3 characters to search.') return false;
+        // The hint is written to BOTH language keys and restored before the
+        // transport returns -- see the `_emptyRow` note beside the hint in
+        // vmDataTableServerData for why both keys are needed. `callback`
+        // paints synchronously, so by the time the call is over the borrowed
+        // keys must already be back: a declined search that is never followed
+        // by another one (the table is destroyed, the view torn down) must
+        // not leave the hint behind.
+        if (settings.oLanguage.sZeroRecords !== originalZeroRecords) return false;
+        if (settings.oLanguage.sEmptyTable  !== originalEmptyTable) return false;
 
-        // A following successful (long-enough) search must restore both
-        // keys to what the view originally configured -- otherwise the hint
-        // sticks around permanently once a short search has ever run.
+        // The hint has to actually reach the paint, though. Re-run the
+        // decline with a callback that samples the language keys at the
+        // moment the core would render the empty row.
+        var atPaint = null;
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+        try {
+            ajax({
+                draw: 11,
+                start: 0,
+                length: 10,
+                search: { value: 'ab' },
+                order: []
+            }, function() {
+                atPaint = {
+                    zero:  settings.oLanguage.sZeroRecords,
+                    empty: settings.oLanguage.sEmptyTable
+                };
+            }, settings);
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (!atPaint) return false;
+        if (atPaint.zero  !== 'Enter at least 3 characters to search.') return false;
+        if (atPaint.empty !== 'Enter at least 3 characters to search.') return false;
+
+        // ...and a second consecutive decline must capture the ORIGINALS,
+        // not the hint it just installed. Without the restore-before-return
+        // this is where the hint would become permanent.
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+        try {
+            ajax({
+                draw: 12,
+                start: 0,
+                length: 10,
+                search: { value: 'cd' },
+                order: []
+            }, function() {}, settings);
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (settings.oLanguage.sZeroRecords !== originalZeroRecords) return false;
+        if (settings.oLanguage.sEmptyTable  !== originalEmptyTable) return false;
+
+        // A following successful (long-enough) search must leave both keys
+        // as the view configured them, and must actually hit the network.
         requested = false;
         $.ajax = function() { requested = true; return { abort: function() {} }; };
         try {

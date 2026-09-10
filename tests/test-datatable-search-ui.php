@@ -40,8 +40,8 @@ try {
 $check('production minified bundle exposes the shared transport',
     is_string($bundle)
         && str_contains($bundle, 'function vmDataTableServerData(')
-        && str_contains($bundle, 'Invalid JSON response')
-        && str_contains($bundle, 'Ajax error')
+        && str_contains($bundle, 'vmDataTableLogAjaxError(api,1,"Invalid JSON response")')
+        && str_contains($bundle, 'vmDataTableLogAjaxError(api,7,"Ajax error")')
         && !str_contains($bundle, 'error:function(){callback(emptyResult)}'));
 
 $lists = [
@@ -56,7 +56,7 @@ foreach ($lists as $list => $contract) {
     $controller = file_get_contents(__DIR__ . "/../src/Kernel/Controller/{$contract['controller']}.php");
     $check("{$list} browser suppresses short server-side searches", is_string($template)
         && str_contains($template, "'ajax': {$contract['fn']}(")
-        && str_contains($template, 'vmDataTableServerData( source, minimum, \'#list_table\' )'));
+        && str_contains($template, 'vmDataTableServerData( source, minimum )'));
     $check("{$list} endpoint passes its configured minimum to fromArray", is_string($controller)
         && preg_match(
             '/DataTableQuery::fromArray\(\s*(?:self::[^\n]+\n\s*)?,?\s*\$this->'

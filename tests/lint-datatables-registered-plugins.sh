@@ -118,7 +118,9 @@ registered_pagers=$(
 strip_line_comments() { sed 's://.*::'; }
 
 harvest_renderers_dot() {
-  grep -hPo 'DataTable\.ext\.renderer\.pag(?:e|ing)Button\.\K[A-Za-z_][A-Za-z0-9_]*(?=\s*=)' "$@"
+  # [Dd]ataTable: registrations appear both bare (`DataTable.ext...`, the
+  # vendored engine) and namespaced (`$.fn.dataTable.ext...`, our own code).
+  grep -hPo '[Dd]ataTable\.ext\.renderer\.pag(?:e|ing)Button\.\K[A-Za-z_][A-Za-z0-9_]*(?=\s*=)' "$@"
 }
 
 harvest_renderers_bracket() {
@@ -249,7 +251,10 @@ found_real=$(
     harvest_renderers_bracket "$real_stripped" 2>/dev/null
   } | sort -u | tr '\n' ' '
 )
-if [[ $found_real == *genuine* && $found_real == *genuine_bracket* ]]; then
+# Compare whole entries, not substrings: `genuine_bracket` contains `genuine`,
+# so a substring test would let the bracket matcher alone satisfy both halves
+# and the dot matcher could silently harvest nothing.
+if [[ " $found_real" == *" genuine "* && " $found_real" == *" genuine_bracket "* ]]; then
   echo "  OK: a genuine renderer registration is still harvested"
 else
   echo "  FAIL: the renderer harvest missed a genuine registration ($found_real)" >&2

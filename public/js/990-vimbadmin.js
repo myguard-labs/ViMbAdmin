@@ -706,20 +706,32 @@ function vmDataTableServerData( source, minimum )
 
 			// Answer in the LEGACY response shape the rest of this
 			// bridge deals in; 2.x maps it natively (see the header).
-			callback( {
-				sEcho:                data.draw,
-				iTotalRecords:        0,
-				iTotalDisplayRecords: 0,
-				aaData:               []
-			} );
-
-			// `callback` drives _fnAjaxUpdateDraw -> _fnDraw -> _emptyRow
-			// synchronously, so the hint has already been painted by the
-			// time this returns and the borrowed keys can go straight
-			// back. Restoring here rather than on the next call is what
-			// keeps the mutation from outliving the draw it was for.
-			oLanguage.sZeroRecords = originalZeroRecords;
-			oLanguage.sEmptyTable  = originalEmptyTable;
+			//
+			// `callback` drives _fnAjaxUpdateDraw -> _fnDraw ->
+			// _emptyRow synchronously, so the hint has already been
+			// painted by the time this returns and the borrowed keys can
+			// go straight back. Restoring here rather than on the next
+			// call is what keeps the mutation from outliving the draw it
+			// was for.
+			//
+			// `finally`, because that same synchronous draw fires
+			// `aoDrawCallback` (150-jquery.datatables.js:3539) and then
+			// _fnInitComplete: a view's own draw callback, a column
+			// renderer or a resize handler throwing anywhere in there
+			// would otherwise skip the restore and leave the search hint
+			// as this table's PERMANENT empty-table text.
+			try {
+				callback( {
+					sEcho:                data.draw,
+					iTotalRecords:        0,
+					iTotalDisplayRecords: 0,
+					aaData:               []
+				} );
+			}
+			finally {
+				oLanguage.sZeroRecords = originalZeroRecords;
+				oLanguage.sEmptyTable  = originalEmptyTable;
+			}
 
 			return;
 		}

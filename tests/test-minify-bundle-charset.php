@@ -65,8 +65,8 @@ if (is_string($bundle)) {
         str_contains($bundle, "J{$correctOumlaut}rn Zaefferer")
     );
     $check(
-        'bundle contains the correct "©2008-2024 SpryMedia" UTF-8 byte sequence',
-        str_contains($bundle, "{$correctCopyright}2008-2024 SpryMedia")
+        'bundle contains the correct "© SpryMedia Ltd" UTF-8 byte sequence',
+        str_contains($bundle, "{$correctCopyright} SpryMedia Ltd")
     );
     $check(
         'bundle does NOT contain the "read-as-Latin-1" mojibake spelling of Jörn',
@@ -78,7 +78,7 @@ if (is_string($bundle)) {
     );
     $check(
         'bundle does NOT contain the ASCII "?" mangling of either licence byte',
-        !str_contains($bundle, 'J?rn') && !str_contains($bundle, '?2008-2024')
+        !str_contains($bundle, 'J?rn') && !str_contains($bundle, '? SpryMedia')
     );
 } else {
     // The readability check above has already counted this as a failure; do not

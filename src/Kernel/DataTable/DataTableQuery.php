@@ -66,6 +66,7 @@ final class DataTableQuery
      * @param int $minimumSearchLength Nonempty searches shorter than this are
      *        rejected; zero explicitly disables the minimum.
      * @throws \LengthException when a nonempty search is below the minimum
+     * @throws \LogicException when the configured minimum search length is negative
      * @throws \TypeError when a request parameter has the wrong scalar type
      */
     public static function fromArray(array $p, int $minimumSearchLength = 0): self

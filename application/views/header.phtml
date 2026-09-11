@@ -22,11 +22,7 @@
     {tmplinclude file='header-css.phtml'}
 
 {if isset($inColorBox) && $inColorBox}
-    {if !$options.mini_css}
-        <link rel="stylesheet" type="text/css" href="{genUrl}/css/930-popup.css" />
-    {else}
-        <link rel="stylesheet" type="text/css" href="{genUrl}/css/min.930-popup.css" />
-    {/if}
+    <link rel="stylesheet" type="text/css" href="{genUrl}/css/930-popup.css" />
 {/if}
 
     <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->

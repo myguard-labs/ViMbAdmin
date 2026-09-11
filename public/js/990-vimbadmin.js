@@ -672,13 +672,20 @@ function vmDataTableServerData( source, minimum )
 		var api = new $.fn.dataTable.Api( settings );
 		var oLanguage = settings.oLanguage;
 
+		// PHP trim excludes form feed and Unicode whitespace such as NBSP.
 		var search = ( data.search && data.search.value )
-			? String( data.search.value ).trim()
+			? String( data.search.value ).replace( /^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '' )
 			: '';
+
+		// Match DataTableQuery's leading contains sigil and PHP ltrim set.
+		// Keep the raw request unchanged so the server still sees the sigil.
+		var searchTerm = search.charAt( 0 ) === '*'
+			? search.slice( 1 ).replace( /^[ \t\n\r\0\x0B]+/, '' )
+			: search;
 
 		// Count a surrogate pair as one character, so an astral
 		// character is not mistaken for a long enough search.
-		var searchLength = search
+		var searchLength = searchTerm
 			.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
 
 		if ( searchLength > 0 && searchLength < minimum ) {

@@ -36,8 +36,8 @@ $(document).ready( function()
             // sortField map ([0=>'username', 1=>'status', 2=>'domain',
             // 4=>'archived_at']; no key 3), so the server's `?? 'archived_at'`
             // fallback would sort by archived date while this column painted
-            // its own sort indicator -- a client/server disagreement. Kept
-            // non-orderable until VIM-A15.56a2 gives it a mapped sort field.
+            // its own sort indicator -- a client/server disagreement.
+            // Maildir-size sorting remains unsupported, so keep it non-orderable.
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return row.maildir_size ? vmArchiveBytes( row.maildir_size ) : '&mdash;'; } },
             { 'data': 'archived_at', 'render': function( d ){ return d ? vmArchiveEsc( d ) : '&mdash;'; } },
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return ( row.user_exists == 1 ) ? '<span class="badge text-bg-success">Yes</span>' : '<span class="badge text-bg-secondary">No</span>'; } },

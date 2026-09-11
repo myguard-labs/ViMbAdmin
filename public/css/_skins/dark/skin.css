@@ -260,7 +260,7 @@ table.dataTable thead td,
 .popover.right .arrow:after  { border-right-color: var(--vimb-surface-2); }
 .tooltip-inner { background: var(--vimb-surface-2); color: var(--vimb-text); }
 
-/* ---- modals (if any are used outside colorbox) ------------------- */
+/* ---- modals ---------------------------------------------------- */
 .modal, .modal-body { background: var(--vimb-surface); color: var(--vimb-text); }
 .modal-header, .modal-footer {
     background: var(--vimb-surface-2);

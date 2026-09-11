@@ -137,8 +137,9 @@ function toggleActive(elid, id) {
                         if( data !== "ko" && data.substr( 0, 1 ) == "[" )
                         {
                             data = JSON.parse( data );
+                            var tableApi = vmDataTableApi( oDataTable );
                             $.each( data, function( index, row ){
-                                   vmDataTableApi( oDataTable ).row.add([
+                                   tableApi.row.add([
                                         row.username,
                                         row.name,
                                         formatUsedQuota( row.id, row.quota_bytes, row.quota ),
@@ -148,7 +149,7 @@ function toggleActive(elid, id) {
                                         formatControlls( row.id )
                              ]);
                             });
-                            vmDataTableApi( oDataTable ).draw();
+                            tableApi.draw();
                         }
                       }
                     });

@@ -118,8 +118,9 @@ function getEntries( event ){
                     if( data !== "ko" && data.substr( 0, 1 ) == "[" )
                     {
                         data = JSON.parse( data );
+                        var tableApi = vmDataTableApi( oDataTable );
                         $.each( data, function( index, row ){
-                               vmDataTableApi( oDataTable ).row.add([
+                               tableApi.row.add([
                                     row.address,
                                     row.domain,
                                     formatActive( row.id, row.active ),
@@ -127,7 +128,7 @@ function getEntries( event ){
                                     formatControlls( row.id )
                          ]);
                         });
-                        vmDataTableApi( oDataTable ).draw();
+                        tableApi.draw();
                     }
                   }
                 });
@@ -254,4 +255,3 @@ jQuery( document ).on( 'click', '[data-toggle-active]', function() {
     var id = jQuery( this ).attr( 'data-toggle-active' );
     toggleActive( 'toggle-active-' + id, id );
 } );
-

@@ -94,8 +94,8 @@ $check('archive list ids reject mixed numeric strings before repository access',
     && $invoke(ArchiveController::class, 'positiveIntegerOrNull', '9junk') === null
     && $invoke(ArchiveController::class, 'positiveIntegerOrNull', '01') === null);
 $check('archive DataTables containers fail before query parsing', $fails(
-    static fn(): mixed => $invoke(ArchiveController::class, 'requestArray', ['iDisplayLength' => ['100']]),
-    'DataTables parameter iDisplayLength must be a string',
+    static fn(): mixed => $invoke(ArchiveController::class, 'requestArray', ['length' => ['100']]),
+    'DataTables parameter length must be a string',
 ));
 $snapshot = $invoke(ArchiveController::class, 'mailboxSnapshot', [
     'username' => 'alice@example.test', 'local_part' => 'alice', 'name' => null,

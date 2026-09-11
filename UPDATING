@@ -18,4 +18,11 @@ and `size_at` columns. Review the `application.ini` config changes in the
 release notes before
 restarting the application.
 
+Server-side list tables now use the DataTables 2 wire protocol. Deploy the PHP
+code and JavaScript assets together and reload open panel tabs after upgrading.
+Custom list-data clients must send draw/start/length, search[value], and
+order[0][column]/order[0][dir]; responses contain draw, recordsTotal,
+recordsFiltered, and data. Only the first ordering is applied. Paging bounds
+and literal prefix/leading-* search semantics are unchanged.
+
 (The old upstream wiki at opensolutions/ViMbAdmin is no longer maintained.)

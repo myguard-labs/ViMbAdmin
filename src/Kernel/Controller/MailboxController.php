@@ -157,12 +157,9 @@ final class MailboxController extends AbstractController
     private static function requestArray(array $value): array
     {
         $scalarKeys = [
-            'sEcho',
-            'iDisplayStart',
-            'iDisplayLength',
-            'sSearch',
-            'iSortCol_0',
-            'sSortDir_0',
+            'draw',
+            'start',
+            'length',
         ];
         $result = [];
         foreach ($value as $key => $item) {
@@ -230,7 +227,7 @@ final class MailboxController extends AbstractController
      * view uses. Computed columns -- used quota, last login, active, controls --
      * are rendered but not sortable and map to the default.
      *
-     * @param int  $index        The DataTables `iSortCol_0` index.
+     * @param int  $index        The DataTables `order[0][column]` index.
      * @param bool $domainColumn Whether the Domain column is rendered.
      */
     private static function listSortField(int $index, bool $domainColumn): string
@@ -375,10 +372,12 @@ final class MailboxController extends AbstractController
             return new Response('ko');
         }
         try {
-            $q = DataTableQuery::fromArray(
-                self::requestArray($_GET),
-                $this->dataTableMinimumSearchLength(),
-            );
+            $minimum = $this->dataTableMinimumSearchLength();
+            try {
+                $q = DataTableQuery::fromArray(self::requestArray($_GET), $minimum);
+            } catch (\TypeError) {
+                return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
+            }
         } catch (\LengthException $e) {
             return new Response($e->getMessage(), 400, 'text/plain; charset=utf-8');
         } catch (\LogicException) {

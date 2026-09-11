@@ -77,6 +77,9 @@ for asset in \
     exit 1
   fi
 done
+mkdir -p "$tmp/src/Kernel/DataTable" "$tmp/tests/support"
+cp src/Kernel/DataTable/{DataTableQuery,DataTableResult}.php "$tmp/src/Kernel/DataTable/"
+cp tests/support/datatable-wire-endpoint.php "$tmp/tests/support/"
 # The search text contains a literal Smarty variable, not a shell variable.
 # shellcheck disable=SC2016
 sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' \
@@ -144,6 +147,47 @@ function check(name, test) {
 }
 
 $(function() {
+    // Real HTTP serialization -> PHP parser -> modern response -> DataTables.
+    // Each list uses the shared transport, with its own scoped fixture rows.
+    var wireChecks = ['domain', 'mailbox', 'alias', 'archive', 'log'].map(function(scope) {
+        return new Promise(function(resolve, reject) {
+            var element = $('<table><thead><tr><th>Name</th></tr></thead></table>').appendTo('body');
+            var step = 0;
+            element.on('draw.dt', function() {
+                try {
+                    var api = element.DataTable();
+                    var info = api.page.info();
+                    var names = api.column(0).data().toArray();
+                    if (step === 0) {
+                        if (info.recordsTotal !== 4 || names.join() !== scope + '-Alpha,' + scope + '-Beta') throw new Error('initial page');
+                        step++;
+                        api.page('next').draw('page');
+                    } else if (step === 1) {
+                        if (info.start !== 2 || names.join() !== scope + '-Delta,' + scope + '-Gamma') throw new Error('next page');
+                        step++;
+                        api.order([[0, 'desc']]).draw();
+                    } else if (step === 2) {
+                        if (names.join() !== scope + '-Gamma,' + scope + '-Delta') throw new Error('descending order');
+                        step++;
+                        api.search(scope + '-Beta').draw();
+                    } else {
+                        if (info.recordsTotal !== 4 || info.recordsDisplay !== 1 || names.join() !== scope + '-Beta') throw new Error('filtered page');
+                        resolve();
+                    }
+                } catch (error) { reject(new Error(scope + ': ' + error.message)); }
+            });
+            element.DataTable({
+                serverSide: true, pageLength: 2, order: [[0, 'asc']],
+                columns: [{ data: 'name' }],
+                ajax: vmDataTableServerData('/tests/support/datatable-wire-endpoint.php?scope=' + scope, 3)
+            });
+        });
+    });
+    var wireFinished = false;
+    Promise.all(wireChecks).then(function() { wireFinished = true; }, function(error) {
+        failures.push('server-side wire: ' + error.message);
+        wireFinished = true;
+    });
     // Drives the 'injected Migrate warning' negative control (name kept for
     // history/CI-label continuity; the mechanism is jQuery-4-native, not
     // Migrate -- Migrate is deleted). jQuery 4.0.0 added
@@ -195,30 +239,30 @@ $(function() {
         table.destroy();
         return true;
     });
-    // VIM-A15.56a1: the client is DataTables 2.x but the PHP server side still
-    // speaks the legacy 1.9 wire protocol (sEcho / iDisplayStart /
-    // iDisplayLength / sSearch / iSortCol_0 / sSortDir_0). 2.x emits ONLY the
-    // modern names and has no legacy request mode, so vmDataTableServerData()
-    // in 990-vimbadmin.js supplies an `ajax.data` callback that rewrites them.
-    // Assert the legacy names the untouched PHP side actually reads: the
-    // modern names must NOT survive, or every server-side table silently
-    // paginates and sorts against a server that ignores the request.
-    check('server-side ajax request carries the legacy 1.9 parameter names', function() {
-        var sent = vmDataTableLegacyRequest({
+    check('server-side ajax preserves the modern request parameters', function() {
+        var request = {
             draw: 4,
             start: 30,
             length: 15,
             search: { value: 'example' },
             order: [{ column: 2, dir: 'desc' }]
-        });
-        if (sent.sEcho !== 4) return false;
-        if (sent.iDisplayStart !== 30) return false;
-        if (sent.iDisplayLength !== 15) return false;
-        if (sent.sSearch !== 'example') return false;
-        if (sent.iSortCol_0 !== 2 || sent.sSortDir_0 !== 'desc') return false;
-        // The modern names must not leak through alongside them.
-        if ('draw' in sent || 'start' in sent || 'length' in sent) return false;
-        return true;
+        };
+        var originalAjax = $.ajax;
+        var sent;
+        var table = $('#table').DataTable();
+        try {
+            $.ajax = function(options) { sent = options.data; };
+            vmDataTableServerData('/list-data', 3)(request, function() {}, table.settings()[0]);
+        } finally {
+            $.ajax = originalAjax;
+            table.destroy();
+        }
+        if (sent.draw !== 4) return false;
+        if (sent.start !== 30) return false;
+        if (sent.length !== 15) return false;
+        if (sent.search.value !== 'example') return false;
+        if (sent.order[0].column !== 2 || sent.order[0].dir !== 'desc') return false;
+        return sent === request;
     });
     // Exercise the actual source/bundle transport in every mode. Request
     // interception observes whether the minimum gate runs before network I/O,
@@ -253,15 +297,15 @@ $(function() {
             } finally {
                 $.ajax = originalAjax;
             }
-            if (allowed) return requested !== null && requested.sSearch === search && answered === null;
-            return requested === null && answered !== null && answered.sEcho === 11
-                && answered.iTotalDisplayRecords === 0 && answered.aaData.length === 0;
+            if (allowed) return requested !== null && requested.search.value === search && answered === null;
+            return requested === null && answered !== null && answered.draw === 11
+                && answered.recordsFiltered === 0 && answered.data.length === 0;
         });
     });
 
     // The shim must be able to DECLINE a request, not merely blank the search
     // term: a search shorter than the minimum has to resolve to an empty result
-    // set locally. If it reached the server with sSearch blanked, the server
+    // set locally. If it reached the server with search[value] blanked, the server
     // would answer with the full unfiltered page while the hint claimed more
     // characters were needed.
     check('a search shorter than the minimum never reaches the server', function() {
@@ -302,9 +346,9 @@ $(function() {
 
         if (requested) return false;
         if (!answered) return false;
-        if (answered.sEcho !== 9) return false;
-        if (answered.iTotalDisplayRecords !== 0) return false;
-        if (answered.aaData.length !== 0) return false;
+        if (answered.draw !== 9) return false;
+        if (answered.recordsFiltered !== 0) return false;
+        if (answered.data.length !== 0) return false;
 
         // The hint is written to BOTH language keys and restored before the
         // transport returns -- see the `_emptyRow` note beside the hint in
@@ -388,7 +432,7 @@ $(function() {
     });
     // The single sort column the PHP side reads is only honest if the client
     // cannot select more than one.
-    check('multi-column ordering is disabled while the legacy bridge exists', function() {
+    check('multi-column ordering is disabled for the single-order server contract', function() {
         return $.fn.dataTable.defaults.orderMulti === false;
     });
     // Chosen and Colorbox coverage was dropped here; see the file header.
@@ -508,6 +552,7 @@ $(function() {
                 return $('#throb-test .vb-throbber').length === 0;
             });
 
+            if (!wireFinished) failures.push('server-side wire requests did not complete');
             if (warnings.length) failures.push('Migrate warning: ' + warnings.join(' | '));
             document.getElementById('output').textContent = JSON.stringify({ mode: mode, warnings: warnings, failures: failures });
             document.body.dataset.verdict = failures.length ? 'FAIL' : 'PASS';

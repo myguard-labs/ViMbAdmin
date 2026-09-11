@@ -18,7 +18,7 @@ $helper = file_get_contents(__DIR__ . '/../public/js/990-vimbadmin.js');
 $check('shared transport suppresses short nonempty server requests with feedback',
     is_string($helper)
         && str_contains($helper, 'searchLength > 0 && searchLength < minimum')
-        && str_contains($helper, 'iTotalDisplayRecords: 0,')
+        && preg_match('/recordsFiltered\s*:\s*0\s*,/', $helper) === 1
         && str_contains($helper, "'Enter at least ' + minimum")
         && str_contains($helper, "error === 'parsererror'")
         && str_contains($helper, "'Invalid JSON response'")
@@ -58,9 +58,9 @@ foreach ($lists as $list => $contract) {
         && str_contains($template, "'ajax': {$contract['fn']}(")
         && str_contains($template, 'vmDataTableServerData( source, minimum )'));
     $check("{$list} endpoint passes its configured minimum to fromArray", is_string($controller)
+        && str_contains($controller, '$minimum = $this->' . $contract['resolver'] . ';')
         && preg_match(
-            '/DataTableQuery::fromArray\(\s*(?:self::[^\n]+\n\s*)?,?\s*\$this->'
-                . preg_quote($contract['resolver'], '/') . ',?\s*\)/',
+            '/DataTableQuery::fromArray\(\s*self::(?:requestArray|stringMap)\(\$_GET(?:, \'GET data\')?\),\s*\$minimum,?\s*\)/',
             $controller,
         ) === 1);
 }

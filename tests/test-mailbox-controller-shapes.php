@@ -70,11 +70,11 @@ $check('integer-coercion mutant is killed by malformed and non-positive ids',
         && $invoke('positiveIntegerOrNull', 0) === null
         && $invoke('positiveIntegerOrNull', ['7']) === null);
 
-$request = $invoke('requestArray', ['sEcho' => '2', 7 => 'ignored']);
-$check('request boundary retains only string-keyed DataTables values', $request === ['sEcho' => '2']);
+$request = $invoke('requestArray', ['draw' => '2', 7 => 'ignored']);
+$check('request boundary retains only string-keyed DataTables values', $request === ['draw' => '2']);
 $check('DataTables containers fail closed instead of reaching scalar casts', $fails(
-    static fn(): mixed => $invoke('requestArray', ['sEcho' => ['2']]),
-    'DataTables parameter sEcho must be a string',
+    static fn(): mixed => $invoke('requestArray', ['draw' => ['2']]),
+    'DataTables parameter draw must be a string',
 ));
 $check('string-key assertion rejects nested numeric configuration keys', $fails(
     static fn(): mixed => $invoke('stringKeyedArray', [0 => 'bad'], 'Configuration test'),

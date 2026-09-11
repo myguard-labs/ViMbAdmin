@@ -592,7 +592,7 @@ controllerAliasIdentityCheck('present malformed list domain cannot widen into an
         && $invalidDidEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []);
 
 $oldGet = $_GET;
-$_GET = ['sEcho' => ['2']];
+$_GET = ['draw' => ['2']];
 $listDataController = new MailboxController(
     $wrongContainer,
     new RouteMatch('mailbox', 'list-data', MailboxController::class, 'listDataAction', []),
@@ -603,7 +603,7 @@ controllerAliasIdentityCheck('DataTables container input returns ko before repos
     $listDataResponse->body === 'ko'
         && $wrongEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []);
 
-$_GET = ['sSearch' => 'abc'];
+$_GET = ['search' => ['value' => 'abc']];
 $searchFloorOptions = ['defaults' => ['server_side' => ['pagination' => ['min_search_str' => 4]]]];
 foreach ([
     'alias' => new AliasController(

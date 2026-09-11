@@ -172,14 +172,14 @@ foreach ($malformedRequests as [$request, $message]) {
     }
     dataTableCheck('malformed request: ' . $message, $rejected);
 }
-$malformedEchoRejected = false;
-$malformedEcho = getenv('VIMBADMIN_TEST_MALFORMED_ECHO') ?: '7; DROP';
+$malformedDrawRejected = false;
+$malformedDraw = getenv('VIMBADMIN_TEST_MALFORMED_DRAW') ?: '7; DROP';
 try {
-    DataTableQuery::fromArray(['draw' => $malformedEcho]);
+    DataTableQuery::fromArray(['draw' => $malformedDraw]);
 } catch (\TypeError) {
-    $malformedEchoRejected = true;
+    $malformedDrawRejected = true;
 }
-dataTableCheck('malformed echo fails closed', $malformedEchoRejected);
+dataTableCheck('malformed draw fails closed', $malformedDrawRejected);
 
 $shortSearchRejected = static function (string $search): bool {
     try {

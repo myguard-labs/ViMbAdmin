@@ -22,7 +22,7 @@ require "  --user \"${dollar}(id -u):${dollar}(id -g)\""
 require "  --env \"HOME=${dollar}fixture_dir\""
 require "  --mount \"type=bind,src=${dollar}fixture_dir,dst=${dollar}fixture_dir\""
 require "  \"${dollar}image\" google-chrome --no-sandbox \"${dollar}@\""
-require 'vimbadmin-(alias-destination|residual-stored-xss|confirm-guard|jquery-migrate|control-behaviour|source-defect-sweep|validate-group)'
+require 'vimbadmin-(alias-destination|residual-stored-xss|confirm-guard|jquery-migrate|control-behaviour|source-defect-sweep|validate-group|browser-adapter)'
 require 'dst=/usr/local/bin/run-chrome-http-fixture,readonly'
 
 require_php() {
@@ -161,6 +161,33 @@ file://$fixture_dir/regression.html
 EOF
 cmp -- "$expected_args" "$docker_args"
 
+# Every selected engine must pass through the same private-root gate before
+# Docker is invoked; these are behavioural assertions, not just source matches.
+for engine in chromium firefox webkit; do
+  VIMBADMIN_BROWSER=$engine run_runner \
+    --user-data-dir="$fixture_dir/profile" --dump-dom "file://$fixture_dir/regression.html"
+  grep -qxF 'none' "$docker_args"
+  grep -qxF 'ALL' "$docker_args"
+  grep -qxF 'no-new-privileges' "$docker_args"
+  grep -qxF "$(id -u):$(id -g)" "$docker_args"
+  grep -qxF "type=bind,src=$fixture_dir,dst=$fixture_dir" "$docker_args"
+  grep -qxF 'vimbadmin-browser:1.63.0' "$docker_args"
+  grep -qxF "$engine" "$docker_args"
+  rm -f -- "$docker_args"
+  if VIMBADMIN_BROWSER=$engine run_runner --user-data-dir="$foreign_root/profile"; then
+    echo "FAIL: $engine accepted an unregistered fixture" >&2
+    exit 1
+  fi
+  grep -qF 'requires a private test fixture directory' "$output"
+  [[ ! -e $docker_args ]]
+done
+if VIMBADMIN_BROWSER=unknown run_runner --user-data-dir="$fixture_dir/profile"; then
+  echo 'FAIL: unknown browser engine was accepted' >&2
+  exit 1
+fi
+grep -qF 'unsupported browser engine: unknown' "$output"
+[[ ! -e $docker_args ]]
+
 if run_runner --headless; then
   echo 'FAIL: Chrome container runner accepted a missing profile directory' >&2
   exit 1
@@ -178,5 +205,22 @@ if run_runner --user-data-dir="$foreign_root/profile"; then
   exit 1
 fi
 grep -qF 'requires a private test fixture directory' "$output"
+
+# An unexpected launch failure must keep its original exit status and its
+# identifying diagnostic after the adapter test removes the fixture directory.
+cat >"$stub_dir/docker" <<'SH'
+#!/bin/sh
+echo '[firefox] FAIL: injected browser launch failure' >&2
+exit 73
+SH
+status=0
+PATH="$stub_dir:/usr/bin:/bin" VIMBADMIN_BROWSER=firefox \
+  bash tests/test-browser-fixture-adapter.sh >"$output" 2>&1 || status=$?
+if [[ $status != 73 ]]; then
+  echo "FAIL: adapter cleanup changed launch failure status to $status" >&2
+  exit 1
+fi
+grep -qF '[firefox] FAIL: injected browser launch failure' "$output"
+grep -qF '[firefox] FAIL: adapter test exited 73' "$output"
 
 echo 'OK: Chrome runner image and confinement are pinned'

@@ -60,9 +60,11 @@ foreach ($lists as $list => $contract) {
     $check("{$list} endpoint passes its configured minimum to fromArray", is_string($controller)
         && str_contains($controller, '$minimum = $this->' . $contract['resolver'] . ';')
         && preg_match(
-            '/DataTableQuery::fromArray\(\s*self::(?:requestArray|stringMap)\(\$_GET(?:, \'GET data\')?\),\s*\$minimum,?\s*\)/',
+            '/DataTableQuery::fromArray\(\s*(?:self::(?:requestArray|stringMap)\(\$_GET(?:, \'GET data\')?\)|\$request),\s*\$minimum,?\s*\)/',
             $controller,
-        ) === 1);
+        ) === 1
+        && (preg_match('/DataTableQuery::fromArray\(\s*\$request/', $controller) !== 1
+            || str_contains($controller, '$request = self::requestArray($_GET);')));
 }
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";

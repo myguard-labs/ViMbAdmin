@@ -33,11 +33,13 @@ final class DataTableWireResources
 {
     public int $doctrineReads = 0;
     public bool $brokenConfig = false;
+    public bool $brokenLogic = false;
     public function __construct(private DataTableWireSession $session) {}
     /** @return array<string,mixed> */
     public function getOptions(): array
     {
         if ($this->brokenConfig) throw new TypeError('Internal config failure');
+        if ($this->brokenLogic) throw new LogicException('Internal logic failure');
         return [];
     }
     public function getResource(string $name): object
@@ -100,8 +102,18 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
     $action = $class->getMethod('listDataAction');
     $oldGet = $_GET;
     try {
-        foreach (['search' => ['search' => ['value' => ['abc']]],
-            'order' => ['order' => [['dir' => ['desc']]]]] as $shape => $request) {
+        $malformedRequests = [
+            'search' => ['search' => ['value' => ['abc']]],
+            'order' => ['order' => [['dir' => ['desc']]]],
+        ];
+        if (in_array($name, ['Alias', 'Archive', 'Domain'], true)) {
+            $malformedRequests += [
+                'draw' => ['draw' => ['7']],
+                'start' => ['start' => ['0']],
+                'length' => ['length' => ['25']],
+            ];
+        }
+        foreach ($malformedRequests as $shape => $request) {
             $_GET = $request;
             try {
                 $response = $action->invoke($controller);
@@ -122,6 +134,15 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
         }
         $check($name . ': config TypeError is not converted to a client error', $configFailed);
         $resources->brokenConfig = false;
+        $resources->brokenLogic = true;
+        $logicFailed = false;
+        try {
+            $action->invoke($controller);
+        } catch (LogicException $e) {
+            $logicFailed = $e->getMessage() === 'Internal logic failure';
+        }
+        $check($name . ': unrelated internal LogicException is not converted to a client error', $logicFailed);
+        $resources->brokenLogic = false;
         $_GET = [];
         $repositoryFailed = false;
         try {

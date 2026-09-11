@@ -356,8 +356,18 @@ final class DomainController extends AbstractController
 
         $minimum = $this->dataTableMinimumSearchLength('domain');
         try {
+            $request = self::requestArray($_GET);
+        } catch (LogicException $e) {
+            foreach (['draw', 'start', 'length'] as $key) {
+                if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
+                    return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
+                }
+            }
+            throw $e;
+        }
+        try {
             $q = DataTableQuery::fromArray(
-                self::requestArray($_GET),
+                $request,
                 $minimum,
             );
         } catch (\LengthException $e) {

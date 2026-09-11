@@ -20,8 +20,15 @@ jobs:
   # Static/browser regressions — no DB. Fast first signal.             #
   # ------------------------------------------------------------------ #
   static:
-    name: Static and browser regression
+    name: Static and browser regression (${{ matrix.browser }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    env:
+      VIMBADMIN_BROWSER: ${{ matrix.browser }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -73,8 +80,18 @@ jobs:
       - name: DataTables clear() must chain its redraw (VIM-A15.56a)
         run: bash tests/lint-datatables-clear-redraws.sh
 
+      - name: Search responses reuse one DataTables Api wrapper
+        run: node tests/test-datatable-search-row-api.cjs
+
       - name: Containerized Chrome runner hardening
-        run: bash tests/test-headless-chrome-container.sh
+        run: >-
+          VIMBADMIN_BROWSER=chrome bash tests/test-headless-chrome-container.sh
+
+      - name: Build pinned browser fixture image
+        run: docker build -t vimbadmin-browser:1.63.0 .github/scripts/browser
+
+      - name: Browser adapter identity and fail-closed contract
+        run: bash tests/test-browser-fixture-adapter.sh
 
       - name: Fixture HTTP readiness stays bounded (VIM-A15.16 round-3 defect)
         run: bash tests/test-fixture-http-readiness-bound.sh
@@ -111,6 +128,9 @@ jobs:
         run: >-
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
           bash tests/test-jquery-migrate-compat.sh
+
+      - name: Deliberately broken compatibility lane must fail on this engine
+        run: bash tests/test-browser-engine-negative-control.sh
 
       - name: jQuery Validation grouped-field path survives jQuery 4 (VIM-A15.59)
         run: >-

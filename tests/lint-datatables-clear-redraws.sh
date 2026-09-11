@@ -27,6 +27,7 @@
 #        - an aliased/indirect call: `var m='clear'; x[m]()`
 #        - a concatenated string: `["cle"+"ar"]()`
 #        - `.clear.apply(...)` / `.clear.call(...)`
+#        - optional invocation: `table.clear?.()`
 #        - `var f=api.clear; f()` (method torn off before calling)
 #        - destructuring: `var {clear}=api;`
 #        - a unicode-escaped property (`\u0063lear` or the ES6 code-point
@@ -118,6 +119,9 @@ fi
 # so English prose with an abbreviation -- `e.g. clear (temp)` -- is not read
 # as a call. Scope-assertion known-uncovered, consequently: a call written
 # `obj. clear()` or `obj .clear()` with space around the dot.
+# Generic optional member access, `table?.clear()`, is also uncovered here:
+# the `?` separates the receiver from the member dot. Discovery in .js files
+# still sees its `.clear()` suffix; this is a scope-assertion hole only.
 #
 # Scope-assertion known-uncovered (distinct from discovery's known-uncovered
 # list above): a `<script` tag emitted by PHP/echo/string concatenation
@@ -168,7 +172,7 @@ fi
 # string (`["cle"+"ar"]()`), `.clear.apply(...)`/`.clear.call(...)`, a torn-off
 # method reference (`var f=api.clear; f()`), destructuring (`var {clear}=api`),
 # a unicode-escaped property (`\u0063lear` or `\u{63}lear`), or `[` newline
-# `"clear"]()`.
+# `"clear"]()`, or optional invocation (`table.clear?.()`).
 discovery_re='\.[[:space:]]*clear[[:space:]]*\(|\[[[:space:]]*["'"'"'\`]clear["'"'"'\`][[:space:]]*\][[:space:]]*\('
 
 normal_form_re='^[[:space:]]*vmDataTableApi\([[:space:]]*[A-Za-z_$][A-Za-z0-9_$]*[[:space:]]*\)\.clear\(\)\.draw\(\);[[:space:]]*$'

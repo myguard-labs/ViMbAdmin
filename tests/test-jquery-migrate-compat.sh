@@ -220,6 +220,45 @@ $(function() {
         if ('draw' in sent || 'start' in sent || 'length' in sent) return false;
         return true;
     });
+    // Exercise the actual source/bundle transport in every mode. Request
+    // interception observes whether the minimum gate runs before network I/O,
+    // and checks that accepted contains searches retain their original sigil.
+    [
+        ['*ab', 3, false], ['* ab', 3, false], ['*abc', 3, true],
+        ['* abc', 3, true], ['*', 3, true], ['*  ', 3, true],
+        ['*\tab', 3, false], ['*\nab', 3, false], ['*\rab', 3, false],
+        ['*\0ab', 3, false], ['*\vab', 3, false],
+        ['*\fab', 3, true], ['*\u00a0ab', 3, true],
+        ['*ab\f', 3, true], ['*ab\u00a0', 3, true],
+        ['\fab', 3, true], ['\u00a0ab', 3, true],
+        ['*ab\0', 3, false], ['\0*ab', 3, false],
+        ['*😀a', 3, false], ['*😀ab', 3, true],
+        ['*ab', 0, true], ['ab', 3, false], ['abc', 3, true],
+        ['  * ab  ', 3, false], ['', 3, true], ['   ', 3, true]
+    ].concat([' ', '\t', '\n', '\r', '\0', '\v'].reduce(function(cases, space) {
+        return cases.concat([[space + '*ab', 3, false], ['*ab' + space, 3, false],
+            [space + '*abc' + space, 3, true]]);
+    }, [])).forEach(function(testCase) {
+        var search = testCase[0], minimum = testCase[1], allowed = testCase[2];
+        check('sigil minimum boundary ' + JSON.stringify(search) + ' minimum ' + minimum, function() {
+            var requested = null, answered = null;
+            var originalAjax = $.ajax;
+            $.ajax = function(options) { requested = options.data; return { abort: function() {} }; };
+            try {
+                vmDataTableServerData('/unused/source', minimum)({
+                    draw: 11, start: 0, length: 10, search: { value: search }, order: []
+                }, function(json) { answered = json; }, {
+                    sServerMethod: 'GET', oLanguage: { sZeroRecords: 'None', sEmptyTable: 'Empty' }
+                });
+            } finally {
+                $.ajax = originalAjax;
+            }
+            if (allowed) return requested !== null && requested.sSearch === search && answered === null;
+            return requested === null && answered !== null && answered.sEcho === 11
+                && answered.iTotalDisplayRecords === 0 && answered.aaData.length === 0;
+        });
+    });
+
     // The shim must be able to DECLINE a request, not merely blank the search
     // term: a search shorter than the minimum has to resolve to an empty result
     // set locally. If it reached the server with sSearch blanked, the server

@@ -21,9 +21,11 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 $failures = 0;
 
-$check = static function (string $label, bool $ok) use (&$failures): void {
+$check = static function (string $label, bool $ok, mixed $actual = null, mixed $expected = true) use (&$failures): void {
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
     if (!$ok) {
+        echo '       actual: ' . var_export(func_num_args() >= 3 ? $actual : $ok, true) . "\n";
+        echo '       expected: ' . var_export($expected, true) . "\n";
         $failures++;
     }
 };
@@ -86,8 +88,8 @@ foreach (['130-jquery.colorbox.js', '300-chosen.jquery.js'] as $dead) {
 foreach (['130-colorbox.css', '300-chosen.css'] as $dead) {
     $check("dead CSS asset is not a bundle input: {$dead}", !in_array($dead, $cssNames, true));
 }
-$check('jsExcluded is empty now that Chosen and Colorbox are deleted', $lists['jsExcluded'] === []);
-$check('cssExcluded is empty now that Chosen and Colorbox are deleted', $lists['cssExcluded'] === []);
+$check('jsExcluded is empty now that Chosen and Colorbox are deleted', $lists['jsExcluded'] === [], $lists['jsExcluded'], []);
+$check('cssExcluded is empty now that Chosen and Colorbox are deleted', $lists['cssExcluded'] === [], $lists['cssExcluded'], []);
 
 // The live assets, enumerated from the real tree, in bundle concatenation
 // order. An exact comparison rather than a subset check: a bundle that gained
@@ -114,14 +116,8 @@ $expectedCss = [
     '930-popup.css',
 ];
 
-$check('the JS bundle inputs are exactly the live assets, in order', $jsNames === $expectedJs);
-if ($jsNames !== $expectedJs) {
-    echo '       got: ' . implode(', ', $jsNames) . "\n";
-}
-$check('the CSS bundle inputs are exactly the live assets, in order', $cssNames === $expectedCss);
-if ($cssNames !== $expectedCss) {
-    echo '       got: ' . implode(', ', $cssNames) . "\n";
-}
+$check('the JS bundle inputs are exactly the live assets, in order', $jsNames === $expectedJs, $jsNames, $expectedJs);
+$check('the CSS bundle inputs are exactly the live assets, in order', $cssNames === $expectedCss, $cssNames, $expectedCss);
 
 foreach ($expectedJs as $live) {
     $check("live JS asset resolves to a real file: {$live}", is_file($root . '/public/js/' . $live));
@@ -254,15 +250,12 @@ exec(
     $printed,
     $status
 );
-$check('--print-inputs succeeds without a build toolchain', $status === 0);
+$check('--print-inputs succeeds without a build toolchain', $status === 0, $status, 0);
 $expectedPrinted = array_merge(
     array_map(static fn (string $n): string => 'js  ' . $n, $expectedJs),
     array_map(static fn (string $n): string => 'css ' . $n, $expectedCss)
 );
-$check('--print-inputs reports the same list the resolver returns', $printed === $expectedPrinted);
-if ($printed !== $expectedPrinted) {
-    echo '       got: ' . implode(' | ', $printed) . "\n";
-}
+$check('--print-inputs reports the same list the resolver returns', $printed === $expectedPrinted, $printed, $expectedPrinted);
 
 // The retired vendor invocation must not be advertised anywhere: running it
 // would reintroduce the glob and revert PR #180 again.
@@ -358,12 +351,16 @@ foreach ($css as $cssPath) {
 $charsetOccurrences = substr_count($simulatedMerge, '@charset');
 $check(
     'the simulated bundle contains at most one @charset',
-    $charsetOccurrences <= 1
+    $charsetOccurrences <= 1,
+    $charsetOccurrences,
+    'at most 1'
 );
 if ($charsetOccurrences === 1) {
     $check(
         'the single remaining @charset sits at offset 0',
-        str_starts_with($simulatedMerge, '@charset')
+        str_starts_with($simulatedMerge, '@charset'),
+        strpos($simulatedMerge, '@charset'),
+        0
     );
 } elseif ($charsetOccurrences === 0) {
     echo "  ok   no @charset survived concatenation (no chunk opened with one)\n";

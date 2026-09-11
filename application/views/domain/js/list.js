@@ -118,8 +118,9 @@ function getEntries( event ){
                     if( data !== "ko" && data.substr( 0, 1 ) == "[" )
                     {
                         data = JSON.parse( data );
+                        var tableApi = vmDataTableApi( oDataTable );
                         $.each( data, function( index, row ){
-                               vmDataTableApi( oDataTable ).row.add([
+                               tableApi.row.add([
                                     row.name,
                                     formatMailboxes( row.id, row.mailboxes, row.maxmailboxes ),
                                     formatAliases( row.id, row.aliases, row.maxaliases ),
@@ -134,7 +135,7 @@ function getEntries( event ){
                                     formatControlls( row.id, row.name )
                          ]);
                         });
-                        vmDataTableApi( oDataTable ).draw();
+                        tableApi.draw();
                     }
                   }
                 });
@@ -296,4 +297,3 @@ jQuery( document ).on( 'click', '[data-purge-domain]', function() {
     var el = jQuery( this );
     purgeDomain( el.attr( 'data-purge-domain' ), el.attr( 'data-domain-name' ) );
 } );
-

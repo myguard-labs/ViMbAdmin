@@ -125,6 +125,21 @@ printf '%s\n' "$@" > "$VIMBADMIN_DOCKER_ARGS"
 SH
 chmod +x "$stub_dir/docker"
 
+# CI can install Node outside /usr/bin. Keep its caller-provided PATH when
+# exercising the adapter, and prove that it reaches the selected Node binary.
+readonly node_bin=$fixture_root/node-bin
+readonly node_marker=$fixture_root/node-started
+test_node=$(command -v node)
+mkdir -p "$node_bin"
+cat >"$node_bin/node" <<'SH'
+#!/bin/sh
+touch "$VIMBADMIN_TEST_NODE_MARKER"
+exec "$VIMBADMIN_TEST_NODE" "$@"
+SH
+chmod +x "$node_bin/node"
+PATH="$node_bin:$PATH"
+export VIMBADMIN_TEST_NODE="$test_node" VIMBADMIN_TEST_NODE_MARKER="$node_marker"
+
 run_runner() {
   PATH="$stub_dir:/usr/bin:/bin" \
     VIMBADMIN_DOCKER_ARGS="$docker_args" \
@@ -214,7 +229,7 @@ echo '[firefox] FAIL: injected browser launch failure' >&2
 exit 73
 SH
 status=0
-PATH="$stub_dir:/usr/bin:/bin" VIMBADMIN_BROWSER=firefox \
+PATH="$stub_dir:$PATH" VIMBADMIN_BROWSER=firefox \
   bash tests/test-browser-fixture-adapter.sh >"$output" 2>&1 || status=$?
 if [[ $status != 73 ]]; then
   echo "FAIL: adapter cleanup changed launch failure status to $status" >&2
@@ -222,5 +237,9 @@ if [[ $status != 73 ]]; then
 fi
 grep -qF '[firefox] FAIL: injected browser launch failure' "$output"
 grep -qF '[firefox] FAIL: adapter test exited 73' "$output"
+if [[ ! -e $node_marker ]]; then
+  echo 'FAIL: adapter cleanup test discarded the caller-selected Node path' >&2
+  exit 1
+fi
 
 echo 'OK: Chrome runner image and confinement are pinned'

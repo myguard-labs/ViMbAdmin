@@ -41,6 +41,7 @@ gates=(
   lint-bs2-component-classes.sh
   lint-template-escaping.sh
   lint-modal-aria-labelledby.sh
+  lint-datatables-clear-redraws.sh
 )
 
 # Each case is "<cwd>|<path to pass to bash>". Both halves matter:

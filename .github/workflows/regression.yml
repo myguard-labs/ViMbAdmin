@@ -70,6 +70,9 @@ jobs:
       - name: fnServerData initialisers must keep sAjaxSource (VIM-A15.26)
         run: bash tests/lint-datatables-serverdata-source.sh
 
+      - name: DataTables clear() must chain its redraw (VIM-A15.56a)
+        run: bash tests/lint-datatables-clear-redraws.sh
+
       - name: Containerized Chrome runner hardening
         run: bash tests/test-headless-chrome-container.sh
 

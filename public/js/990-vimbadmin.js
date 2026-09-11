@@ -499,143 +499,378 @@ function randPasword( len, id )
 //****************************************************************************
 
 
-/* Default class modification */
-function vmDataTableServerData( source, data, callback, minimum, tableSelector, settings )
+/* ---------------------------------------------------------------------------
+ * TEMPORARY legacy wire-protocol shim  --  remove in VIM-A15.56a2
+ * ---------------------------------------------------------------------------
+ * DataTables 2.x speaks the modern server-side protocol:
+ *
+ *     request   draw / start / length / search[value]
+ *               / order[0][column] / order[0][dir]
+ *     response  draw / recordsTotal / recordsFiltered / data
+ *
+ * The PHP side of this application still speaks the DataTables 1.9 protocol:
+ * src/Kernel/DataTable/DataTableResult.php emits sEcho / iTotalRecords /
+ * iTotalDisplayRecords / aaData, and src/Kernel/DataTable/DataTableQuery.php
+ * plus the Domain/Mailbox/Archive controllers parse sEcho / iDisplayStart /
+ * iDisplayLength / sSearch / iSortCol_0 / sSortDir_0.
+ *
+ * VIM-A15.56a1 (this change) migrates the CLIENT ONLY. The two ends therefore
+ * disagree on purpose, and this shim is the deliberate bridge between them so
+ * a 2.x client can keep talking to the unchanged 1.9 server. It is a planned
+ * two-step, not an accident: VIM-A15.56a2 retires the legacy protocol in PHP,
+ * and when it lands this block is deleted and every list table collapses to a
+ * plain `ajax: { url: ..., data: ... }` with no translation at all.
+ *
+ * The bridge is ASYMMETRIC, and only one half is ours:
+ *
+ *   response (server -> client)  NOT handled here. DataTables 2.3.4 still
+ *       carries its own legacy fallbacks -- _fnAjaxDataSrc reads
+ *       `json.aaData || json.data`, and _fnAjaxDataSrcParam maps sEcho ->
+ *       draw, iTotalRecords -> recordsTotal, iTotalDisplayRecords ->
+ *       recordsFiltered. The legacy response body is consumed natively, so
+ *       adding our own mapper would be dead code. This holds only while no
+ *       `ajax.dataSrc` is configured; setting one replaces the
+ *       `aaData || data` fallback outright.
+ *
+ *   request (client -> server)   handled here, by vmDataTableLegacyRequest.
+ *       2.x emits ONLY the modern parameter names (_fnAjaxParameters); it has
+ *       no legacy request mode, and the PHP side reads no modern name. This
+ *       translation is the one thing keeping the tables working.
+ *
+ * Do not build new behaviour on any of this.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Translate a DataTables 2.x request-parameter object into the legacy 1.9
+ * scalar keys the PHP side still parses.
+ *
+ * Only the parameters this application's server actually reads are mapped.
+ * 2.x also sends a full per-column block (`columns[i][...]`) that the legacy
+ * PHP ignores entirely, so it is dropped rather than forwarded.
+ *
+ * @param {object} data 2.x request parameters.
+ * @return {object} Legacy 1.9 request parameters.
+ */
+function vmDataTableLegacyRequest( data )
 {
-        var search = '', echo = 1;
-        $.each( data, function( _, parameter ) {
-                if( parameter.name === 'sSearch' ) search = String( parameter.value || '' ).trim();
-                if( parameter.name === 'sEcho' ) echo = parseInt( parameter.value, 10 ) || 1;
-        } );
+        var order = ( data.order && data.order.length ) ? data.order[0] : null;
 
-        var searchLength = search.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
-        var emptyResult = { sEcho: echo, iTotalRecords: 0, iTotalDisplayRecords: 0, aaData: [] };
-        if( searchLength > 0 && searchLength < minimum ) {
-                callback( emptyResult );
-                setTimeout( function() {
-                        $( tableSelector + ' tbody td.dataTables_empty' )
-                                .text( 'Enter at least ' + minimum + ' characters to search.' );
-                }, 0 );
-                return;
-        }
-
-        return $.ajax( {
-                url: source,
-                data: data,
-                dataType: 'json',
-                success: callback,
-                error: function( xhr, error ) {
-                        var api = $.fn.dataTableExt.oApi;
-                        var handled = api._fnCallbackFire(
-                                settings, null, 'xhr', [settings, null, xhr]
-                        );
-                        if( $.inArray( true, handled ) === -1 ) {
-                                api._fnLog(
-                                        settings,
-                                        0,
-                                        error === 'parsererror' ? 'Invalid JSON response' : 'Ajax error',
-                                        error === 'parsererror' ? 1 : 7
-                                );
-                        }
-                        api._fnProcessingDisplay( settings, false );
-                }
-        } );
-}
-
-$.extend( $.fn.dataTableExt.oStdClasses, {
-        "sWrapper": "dataTables_wrapper form-inline"
-} );
-
-/* API method to get paging information */
-$.fn.dataTableExt.oApi.fnPagingInfo = function ( oSettings )
-{
-        return {
-                "iStart":         oSettings._iDisplayStart,
-                "iEnd":           oSettings.fnDisplayEnd(),
-                "iLength":        oSettings._iDisplayLength,
-                "iTotal":         oSettings.fnRecordsTotal(),
-                "iFilteredTotal": oSettings.fnRecordsDisplay(),
-                "iPage":          Math.ceil( oSettings._iDisplayStart / oSettings._iDisplayLength ),
-                "iTotalPages":    Math.ceil( oSettings.fnRecordsDisplay() / oSettings._iDisplayLength )
+        // 2.x `draw` is the 1.9 `sEcho` draw counter: echoed back unchanged by
+        // the server so DataTables can discard out-of-order responses.
+        var legacy = {
+                sEcho:          data.draw,
+                iDisplayStart:  data.start,
+                iDisplayLength: data.length,
+                sSearch:        ( data.search && data.search.value ) ? data.search.value : ''
         };
+
+        if ( order ) {
+                legacy.iSortCol_0   = order.column;
+                legacy.sSortDir_0   = order.dir;
+        }
+
+        return legacy;
 }
 
-/* Bootstrap style pagination control */
-$.extend( $.fn.dataTableExt.oPagination, {
-        "bootstrap": {
-                "fnInit": function( oSettings, nPaging, fnDraw ) {
-                        var oLang = oSettings.oLanguage.oPaginate;
-                        var fnClickHandler = function ( e ) {
-                                e.preventDefault();
-                                if ( oSettings.oApi._fnPageChange(oSettings, e.data.action) ) {
-                                        fnDraw( oSettings );
-                                }
-                        };
+/**
+ * Report an Ajax failure the way DataTables' own _fnLog() would.
+ *
+ * 2.x exposes no internals at all -- `$.fn.dataTableExt.oApi` carried
+ * _fnLog/_fnCallbackFire/_fnProcessingDisplay under 1.x, and `ext.internal` is
+ * gone -- so a caller that runs its own transport has to reproduce the public
+ * half of that reporting itself: build a real event carrying `e.dt` (the way
+ * `_fnCallbackFire` does) and trigger the `.dt`-namespaced `dt-error` event,
+ * honour `ext.errMode`, and use the same technical-note numbers the core uses
+ * (1 for a malformed JSON body, 7 for a transport failure). A falsy/unhandled
+ * mode reports nothing further, matching `_fnLog`'s own silence outside
+ * alert/throw/function -- so `errMode: 'none'` stays silent here too.
+ */
+function vmDataTableLogAjaxError( api, technicalNote, message )
+{
+	var settings = api.settings()[0];
+	var ext      = $.fn.dataTable.ext;
+	var mode     = ext.sErrMode || ext.errMode;
+	var full     = 'DataTables warning: table id=' + settings.sTableId
+		+ ' - ' + message + '. For more information about this error, please see '
+		+ 'https://datatables.net/tn/' + technicalNote;
 
-                        $(nPaging).addClass('pagination').append(
-                                '<ul>'+
-                                        '<li class="prev disabled"><a href="#">&larr; '+oLang.sPrevious+'</a></li>'+
-                                        '<li class="next disabled"><a href="#">'+oLang.sNext+' &rarr; </a></li>'+
-                                '</ul>'
-                        );
-                        var els = $('a', nPaging);
-                        $(els[0]).on( 'click.DT', { action: "previous" }, fnClickHandler );
-                        $(els[1]).on( 'click.DT', { action: "next" }, fnClickHandler );
-                },
+	var e     = $.Event( 'dt-error.dt' );
+	var table = $( settings.nTable );
+	e.dt = settings.api;
 
-                "fnUpdate": function ( oSettings, fnDraw ) {
-                        var iListLength = 5;
-                        var oPaging = oSettings.oInstance.fnPagingInfo();
-                        var an = oSettings.aanFeatures.p;
-                        var i, j, sClass, iStart, iEnd, iHalf=Math.floor(iListLength/2);
+	table.trigger( e, [ settings, technicalNote, message ] );
 
-                        if ( oPaging.iTotalPages < iListLength) {
-                                iStart = 1;
-                                iEnd = oPaging.iTotalPages;
-                        }
-                        else if ( oPaging.iPage <= iHalf ) {
-                                iStart = 1;
-                                iEnd = iListLength;
-                        } else if ( oPaging.iPage >= (oPaging.iTotalPages-iHalf) ) {
-                                iStart = oPaging.iTotalPages - iListLength + 1;
-                                iEnd = oPaging.iTotalPages;
-                        } else {
-                                iStart = oPaging.iPage - iHalf + 1;
-                                iEnd = iStart + iListLength - 1;
-                        }
+	// Stand in for _fnCallbackFire's bubble fallback: if the table is not
+	// yet attached to the document, the trigger above never reaches `body`,
+	// so re-fire there to simulate the bubble. Two deliberate differences
+	// from the core:
+	//
+	//   - we dispatch a FRESH event, because a jQuery.Event carries
+	//     isPropagationStopped() as instance state, so re-triggering the
+	//     same object is a silent no-op once any handler on the detached
+	//     table has stopped propagation -- exactly the case this fallback
+	//     exists to serve;
+	//   - we skip the fallback entirely when propagation was stopped. The
+	//     core re-fires unconditionally, which still reaches handlers bound
+	//     directly on `body`; we treat a stopped propagation as stopped,
+	//     which is what an attached table would have done.
+	//
+	// The fresh event also means a body-bound handler's return value lands
+	// on `bubbled` and is discarded, where the core's single re-fired object
+	// would have carried it back in `e.result`. That is acceptable here only
+	// because `dt-error` has no claim channel -- nothing reads the return.
+	// Do NOT copy this shape to an event whose return value is consulted
+	// (the `xhr.dt` trigger below is exactly such a case).
+	if ( table.parents( 'body' ).length === 0 && ! e.isPropagationStopped() ) {
+		var bubbled = $.Event( 'dt-error.dt' );
+		bubbled.dt = settings.api;
 
-                        for ( i=0, iLen=an.length ; i<iLen ; i++ ) {
-                                // Remove the middle elements
-                                $('li:gt(0)', an[i]).filter(':not(:last)').remove();
+		$( 'body' ).trigger( bubbled, [ settings, technicalNote, message ] );
+	}
 
-                                // Add the new list items and their event handlers
-                                for ( j=iStart ; j<=iEnd ; j++ ) {
-                                        sClass = (j==oPaging.iPage+1) ? 'class="active"' : '';
-                                        $('<li '+sClass+'><a href="#">'+j+'</a></li>')
-                                                .insertBefore( $('li:last', an[i])[0] )
-                                                .on('click', function (e) {
-                                                        e.preventDefault();
-                                                        oSettings._iDisplayStart = (parseInt($('a', this).text(),10)-1) * oPaging.iLength;
-                                                        fnDraw( oSettings );
-                                                } );
-                                }
+	if ( typeof mode === 'function' ) {
+		mode( settings, technicalNote, full );
+	}
+	else if ( mode === 'throw' ) {
+		throw new Error( full );
+	}
+	else if ( mode === 'alert' ) {
+		alert( full );
+	}
+}
 
-                                // Add / remove disabled classes from the static elements
-                                if ( oPaging.iPage === 0 ) {
-                                        $('li:first', an[i]).addClass('disabled');
-                                } else {
-                                        $('li:first', an[i]).removeClass('disabled');
-                                }
+/**
+ * Build the shared `ajax` option for a server-side list table.
+ *
+ * Replaces the 1.9 `sAjaxSource` + `fnServerData` pair, which DataTables 2.x
+ * removed outright (zero occurrences in 2.3.4).
+ *
+ * Returns the FUNCTION form of `ajax`, not the object form, because this
+ * helper has to be able to DECLINE a request: a search shorter than `minimum`
+ * must resolve to an empty result set without touching the server. An
+ * `ajax: { data: ... }` callback can only rewrite parameters, so blanking the
+ * search term there would still issue the XHR and the server would answer
+ * with the full unfiltered page -- the opposite of the intent, and with no
+ * empty row for the hint below to be written into. 2.3.4's `preXhr` cannot
+ * stand in for this either: its handlers' return value is discarded
+ * (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
+ * offers no way to cancel.
+ *
+ * `settings.oLanguage` is required: the core always supplies it (the per-table deep
+ * copy is at 150-jquery.datatables.js:174 and the language merge onto it at
+ * 150-jquery.datatables.js:453-455), so a caller that builds a
+ * settings object by hand has to provide one too.
+ *
+ * @param {string} source  list-data URL.
+ * @param {number} minimum minimum search string length.
+ * @return {function} A DataTables 2.x `ajax` option.
+ */
+function vmDataTableServerData( source, minimum )
+{
+	return function( data, callback, settings )
+	{
+		var api = new $.fn.dataTable.Api( settings );
+		var oLanguage = settings.oLanguage;
 
-                                if ( oPaging.iPage === oPaging.iTotalPages-1 || oPaging.iTotalPages === 0 ) {
-                                        $('li:last', an[i]).addClass('disabled');
-                                } else {
-                                        $('li:last', an[i]).removeClass('disabled');
-                                }
-                        }
-                }
-        }
+		var search = ( data.search && data.search.value )
+			? String( data.search.value ).trim()
+			: '';
+
+		// Count a surrogate pair as one character, so an astral
+		// character is not mistaken for a long enough search.
+		var searchLength = search
+			.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
+
+		if ( searchLength > 0 && searchLength < minimum ) {
+			// Captured per call, so the restore is faithful to whatever
+			// this table's view configured (e.g. list.js's
+			// `language.emptyTable`) rather than a hard-coded guess.
+			var originalZeroRecords = oLanguage.sZeroRecords;
+			var originalEmptyTable  = oLanguage.sEmptyTable;
+
+			// The core's `_emptyRow` only reads `sZeroRecords` when
+			// `fnRecordsTotal()` is non-zero; a declined request answers
+			// `iTotalRecords: 0`, so it falls through to `sEmptyTable`
+			// instead (when one is configured, as every list.js view's
+			// `language.emptyTable` does) -- so both have to carry the
+			// hint, or it never renders on this path.
+			//
+			// Set the hint text BEFORE calling back, so it renders in the
+			// first paint instead of flashing the view's configured
+			// `emptyTable`/`zeroRecords` text (e.g. "No log entries.")
+			// first.
+			var hint = 'Enter at least ' + minimum
+				+ ' characters to search.';
+			oLanguage.sZeroRecords = hint;
+			oLanguage.sEmptyTable  = hint;
+
+			// Answer in the LEGACY response shape the rest of this
+			// bridge deals in; 2.x maps it natively (see the header).
+			//
+			// `callback` drives _fnAjaxUpdateDraw -> _fnDraw ->
+			// _emptyRow synchronously, so the hint has already been
+			// painted by the time this returns and the borrowed keys can
+			// go straight back. Restoring here rather than on the next
+			// call is what keeps the mutation from outliving the draw it
+			// was for.
+			//
+			// `finally`, because that same synchronous draw fires
+			// `aoDrawCallback` (150-jquery.datatables.js:3539) and then
+			// _fnInitComplete: a view's own draw callback, a column
+			// renderer or a resize handler throwing anywhere in there
+			// would otherwise skip the restore and leave the search hint
+			// as this table's PERMANENT empty-table text.
+			try {
+				callback( {
+					sEcho:                data.draw,
+					iTotalRecords:        0,
+					iTotalDisplayRecords: 0,
+					aaData:               []
+				} );
+			}
+			finally {
+				oLanguage.sZeroRecords = originalZeroRecords;
+				oLanguage.sEmptyTable  = originalEmptyTable;
+			}
+
+			return;
+		}
+
+		return $.ajax( {
+			url:      source,
+			type:     settings.sServerMethod || 'GET',
+			dataType: 'json',
+			cache:    false,
+			data:     vmDataTableLegacyRequest( data ),
+			success:  callback,
+			error:    function( xhr, error ) {
+				// Mirrors the core's own baseAjax error handler: let an
+				// `xhr` listener claim the failure first, and otherwise log
+				// it, then always clear the processing indicator.
+				//
+				// The core suppresses when any entry of `ret` is true
+				// (150-jquery.datatables.js:4230). For EVENT listeners that
+				// array holds exactly one entry, `e.result`
+				// (_fnCallbackFire, 150-jquery.datatables.js:6705) -- the core
+				// passes null for `callbackArr` on this path, so its other
+				// `ret` entries never materialise. `e.result` is jQuery's
+				// last-non-undefined handler return, so a later listener
+				// returning false un-claims what an earlier one claimed -- in
+				// the core exactly as here. Matching that quirk is deliberate:
+				// this shim is a bridge, and behaving differently from the
+				// engine it wraps would be the worse surprise.
+				var event = $.Event( 'xhr.dt' );
+				event.dt  = settings.api;
+
+				$( settings.nTable ).trigger(
+					event, [ settings, null, xhr ]
+				);
+
+				if ( event.result !== true ) {
+					if ( error === 'parsererror' ) {
+						vmDataTableLogAjaxError(
+							api, 1, 'Invalid JSON response'
+						);
+					}
+					else if ( xhr.readyState === 4 ) {
+						vmDataTableLogAjaxError(
+							api, 7, 'Ajax error'
+						);
+					}
+				}
+
+				api.processing( false );
+			}
+		} );
+	};
+}
+
+/* ------------------------------------------------------------------------- */
+
+/**
+ * Get the DataTables 2.x API instance for a table.
+ *
+ * DataTables 1.x returned an object carrying the legacy `fn*` methods
+ * (`fnClearTable`, `fnAddData`, ...) directly from `$( sel ).dataTable()`. 2.x
+ * removed that method set -- only the private `_fnClearTable`/`_fnAddData`
+ * internals remain -- so those calls have to go through the modern API
+ * (`clear()`, `row.add()`, `draw()`) instead.
+ *
+ * `$.fn.dataTable.Api` accepts the table node, selector or an existing
+ * instance, so this works whether it is handed the object returned by
+ * `.dataTable()` or a plain selector.
+ *
+ * @param {*} table Table node, selector, or DataTables instance.
+ * @return {object} A DataTables 2.x API instance.
+ */
+function vmDataTableApi( table )
+{
+        return new $.fn.dataTable.Api( table );
+}
+
+/* Bootstrap 5 pagination.
+ *
+ * 1.x needed a hand-written pager plugin here: it registered a `bootstrap`
+ * entry on `$.fn.dataTableExt.oPagination` implementing the `fnInit`/`fnUpdate`
+ * contract, plus an `fnPagingInfo` API method, to emit a
+ * `<ul class="pagination"><li>` structure with a five-number window and
+ * prev/next controls.
+ *
+ * DataTables 2.x provides that structure natively. `ext.pager` entries are now
+ * plain functions returning a button-name list, and the rendering is done by
+ * `ext.renderer.pagingButton` / `ext.renderer.pagingContainer` -- both of which
+ * the vendored public/js/152-jquery.datatables.bootstrap5.js registers under
+ * the name `bootstrap`, producing exactly the same
+ * `<ul class="pagination"><li class="page-item"><button class="page-link">`
+ * markup with `active`/`disabled` states. The built-in `simple_numbers` pager
+ * supplies the previous / numbers / next button set, and
+ * `ext.pager.numbers_length` carries the number window the old plugin
+ * hard-coded as `iListLength`.
+ *
+ * So the custom plugin is not ported -- it is replaced by the stock 2.x pager
+ * plus the vendored Bootstrap 5 renderer, none of which needs the old
+ * private-API coupling. It is not, however, the same visual result: the old
+ * plugin emitted literal `&larr; Previous` / `Next &rarr;` arrows and always
+ * rendered exactly `iListLength` numbers with no ellipsis. 2.x's
+ * `simple_numbers` pager emits plain Previous/Next text and inserts
+ * `ellipsis` spans once the page count exceeds the number window -- that
+ * ellipsis behaviour is new in 2.x, not a port of anything the old plugin
+ * did. The arrows are restored below via `language.paginate.previous`/`next`.
+ * Rendering plain `&larr;`/`&rarr;` text as literal HTML entities is safe
+ * only because the vendored BS5 renderer writes button labels with
+ * `.html(content)` (public/js/152-jquery.datatables.bootstrap5.js:108); a
+ * renderer that switched to `.text(content)` would surface the raw entity
+ * text instead of the arrow glyph, so this pairing has to move together.
+ * `fnPagingInfo` has no 2.x counterpart and is not reintroduced; the public
+ * `page.info()` API supersedes it and nothing in this project called it
+ * outside the deleted plugin.
+ */
+$.extend( $.fn.dataTable.defaults, {
+	pagingType: 'simple_numbers',
+
+	// Restore the old plugin's literal arrows; 2.x's stock default is plain
+	// "Previous" / "Next" text.
+	language: {
+		paginate: {
+			previous: '&larr; Previous',
+			next:     'Next &rarr;'
+		}
+	},
+
+	// The legacy request bridge forwards ONE sort column, because the PHP side
+	// reads only `iSortCol_0` / `sSortDir_0` -- there is no `iSortingCols` loop
+	// anywhere in src/Kernel (DataTableQuery reads the single pair). 2.x enables
+	// `orderMulti` by default, so without this a shift-click would paint sort
+	// indicators on several columns while the server sorted by exactly one,
+	// showing the user an ordering that was never applied. VIM-A15.56a2 removes
+	// this along with the rest of the bridge.
+	orderMulti: false
 } );
+
+// The old plugin hard-coded a five-number window (`iListLength = 5`). In 2.x
+// that window is `ext.pager.numbers_length` (default 7, and it must be odd),
+// read as the default for the paging feature's `buttons` option.
+$.fn.dataTable.ext.pager.numbers_length = 5;
 
 //Adding more sort filters
 jQuery.extend( jQuery.fn.dataTableExt.oSort, {

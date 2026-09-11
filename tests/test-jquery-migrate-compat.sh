@@ -195,6 +195,163 @@ $(function() {
         table.destroy();
         return true;
     });
+    // VIM-A15.56a1: the client is DataTables 2.x but the PHP server side still
+    // speaks the legacy 1.9 wire protocol (sEcho / iDisplayStart /
+    // iDisplayLength / sSearch / iSortCol_0 / sSortDir_0). 2.x emits ONLY the
+    // modern names and has no legacy request mode, so vmDataTableServerData()
+    // in 990-vimbadmin.js supplies an `ajax.data` callback that rewrites them.
+    // Assert the legacy names the untouched PHP side actually reads: the
+    // modern names must NOT survive, or every server-side table silently
+    // paginates and sorts against a server that ignores the request.
+    check('server-side ajax request carries the legacy 1.9 parameter names', function() {
+        var sent = vmDataTableLegacyRequest({
+            draw: 4,
+            start: 30,
+            length: 15,
+            search: { value: 'example' },
+            order: [{ column: 2, dir: 'desc' }]
+        });
+        if (sent.sEcho !== 4) return false;
+        if (sent.iDisplayStart !== 30) return false;
+        if (sent.iDisplayLength !== 15) return false;
+        if (sent.sSearch !== 'example') return false;
+        if (sent.iSortCol_0 !== 2 || sent.sSortDir_0 !== 'desc') return false;
+        // The modern names must not leak through alongside them.
+        if ('draw' in sent || 'start' in sent || 'length' in sent) return false;
+        return true;
+    });
+    // The shim must be able to DECLINE a request, not merely blank the search
+    // term: a search shorter than the minimum has to resolve to an empty result
+    // set locally. If it reached the server with sSearch blanked, the server
+    // would answer with the full unfiltered page while the hint claimed more
+    // characters were needed.
+    check('a search shorter than the minimum never reaches the server', function() {
+        var ajax = vmDataTableServerData('/unused/source', 3);
+        if (typeof ajax !== 'function') return false;
+
+        var requested = false;
+        var originalAjax = $.ajax;
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+
+        // A real `oLanguage`, as the core always supplies (150-…js:453
+        // initialises it before any table option is applied) -- unlike the
+        // production path, this is the only object the shim is given, so if
+        // the hint or its restore lands anywhere else, this assertion is the
+        // one place that would notice.
+        var settings = {
+            sServerMethod: 'GET',
+            oLanguage: {
+                sZeroRecords: 'No matching records found',
+                sEmptyTable:  'No log entries.'
+            }
+        };
+        var originalZeroRecords = settings.oLanguage.sZeroRecords;
+        var originalEmptyTable  = settings.oLanguage.sEmptyTable;
+
+        var answered = null;
+        try {
+            ajax({
+                draw: 9,
+                start: 0,
+                length: 10,
+                search: { value: 'ab' },
+                order: []
+            }, function(json) { answered = json; }, settings);
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (requested) return false;
+        if (!answered) return false;
+        if (answered.sEcho !== 9) return false;
+        if (answered.iTotalDisplayRecords !== 0) return false;
+        if (answered.aaData.length !== 0) return false;
+
+        // The hint is written to BOTH language keys and restored before the
+        // transport returns -- see the `_emptyRow` note beside the hint in
+        // vmDataTableServerData for why both keys are needed. `callback`
+        // paints synchronously, so by the time the call is over the borrowed
+        // keys must already be back: a declined search that is never followed
+        // by another one (the table is destroyed, the view torn down) must
+        // not leave the hint behind.
+        if (settings.oLanguage.sZeroRecords !== originalZeroRecords) return false;
+        if (settings.oLanguage.sEmptyTable  !== originalEmptyTable) return false;
+
+        // The hint has to actually reach the paint, though. Re-run the
+        // decline with a callback that samples the language keys at the
+        // moment the core would render the empty row.
+        var atPaint = null;
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+        try {
+            ajax({
+                draw: 11,
+                start: 0,
+                length: 10,
+                search: { value: 'ab' },
+                order: []
+            }, function() {
+                atPaint = {
+                    zero:  settings.oLanguage.sZeroRecords,
+                    empty: settings.oLanguage.sEmptyTable
+                };
+            }, settings);
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (!atPaint) return false;
+        if (atPaint.zero  !== 'Enter at least 3 characters to search.') return false;
+        if (atPaint.empty !== 'Enter at least 3 characters to search.') return false;
+
+        // ...and the capture must read LIVE state on each call, not a value
+        // memoised from the first decline. Rotate sEmptyTable to a sentinel
+        // between declines: the second decline has to restore the sentinel,
+        // which only holds if it captured at call time.
+        settings.oLanguage.sEmptyTable = 'Rotated sentinel.';
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+        try {
+            ajax({
+                draw: 12,
+                start: 0,
+                length: 10,
+                search: { value: 'cd' },
+                order: []
+            }, function() {}, settings);
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (settings.oLanguage.sZeroRecords !== originalZeroRecords) return false;
+        if (settings.oLanguage.sEmptyTable  !== 'Rotated sentinel.') return false;
+
+        settings.oLanguage.sEmptyTable = originalEmptyTable;
+
+        // A following successful (long-enough) search must leave both keys
+        // as the view configured them, and must actually hit the network.
+        requested = false;
+        $.ajax = function() { requested = true; return { abort: function() {} }; };
+        try {
+            ajax({
+                draw: 10,
+                start: 0,
+                length: 10,
+                search: { value: 'example' },
+                order: []
+            }, function() {}, settings);
+        } finally {
+            $.ajax = originalAjax;
+        }
+
+        if (!requested) return false;
+        if (settings.oLanguage.sZeroRecords !== originalZeroRecords) return false;
+        if (settings.oLanguage.sEmptyTable  !== originalEmptyTable) return false;
+        return true;
+    });
+    // The single sort column the PHP side reads is only honest if the client
+    // cannot select more than one.
+    check('multi-column ordering is disabled while the legacy bridge exists', function() {
+        return $.fn.dataTable.defaults.orderMulti === false;
+    });
     // Chosen and Colorbox coverage was dropped here; see the file header.
     // bootbox 3.3.0 is gone (it built Bootstrap 2 modal markup and drove the
     // Bootstrap 2 lifecycle). The replacement shim deliberately provides only

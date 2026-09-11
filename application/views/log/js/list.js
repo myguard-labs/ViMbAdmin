@@ -1,9 +1,9 @@
 var oDataTable;
 
-function vmLogServerData( source, data, callback, settings )
+function vmLogServerData( source )
 {
     var minimum = {if isset($options.defaults.server_side.pagination.log.min_search_str)}{$options.defaults.server_side.pagination.log.min_search_str}{elseif isset($options.defaults.server_side.pagination.min_search_str)}{$options.defaults.server_side.pagination.min_search_str}{else}3{/if};
-    return vmDataTableServerData( source, data, callback, minimum, '#list_table', settings );
+    return vmDataTableServerData( source, minimum );
 }
 
 
@@ -17,8 +17,7 @@ $(document).ready(function()
         'processing': true,
         'serverSide': true,
         'serverMethod': 'GET',
-        'sAjaxSource': "{genUrl controller='log' action='list-data'}",
-        'fnServerData': vmLogServerData,
+        'ajax': vmLogServerData( "{genUrl controller='log' action='list-data'}" ),
         'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
                 ? parseInt( vm_prefs['iLength'] )
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},

@@ -37,6 +37,19 @@ const payload = 'destination@example.test,'.repeat(3) +
     '"<svg/onload=document.body.dataset.pwned=1>"@example.test';
 const dataTableErrors = [];
 
+// VIM-A15.56a1: #log-fixture's #list_table is a real serverSide DataTable. The
+// escaping under test lives in the server-rendered <tbody> the fixture ships,
+// but a 2.x serverSide table clears that body and issues an XHR on init (1.x
+// left the pre-rendered rows in place when its request failed). Capture the
+// server-rendered cell text NOW, before DataTables can replace it, so the
+// literal-text assertions below test the PHP escaping they were written for.
+const serverRenderedLogCells = Array.from(
+    document.querySelectorAll('#log-fixture td')
+).map((cell) => cell.textContent.trim());
+const serverRenderedLogHtml = (
+    document.querySelector('#log-fixture') || { innerHTML: '' }
+).innerHTML;
+
 // Keep DataTables' normal error reporting observable without opening a modal
 // alert in headless Chrome.
 $.fn.dataTable.ext.sErrMode = $.fn.dataTable.ext.errMode = function (_settings, technicalNote, message) {
@@ -60,7 +73,15 @@ $(function () {
     document.querySelectorAll('#mailbox-purge-fixture [id|="alias-goto"]').forEach(openTooltip);
     openTooltip(document.getElementById('log-message-91'));
 
-    const settings = oDataTable.fnSettings();
+    // VIM-A15.56a1: under DataTables 1.x, vmDataTableServerData() WAS the
+    // fnServerData callback and ran the request itself, so this block called it
+    // directly with (source, data, callback, minimum, selector, settings). 2.x
+    // removed fnServerData; the shim now returns an `ajax` OBJECT and DataTables
+    // owns the request lifecycle, its error reporting and its teardown. So drive
+    // the real thing: initialise a server-side table over the stubbed transport
+    // and assert the same three properties as before -- a legitimate empty
+    // response reaches the table, a transport failure does not, and the failure
+    // surfaces through DataTables' own error channel as technicalNote 7.
     const originalAjax = $.ajax;
     let emptyCallbacks = 0;
     let failureCallbacks = 0;
@@ -81,27 +102,42 @@ $(function () {
         return { abort: function () {} };
     };
 
-    vmDataTableServerData(
-        '/legitimate-empty',
-        [{ name: 'sSearch', value: '' }, { name: 'sEcho', value: 11 }],
-        function (result) {
-            if (result.aaData.length === 0) emptyCallbacks++;
-        },
-        3,
-        '#list_table',
-        settings
-    );
+    // The shim's ajax object, driven through DataTables exactly as a migrated
+    // view initialiser drives it.
+    let probeCounter = 0;
+    function drawServerSideTable(source, onData) {
+        // Park the probe table in its own container so its cells cannot be
+        // picked up by the document-wide `#log-fixture td` / `svg` / `[onload]`
+        // sweeps below.
+        // The probe still gets its own id so repeated draws cannot collide.
+        const probeId = 'serverside-probe-table-' + (++probeCounter);
+        const $host = $('<div class="serverside-probe" style="display:none"></div>');
+        const $table = $('<table id="' + probeId + '"><thead><tr><th>Col</th></tr></thead><tbody></tbody></table>');
+        $host.append($table);
+        $('body').append($host);
+        const api = $table.DataTable({
+            serverSide: true,
+            paging: false,
+            searching: false,
+            info: false,
+            ajax: vmDataTableServerData(source, 3),
+            drawCallback: function () { if (onData) onData(this.api()); }
+        });
+        return { api: api, $table: $table };
+    }
+
+    const emptyTable = drawServerSideTable('/legitimate-empty', function (api) {
+        if (api.rows().count() === 0) emptyCallbacks++;
+    });
     const errorsBeforeFailure = dataTableErrors.length;
-    vmDataTableServerData(
-        '/transport-failure',
-        [{ name: 'sSearch', value: 'valid search' }, { name: 'sEcho', value: 12 }],
-        function () { failureCallbacks++; },
-        3,
-        '#list_table',
-        settings
-    );
+    const failedTable = drawServerSideTable('/transport-failure', function () {
+        failureCallbacks++;
+    });
     const surfacedTransportFailure = dataTableErrors.length === errorsBeforeFailure + 1
         && dataTableErrors[dataTableErrors.length - 1].technicalNote === 7;
+    emptyTable.api.destroy();
+    failedTable.api.destroy();
+    $('.serverside-probe').remove();
     $.ajax = originalAjax;
 
     setTimeout(function () {
@@ -109,8 +145,7 @@ $(function () {
         const purgeDestination = document.querySelector(
             '#mailbox-purge-fixture [id|="alias-goto"]'
         );
-        const logCell = Array.from(document.querySelectorAll('#log-fixture td'))
-            .find((cell) => cell.textContent.trim() === payload);
+        const logCell = serverRenderedLogCells.find((text) => text === payload);
 
         if (!document.getElementById('trusted-tooltip-content')) {
             failures.push('positive HTML-tooltip control did not render');
@@ -129,9 +164,15 @@ $(function () {
             failures.push('purge destination retained HTML tooltip');
         }
         if (!logCell) failures.push('log data was not rendered as literal text');
-        if (document.querySelector('#log-fixture .have-tooltip-long')) {
+        if (/have-tooltip-long/.test(serverRenderedLogHtml)) {
             failures.push('log data reached an HTML tooltip');
         }
+        // Both probes init with searching:false and no search value, so each
+        // takes the network branch. The count of 2 therefore depends on
+        // vmDataTableServerData's `searchLength > 0` guard short-circuiting
+        // the empty-search case into the network branch rather than declining
+        // it. If that threshold ever starts declining empty searches, this
+        // assertion fails here rather than where the change was made.
         if (ajaxCalls !== 2) failures.push('empty and failed requests did not use AJAX');
         if (emptyCallbacks !== 1) failures.push('legitimate empty response did not reach callback');
         if (failureCallbacks !== 0) failures.push('transport failure reached success callback');

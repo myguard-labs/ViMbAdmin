@@ -42,7 +42,11 @@
 #      shapes above -- that case is a known, accepted hole, not a covered one.
 #   2. Only the anchored NORMAL-FORM check in stage 2 is exact. Everything
 #      discovery finds that does not match the normal form byte-for-byte
-#      fails loudly -- there is no "cannot judge" branch.
+#      fails loudly -- no discovered candidate is ever waved through as
+#      unjudgeable. (The script does abort with "cannot judge" when a
+#      precondition fails -- the view root or view JS is missing, or a file
+#      is unreadable -- but those are environment faults, never a verdict
+#      on a candidate.)
 # This invariant (over-match the covered set, then judge exactly) must never
 # regress: widen discovery's regex freely, never relax the normal-form regex.
 # Do NOT attempt to turn discovery into a complete JavaScript tokenizer --
@@ -97,8 +101,8 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 
-# This gate's scope is *.js only. Any non-.js, non-.md file under the view
-# root (.phtml, .php, .html, .tpl, ...) gaining an inline <script> call site
+# This gate's scope is *.js only. Any non-.js file under the view root
+# (.phtml, .php, .html, .md, .tpl, ...) gaining an inline <script> call site
 # would be invisible to discovery above AND would not move the count
 # tripwire. Assert the scope assumption still holds every run, generalised
 # to every extension rather than a per-extension list that must be extended
@@ -124,7 +128,7 @@ scope_call_re='vmDataTableApi[[:space:]]*\(|[]A-Za-z0-9_$)]\.clear[[:space:]]*\(
 scope_hits=()
 while IFS= read -r -d '' file; do
   case "$file" in
-  *.js | *.md) continue ;;
+  *.js) continue ;;
   esac
   [ -r "$file" ] || {
     echo "FAIL: '$file' is not readable; cannot judge scope." >&2

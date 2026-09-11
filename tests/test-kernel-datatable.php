@@ -173,7 +173,10 @@ foreach ($malformedRequests as [$request, $message]) {
     dataTableCheck('malformed request: ' . $message, $rejected);
 }
 $malformedDrawRejected = false;
-$malformedDraw = getenv('VIMBADMIN_TEST_MALFORMED_DRAW') ?: '7; DROP';
+$malformedDraw = getenv('VIMBADMIN_TEST_MALFORMED_DRAW');
+if ($malformedDraw === false) {
+    $malformedDraw = '7; DROP';
+}
 try {
     DataTableQuery::fromArray(['draw' => $malformedDraw]);
 } catch (\TypeError) {

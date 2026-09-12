@@ -481,9 +481,12 @@ function ossAddMessage( msg, type, handled )
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>\
                                     '+ msg + '</div>';
 
-    if( DataTable.Dom.select('.modal-body').isVisible() && handled )
+    var modalBodies = DataTable.Dom.select('.modal-body').filter(function(node) {
+        return DataTable.Dom.select(node).isVisible();
+    });
+    if( modalBodies.length && handled )
     {
-        DataTable.Dom.select('.modal-body').prepend( msgbox );
+        modalBodies.prepend( msgbox );
 
 
     }
@@ -616,7 +619,7 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
         + 'https://datatables.net/tn/' + technicalNote;
     var table = DataTable.Dom.select(api.table().node());
     var stopped = false;
-    var event = table.trigger('dt-error.dt', true,
+    table.trigger('dt-error.dt', true,
         [settings, technicalNote, message], {
             dt: settings.api,
             stopPropagation: function() {
@@ -627,7 +630,7 @@ function vmDataTableLogAjaxError( api, technicalNote, message )
                 stopped = true;
                 Event.prototype.stopImmediatePropagation.call(this);
             }
-        }, true)[0];
+        }, true);
     if (!table.isAttached() && !stopped) {
         DataTable.Dom.select(document.body).trigger('dt-error.dt', true,
             [settings, technicalNote, message], { dt: settings.api });
@@ -688,6 +691,14 @@ function vmDataTableServerData( source, minimum )
             }
         });
     };
+}
+
+/** Restore only usable lengths; older cookies may contain null or bad JSON values. */
+function vmDataTablePageLength( fallback )
+{
+    var length = typeof vm_prefs !== 'undefined' && vm_prefs ? vm_prefs.iLength : undefined;
+    if( typeof length === 'string' && /^-?\d+$/.test(length) ) length = Number(length);
+    return Number.isSafeInteger(length) && (length > 0 || length === -1) ? length : fallback;
 }
 
 function vmDataTableApi( table )

@@ -28,19 +28,6 @@ cp public/js/990-vimbadmin.js "$tmp/runtime.js"
 cp public/js/800-bootstrap.js "$tmp/bootstrap.js"
 cp public/js/850-vimbadmin.modals.js "$tmp/modals.js"
 
-awk '/^function tt_throbber/ { copying = 1 }
-     /^function ossToggle/ { copying = 0 }
-     /^function tt_openModalDialog/ { copying = 1 }
-     /^function ossAjaxErrorHandler/ { copying = 0 }
-     copying { print }' public/js/990-vimbadmin.js >"$tmp/ajax-modal.js"
-awk '/^var ossConfirmedForms = new WeakSet\(\);/ { copying = 1 }
-     copying { print }' public/js/990-vimbadmin.js >"$tmp/guard.js"
-if ! grep -q 'function tt_openModalDialog' "$tmp/ajax-modal.js" ||
-  ! grep -q 'ossConfirm( message' "$tmp/guard.js"; then
-  echo 'FAIL: could not extract production AJAX modal and confirm handlers' >&2
-  exit 2
-fi
-
 modal_shell_has_fallback_name() {
   local file=$1 tag id classes label
   while IFS=$'\t' read -r _line tag; do

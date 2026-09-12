@@ -56,6 +56,7 @@ trap 'rm -rf "$tmp"' EXIT
 cp public/js/150-datatables.js public/js/800-bootstrap.js "$tmp/"
 cp public/js/990-vimbadmin.js "$tmp/990-vimbadmin.js"
 cp public/js/850-vimbadmin.modals.js "$tmp/850-vimbadmin.modals.js"
+cp tests/support/datatables-event-ownership.js "$tmp/"
 bundle_file=$(resolve_bundle_v) || exit $?
 cp "public/js/$bundle_file" "$tmp/bundle.js"
 cp public/css/800-bootstrap.css "$tmp/bootstrap.css"
@@ -87,11 +88,12 @@ cat >"$tmp/regression.html" <<'HTML'
 <html><head><meta charset="utf-8"></head><body>
 <script>
 var production = new URL(location.href).searchParams.get('assets') === 'production';
+var listenerMutation = new URL(location.href).searchParams.get('mutation');
 document.write('<link rel="stylesheet" href="' + (production ? 'bundle.css' : 'bootstrap.css') + '">');
 var assets = production
     ? ['bundle.js']
     : ['150-datatables.js', '800-bootstrap.js', '990-vimbadmin.js', '850-vimbadmin.modals.js'];
-assets.concat(['toggle-view.js']).forEach(function(file) {
+assets.concat(['datatables-event-ownership.js', 'toggle-view.js']).forEach(function(file) {
     document.write('<script src="' + file + '"><\/script>');
 });
 </script>
@@ -202,6 +204,7 @@ vmReady(function () {
             '<span id="toggle-active-probe" data-toggle-active="probe" class="btn btn-success"><i>Yes</i></span>';
         toggleApi.rows.add([[markup]]).draw();
         var control = table.querySelector('[data-toggle-active]');
+        if (listenerMutation === 'direct-listener') DataTable.Dom.select(control).on('click.probe', function() {});
         function clickToggle(node) {
             (node.firstElementChild || node).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
         }
@@ -224,7 +227,7 @@ vmReady(function () {
             else request.success(outcome);
             request.complete();
             if (control.disabled !== false) throw new Error('completed toggle remained disabled');
-            if (control._event_uid !== undefined) throw new Error('toggle owns a direct DataTables listener after completion');
+            if (hasDataTablesHandlers(control)) throw new Error('toggle owns a direct DataTables listener after completion');
             if (outcome === 'ok' ? !control.classList.contains('btn-danger') : control.className !== oldClass)
                 throw new Error('toggle success/failure state incorrect');
         });
@@ -235,11 +238,12 @@ vmReady(function () {
         clickToggle(detached);
         if (requests.length !== outcomes.length) throw new Error('detached toggle sent a request');
         control = table.querySelector('[data-toggle-active]');
+        if (listenerMutation === 'redrawn-direct-listener') DataTable.Dom.select(control).on('click.probe', function() {});
         clickToggle(control);
         if (requests.length !== outcomes.length + 1) throw new Error('redrawn toggle lost delegation');
         requests[outcomes.length].success('ok');
         requests[outcomes.length].complete();
-        if (control._event_uid !== undefined) throw new Error('redrawn toggle owns a direct listener');
+        if (hasDataTablesHandlers(control)) throw new Error('redrawn toggle owns a direct listener');
     } catch (e) {
         failures.push('delegated toggle lifecycle: ' + e.message);
     } finally {
@@ -326,7 +330,7 @@ vmReady(function () {
 </body></html>
 HTML
 
-for mode in source production; do
+for mode in source production 'source&mutation=direct-listener' 'source&mutation=redrawn-direct-listener'; do
   rm -rf "$tmp/profile"
   "$browser" \
     --headless \
@@ -336,6 +340,17 @@ for mode in source production; do
     --virtual-time-budget=1000 \
     --dump-dom "file://$tmp/regression.html?assets=$mode" >"$tmp/rendered.html" 2>"$tmp/chromium.log"
 
+  if [[ $mode == *mutation=* ]]; then
+    expected='toggle owns a direct DataTables listener after completion'
+    [[ $mode == *mutation=redrawn-direct-listener ]] && expected='redrawn toggle owns a direct listener'
+    if ! grep -q 'data-test-result="fail"' "$tmp/rendered.html" || ! grep -q "$expected" "$tmp/rendered.html"; then
+      echo "FAIL: listener ownership negative control did not detect $expected" >&2
+      exit 1
+    fi
+    echo "ok   negative control detected: $expected"
+    grep -o 'data-test-failures="[^"]*"' "$tmp/rendered.html"
+    continue
+  fi
   if ! grep -q 'data-test-result="pass"' "$tmp/rendered.html"; then
     failures="$(grep -o 'data-test-failures="[^"]*"' "$tmp/rendered.html" || true)"
     echo "FAIL: source-defect-sweep regression ($mode): ${failures:-no browser verdict}" >&2

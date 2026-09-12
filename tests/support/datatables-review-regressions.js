@@ -1,22 +1,5 @@
-/* global DataTable, ossAjax, vmDataTableServerData, vm_prefs, vmPrefsCookie, listLengthCallbacks */
+/* global DataTable, ossAjax, ossAjaxErrorHandler, vmDataTableServerData, vm_prefs, vmPrefsCookie, listLengthCallbacks, listLengthRestores, hasDataTablesHandlers */
 'use strict';
-
-// Observe ownership without retaining element keys or requiring nondeterministic
-// GC. A strong indexed registry cannot satisfy this oracle in any browser lane.
-var dataTablesEventStores = [];
-var nativeWeakMapSet = WeakMap.prototype.set;
-WeakMap.prototype.set = function(key, value) {
-    if (key && key.nodeType && Array.isArray(value) && dataTablesEventStores.indexOf(this) === -1) {
-        dataTablesEventStores.push(this);
-    }
-    return nativeWeakMapSet.call(this, key, value);
-};
-function hasDataTablesHandlers(node) {
-    return dataTablesEventStores.some(function(store) {
-        var handlers = store.get(node);
-        return handlers && handlers.length > 0;
-    });
-}
 
 function runDataTablesReviewRegressions(check) {
     function table() {
@@ -125,13 +108,56 @@ function runDataTablesReviewRegressions(check) {
                         'selected ' + length + ' persisted as ' + vm_prefs.iLength);
                 });
                 select.value = '25'; select.dispatchEvent(new Event('change', { bubbles: true }));
-                var persisted = vmPrefsCookie('vm_prefs').iLength;
+                vm_prefs = vmPrefsCookie('vm_prefs');
                 api.destroy();
-                api = new DataTable(node, { pageLength: parseInt(persisted, 10), drawCallback: callback });
+                api = new DataTable(node, { pageLength: listLengthRestores[index](), drawCallback: callback });
                 require(api.page.len() === 25, 'saved page length did not restore');
                 return true;
             } finally { if (api) api.destroy(); node.remove(); vm_prefs = saved; vmPrefsCookie('vm_prefs', saved, { path: '/' }); }
         });
+    });
+
+    listLengthRestores.forEach(function(restore, index) {
+        check('R5 stored length validation ' + index + ' rejects corrupt cookies and restores valid lengths', function() {
+            var saved = vm_prefs, node, api;
+            try {
+                [null, false, true, '', 'bad', '25junk', [], [25], {}, 0, -2, 1.5, '1.5', Infinity, NaN, 1e30].forEach(function(value) {
+                    vm_prefs = { iLength: value };
+                    require(restore() === 10, 'invalid stored length was accepted: ' + String(value));
+                });
+                [10, 25, -1, '50', '-1'].forEach(function(value) {
+                    vm_prefs = { iLength: value };
+                    require(restore() === Number(value), 'valid stored length was lost');
+                });
+                vm_prefs = {};
+                require(restore() === 10, 'missing stored length did not use default');
+                // Reproduce a cookie left by the broken empty selection.
+                vmPrefsCookie('vm_prefs', { iLength: null }, { path: '/' });
+                vm_prefs = vmPrefsCookie('vm_prefs');
+                node = table();
+                api = new DataTable(node, { data: [['visible']], columns: [{ title: 'Name' }], pageLength: restore() });
+                require(api.page.len() === 10 && node.tBodies[0].textContent === 'visible', 'null preference made the table empty');
+                return true;
+            } finally {
+                if (api) api.destroy(); if (node) node.remove();
+                vm_prefs = saved; vmPrefsCookie('vm_prefs', saved, { path: '/' });
+            }
+        });
+    });
+
+    check('handled AJAX failure appears in visible modal after an earlier hidden modal', function() {
+        var host = document.createElement('div');
+        host.innerHTML = '<div class="modal-body" style="display:none" id="earlier-hidden-modal"></div>' +
+            '<div id="modal_dialog_shell"><div class="modal-body" id="active-email-modal">Email settings</div>' +
+            '<button id="modal_dialog_save" disabled>Save</button><button id="modal_dialog_cancel" disabled>Cancel</button></div>';
+        document.body.prepend(host);
+        try {
+            ossAjaxErrorHandler({}, 'error', 'fixture');
+            require(host.querySelector('#active-email-modal .alert-danger'), 'visible modal did not receive the AJAX error');
+            require(!host.querySelector('#earlier-hidden-modal .alert'), 'hidden modal received the error');
+            require(!host.querySelector('#modal_dialog_save').disabled, 'failed request left the save button disabled');
+            return true;
+        } finally { host.remove(); document.querySelectorAll('.modal-body .alert-danger').forEach(function(node) { node.remove(); }); }
     });
 
     check('R6 pagination redraw owns handlers through a weak element registry', function() {

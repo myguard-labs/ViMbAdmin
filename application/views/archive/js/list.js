@@ -17,9 +17,7 @@ vmReady( function()
         'serverSide': true,
         'serverMethod': 'GET',
         'ajax': vmArchiveServerData( "{genUrl controller='archive' action='list-data'}" ),
-        'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
-                ? parseInt( vm_prefs['iLength'] )
-                : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
+        'pageLength': vmDataTablePageLength( {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if} ),
         'order': [[ 4, 'desc' ]],
         'language': { 'processing': 'Loading…', 'emptyTable': 'No archives.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function(settings) {
@@ -50,9 +48,7 @@ vmReady( function()
 
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
-        'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
-                ? parseInt( vm_prefs['iLength'] )
-                : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
+        'pageLength': vmDataTablePageLength( {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if} ),
         // Username, Status, Domain, Archived, User exists, Autoprune, Actions
         'columns': [
             null,

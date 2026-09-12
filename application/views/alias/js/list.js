@@ -20,9 +20,7 @@ vmReady( function()
         'serverSide': true,
         'serverMethod': 'GET',
         'ajax': vmAliasServerData( "{genUrl controller='alias' action='list-data' ima=$ima}" ),
-        'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
-                ? parseInt( vm_prefs['iLength'] )
-                : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
+        'pageLength': vmDataTablePageLength( {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if} ),
         'language': { 'processing': 'Loading…', 'emptyTable': 'No aliases.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function(settings) {
             vm_prefs['iLength'] = settings.api.page.len();
@@ -42,9 +40,7 @@ vmReady( function()
             vm_prefs['iLength'] = settings.api.page.len();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
-        'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
-                ? parseInt( vm_prefs['iLength'] )
-                : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
+        'pageLength': vmDataTablePageLength( {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if} ),
         'columns': [
             null,
             null,

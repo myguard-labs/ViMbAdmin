@@ -76,5 +76,11 @@ bracket-encoded nested keys; responses remain
 sigils, Unicode character counting and error technical-note numbers remain
 unchanged.
 
+Every list saves its page length through the DataTables API. Restoring a
+preference accepts positive safe integers or `-1` (all rows), including legacy
+integer strings; missing, null, malformed and other unusable values fall back
+to the configured default. AJAX errors are inserted into visible modal bodies,
+even when hidden dialogs appear earlier in the document.
+
 Entity decoding uses an inert textarea: entities become text, while literal
 markup remains literal and cannot create elements or execute handlers.

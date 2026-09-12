@@ -44,7 +44,7 @@ done
 mkdir -p "$tmp/src/Kernel/DataTable" "$tmp/tests/support"
 cp src/Kernel/DataTable/{DataTableQuery,DataTableResult}.php "$tmp/src/Kernel/DataTable/"
 cp tests/support/datatable-wire-endpoint.php "$tmp/tests/support/"
-cp tests/support/datatables-review-regressions.js tests/support/datatables-language-pollution.json "$tmp/"
+cp tests/support/datatables-review-regressions.js tests/support/datatables-language-pollution.json tests/support/datatables-event-ownership.js "$tmp/"
 mkdir -p "$tmp/tests/support/datatable-wire"
 render_wire_response() {
   local scope=$1 draw=$2 start=$3 search=$4 direction=$5
@@ -101,13 +101,27 @@ printf "];\n}\n" >>"$tmp/view-row-lifecycle.js"
 
 # Both pagination modes in every production list must persist the API length.
 printf 'var listLengthCallbacks = [\n' >"$tmp/view-length-callbacks.js"
-for view in alias domain mailbox archive; do
-  awk '
+for view in alias/js/list domain/js/list mailbox/js/list archive/js/list log/js/list admin/js/list admin/js/domains domain/js/admins mailbox/js/aliases; do
+  count=1
+  [[ $view =~ ^(alias|domain|mailbox|archive|log)/js/list$ ]] && count=2
+  awk -v expected="$count" '
     /drawCallback.*function/ { active = 1; sub(/^.*function/, "function"); print; next }
     active && /^[[:space:]]*},/ { print "},"; active = 0; complete++ }
     active { print }
-    END { if (complete != 2) exit 1 }
-  ' "application/views/$view/js/list.js" >>"$tmp/view-length-callbacks.js"
+    END { if (complete != expected) exit 1 }
+  ' "application/views/$view.js" >>"$tmp/view-length-callbacks.js"
+done
+printf '];\n' >>"$tmp/view-length-callbacks.js"
+printf 'var listLengthRestores = [\n' >>"$tmp/view-length-callbacks.js"
+for view in alias/js/list domain/js/list mailbox/js/list archive/js/list log/js/list admin/js/list admin/js/domains domain/js/admins mailbox/js/aliases; do
+  # The configured default is rendered as 10; retain the real restore expression.
+  # shellcheck disable=SC2016
+  sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' "application/views/$view.js" |
+    awk '
+      /pageLength.*:/ { active = 1; sub(/^.*pageLength[^:]*: /, "function() { return ") }
+      active { ending = /,$/; sub(/,$/, "; },"); print; if (ending) { active = 0; complete++ } }
+      END { if (!complete || active) exit 1 }
+    ' >>"$tmp/view-length-callbacks.js"
 done
 printf '];\n' >>"$tmp/view-length-callbacks.js"
 
@@ -139,7 +153,7 @@ if (location.hash === '#missing-dependency') {
     scripts = scripts.filter(function(file) { return file !== '150-datatables.js'; });
 }
 scripts.forEach(function(file) { document.write('<script src="' + file + '"><\/script>'); });
-document.write('<script src="view-length-callbacks.js"><\/script><script src="datatables-review-regressions.js"><\/script>');
+document.write('<script src="view-length-callbacks.js"><\/script><script src="datatables-event-ownership.js"><\/script><script src="datatables-review-regressions.js"><\/script>');
 </script></head><body>
 <form id="validation"><input id="required" name="required" required></form>
 <table id="table"><thead><tr><th>Name</th></tr></thead><tbody><tr><td>Beta</td></tr><tr><td>Alpha</td></tr></tbody></table>
@@ -471,7 +485,7 @@ vmReady(function() {
                 }(record));
                 tooltipRecords.push(record);
                 controls.forEach(function(control) {
-                    if (control._event_uid !== undefined || hasDataTablesHandlers(control))
+                    if (hasDataTablesHandlers(control))
                         throw new Error('row control owns a retained DataTables listener');
                     control.firstChild.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                 });

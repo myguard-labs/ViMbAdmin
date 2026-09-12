@@ -125,6 +125,24 @@ run_case() {
         if (submitted.length !== 1 || submitted[0] !== 'guarded')
             failures.push('accepted confirm did not replay the destructive submit exactly once: ' + JSON.stringify(submitted));
 
+        // Two rapid activations while the first asynchronous decision is still
+        // pending must share that decision. Otherwise two stacked dialogs can
+        // each replay the same destructive form.
+        submitted = [];
+        submit('guarded');
+        submit('guarded');
+        await waitFor(function () {
+            var buttons = Array.from(document.querySelectorAll('[data-oss-confirm]'));
+            return buttons.length > 0 && buttons.every(function (button) { return !button.disabled; });
+        }, 'rapid-submit confirm modal');
+        var rapidButtons = Array.from(document.querySelectorAll('[data-oss-confirm]'));
+        if (rapidButtons.length !== 1)
+            failures.push('rapid duplicate submits opened ' + rapidButtons.length + ' confirmation modals');
+        rapidButtons.forEach(function (button) { button.click(); });
+        await waitFor(function () { return !document.querySelector('[data-oss-confirm]'); }, 'rapid-submit modal removal');
+        if (submitted.length !== 1 || submitted[0] !== 'guarded')
+            failures.push('rapid duplicate submits replayed the destructive form ' + submitted.length + ' times');
+
         // Boundary: forms without a usable message are not guarded.
         submitted = [];
         submit('unguarded');
@@ -179,9 +197,13 @@ HTML
     return 1
   fi
 
-  echo "ok   $label: native confirm cancellation blocks and acceptance gates one destructive submit"
+  echo "ok   $label: native confirm gates one destructive submit and coalesces rapid duplicates"
 }
 
-run_case 'source files' source
-run_case 'minified production bundle' bundle
+status=0
+run_case 'source files' source || status=1
+run_case 'minified production bundle' bundle || status=1
+if [[ $status -ne 0 ]]; then
+  exit "$status"
+fi
 echo 'ALL PASSED'

@@ -826,9 +826,11 @@ jQuery.extend( jQuery.fn.dataTableExt.oSort, {
 // which also covers rows the DataTables renderers build after page load.
 //
 // The Bootstrap modal is asynchronous, so every guarded submit is stopped
-// immediately and only explicitly re-submitted after the user confirms. The
-// WeakSet lets that one replay pass without recursively opening another modal.
+// immediately and only explicitly re-submitted after the user confirms. One
+// WeakSet lets that replay pass without recursively opening another modal; the
+// other blocks rapid duplicate submits while a decision is still pending.
 var ossConfirmedForms = new WeakSet();
+var ossPendingConfirmForms = new WeakSet();
 jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
     var message = jQuery( this ).attr( 'data-confirm' );
 
@@ -845,8 +847,15 @@ jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
     event.stopImmediatePropagation();
 
     var form = this;
+    if ( ossPendingConfirmForms.has( form ) ) {
+        return;
+    }
+    ossPendingConfirmForms.add( form );
+
     var submitter = event.originalEvent && event.originalEvent.submitter;
     ossConfirm( message, function( accepted ) {
+        ossPendingConfirmForms.delete( form );
+
         if ( !accepted ) {
             return;
         }

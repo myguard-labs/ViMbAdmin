@@ -8,6 +8,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 source tests/support/resolve-bundle-v.sh
+# shellcheck source=tests/support/html-opening-tags.sh
+source tests/support/html-opening-tags.sh
 
 browser=${CHROMIUM_BIN:-}
 if [[ -z $browser ]]; then
@@ -38,17 +40,61 @@ if ! grep -q 'function tt_openModalDialog' "$tmp/ajax-modal.js" ||
   exit 2
 fi
 
+modal_shell_has_fallback_name() {
+  local file=$1 tag id classes label
+  while IFS=$'\t' read -r _line tag; do
+    id=$(tag_attr "$tag" id)
+    [[ $id == modal_dialog_shell ]] || continue
+    classes=$(tag_attr "$tag" class)
+    tr -s '[:space:]' '\n' <<<"$classes" | grep -qx modal || continue
+    label=$(tag_attr "$tag" aria-label)
+    [[ -n ${label//[[:space:]]/} ]]
+    return
+  done < <(extract_opening_tags "$file")
+  return 1
+}
+
+email_fragment_has_title_id() {
+  local file=$1 tag id classes
+  while IFS=$'\t' read -r _line tag; do
+    classes=$(tag_attr "$tag" class)
+    tr -s '[:space:]' '\n' <<<"$classes" | grep -qx modal-title || continue
+    id=$(tag_attr "$tag" id)
+    [[ $id == email_settings_dialog_title ]]
+    return
+  done < <(extract_opening_tags "$file")
+  return 1
+}
+
 for footer in application/views/footer.phtml application/views/_skins/myskin/footer.phtml; do
-  if ! grep -q 'id="modal_dialog_shell".*aria-label="Loading dialog"' "$footer"; then
+  if ! modal_shell_has_fallback_name "$footer"; then
     echo "FAIL: AJAX modal shell has no loading-state accessible name in $footer" >&2
     exit 1
   fi
 done
-if ! grep -q 'class="modal-title" id="email_settings_dialog_title"' \
-  application/views/mailbox/native-email-settings.phtml; then
+if ! email_fragment_has_title_id application/views/mailbox/native-email-settings.phtml; then
   echo 'FAIL: email-settings fragment title has no stable id' >&2
   exit 1
 fi
+
+cat >"$tmp/reordered-shell.phtml" <<'HTML'
+<div aria-hidden="true" aria-label="Loading dialog" class="fade modal" tabindex="-1" id="modal_dialog_shell"></div>
+HTML
+if ! modal_shell_has_fallback_name "$tmp/reordered-shell.phtml"; then
+  echo 'FAIL: structurally valid reordered modal shell was rejected' >&2
+  exit 1
+fi
+sed 's/ aria-label="Loading dialog"//' "$tmp/reordered-shell.phtml" >"$tmp/unnamed-shell.phtml"
+if modal_shell_has_fallback_name "$tmp/unnamed-shell.phtml"; then
+  echo 'FAIL: unnamed modal shell passed structural preflight' >&2
+  exit 1
+fi
+sed 's/Loading dialog/   /' "$tmp/reordered-shell.phtml" >"$tmp/blank-name-shell.phtml"
+if modal_shell_has_fallback_name "$tmp/blank-name-shell.phtml"; then
+  echo 'FAIL: blank-named modal shell passed structural preflight' >&2
+  exit 1
+fi
+echo 'ok   structural modal preflight accepts reorder and rejects unnamed/blank shells'
 
 run_case() {
   local label=$1 mode=$2 script_tags
@@ -294,49 +340,86 @@ run_case() {
         await waitFor(function () { return !document.body.contains(alertModal); }, 'alert modal removal');
         assertFocusReturned('alert dismissal', 'alert-trigger');
 
-        // The shared AJAX shell must be named while its throbber is visible,
-        // then transfer that name to the real fragment title after insertion.
+        // The shared AJAX shell must be named while its throbber is visible.
+        // It transfers that name only to a nonblank, uniquely identified
+        // fragment title; malformed fragments retain the safe fallback.
         var ajaxTrigger = document.getElementById('modal-dialog-email-7');
         var ajaxShell = document.getElementById('modal_dialog_shell');
-        var ajaxRequest = null;
         var realAjax = jQuery.ajax;
-        jQuery.ajax = function(options) { ajaxRequest = options; };
-        ajaxTrigger.focus();
-        tt_openModalDialog({
-            preventDefault: function() {},
-            target: ajaxTrigger
-        });
-        if (ajaxShell.getAttribute('aria-label') !== 'Send Settings')
-            failures.push('AJAX modal loading state did not use the trigger label');
-        if (ajaxShell.hasAttribute('aria-labelledby'))
-            failures.push('AJAX modal loading state retained a dangling aria-labelledby');
-        if (!ajaxRequest || typeof ajaxRequest.success !== 'function') {
-            failures.push('AJAX modal did not issue its content request');
-        }
-        else {
-            ajaxRequest.success(
-                '<div class="modal-header"><h3 class="modal-title" id="email_settings_dialog_title">' +
-                'Email Settings</h3></div><div class="modal-body"></div>' +
-                '<div class="modal-footer"><button id="modal_dialog_cancel">Close</button></div>'
-            );
+
+        async function assertAjaxModalName(response, label, expectTitleLink) {
+            var ajaxRequest = null;
+            jQuery.ajax = function(options) { ajaxRequest = options; };
+            ajaxTrigger.focus();
+            tt_openModalDialog({
+                preventDefault: function() {},
+                target: ajaxTrigger
+            });
+            if (ajaxShell.getAttribute('aria-label') !== 'Send Settings')
+                failures.push(label + ' loading state did not use the trigger label');
+            if (ajaxShell.hasAttribute('aria-labelledby'))
+                failures.push(label + ' loading state retained a dangling aria-labelledby');
+            if (!ajaxRequest || typeof ajaxRequest.success !== 'function') {
+                failures.push(label + ' did not issue its content request');
+                return;
+            }
+
+            ajaxRequest.success(response);
             var loadedTitle = ajaxShell.querySelector('.modal-title');
             var loadedTitleId = loadedTitle ? loadedTitle.id : '';
             var matchingTitleIds = Array.from(document.querySelectorAll('[id]')).filter(function(node) {
                 return node.id === loadedTitleId;
             }).length;
-            if (!loadedTitleId || matchingTitleIds !== 1)
-                failures.push('AJAX modal loaded title id was absent or non-unique');
-            if (ajaxShell.getAttribute('aria-labelledby') !== loadedTitleId)
-                failures.push('AJAX modal loaded state was not labelled by its title');
-            if (ajaxShell.hasAttribute('aria-label'))
-                failures.push('AJAX modal loaded state retained its loading label');
+            if (expectTitleLink) {
+                if (!loadedTitleId || matchingTitleIds !== 1)
+                    failures.push(label + ' title id was absent or non-unique');
+                if (ajaxShell.getAttribute('aria-labelledby') !== loadedTitleId)
+                    failures.push(label + ' was not labelled by its title');
+                if (ajaxShell.hasAttribute('aria-label'))
+                    failures.push(label + ' retained its loading label');
+            }
+            else {
+                if (ajaxShell.hasAttribute('aria-labelledby'))
+                    failures.push(label + ' trusted a missing, blank, or duplicate title');
+                if (ajaxShell.getAttribute('aria-label') !== 'Send Settings')
+                    failures.push(label + ' did not retain its fallback label');
+            }
+
+            await waitFor(function () { return ajaxShell.classList.contains('show'); }, label + ' shown state');
+            dialog.hide();
+            await waitFor(function () {
+                return document.activeElement === ajaxTrigger;
+            }, label + ' focus restoration');
         }
-        jQuery.ajax = realAjax;
-        await waitFor(function () { return ajaxShell.classList.contains('show'); }, 'AJAX modal shown state');
-        dialog.hide();
-        await waitFor(function () {
-            return document.activeElement === ajaxTrigger;
-        }, 'AJAX modal focus restoration');
+
+        try {
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="email_settings_dialog_title">' +
+                'Email Settings</h3></div><div class="modal-body"></div>' +
+                '<div class="modal-footer"><button id="modal_dialog_cancel">Close</button></div>',
+                'AJAX modal loaded state',
+                true
+            );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="duplicate_dialog_title">' +
+                'Duplicate</h3><span id="duplicate_dialog_title"></span></div>',
+                'AJAX modal duplicate-title state',
+                false
+            );
+            await assertAjaxModalName(
+                '<div class="modal-body">No title</div>',
+                'AJAX modal missing-title state',
+                false
+            );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="blank_dialog_title">   </h3></div>',
+                'AJAX modal blank-title state',
+                false
+            );
+        }
+        finally {
+            jQuery.ajax = realAjax;
+        }
 
         // Boundary: forms without a usable message are not guarded.
         submitted = [];

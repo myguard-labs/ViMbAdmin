@@ -316,11 +316,13 @@ function tt_openModalDialog(event) {
                         $('#modal_dialog').html( data );
                         var modalTitle = modalShell.find( '.modal-title' ).first();
                         var modalTitleId = modalTitle.attr( 'id' );
+                        var modalTitleText = modalTitle.text();
                         var matchingIds = $( '[id]' ).filter( function() {
                             return this.id === modalTitleId;
                         } ).length;
                         if( modalTitle.length && typeof modalTitleId === 'string'
-                            && modalTitleId !== '' && matchingIds === 1 )
+                            && modalTitleId !== '' && modalTitleText.trim() !== ''
+                            && matchingIds === 1 )
                             modalShell.attr( 'aria-labelledby', modalTitleId ).removeAttr( 'aria-label' );
                         $( '.modal-body' ).scrollTop( 0 );
                         $( '#modal_dialog_cancel' ).on( 'click', function(){

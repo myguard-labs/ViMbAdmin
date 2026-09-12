@@ -27,9 +27,8 @@ vmReady( function() {
                 ? parseInt( vm_prefs['iLength'] )
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
         'language': { 'processing': 'Loading…', 'emptyTable': 'No mailboxes.', 'search': 'Search (prefix * to match anywhere):' },
-        'drawCallback': function() {
-            if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
+        'drawCallback': function(settings) {
+            vm_prefs['iLength'] = settings.api.page.len();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'columns': [
@@ -46,9 +45,8 @@ vmReady( function() {
     });
     {else}
     oDataTable = new DataTable('#list_table', {
-        'drawCallback': function() {
-            if( vm_prefs['iLength'] !=  DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
+        'drawCallback': function(settings) {
+            vm_prefs['iLength'] = settings.api.page.len();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )

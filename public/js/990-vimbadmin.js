@@ -92,13 +92,18 @@ function ossAjax(options)
         if (finished) return;
         finished = true;
         var value = xhr.responseText;
+        // No-content and conditional responses succeed without a JSON body.
+        if (status === 'success' && (xhr.status === 204 || method === 'HEAD' || xhr.status === 304)) {
+            status = xhr.status === 304 ? 'notmodified' : 'nocontent';
+            value = undefined;
+        }
         if (status === 'success' && (options.dataType === 'json'
             || (!options.dataType && /\bjson\b/i.test(xhr.getResponseHeader('Content-Type') || '')))) {
             try { value = JSON.parse(value); }
             catch (error) { status = 'parsererror'; }
         }
         try {
-            if (status === 'success') {
+            if (status === 'success' || status === 'nocontent' || status === 'notmodified') {
                 if (options.success) options.success(value, status, xhr);
             }
             else if (options.error) options.error(xhr, status, xhr.statusText);

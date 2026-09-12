@@ -175,7 +175,7 @@ sessions/CLI native and ZF1-free; `composer audit` reports **no advisories**.
 The admin UI ships dependency-free **DataTables 3.0.3** with its matching
 Bootstrap 5 integration and **Bootstrap 5.3.8**. jQuery is no longer shipped,
 loaded or required. First-party scripts use browser and DataTables APIs.
-Unmodified upstream assets retain dormant optional jQuery interoperability;
+The upstream assets retain dormant optional jQuery interoperability;
 this is not a runtime dependency or a fallback download.
 
 The supported policy remains current Chrome, Firefox, Safari and Edge and

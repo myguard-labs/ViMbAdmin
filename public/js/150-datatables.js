@@ -441,6 +441,10 @@ function assignDeep(out, ...inputs) {
             continue;
         }
         for (const [key, value] of Object.entries(input)) {
+            // Translation JSON and nested options must never address prototypes.
+            if (key === '__proto__' || key === 'prototype' || key === 'constructor') {
+                continue;
+            }
             if (Array.isArray(value)) {
                 if (!Array.isArray(out[key])) {
                     out[key] = [];
@@ -478,6 +482,9 @@ function assignDeep(out, ...inputs) {
 function assignDeepObjects(out, extender, breakRefs = false) {
     let val;
     for (let prop in extender) {
+        if (prop === '__proto__' || prop === 'prototype' || prop === 'constructor') {
+            continue;
+        }
         if (Object.prototype.hasOwnProperty.call(extender, prop)) {
             val = extender[prop];
             if (plainObject(val)) {
@@ -1429,25 +1436,12 @@ var util = {
     version
 };
 
-/** Each element with an event attached needs a unique id */
-let _uidCounter = 1;
 /**
- * All wrapped event handlers are stored in this array so we can refer back to
- * them for removal. Each entry in the array is for a unique element, using the
- * index to refer to it (the `uid` that is attached to the element).
+ * Keep wrappers available for removal without retaining detached nodes. Each
+ * wrapper closes over its element, so an indexed global array roots both after
+ * pagination replaces the buttons. WeakMap entries share the element lifetime.
  */
-const _eventStore = [];
-/**
- * Get a unique id that can be assigned to an element.
- *
- * @returns UID
- */
-function getUid(el) {
-    if (!el._event_uid) {
-        el._event_uid = _uidCounter++;
-    }
-    return el._event_uid;
-}
+const _eventStore = new WeakMap();
 /**
  * Get all event handlers that have been assigned to an element
  *
@@ -1455,11 +1449,7 @@ function getUid(el) {
  * @returns Array of functions
  */
 function get(el) {
-    let uid = el._event_uid;
-    if (!uid || !_eventStore[uid]) {
-        return null;
-    }
-    return _eventStore[uid];
+    return _eventStore.get(el) || null;
 }
 /**
  * Store an event handler for an element (does not apply it)
@@ -1468,11 +1458,10 @@ function get(el) {
  * @param wrapper Function to set
  */
 function set(el, wrapper) {
-    let uid = getUid(el);
-    if (_eventStore[uid] === undefined) {
-        _eventStore[uid] = [];
+    if (!_eventStore.has(el)) {
+        _eventStore.set(el, []);
     }
-    _eventStore[uid].push(wrapper);
+    _eventStore.get(el).push(wrapper);
 }
 /**
  * Remove an event handler from an element's store
@@ -9419,7 +9408,7 @@ register('destroy()', function (remove) {
         callbackFire(settings, 'destroy', 'destroy', [settings], true);
         // If not being removed from the document, make all columns visible
         if (!remove) {
-            new Api(settings).columns().visible();
+            new Api(settings).columns().visible(true);
         }
         // Container width change listener
         if (settings.resizeObserver) {

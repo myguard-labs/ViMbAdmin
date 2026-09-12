@@ -146,11 +146,12 @@ foreach ($ownSources as $source) {
         preg_match('/\bjQuery\b|(?:^|[^A-Za-z0-9_$])\$\s*[.(]/m', (string) file_get_contents($source)) === 0);
 }
 foreach ([
-    'public/js/150-datatables.js' => 'dd3a93d478a57278f4fe629674c5760222b1e2c5ec96511c7675a5034f249b38',
+    // Core includes the three local fixes documented with its upstream hash in docs/ASSETS.md.
+    'public/js/150-datatables.js' => '2d0d745d24600d8b450d3fe610b85593af16959e3b408dff3abbe88e11c73d3d',
     'public/js/152-datatables.bootstrap5.js' => 'cb335f90908b20599ec84d5396940f3ecbb958d43b231e58fb2ddb7fa11b63d3',
     'public/css/816-datatables-bootstrap5.css' => '92a010aa4be02fb5de612cad3aeefc67cdd18ba24529767b9625e60dc70d0c8e',
 ] as $asset => $hash) {
-    $check('DataTables 3.0.3 provenance: ' . $asset, hash_file('sha256', $root . '/' . $asset) === $hash);
+    $check('DataTables 3.0.3 shipped asset integrity: ' . $asset, hash_file('sha256', $root . '/' . $asset) === $hash);
 }
 $modalJs = (string) file_get_contents($root . '/public/js/850-vimbadmin.modals.js');
 $check('native modal helper has no jQuery runtime dependency',

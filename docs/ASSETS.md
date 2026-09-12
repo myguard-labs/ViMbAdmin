@@ -1,19 +1,28 @@
 # Browser assets
 
 DataTables core and its Bootstrap 5 JavaScript/CSS integration are pinned to
-3.0.3, released 31 August 2026. These are unmodified files from the official
+3.0.3, released 31 August 2026. The originals came from the official
 [release directory](https://cdn.datatables.net/3.0.3/), verified 12 September 2026.
 No commercial extensions or external runtime requests are needed.
 
-- `public/js/150-datatables.js`: upstream `js/dataTables.js`.
-  SHA-256:
+- `public/js/150-datatables.js`: upstream `js/dataTables.js` with the local fixes below.
+  Original upstream SHA-256:
   `dd3a93d478a57278f4fe629674c5760222b1e2c5ec96511c7675a5034f249b38`
+  Shipped SHA-256:
+  `2d0d745d24600d8b450d3fe610b85593af16959e3b408dff3abbe88e11c73d3d`
 - `public/js/152-datatables.bootstrap5.js`:
   upstream `js/dataTables.bootstrap5.js`. SHA-256:
   `cb335f90908b20599ec84d5396940f3ecbb958d43b231e58fb2ddb7fa11b63d3`
 - `public/css/816-datatables-bootstrap5.css`:
   upstream `css/dataTables.bootstrap5.css`. SHA-256:
   `92a010aa4be02fb5de612cad3aeefc67cdd18ba24529767b9625e60dc70d0c8e`
+
+The core carries three local fixes: deep option/translation merges discard
+`__proto__`, `prototype` and `constructor`; `destroy()` restores hidden columns;
+and event wrappers use a `WeakMap` so pagination redraws cannot retain detached
+buttons through a global array. The Bootstrap integration files are unmodified.
+`tests/test-minify-bundle-inputs.php` pins the shipped bytes; the browser regression
+exercises these fixes in source and bundle modes.
 
 `151-datatables.ext.js` registers the existing numeric-HTML ordering contract
 through `DataTable.ext.type.order`. It replaces the duplicated legacy plugin
@@ -55,8 +64,7 @@ installation. No CDN fallback is used; CSP and nonce handling are unchanged.
 
 The source/minified regression lanes run with neither `window.jQuery` nor
 `window.$` present. DataTables 3 and Bootstrap have optional interoperability
-code that detects an existing jQuery instance; keeping these dormant paths
-preserves pristine, independently verifiable vendor files. They neither load
+code that detects an existing jQuery instance. These dormant paths neither load
 jQuery nor require it, and first-party code never invokes that interoperability.
 
 DataTables 3 uses camelCase settings (`language.emptyTable`, `serverMethod`)

@@ -44,6 +44,7 @@ done
 mkdir -p "$tmp/src/Kernel/DataTable" "$tmp/tests/support"
 cp src/Kernel/DataTable/{DataTableQuery,DataTableResult}.php "$tmp/src/Kernel/DataTable/"
 cp tests/support/datatable-wire-endpoint.php "$tmp/tests/support/"
+cp tests/support/datatables-review-regressions.js tests/support/datatables-language-pollution.json "$tmp/"
 mkdir -p "$tmp/tests/support/datatable-wire"
 render_wire_response() {
   local scope=$1 draw=$2 start=$3 search=$4 direction=$5
@@ -90,13 +91,25 @@ awk '
   application/views/mailbox/js/list.js >"$tmp/view-row-lifecycle.js"
 for view in alias domain mailbox; do
   awk '
-    /drawCallback.*function/ && !found++ { active = 1; print "function() {"; next }
+    /drawCallback.*function/ && !found++ { active = 1; sub(/^.*function/, "function"); print; next }
     active && /^[[:space:]]*},/ { print "},"; active = 0; complete++ }
     active { print }
     END { if (complete != 1) exit 1 }
   ' "application/views/$view/js/list.js" >>"$tmp/view-row-lifecycle.js"
 done
 printf "];\n}\n" >>"$tmp/view-row-lifecycle.js"
+
+# Both pagination modes in every production list must persist the API length.
+printf 'var listLengthCallbacks = [\n' >"$tmp/view-length-callbacks.js"
+for view in alias domain mailbox archive; do
+  awk '
+    /drawCallback.*function/ { active = 1; sub(/^.*function/, "function"); print; next }
+    active && /^[[:space:]]*},/ { print "},"; active = 0; complete++ }
+    active { print }
+    END { if (complete != 2) exit 1 }
+  ' "application/views/$view/js/list.js" >>"$tmp/view-length-callbacks.js"
+done
+printf '];\n' >>"$tmp/view-length-callbacks.js"
 
 cat >"$tmp/regression.html" <<'HTML'
 <!doctype html><html><head><meta charset="utf-8">
@@ -126,6 +139,7 @@ if (location.hash === '#missing-dependency') {
     scripts = scripts.filter(function(file) { return file !== '150-datatables.js'; });
 }
 scripts.forEach(function(file) { document.write('<script src="' + file + '"><\/script>'); });
+document.write('<script src="view-length-callbacks.js"><\/script><script src="datatables-review-regressions.js"><\/script>');
 </script></head><body>
 <form id="validation"><input id="required" name="required" required></form>
 <table id="table"><thead><tr><th>Name</th></tr></thead><tbody><tr><td>Beta</td></tr><tr><td>Alpha</td></tr></tbody></table>
@@ -241,6 +255,7 @@ vmReady(function() {
         });
     });
     var wireFinished = false;
+    wireChecks.push(runDataTablesReviewRegressions(check));
     Promise.all(wireChecks).then(function() { wireFinished = true; }, function(error) {
         failures.push('server-side wire: ' + error.message);
         wireFinished = true;
@@ -420,7 +435,7 @@ vmReady(function() {
         try {
             api = new DataTable(node, {
                 data: [], columns: [{ title: 'Actions' }], order: [],
-                drawCallback: function() { draws.forEach(function(draw) { draw(); }); }
+                drawCallback: function(settings) { draws.forEach(function(draw) { draw(settings); }); }
             });
             var oldControls = [], tooltipRecords = [];
             function assertDisposed(record) {
@@ -456,7 +471,8 @@ vmReady(function() {
                 }(record));
                 tooltipRecords.push(record);
                 controls.forEach(function(control) {
-                    if (control._event_uid !== undefined) throw new Error('row control owns a retained DataTables listener');
+                    if (control._event_uid !== undefined || hasDataTablesHandlers(control))
+                        throw new Error('row control owns a retained DataTables listener');
                     control.firstChild.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                 });
                 oldControls.forEach(function(control) {

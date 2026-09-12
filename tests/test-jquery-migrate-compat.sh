@@ -66,10 +66,10 @@ trap cleanup EXIT
 bundle_file=$(resolve_bundle_v) || exit $?
 
 for asset in \
-  100-jquery.js 120-jquery.validate.js \
+  100-jquery.js 120-vimbadmin.validation.js \
   150-jquery.datatables.js 151-jquery.datatables.ext.js \
   152-jquery.datatables.bootstrap5.js \
-  800-bootstrap.js 850-bootbox.js 900-vimbadmin.validate.js \
+  800-bootstrap.js 850-bootbox.js \
   910-vimbadmin.functions.js 990-vimbadmin.js \
   "$bundle_file"; do
   if ! cp "public/js/$asset" "$tmp/$asset" 2>/dev/null; then
@@ -111,10 +111,10 @@ console.warn = function() {
 window.onerror = function(message) { failures.push('page error: ' + message); };
 var scripts = mode === 'production'
     ? ['@@VIMBADMIN_TEST_BUNDLE_FILE@@','view-admin-domains.js']
-    : ['100-jquery.js','120-jquery.validate.js',
+    : ['100-jquery.js','120-vimbadmin.validation.js',
        '150-jquery.datatables.js','151-jquery.datatables.ext.js',
        '152-jquery.datatables.bootstrap5.js',
-       '800-bootstrap.js','850-bootbox.js','900-vimbadmin.validate.js',
+       '800-bootstrap.js','850-bootbox.js',
        '910-vimbadmin.functions.js','990-vimbadmin.js',
        'view-admin-domains.js'];
 // Drives the 'missing plugin dependency' negative control. It removes a script
@@ -129,7 +129,7 @@ if (location.hash === '#missing-dependency') {
 }
 scripts.forEach(function(file) { document.write('<script src="' + file + '"><\/script>'); });
 </script></head><body>
-<form id="validation"><input id="required" name="required" title="Wrong title priority"></form>
+<form id="validation"><input id="required" name="required" required></form>
 <table id="table"><thead><tr><th>Name</th></tr></thead><tbody><tr><td>Beta</td></tr><tr><td>Alpha</td></tr></tbody></table>
 <table id="list_table"><thead><tr><th>Domain</th><th>Action</th></tr></thead><tbody><tr><td>example.test</td><td><a id="remove-domain-7" ref="example.test">Remove</a></td></tr></tbody></table>
 <!-- Mirrors application/views/domain/list.phtml: Bootstrap 5's Modal requires a
@@ -281,9 +281,10 @@ $(function() {
         spinner.stop();
         return true;
     });
-    check('empty required field reports a validation error', function() {
-        $('#validation').validate({ rules: { required: { required: true } } });
-        return !$('#validation').valid() && $('#required-error').text() === 'This field is required.';
+    check('empty required field reports native Bootstrap validation state', function() {
+        var submit = new Event('submit', { bubbles: true, cancelable: true });
+        document.getElementById('validation').dispatchEvent(submit);
+        return submit.defaultPrevented && $('#required').hasClass('is-invalid');
     });
     check('DataTables sorts, searches and tears down', function() {
         var table = $('#table').DataTable({ order: [[0, 'asc']] });

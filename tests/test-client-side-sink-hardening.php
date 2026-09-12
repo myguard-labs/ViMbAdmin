@@ -33,22 +33,29 @@ $check('mailbox size dialog escapes every dynamic table value',
         && str_contains($mailboxList, 'htmlEntity( prc.toFixed(0) )')
         && str_contains($mailboxList, 'htmlEntity( data[4] )'));
 
-$validator = file_get_contents(__DIR__ . '/../public/js/900-vimbadmin.validate.js');
-$check('requiredIf dispatches every supported comparison explicitly',
-    is_string($validator)
-        && preg_match_all("/'(?:==|!=|>|<|>=|<=)': function\\(left, right\\)/", $validator) === 6
-        && str_contains($validator, 'Object.prototype.hasOwnProperty.call( comparators, condition )')
-        && str_contains($validator, "'==': function(left, right) { return left === right; }")
-        && str_contains($validator, "'!=': function(left, right) { return left !== right; }"));
-$check('requiredIf preserves string comparison without selector construction',
-    is_string($validator)
-        && str_contains($validator, "document.getElementById( param['field'] )")
-        && str_contains($validator, "String( param['value'] )")
-        && !str_contains($validator, "$( '#' + param['field'] )"));
-$check('requiredIf no longer evaluates a generated program',
-    is_string($validator)
-        && !str_contains($validator, 'vEvalStr')
-        && !preg_match('/\\beval\\s*\\(/', $validator));
+$emailSettings = file_get_contents(__DIR__ . '/../application/views/mailbox/native-email-settings.phtml');
+$emailSettingsHasLegacyRequiredClass = false;
+if (is_string($emailSettings)
+    && preg_match_all('/\\bclass=(["\'])(.*?)\\1/', $emailSettings, $classAttributes)) {
+    foreach ($classAttributes[2] as $classAttribute) {
+        $classTokens = preg_split('/\\s+/', trim($classAttribute));
+        if ($classTokens !== false && in_array('required', $classTokens, true)) {
+            $emailSettingsHasLegacyRequiredClass = true;
+            break;
+        }
+    }
+}
+$check('email-settings modal emits native required constraints',
+    is_string($emailSettings)
+        && str_contains($emailSettings, '<select name="type" id="type" class="form-select" required')
+        && str_contains($emailSettings, 'class="form-control"')
+        && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}")
+        && !$emailSettingsHasLegacyRequiredClass);
+$check('email-settings modal validates before AJAX and tracks conditional email requirement',
+    is_string($mailboxList)
+        && str_contains($mailboxList, "jQuery( '#email' ).prop( 'required', other );")
+        && str_contains($mailboxList, 'if( !form[0].reportValidity() )')
+        && strpos($mailboxList, 'if( !form[0].reportValidity() )') < strpos($mailboxList, 'jQuery.ajax({'));
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

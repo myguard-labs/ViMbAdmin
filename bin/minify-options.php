@@ -104,9 +104,8 @@ defined( 'SCRIPTDIR' ) || define( 'SCRIPTDIR', __DIR__ );
 // prerequisites live next to this file in bin/, so they are anchored on __DIR__.
 // --charset UTF-8: Closure Compiler's own default is "accept UTF-8 as input,
 // emit US-ASCII (with \uXXXX escapes) as output". That silently mangles any
-// non-ASCII byte a vendored source legitimately carries -- e.g. the "ö" in
-// 120-jquery.validate.js's licence header and the "©" in
-// 150-jquery.datatables.js's -- into `?` once concatenated through PHP's
+// non-ASCII byte a vendored source legitimately carries -- e.g. the "©" in
+// 150-jquery.datatables.js's licence header -- into `?` once concatenated through PHP's
 // escapeshellarg()/exec() pipeline (VIM-A15.60). Setting --charset explicitly
 // makes both directions UTF-8, so those bytes survive unmodified into
 // min.bundle-v<N>.js.
@@ -269,4 +268,3 @@ $del_mini_css = true;
 // do we want to keep older minified CSS files? If you have old installs taking JS/CSS
 // from a CDN / central repository you may want to keep these and delete manually
 $del_old_css_bundles = true;
-

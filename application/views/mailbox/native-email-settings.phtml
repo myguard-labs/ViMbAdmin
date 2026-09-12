@@ -15,7 +15,7 @@
         <input type="hidden" name="csrf" value="{$csrfToken}" />
 
         <div style="position: fixed; z-index: 1;">
-            <select name="type" id="type" class="required" title="Email">
+            <select name="type" id="type" class="form-select" required title="Email">
 {foreach $typeOptions as $optValue => $optLabel}
                 <option value="{$optValue|escape}"{if $optValue == $selectedType} selected="selected"{/if}>{$optLabel|escape}</option>
 {/foreach}
@@ -28,7 +28,7 @@
         </div>
 
         <div id="other_email" {if $selectedType != 'other'}style="display: none"{/if}>
-            <input type="text" name="email" id="email" size="32" class="required"
+            <input type="text" name="email" id="email" size="32" class="form-control"{if $selectedType == 'other'} required{/if}
                    placeholder="email1@example.com,email2@example.com" value="{$emailValue|escape}" />
         </div>
 

@@ -82,8 +82,9 @@ $check(
     'the Colorbox image directory no longer exists on disk',
     !is_dir($root . '/public/images/colorbox')
 );
-foreach (['130-jquery.colorbox.js', '300-chosen.jquery.js'] as $dead) {
+foreach (['120-jquery.validate.js', '130-jquery.colorbox.js', '300-chosen.jquery.js', '900-vimbadmin.validate.js'] as $dead) {
     $check("dead JS asset is not a bundle input: {$dead}", !in_array($dead, $jsNames, true));
+    $check("dead JS asset no longer exists: {$dead}", !is_file($root . '/public/js/' . $dead));
 }
 foreach (['130-colorbox.css', '300-chosen.css'] as $dead) {
     $check("dead CSS asset is not a bundle input: {$dead}", !in_array($dead, $cssNames, true));
@@ -96,13 +97,12 @@ $check('cssExcluded is empty now that Chosen and Colorbox are deleted', $lists['
 // an unreviewed file is as much a defect as one that lost a library.
 $expectedJs = [
     '100-jquery.js',
-    '120-jquery.validate.js',
+    '120-vimbadmin.validation.js',
     '150-jquery.datatables.js',
     '151-jquery.datatables.ext.js',
     '152-jquery.datatables.bootstrap5.js',
     '800-bootstrap.js',
     '850-bootbox.js',
-    '900-vimbadmin.validate.js',
     '910-vimbadmin.functions.js',
     '990-vimbadmin.js',
 ];
@@ -122,6 +122,14 @@ $check('the CSS bundle inputs are exactly the live assets, in order', $cssNames 
 foreach ($expectedJs as $live) {
     $check("live JS asset resolves to a real file: {$live}", is_file($root . '/public/js/' . $live));
 }
+$runtimeJs = '';
+foreach ($expectedJs as $live) {
+    $runtimeJs .= (string) file_get_contents($root . '/public/js/' . $live);
+}
+$check('runtime JS has no jQuery Validation API references',
+    !str_contains($runtimeJs, 'jQuery.validator')
+        && !str_contains($runtimeJs, '$.validator')
+        && preg_match('/\.validate\s*\(/', $runtimeJs) !== 1);
 foreach ($expectedCss as $live) {
     $check("live CSS asset resolves to a real file: {$live}", is_file($root . '/public/css/' . $live));
 }

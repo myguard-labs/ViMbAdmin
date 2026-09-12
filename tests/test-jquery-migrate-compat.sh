@@ -162,6 +162,13 @@ function check(name, test) {
 $(function() {
     var wireEndpoint = '/tests/support/datatable-wire-endpoint.php';
     var wireDisabled = location.hash === '#wire-route-disabled';
+    // A missing route leaves Chromium's dump-dom process waiting on the 404
+    // request even after jQuery reports it. Point the negative control at a
+    // served response for the wrong scope instead: it keeps the route mutation
+    // observable while settling promptly under both fixture servers.
+    var wireRequestEndpoint = wireDisabled
+        ? '/tests/support/datatable-wire/domain-1.json'
+        : wireEndpoint;
     // The network-isolated multi-engine runner is a static server. Its finite
     // response set was rendered through the real PHP parser above; route each
     // fully formed modern request to the matching result while retaining real
@@ -197,6 +204,9 @@ $(function() {
         return new Promise(function(resolve, reject) {
             var element = $('<table><thead><tr><th>Name</th></tr></thead></table>').appendTo('body');
             var step = 0;
+            element.one('xhr.dt', function(event, settings, json, xhr) {
+                if (json === null && xhr) reject(new Error(scope + ': AJAX request failed'));
+            });
             element.on('draw.dt', function() {
                 try {
                     var api = element.DataTable();
@@ -223,7 +233,7 @@ $(function() {
             element.DataTable({
                 serverSide: true, pageLength: 2, order: [[0, 'asc']],
                 columns: [{ data: 'name' }],
-                ajax: vmDataTableServerData((wireDisabled ? '/tests/support/missing-datatable-wire-endpoint.php' : wireEndpoint) + '?scope=' + scope, 3)
+                ajax: vmDataTableServerData(wireRequestEndpoint + '?scope=' + scope, 3)
             });
         });
     });

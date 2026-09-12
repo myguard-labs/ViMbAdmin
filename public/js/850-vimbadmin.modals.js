@@ -2,9 +2,9 @@
  * ViMbAdmin's native Bootstrap 5 modal helpers.
  *
  * These helpers deliberately use the Bootstrap JavaScript API directly and
- * have no DOM-library or third-party dialog dependency. The application still renders HTML in
- * informational popups for backwards-compatible OSS_Message output; confirm
- * messages are always inserted as text.
+ * have no DOM-library or third-party dialog dependency. The application still
+ * renders HTML in informational popups for backwards-compatible OSS_Message
+ * output; confirm messages are always inserted as text.
  */
 
 (function( window, document ) {
@@ -27,9 +27,22 @@
         return target && target.nodeType === 1 ? target : null;
     }
 
+    function restoreFocus( element )
+    {
+        if( !element || !element.isConnected || typeof element.focus !== 'function' )
+            return;
+
+        if( element.tabIndex < 0 || element.matches( ':disabled' )
+            || element.closest( '[hidden], [inert]' ) )
+            return;
+
+        element.focus();
+    }
+
     /**
      * Show an existing in-page modal.
      *
+     * @param {string|Element} target Modal element or selector resolving to it.
      * @return {bootstrap.Modal|null}
      */
     function ossModal( target )
@@ -91,6 +104,8 @@
     /**
      * Show an informational popup and invoke callback after it is dismissed.
      *
+     * @param {string} message HTML rendered in the modal body.
+     * @param {function(): void} [callback] Invoked after dismissal and removal.
      * @return {Element|null}
      */
     function ossAlert( message, callback )
@@ -105,6 +120,7 @@
             return null;
         }
 
+        var previouslyFocused = document.activeElement;
         var element = createDialog( 'Message', message, true, '' );
         var instance = Modal.getOrCreateInstance( element, {
             backdrop: true,
@@ -114,6 +130,7 @@
         element.addEventListener( 'hidden.bs.modal', function() {
             instance.dispose();
             element.remove();
+            restoreFocus( previouslyFocused );
             if( typeof callback === 'function' )
                 callback();
         }, { once: true } );
@@ -126,6 +143,9 @@
      * Ask for confirmation. Dismissal, Escape, and a missing Bootstrap runtime
      * all fail closed and report false to the callback.
      *
+     * @param {string} message Plain text rendered in the modal body.
+     * @param {function(boolean): void} [callback] Receives true only after
+     *     explicit confirmation.
      * @return {Element|null}
      */
     function ossConfirm( message, callback )
@@ -138,6 +158,7 @@
             return null;
         }
 
+        var previouslyFocused = document.activeElement;
         var element = createDialog( 'Confirm action', message, false, 'Confirm' );
         var instance = Modal.getOrCreateInstance( element, {
             backdrop: true,
@@ -160,6 +181,7 @@
         element.addEventListener( 'hidden.bs.modal', function() {
             instance.dispose();
             element.remove();
+            restoreFocus( previouslyFocused );
             if( typeof callback === 'function' )
                 callback( accepted );
         }, { once: true } );

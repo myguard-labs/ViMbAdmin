@@ -55,9 +55,12 @@ run_case() {
 <!doctype html>
 <html><head><meta charset="utf-8">@@SCRIPT_TAGS@@</head><body data-test-result="pending">
 <form id="guarded" method="post" action="/mailbox/queue-delete"
-      data-confirm="DELETE &lt;em&gt;this mailbox&lt;/em&gt;?"></form>
+      data-confirm="DELETE &lt;em&gt;this mailbox&lt;/em&gt;?">
+  <button id="guarded-submit" type="submit">Delete mailbox</button>
+</form>
 <form id="unguarded" method="post" action="/mailbox/list"></form>
 <form id="empty-message" method="post" action="/x" data-confirm=""></form>
+<button id="alert-trigger" type="button">Show message</button>
 
 <script>
 (function () {
@@ -86,7 +89,21 @@ run_case() {
     }
 
     function submit(formId) {
-        document.getElementById(formId).requestSubmit();
+        var form = document.getElementById(formId);
+        var submitter = form.querySelector('[type="submit"]');
+        if (submitter) {
+            submitter.focus();
+            form.requestSubmit(submitter);
+        }
+        else {
+            form.requestSubmit();
+        }
+    }
+
+    function assertFocusReturned(label, expectedId) {
+        var actualId = document.activeElement ? document.activeElement.id : '';
+        if (actualId !== expectedId)
+            failures.push(label + ' did not restore focus to #' + expectedId + ': got #' + actualId);
     }
 
     async function drive() {
@@ -108,10 +125,44 @@ run_case() {
         if (message.querySelector('em'))
             failures.push('confirm modal interpreted the confirmation message as HTML');
 
-        modal.querySelector('[data-bs-dismiss="modal"]').click();
+        modal.querySelector('.modal-footer [data-bs-dismiss="modal"]').click();
         await waitFor(function () { return !document.body.contains(modal); }, 'cancelled modal removal');
         if (submitted.indexOf('guarded') !== -1)
             failures.push('dismissed confirm replayed the destructive submit');
+        assertFocusReturned('Cancel dismissal', 'guarded-submit');
+
+        // Header Close and Escape are separate Bootstrap dismissal paths. Both
+        // must fail closed and return keyboard focus to the invoking submitter.
+        submitted = [];
+        submit('guarded');
+        await waitFor(function () {
+            var button = document.querySelector('[data-oss-confirm]');
+            return button && !button.disabled;
+        }, 'close-button confirm modal');
+        modal = document.querySelector('[data-oss-confirm]').closest('.modal');
+        modal.querySelector('.btn-close').click();
+        await waitFor(function () { return !document.body.contains(modal); }, 'close-button modal removal');
+        if (submitted.length !== 0)
+            failures.push('Close dismissal replayed the destructive submit');
+        assertFocusReturned('Close dismissal', 'guarded-submit');
+
+        submitted = [];
+        submit('guarded');
+        await waitFor(function () {
+            var button = document.querySelector('[data-oss-confirm]');
+            return button && !button.disabled;
+        }, 'Escape confirm modal');
+        modal = document.querySelector('[data-oss-confirm]').closest('.modal');
+        modal.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Escape',
+            code: 'Escape',
+            bubbles: true,
+            cancelable: true
+        }));
+        await waitFor(function () { return !document.body.contains(modal); }, 'Escape modal removal');
+        if (submitted.length !== 0)
+            failures.push('Escape dismissal replayed the destructive submit');
+        assertFocusReturned('Escape dismissal', 'guarded-submit');
 
         // Explicit acceptance replays the submit exactly once.
         submitted = [];
@@ -124,6 +175,7 @@ run_case() {
         await waitFor(function () { return submitted.length > 0; }, 'accepted submit replay');
         if (submitted.length !== 1 || submitted[0] !== 'guarded')
             failures.push('accepted confirm did not replay the destructive submit exactly once: ' + JSON.stringify(submitted));
+        assertFocusReturned('accepted confirmation', 'guarded-submit');
 
         // Two rapid activations while the first asynchronous decision is still
         // pending must share that decision. Otherwise two stacked dialogs can
@@ -142,6 +194,19 @@ run_case() {
         await waitFor(function () { return !document.querySelector('[data-oss-confirm]'); }, 'rapid-submit modal removal');
         if (submitted.length !== 1 || submitted[0] !== 'guarded')
             failures.push('rapid duplicate submits replayed the destructive form ' + submitted.length + ' times');
+        assertFocusReturned('rapid-submit confirmation', 'guarded-submit');
+
+        // Programmatic informational modals have no data-api trigger for
+        // Bootstrap to remember, so the helper owns focus restoration here too.
+        var alertTrigger = document.getElementById('alert-trigger');
+        alertTrigger.focus();
+        var alertModal = ossAlert('Mailbox action completed');
+        await new Promise(function (resolve) {
+            alertModal.addEventListener('shown.bs.modal', resolve, { once: true });
+        });
+        alertModal.querySelector('.modal-footer [data-bs-dismiss="modal"]').click();
+        await waitFor(function () { return !document.body.contains(alertModal); }, 'alert modal removal');
+        assertFocusReturned('alert dismissal', 'alert-trigger');
 
         // Boundary: forms without a usable message are not guarded.
         submitted = [];

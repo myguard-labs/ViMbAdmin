@@ -1,0 +1,85 @@
+/*
+ * ViMbAdmin form validation.
+ *
+ * Uses the browser's Constraint Validation API and Bootstrap 5's validation
+ * classes. Fields may share a data-validation-group value; validating one
+ * member also refreshes its peers so a now-valid sibling cannot retain stale
+ * error styling.
+ */
+(function() {
+    'use strict';
+
+    function formControls(form) {
+        return Array.prototype.filter.call(form.elements, function(element) {
+            return typeof element.checkValidity === 'function' &&
+                !element.disabled &&
+                !/^(?:button|reset|submit)$/i.test(element.type);
+        });
+    }
+
+    function applyLegacyRequired(form) {
+        form.querySelectorAll('.required').forEach(function(element) {
+            if (/^(?:input|select|textarea)$/i.test(element.tagName))
+                element.required = true;
+        });
+    }
+
+    function showValidity(element) {
+        const valid = element.checkValidity();
+
+        element.classList.toggle('is-invalid', !valid);
+        element.classList.toggle('is-valid', valid);
+        return valid;
+    }
+
+    function refreshGroup(element) {
+        const group = element.getAttribute('data-validation-group');
+
+        if (!group || !element.form)
+            return;
+
+        formControls(element.form).forEach(function(peer) {
+            if (peer !== element && peer.getAttribute('data-validation-group') === group)
+                showValidity(peer);
+        });
+    }
+
+    document.addEventListener('invalid', function(event) {
+        if (event.target.form)
+            event.target.classList.add('is-invalid');
+    }, true);
+
+    function handleFieldEvent(event) {
+        const element = event.target;
+
+        if (!element.form || typeof element.checkValidity !== 'function')
+            return;
+
+        showValidity(element);
+        refreshGroup(element);
+    }
+
+    document.addEventListener('input', handleFieldEvent);
+    document.addEventListener('change', handleFieldEvent);
+
+    document.addEventListener('submit', function(event) {
+        const form = event.target;
+
+        if (!(form instanceof HTMLFormElement))
+            return;
+
+        if (form.noValidate || (event.submitter && event.submitter.formNoValidate))
+            return;
+
+        applyLegacyRequired(form);
+        form.classList.add('was-validated');
+
+        const valid = form.checkValidity();
+        formControls(form).forEach(showValidity);
+
+        if (!valid) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+}());

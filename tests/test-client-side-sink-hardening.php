@@ -33,22 +33,5 @@ $check('mailbox size dialog escapes every dynamic table value',
         && str_contains($mailboxList, 'htmlEntity( prc.toFixed(0) )')
         && str_contains($mailboxList, 'htmlEntity( data[4] )'));
 
-$validator = file_get_contents(__DIR__ . '/../public/js/900-vimbadmin.validate.js');
-$check('requiredIf dispatches every supported comparison explicitly',
-    is_string($validator)
-        && preg_match_all("/'(?:==|!=|>|<|>=|<=)': function\\(left, right\\)/", $validator) === 6
-        && str_contains($validator, 'Object.prototype.hasOwnProperty.call( comparators, condition )')
-        && str_contains($validator, "'==': function(left, right) { return left === right; }")
-        && str_contains($validator, "'!=': function(left, right) { return left !== right; }"));
-$check('requiredIf preserves string comparison without selector construction',
-    is_string($validator)
-        && str_contains($validator, "document.getElementById( param['field'] )")
-        && str_contains($validator, "String( param['value'] )")
-        && !str_contains($validator, "$( '#' + param['field'] )"));
-$check('requiredIf no longer evaluates a generated program',
-    is_string($validator)
-        && !str_contains($validator, 'vEvalStr')
-        && !preg_match('/\\beval\\s*\\(/', $validator));
-
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

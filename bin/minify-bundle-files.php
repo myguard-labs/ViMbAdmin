@@ -44,13 +44,12 @@ return [
     // of application/views/header-js.phtml.
     'js' => [
         '100-jquery.js',
-        '120-jquery.validate.js',
+        '120-vimbadmin.validation.js',
         '150-jquery.datatables.js',
         '151-jquery.datatables.ext.js',
         '152-jquery.datatables.bootstrap5.js',
         '800-bootstrap.js',
         '850-bootbox.js',
-        '900-vimbadmin.validate.js',
         '910-vimbadmin.functions.js',
         '990-vimbadmin.js',
     ],

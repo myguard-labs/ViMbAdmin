@@ -172,6 +172,9 @@ document.write('<script src="view-length-callbacks.js"><\/script><script src="da
 <form id="remove_domain_form"><input name="did"></form>
 <button id="state-button" type="button" data-loading-text="Working">Ready</button>
 <div id="throb-test"></div>
+<button id="transition-toggle" class="btn btn-danger">No</button>
+<div id="throb-transition-toggle"></div>
+<div id="transition-delete-target">delete me</div>
 <pre id="output">PENDING</pre>
 <script>
 function check(name, test) {
@@ -276,7 +279,13 @@ vmReady(function() {
     });
     // The warning oracle still rejects unexpected diagnostics after removal.
     if (location.hash === '#warning-trigger') console.warn('injected for the negative control');
-    DataTable.Dom.transitions = false;
+    DataTable.Dom.transitions = true;
+    if (location.hash === '#transition-completion-disabled') {
+        var transitionWithCompletion = DataTable.Dom.prototype.transition;
+        DataTable.Dom.prototype.transition = function(css, duration, ease) {
+            return transitionWithCompletion.call(this, css, duration, ease, function() {});
+        };
+    }
     check('runtime has no jQuery dependency', function() {
         return typeof window.jQuery === 'undefined' && typeof window.$ === 'undefined'
             && DataTable.version === '3.0.3';
@@ -305,6 +314,20 @@ vmReady(function() {
         // below rather than here.
         spinner.stop();
         return true;
+    });
+    check('successful deletion schedules its transition cleanup', function() {
+        var originalAjax = ossAjax;
+        ossAjax = function(options) {
+            options.success('ok');
+            options.complete();
+            return { abort: function() {} };
+        };
+        try {
+            ossToggle(DataTable.Dom.select('#transition-toggle'), '/fixture', {}, '#transition-delete-target');
+            return document.getElementById('transition-delete-target') !== null;
+        } finally {
+            ossAjax = originalAjax;
+        }
     });
     check('empty required field reports native Bootstrap validation state', function() {
         var submit = new Event('submit', { bubbles: true, cancelable: true });
@@ -844,6 +867,9 @@ vmReady(function() {
             check('stopping a spinner removes it from the DOM', function() {
                 return DataTable.Dom.select('#throb-test .vb-throbber').length === 0;
             });
+            check('successful deletion removes its target from the DOM', function() {
+                return document.getElementById('transition-delete-target') === null;
+            });
 
             if (!wireFinished) failures.push('server-side wire requests did not complete');
             if (window.decodeHandlerRan) failures.push('HTML entity decoding executed an active handler');
@@ -911,6 +937,7 @@ case "$mutation" in
   expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
   expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
   expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
+  expect_fail 'DataTables transition completion callbacks' run_mode development '#transition-completion-disabled'
   ;;
 warning)
   run_mode development '#warning-trigger'
@@ -929,6 +956,9 @@ wire-route-disabled)
   ;;
 legacy-wire-key)
   run_mode development '#legacy-wire-key'
+  ;;
+transition-completion-disabled)
+  run_mode development '#transition-completion-disabled'
   ;;
 *)
   echo "FAIL: unknown VIMBADMIN_MUTATION: $mutation" >&2

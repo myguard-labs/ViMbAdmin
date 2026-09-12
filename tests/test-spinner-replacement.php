@@ -25,7 +25,7 @@ class Test_SpinnerReplacement
         $this->test_minify_inputs_no_throbber();
         $this->test_header_no_throbber_tag();
         $this->test_about_page_credits_updated();
-        $this->test_about_page_dependency_punctuation();
+        $this->test_about_page_dependency_facts();
         $this->test_wrapper_function_uses_spinner();
 
         if ( empty($this->failures) )
@@ -156,15 +156,24 @@ class Test_SpinnerReplacement
         }
     }
 
-    private function test_about_page_dependency_punctuation(): void
+    private function test_about_page_dependency_facts(): void
     {
         $content = file_get_contents($this->base_dir . '/application/views/index/about.phtml');
-        $expected = '<a href="https://datatables.net/">DataTables</a>, a dependency-free'
-            . "\n            table library, and <a href=\"https://icons.getbootstrap.com/\">Bootstrap Icons</a>.";
-        if ($content === false || !str_contains($content, $expected)) {
-            $this->failures[] = 'about.phtml dependency list should use grammatical comma punctuation';
+        $componentCredits = '';
+        if ($content !== false
+            && preg_match('/<p>\s*Additional components include(?<credits>.*?)<\/p>/s', $content, $matches) === 1
+        ) {
+            $componentCredits = $matches['credits'];
+        }
+        $facts = str_contains($componentCredits, 'href="https://datatables.net/"')
+            && str_contains($componentCredits, '>DataTables</a>')
+            && str_contains($componentCredits, 'dependency-free')
+            && str_contains($componentCredits, 'href="https://icons.getbootstrap.com/"')
+            && str_contains($componentCredits, '>Bootstrap Icons</a>');
+        if (!$facts) {
+            $this->failures[] = 'about.phtml should credit dependency-free DataTables and Bootstrap Icons';
         } else {
-            echo "  OK: about.phtml dependency punctuation updated\n";
+            echo "  OK: about.phtml dependency facts retained\n";
         }
     }
 

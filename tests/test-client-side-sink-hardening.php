@@ -34,12 +34,22 @@ $check('mailbox size dialog escapes every dynamic table value',
         && str_contains($mailboxList, 'htmlEntity( data[4] )'));
 
 $emailSettings = file_get_contents(__DIR__ . '/../application/views/mailbox/native-email-settings.phtml');
+$emailSettingsHasLegacyRequiredClass = false;
+if (is_string($emailSettings)
+    && preg_match_all('/\\bclass=(["\'])(.*?)\\1/', $emailSettings, $classAttributes)) {
+    foreach ($classAttributes[2] as $classAttribute) {
+        if (in_array('required', preg_split('/\\s+/', trim($classAttribute)), true)) {
+            $emailSettingsHasLegacyRequiredClass = true;
+            break;
+        }
+    }
+}
 $check('email-settings modal emits native required constraints',
     is_string($emailSettings)
         && str_contains($emailSettings, '<select name="type" id="type" class="form-select" required')
         && str_contains($emailSettings, 'class="form-control"')
         && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}")
-        && !str_contains($emailSettings, 'class="required"'));
+        && !$emailSettingsHasLegacyRequiredClass);
 $check('email-settings modal validates before AJAX and tracks conditional email requirement',
     is_string($mailboxList)
         && str_contains($mailboxList, "jQuery( '#email' ).prop( 'required', other );")

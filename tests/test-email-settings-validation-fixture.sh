@@ -81,7 +81,10 @@ HTML
 output=$tmp/output.html
 chrome_args=(--headless --disable-gpu --virtual-time-budget=3000 --user-data-dir="$tmp/profile" --dump-dom http://127.0.0.1:8765/regression.html)
 if [[ $browser == *run-headless-chrome.sh ]]; then
-  if ! "$browser" "${chrome_args[@]}" >"$output" 2>&1; then cat "$output" >&2; exit 1; fi
+  if ! "$browser" "${chrome_args[@]}" >"$output" 2>&1; then
+    cat "$output" >&2
+    exit 1
+  fi
 else
   CHROME_BIN=$browser "$http_runner" "$tmp" "${chrome_args[@]}" >"$output" 2>&1
 fi

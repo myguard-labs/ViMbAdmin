@@ -508,7 +508,11 @@ run_case() {
         var realBootstrap = window.bootstrap;
         var realAlert = window.alert;
         var fallbackAlertMessage = null;
+        var fallbackConfirmResults = [];
         window.bootstrap = undefined;
+        var fallbackConfirmDialog = ossConfirm('Direct fallback probe', function (accepted) {
+            fallbackConfirmResults.push(accepted);
+        });
         submit('guarded');
         alertTrigger.focus();
         window.alert = function (message) { fallbackAlertMessage = message; };
@@ -517,8 +521,27 @@ run_case() {
         window.bootstrap = realBootstrap;
         if (submitted.indexOf('guarded') !== -1)
             failures.push('missing Bootstrap Modal runtime allowed the destructive submit');
+        if (fallbackConfirmDialog !== null)
+            failures.push('missing Bootstrap ossConfirm fallback returned a dialog');
+        if (fallbackConfirmResults.length !== 1 || fallbackConfirmResults[0] !== false)
+            failures.push('missing Bootstrap ossConfirm callback was not exactly once with false: ' + JSON.stringify(fallbackConfirmResults));
         if (fallbackAlertMessage !== 'Delete & retry "now"')
             failures.push('fallback alert did not convert markup and entities to text: ' + JSON.stringify(fallbackAlertMessage));
+
+        // The guarded-form callback also releases its per-form pending lock.
+        // Retrying with Bootstrap restored must therefore open a fresh dialog.
+        submit('guarded');
+        var retryConfirmButton = document.querySelector('[data-oss-confirm]');
+        if (!retryConfirmButton) {
+            failures.push('missing Bootstrap confirmation did not clear the guarded form pending state');
+        }
+        else {
+            var retryModal = retryConfirmButton.closest('.modal');
+            retryModal.querySelector('[data-bs-dismiss="modal"]').click();
+            await waitFor(function () { return !document.body.contains(retryModal); }, 'fallback retry modal removal');
+            if (submitted.indexOf('guarded') !== -1)
+                failures.push('fallback retry cancellation replayed the destructive submit');
+        }
 
         document.body.dataset.testResult = failures.length ? 'fail' : 'pass';
         document.body.dataset.testFailures = failures.join('; ');

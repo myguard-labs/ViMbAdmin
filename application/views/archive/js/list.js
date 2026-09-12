@@ -81,7 +81,7 @@ var archiveStatuses = { {foreach $statuses as $k => $v}'{$k}': "{$v|escape:'java
 var archiveAllowRestore = [ {foreach $allowRestore as $s}'{$s|escape:'javascript'}'{if !$s@last}, {/if}{/foreach} ];
 var archiveAllowDelete  = [ {foreach $allowDelete as $s}'{$s|escape:'javascript'}'{if !$s@last}, {/if}{/foreach} ];
 
-function vmArchiveEsc( s ){ return DataTable.Dom.select( '<div>' ).text( s == null ? '' : s ).html(); }
+function vmArchiveEsc( s ){ return htmlEntity( s == null ? '' : s ); }
 
 function vmArchiveBytes( v )
 {

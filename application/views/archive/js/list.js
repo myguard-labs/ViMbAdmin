@@ -23,7 +23,6 @@ vmReady( function()
         'order': [[ 4, 'desc' ]],
         'language': { 'processing': 'Loading…', 'emptyTable': 'No archives.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
-            vmTooltips();
             if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
                 vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );

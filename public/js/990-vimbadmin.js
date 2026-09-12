@@ -45,10 +45,19 @@ function vmReady(callback)
         callback();
 }
 
-function vmTooltips()
+function vmDisposeTooltips(root)
 {
+    root.querySelectorAll('.have-tooltip, .have-tooltip-below, .have-tooltip-long').forEach(function(element) {
+        var instance = bootstrap.Tooltip.getInstance(element);
+        if (instance) instance.dispose();
+    });
+}
+
+function vmTooltips(root)
+{
+    root = root || document;
     ['.have-tooltip', '.have-tooltip-below', '.have-tooltip-long'].forEach(function(selector) {
-        document.querySelectorAll(selector).forEach(function(element) {
+        root.querySelectorAll(selector).forEach(function(element) {
             var previous = bootstrap.Tooltip.getInstance(element);
             if (previous) previous.dispose();
             var options = { html: true, trigger: 'hover', placement: 'top' };
@@ -683,11 +692,26 @@ function vmDataTableApi( table )
 
 // Keep Bootstrap pagination, five numbers, arrow labels and single-column order.
 DataTable.util.object.assignDeep(DataTable.defaults, {
+    preDrawCallback: function(settings) { vmDisposeTooltips(settings.table); },
     pagingType: 'simple_numbers',
     language: { paginate: { previous: '&larr; Previous', next: 'Next &rarr;' } },
     orderMulti: false
 });
 DataTable.ext.pager.numbers_length = 5;
+
+// Bootstrap owns a strong instance map. Release old rows before DataTables
+// detaches them, then initialize only the newly drawn table. Destroy also needs
+// cleanup when it occurs without another draw.
+DataTable.Dom.select(document).on('draw.dt', function(event, settings) {
+    vmTooltips(settings.table);
+});
+DataTable.Dom.select(document).on('destroy.dt', function(event, settings) {
+    vmDisposeTooltips(settings.table);
+});
+DataTable.Dom.select(document).on('xhr.dt', function(event, settings, json) {
+    // A failed server-side redraw retains the old rows after preDraw cleanup.
+    if (json === null) vmTooltips(settings.table);
+});
 
 //****************************************************************************
 // Delegated confirmation guard for destructive submits (VIM-D07)

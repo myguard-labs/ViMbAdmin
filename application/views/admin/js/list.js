@@ -31,10 +31,10 @@ function toggleActive( elid, id ){
 };
 
 function toggleSuper( elid, id ){
-    if( ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='admin' action='ajax-toggle-super'}", { "aid": id, "csrf": "{$csrfToken}" } ) )
-        DataTable.Dom.select( '#admin_domains_' + id ).hide();
-    else
-        DataTable.Dom.select( '#admin_domains_' + id ).show();
+    var on = ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='admin' action='ajax-toggle-super'}", { "aid": id, "csrf": "{$csrfToken}" } );
+    if( typeof on === 'undefined' )
+        return;
+    document.getElementById( 'admin_domains_' + id ).classList.toggle( 'd-none', on );
 };
 
 function purgeAdmin( event ){

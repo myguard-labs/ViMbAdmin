@@ -96,13 +96,16 @@ final class LogController extends AbstractController
         }
         [$targetAdmin, $domain] = $scope;
 
+        $minimum = $this->dataTableMinimumSearchLength('log');
         try {
             $q = DataTableQuery::fromArray(
                 self::stringMap($_GET, 'GET data'),
-                $this->dataTableMinimumSearchLength('log'),
+                $minimum,
             );
         } catch (\LengthException $e) {
             return new Response($e->getMessage(), 400, 'text/plain; charset=utf-8');
+        } catch (\TypeError) {
+            return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
         }
         $sortField = self::listSortField($q->sortColumn, $domain !== null);
 
@@ -228,7 +231,7 @@ final class LogController extends AbstractController
      * from the same condition the view uses. The "Log"/data column is rendered
      * but not usefully sortable and maps to the default.
      *
-     * @param int  $index         The DataTables `iSortCol_0` index.
+     * @param int  $index         The DataTables `order[0][column]` index.
      * @param bool $domainScoped  Whether a domain filter is active (Domain column hidden).
      */
     private static function listSortField(int $index, bool $domainScoped): string

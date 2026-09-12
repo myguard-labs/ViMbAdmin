@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * DataTables `iSortCol_0` -> sort-field mapping for the server-side list pages.
+ * DataTables `order[0][column]` -> sort-field mapping for the server-side list pages.
  *
  * The client sends the index of the column the user clicked. The controller
  * translates that index into a whitelisted field name which the repository maps

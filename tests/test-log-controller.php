@@ -420,12 +420,11 @@ $pagedLog = new LogControllerTestLogRepository([], [
     'filtered' => 1,
 ]);
 $_GET = [
-    'sEcho' => '3',
-    'iDisplayStart' => '5',
-    'iDisplayLength' => '25',
-    'sSearch' => ' edit ',
-    'iSortCol_0' => '3',
-    'sSortDir_0' => 'desc',
+    'draw' => '3',
+    'start' => '5',
+    'length' => '25',
+    'search' => ['value' => ' edit '],
+    'order' => [['column' => '3', 'dir' => 'desc']],
 ];
 $pagedController = logController(
     logEntityManager(['Entities\\Log' => $pagedLog]),
@@ -436,20 +435,20 @@ $pagedController = logController(
 );
 $pagedResponse = $pagedController->listDataAction();
 $pagedBody = json_decode($pagedResponse->body, true);
-$pagedRows = is_array($pagedBody) && isset($pagedBody['aaData']) && is_array($pagedBody['aaData'])
-    ? $pagedBody['aaData']
+$pagedRows = is_array($pagedBody) && isset($pagedBody['data']) && is_array($pagedBody['data'])
+    ? $pagedBody['data']
     : [];
 $firstPagedRow = $pagedRows[0] ?? null;
 // This request is domain-scoped, so log/list.phtml does NOT render the Domain
-// column and iSortCol_0 = 3 is the "Occurred At" column -- which is also the
+// column and order[0][column] = 3 is the "Occurred At" column -- which is also the
 // index log/js/list.js sets as the initial order in exactly this case. The map
 // must therefore answer 'timestamp' here, not 'domain'.
 $check('list-data preserves scoped pagination and sorting arguments',
     $pagedLog->pageCalls === [[null, $domain, 'edit', false, 'timestamp', 'DESC', 5, 25]]);
 $check('list-data returns counts and formats timestamps',
     is_array($pagedBody)
-        && $pagedBody['sEcho'] === 3
-        && $pagedBody['iTotalRecords'] === 9
+        && $pagedBody['draw'] === 3
+        && $pagedBody['recordsTotal'] === 9
         && is_array($firstPagedRow)
         && ($firstPagedRow['timestamp'] ?? null) === '2026-08-31 12:34:56');
 
@@ -458,7 +457,7 @@ $check('list-data returns counts and formats timestamps',
 // '%*acme%' and silently match nothing, and every non-starred case in this file
 // cannot tell the two properties apart.
 $starredLog = new LogControllerTestLogRepository([], ['rows' => [], 'total' => 9, 'filtered' => 0]);
-$_GET['sSearch'] = ' *acme ';
+$_GET['search']['value'] = ' *acme ';
 $starredController = logController(
     logEntityManager(['Entities\\Log' => $starredLog]),
     new LogControllerTestNamespace(['domain' => $domain]),
@@ -470,7 +469,7 @@ $starredController->listDataAction();
 $check('list-data forwards the stripped term and the contains flag for a starred search',
     $starredLog->pageCalls === [[null, $domain, 'acme', true, 'timestamp', 'DESC', 5, 25]]);
 
-$_GET['sSearch'] = 'abc';
+$_GET['search']['value'] = 'abc';
 foreach ([
     'list-specific override' => ['defaults' => ['server_side' => ['pagination' => [
         'min_search_str' => 2,

@@ -5,19 +5,21 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\DataTable;
 
 /**
- * Parsed DataTables (legacy "server-side processing" protocol, as shipped by
- * the bundled DataTables 1.11.5 via `fnServerData`) request parameters.
+ * Parsed DataTables 2 server-side processing request parameters.
  *
  * The list pages render server-side paged: the table is configured with
- * `bServerProcessing` + an AJAX source, and DataTables sends the draw counter
- * (`sEcho`), the window (`iDisplayStart` / `iDisplayLength`), the global filter
- * (`sSearch`) and the active sort column/direction (`iSortCol_0` / `sSortDir_0`)
+ * `serverSide` + an AJAX source, and DataTables sends the draw counter
+ * (`draw`), the window (`start` / `length`), the global filter
+ * (`search[value]`) and the active sort column/direction
+ * (`order[0][column]` / `order[0][dir]`)
  * on every interaction. A controller turns these into a scoped, paged Doctrine
  * query and answers with {@see DataTableResult::envelope()}.
  *
  * Pure value object (no superglobals, no framework) so it is unit-testable; the
  * controller passes `$_GET`. `length` is clamped to a sane maximum so a crafted
- * `iDisplayLength` cannot ask for an unbounded result set.
+ * `length` cannot ask for an unbounded result set. Only the first ordering is
+ * applied; the client disables multi-column ordering. Per-column metadata and
+ * regex flags are ignored: searches always use the literal LIKE pattern below.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -35,7 +37,7 @@ final class DataTableQuery
      *                           {@see likePattern()}. This is the search value.
      */
     private function __construct(
-        public readonly int $echo,
+        public readonly int $draw,
         public readonly int $start,
         public readonly int $length,
         public readonly string $search,
@@ -67,25 +69,26 @@ final class DataTableQuery
      *        rejected; zero explicitly disables the minimum.
      * @throws \LengthException when a nonempty search is below the minimum
      * @throws \LogicException when the configured minimum search length is negative
-     * @throws \TypeError when a request parameter has the wrong scalar type
+     * @throws \TypeError when a request parameter has the wrong type or shape
      */
     public static function fromArray(array $p, int $minimumSearchLength = 0): self
     {
         if ($minimumSearchLength < 0) {
             throw new \LogicException('Minimum search length must be non-negative');
         }
-        $echo   = self::integer($p['sEcho'] ?? null, 1, 'sEcho');
-        $start  = max(0, self::integer($p['iDisplayStart'] ?? null, 0, 'iDisplayStart'));
+        $draw   = self::integer($p['draw'] ?? null, 1, 'draw');
+        $start  = max(0, self::integer($p['start'] ?? null, 0, 'start'));
 
-        $length = self::integer($p['iDisplayLength'] ?? null, 10, 'iDisplayLength');
+        $length = self::integer($p['length'] ?? null, 10, 'length');
         // -1 ("All") and anything over the cap collapse to the cap; <=0 to 10.
         if ($length <= 0 || $length > self::MAX_LENGTH) {
             $length = $length === -1 ? self::MAX_LENGTH : ($length <= 0 ? 10 : self::MAX_LENGTH);
         }
 
-        $searchValue = $p['sSearch'] ?? null;
+        $searchParams = self::arrayParameter($p['search'] ?? [], 'search');
+        $searchValue = $searchParams['value'] ?? null;
         if ($searchValue !== null && !is_string($searchValue)) {
-            throw new \TypeError('sSearch must be a string');
+            throw new \TypeError('search[value] must be a string');
         }
         $search = trim($searchValue ?? '');
 
@@ -102,14 +105,25 @@ final class DataTableQuery
         if ($searchTerm !== '' && mb_strlen($searchTerm, 'UTF-8') < $minimumSearchLength) {
             throw new \LengthException("Search must be empty or at least {$minimumSearchLength} characters");
         }
-        $sortCol = max(0, self::integer($p['iSortCol_0'] ?? null, 0, 'iSortCol_0'));
-        $sortDirection = $p['sSortDir_0'] ?? null;
+        $orders = self::arrayParameter($p['order'] ?? [], 'order');
+        $order = self::arrayParameter($orders[0] ?? [], 'order[0]');
+        $sortCol = max(0, self::integer($order['column'] ?? null, 0, 'order[0][column]'));
+        $sortDirection = $order['dir'] ?? null;
         if ($sortDirection !== null && !is_string($sortDirection)) {
-            throw new \TypeError('sSortDir_0 must be a string');
+            throw new \TypeError('order[0][dir] must be a string');
         }
         $sortDir = strtoupper($sortDirection ?? 'asc') === 'DESC' ? 'DESC' : 'ASC';
 
-        return new self($echo, $start, $length, $search, $contains, $searchTerm, $sortCol, $sortDir);
+        return new self($draw, $start, $length, $search, $contains, $searchTerm, $sortCol, $sortDir);
+    }
+
+    /** @return array<array-key,mixed> */
+    private static function arrayParameter(mixed $value, string $name): array
+    {
+        if (!is_array($value)) {
+            throw new \TypeError($name . ' must be an array');
+        }
+        return $value;
     }
 
     private static function integer(mixed $value, int $default, string $name): int

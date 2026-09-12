@@ -150,9 +150,14 @@ $check('alias binary flags preserve documented encodings',
         && $invoke(AliasController::class, 'binaryInteger', '1', 0, 'Flag') === 1
         && $invoke(AliasController::class, 'binaryInteger', '', 1, 'Flag') === 0
         && $fails(static fn(): mixed => $invoke(AliasController::class, 'binaryInteger', ['1'], 0, 'Flag')));
-$check('alias DataTables boundary never accepts container values',
-    $invoke(AliasController::class, 'requestArray', ['sEcho' => '1', 0 => 'ignored']) === ['sEcho' => '1']
-        && $fails(static fn(): mixed => $invoke(AliasController::class, 'requestArray', ['sEcho' => ['1']])));
+$check('alias DataTables scalar boundary never accepts container values',
+    $invoke(AliasController::class, 'requestArray', ['draw' => '1', 0 => 'ignored']) === ['draw' => '1']
+        && $fails(static fn(): mixed => $invoke(AliasController::class, 'requestArray', ['draw' => ['1']])));
+$modernRequest = ['draw' => '2', 'search' => ['value' => 'mail'], 'order' => [['column' => '1', 'dir' => 'desc']], 'columns' => [['data' => 'address']]];
+$check('alias DataTables boundary retains modern nested fields',
+    $invoke(AliasController::class, 'requestArray', $modernRequest) === $modernRequest);
+$check('alias DataTables boundary still rejects unrelated containers',
+    $fails(static fn(): mixed => $invoke(AliasController::class, 'requestArray', ['did' => ['1']])));
 $check('alias pagination config distinguishes absent from malformed',
     $invoke(AliasController::class, 'optionBoolean', [], false, 'defaults', 'server_side', 'pagination', 'enable') === false
         && $invoke(AliasController::class, 'optionBoolean', ['defaults' => ['server_side' => ['pagination' => ['enable' => '1']]]], false, 'defaults', 'server_side', 'pagination', 'enable') === true
@@ -216,6 +221,6 @@ $check('valid backup codes remain single-use and update the exact remaining coun
     [$generatedCount, $remainingBefore, $firstUse, $secondUse, $remainingAfter]
         === [2, 2, true, false, 1]);
 
-$check('fixed assertion count', $checks === 24);
+$check('fixed assertion count', $checks === 26);
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

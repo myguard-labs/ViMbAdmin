@@ -77,6 +77,22 @@ for asset in \
     exit 1
   fi
 done
+mkdir -p "$tmp/src/Kernel/DataTable" "$tmp/tests/support"
+cp src/Kernel/DataTable/{DataTableQuery,DataTableResult}.php "$tmp/src/Kernel/DataTable/"
+cp tests/support/datatable-wire-endpoint.php "$tmp/tests/support/"
+mkdir -p "$tmp/tests/support/datatable-wire"
+render_wire_response() {
+  local scope=$1 draw=$2 start=$3 search=$4 direction=$5
+  php "$tmp/tests/support/datatable-wire-endpoint.php" \
+    "scope=$scope&draw=$draw&start=$start&length=2&search%5Bvalue%5D=$search&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=$direction" \
+    >"$tmp/tests/support/datatable-wire/$scope-$draw.json"
+}
+for scope in domain mailbox alias archive log; do
+  render_wire_response "$scope" 1 0 '' asc
+  render_wire_response "$scope" 2 2 '' asc
+  render_wire_response "$scope" 3 0 '' desc
+  render_wire_response "$scope" 4 0 "${scope}-Beta" desc
+done
 # The search text contains a literal Smarty variable, not a shell variable.
 # shellcheck disable=SC2016
 sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' \
@@ -144,6 +160,88 @@ function check(name, test) {
 }
 
 $(function() {
+    var wireEndpoint = '/tests/support/datatable-wire-endpoint.php';
+    var wireDisabled = location.hash === '#wire-route-disabled';
+    // A missing route leaves Chromium's dump-dom process waiting on the 404
+    // request even after jQuery reports it. Point the negative control at a
+    // served response for the wrong scope instead: it keeps the route mutation
+    // observable while settling promptly under both fixture servers.
+    var wireRequestEndpoint = wireDisabled
+        ? '/tests/support/datatable-wire/domain-1.json'
+        : wireEndpoint;
+    // The network-isolated multi-engine runner is a static server. Its finite
+    // response set was rendered through the real PHP parser above; route each
+    // fully formed modern request to the matching result while retaining real
+    // HTTP serialization and DataTables' response handling.
+    $.ajaxPrefilter(function(options, originalOptions) {
+        var match = /^\/tests\/support\/datatable-wire-endpoint\.php\?scope=(domain|mailbox|alias|archive|log)$/.exec(options.url);
+        if (!match) return;
+        var data = originalOptions.data;
+        if (!data || data.draw < 1 || data.draw > 4) return;
+        if (location.hash === '#legacy-wire-key' && data.draw === 1) data.sEcho = data.draw;
+        var allowedName = /^(?:draw|start|length|search%5B(?:value|regex)%5D|order%5B[0-9]+%5D%5B(?:column|dir|name)%5D|columns%5B[0-9]+%5D%5B(?:data|name|searchable|orderable)%5D|columns%5B[0-9]+%5D%5Bsearch%5D%5B(?:value|regex)%5D|_)$/i;
+        var rejected = $.param(data).split('&').map(function(pair) {
+            return pair.split('=', 1)[0];
+        }).filter(function(name) { return !allowedName.test(name); });
+        if (rejected.length) {
+            failures.push('server-side wire: rejected request key ' + rejected[0]);
+            options.url = '/tests/support/datatable-wire/' + match[1] + '-' + data.draw + '.json';
+            return;
+        }
+        var expected = [
+            { start: 0, search: '', dir: 'asc' },
+            { start: 2, search: '', dir: 'asc' },
+            { start: 0, search: '', dir: 'desc' },
+            { start: 0, search: match[1] + '-Beta', dir: 'desc' }
+        ][data.draw - 1];
+        if (data.start !== expected.start || data.length !== 2 ||
+            data.search.value !== expected.search || data.order[0].column !== 0 ||
+            data.order[0].dir !== expected.dir) return;
+        options.url = '/tests/support/datatable-wire/' + match[1] + '-' + data.draw + '.json';
+    });
+    // Each list uses the shared transport, with its own scoped fixture rows.
+    var wireChecks = ['domain', 'mailbox', 'alias', 'archive', 'log'].map(function(scope) {
+        return new Promise(function(resolve, reject) {
+            var element = $('<table><thead><tr><th>Name</th></tr></thead></table>').appendTo('body');
+            var step = 0;
+            element.one('xhr.dt', function(event, settings, json, xhr) {
+                if (json === null && xhr) reject(new Error(scope + ': AJAX request failed'));
+            });
+            element.on('draw.dt', function() {
+                try {
+                    var api = element.DataTable();
+                    var info = api.page.info();
+                    var names = api.column(0).data().toArray();
+                    if (step === 0) {
+                        if (info.recordsTotal !== 4 || names.join() !== scope + '-Alpha,' + scope + '-Beta') throw new Error('initial page');
+                        step++;
+                        api.page('next').draw('page');
+                    } else if (step === 1) {
+                        if (info.start !== 2 || names.join() !== scope + '-Delta,' + scope + '-Gamma') throw new Error('next page');
+                        step++;
+                        api.order([[0, 'desc']]).draw();
+                    } else if (step === 2) {
+                        if (names.join() !== scope + '-Gamma,' + scope + '-Delta') throw new Error('descending order');
+                        step++;
+                        api.search(scope + '-Beta').draw();
+                    } else {
+                        if (info.recordsTotal !== 4 || info.recordsDisplay !== 1 || names.join() !== scope + '-Beta') throw new Error('filtered page');
+                        resolve();
+                    }
+                } catch (error) { reject(new Error(scope + ': ' + error.message)); }
+            });
+            element.DataTable({
+                serverSide: true, pageLength: 2, order: [[0, 'asc']],
+                columns: [{ data: 'name' }],
+                ajax: vmDataTableServerData(wireRequestEndpoint + '?scope=' + scope, 3)
+            });
+        });
+    });
+    var wireFinished = false;
+    Promise.all(wireChecks).then(function() { wireFinished = true; }, function(error) {
+        failures.push('server-side wire: ' + error.message);
+        wireFinished = true;
+    });
     // Drives the 'injected Migrate warning' negative control (name kept for
     // history/CI-label continuity; the mechanism is jQuery-4-native, not
     // Migrate -- Migrate is deleted). jQuery 4.0.0 added
@@ -195,30 +293,30 @@ $(function() {
         table.destroy();
         return true;
     });
-    // VIM-A15.56a1: the client is DataTables 2.x but the PHP server side still
-    // speaks the legacy 1.9 wire protocol (sEcho / iDisplayStart /
-    // iDisplayLength / sSearch / iSortCol_0 / sSortDir_0). 2.x emits ONLY the
-    // modern names and has no legacy request mode, so vmDataTableServerData()
-    // in 990-vimbadmin.js supplies an `ajax.data` callback that rewrites them.
-    // Assert the legacy names the untouched PHP side actually reads: the
-    // modern names must NOT survive, or every server-side table silently
-    // paginates and sorts against a server that ignores the request.
-    check('server-side ajax request carries the legacy 1.9 parameter names', function() {
-        var sent = vmDataTableLegacyRequest({
+    check('server-side ajax preserves the modern request parameters', function() {
+        var request = {
             draw: 4,
             start: 30,
             length: 15,
             search: { value: 'example' },
             order: [{ column: 2, dir: 'desc' }]
-        });
-        if (sent.sEcho !== 4) return false;
-        if (sent.iDisplayStart !== 30) return false;
-        if (sent.iDisplayLength !== 15) return false;
-        if (sent.sSearch !== 'example') return false;
-        if (sent.iSortCol_0 !== 2 || sent.sSortDir_0 !== 'desc') return false;
-        // The modern names must not leak through alongside them.
-        if ('draw' in sent || 'start' in sent || 'length' in sent) return false;
-        return true;
+        };
+        var originalAjax = $.ajax;
+        var sent;
+        var table = $('#table').DataTable();
+        try {
+            $.ajax = function(options) { sent = options.data; };
+            vmDataTableServerData('/list-data', 3)(request, function() {}, table.settings()[0]);
+        } finally {
+            $.ajax = originalAjax;
+            table.destroy();
+        }
+        if (sent.draw !== 4) return false;
+        if (sent.start !== 30) return false;
+        if (sent.length !== 15) return false;
+        if (sent.search.value !== 'example') return false;
+        if (sent.order[0].column !== 2 || sent.order[0].dir !== 'desc') return false;
+        return sent === request;
     });
     // Exercise the actual source/bundle transport in every mode. Request
     // interception observes whether the minimum gate runs before network I/O,
@@ -253,15 +351,15 @@ $(function() {
             } finally {
                 $.ajax = originalAjax;
             }
-            if (allowed) return requested !== null && requested.sSearch === search && answered === null;
-            return requested === null && answered !== null && answered.sEcho === 11
-                && answered.iTotalDisplayRecords === 0 && answered.aaData.length === 0;
+            if (allowed) return requested !== null && requested.search.value === search && answered === null;
+            return requested === null && answered !== null && answered.draw === 11
+                && answered.recordsFiltered === 0 && answered.data.length === 0;
         });
     });
 
     // The shim must be able to DECLINE a request, not merely blank the search
     // term: a search shorter than the minimum has to resolve to an empty result
-    // set locally. If it reached the server with sSearch blanked, the server
+    // set locally. If it reached the server with search[value] blanked, the server
     // would answer with the full unfiltered page while the hint claimed more
     // characters were needed.
     check('a search shorter than the minimum never reaches the server', function() {
@@ -302,9 +400,9 @@ $(function() {
 
         if (requested) return false;
         if (!answered) return false;
-        if (answered.sEcho !== 9) return false;
-        if (answered.iTotalDisplayRecords !== 0) return false;
-        if (answered.aaData.length !== 0) return false;
+        if (answered.draw !== 9) return false;
+        if (answered.recordsFiltered !== 0) return false;
+        if (answered.data.length !== 0) return false;
 
         // The hint is written to BOTH language keys and restored before the
         // transport returns -- see the `_emptyRow` note beside the hint in
@@ -388,7 +486,7 @@ $(function() {
     });
     // The single sort column the PHP side reads is only honest if the client
     // cannot select more than one.
-    check('multi-column ordering is disabled while the legacy bridge exists', function() {
+    check('multi-column ordering is disabled for the single-order server contract', function() {
         return $.fn.dataTable.defaults.orderMulti === false;
     });
     // Chosen and Colorbox coverage was dropped here; see the file header.
@@ -403,21 +501,21 @@ $(function() {
     // `hidden.bs.modal`, so neither the close nor the callback has happened yet
     // when this statement returns. Asserting synchronously would pass even with
     // a broken dismiss handler.
-    bootbox.alert('<em id="bootbox-probe">Continue?</em>', function() { bootboxResult = true; });
+    var bootboxDialog = bootbox.alert('<em id="bootbox-probe">Continue?</em>', function() { bootboxResult = true; });
     check('Bootbox alert renders its message as HTML', function() {
         return !!document.getElementById('bootbox-probe');
     });
-    // Dismissal is deferred to the next tick: Bootstrap 5 shows the dialog
-    // through a transition, and clicking the OK button before the modal has
-    // finished opening is a no-op. The click itself must be a NATIVE event,
-    // because `data-bs-dismiss` is bound by Bootstrap's own delegated native
-    // listener, which a jQuery-triggered event never reaches.
-    setTimeout(function() {
-        var button = document.querySelector('#bootbox-probe')
-            && document.querySelector('#bootbox-probe').closest('.modal')
-                .querySelector('[data-bs-dismiss="modal"]');
+    // Dismiss only after Bootstrap reports that its show transition completed.
+    // A fixed delay races the component's `_isTransitioning` guard: Chromium
+    // happened to finish in time while Firefox and WebKit correctly ignored an
+    // early click. The click itself must be a NATIVE event, because
+    // `data-bs-dismiss` is bound by Bootstrap's own delegated native listener,
+    // which a jQuery-triggered event never reaches.
+    bootboxDialog.one('shown.bs.modal', function() {
+        if (location.hash === '#alert-dismiss-disabled') return;
+        var button = bootboxDialog.get(0).querySelector('[data-bs-dismiss="modal"]');
         if (button) button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    }, 60);
+    });
     check('real admin view remove dialog operates', function() {
         $('#remove-domain-7').trigger('click');
         var selected = $('#remove_domain_form input[name="did"]').val();
@@ -508,11 +606,12 @@ $(function() {
                 return $('#throb-test .vb-throbber').length === 0;
             });
 
+            if (!wireFinished) failures.push('server-side wire requests did not complete');
             if (warnings.length) failures.push('Migrate warning: ' + warnings.join(' | '));
             document.getElementById('output').textContent = JSON.stringify({ mode: mode, warnings: warnings, failures: failures });
             document.body.dataset.verdict = failures.length ? 'FAIL' : 'PASS';
         }, 900);
-    }, 300);
+    }, 700);
 });
 </script></body></html>
 HTML
@@ -568,6 +667,9 @@ case "$mutation" in
     expect_fail 'injected Migrate warning' run_mode development '#warning-trigger'
     expect_fail 'missing plugin dependency' run_mode development '#missing-dependency'
     expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
+    expect_fail 'Bootbox alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
+    expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
+    expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
     ;;
   warning)
     run_mode development '#warning-trigger'
@@ -577,6 +679,15 @@ case "$mutation" in
     ;;
   button-disabled)
     run_mode development '#button-disabled'
+    ;;
+  alert-dismiss-disabled)
+    run_mode development '#alert-dismiss-disabled'
+    ;;
+  wire-route-disabled)
+    run_mode development '#wire-route-disabled'
+    ;;
+  legacy-wire-key)
+    run_mode development '#legacy-wire-key'
     ;;
   *)
     echo "FAIL: unknown VIMBADMIN_MUTATION: $mutation" >&2

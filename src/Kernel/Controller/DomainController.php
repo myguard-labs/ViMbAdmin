@@ -81,7 +81,7 @@ final class DomainController extends AbstractController
      */
     private static function requestArray(array $value): array
     {
-        $scalarKeys = ['sEcho', 'iDisplayStart', 'iDisplayLength', 'sSearch', 'iSortCol_0', 'sSortDir_0'];
+        $scalarKeys = ['draw', 'start', 'length'];
         $result = [];
         foreach ($value as $key => $item) {
             if (!is_string($key)) {
@@ -130,7 +130,7 @@ final class DomainController extends AbstractController
      * the default. Build the map from the same condition the view uses.
      * Columns that are rendered but not sortable map to the default.
      *
-     * @param int  $index      The DataTables `iSortCol_0` index.
+     * @param int  $index      The DataTables `order[0][column]` index.
      * @param bool $sizeColumn Whether the "Used / Max" column is rendered.
      */
     private static function listSortField(int $index, bool $sizeColumn): string
@@ -354,13 +354,26 @@ final class DomainController extends AbstractController
             return new Response('ko');
         }
 
+        $minimum = $this->dataTableMinimumSearchLength('domain');
+        try {
+            $request = self::requestArray($_GET);
+        } catch (LogicException $e) {
+            foreach (['draw', 'start', 'length'] as $key) {
+                if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
+                    return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
+                }
+            }
+            throw $e;
+        }
         try {
             $q = DataTableQuery::fromArray(
-                self::requestArray($_GET),
-                $this->dataTableMinimumSearchLength('domain'),
+                $request,
+                $minimum,
             );
         } catch (\LengthException $e) {
             return new Response($e->getMessage(), 400, 'text/plain; charset=utf-8');
+        } catch (\TypeError) {
+            return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
         }
         $sizeColumn = !self::optionBoolean($this->container->options(), false, 'defaults', 'list_size', 'disabled');
         $sortField  = self::listSortField($q->sortColumn, $sizeColumn);

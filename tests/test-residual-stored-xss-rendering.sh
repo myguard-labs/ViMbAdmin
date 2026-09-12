@@ -91,10 +91,10 @@ $(function () {
         ajaxCalls++;
         if (options.url === '/legitimate-empty') {
             options.success({
-                sEcho: 11,
-                iTotalRecords: 0,
-                iTotalDisplayRecords: 0,
-                aaData: []
+                draw: 11,
+                recordsTotal: 0,
+                recordsFiltered: 0,
+                data: []
             });
         } else {
             options.error({ readyState: 4 }, 'error');

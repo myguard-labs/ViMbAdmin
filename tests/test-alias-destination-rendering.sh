@@ -64,19 +64,19 @@ document.getElementById('dynamic-controls').innerHTML = formatControlls(41);
 // This is the production list-data boundary: DataTables parses the JSON row,
 // calls formatGoto(), then assigns the returned markup to the destination cell.
 const response = JSON.parse(JSON.stringify({
-    sEcho: 1,
-    iTotalRecords: 2,
-    iTotalDisplayRecords: 2,
-    aaData: [
+    draw: 1,
+    recordsTotal: 2,
+    recordsFiltered: 2,
+    data: [
         { id: 41, goto: payload },
         { id: 42, goto: normalLongDestination }
     ]
 }));
 
 document.getElementById('malicious-destination').innerHTML =
-    formatGoto(response.aaData[0].id, response.aaData[0].goto);
+    formatGoto(response.data[0].id, response.data[0].goto);
 document.getElementById('long-destination').innerHTML =
-    formatGoto(response.aaData[1].id, response.aaData[1].goto);
+    formatGoto(response.data[1].id, response.data[1].goto);
 
 $(function () {
     $('#alias-goto-43').trigger('mouseenter');

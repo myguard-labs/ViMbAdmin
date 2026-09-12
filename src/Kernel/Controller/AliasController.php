@@ -97,7 +97,7 @@ final class AliasController extends AbstractController
             if (!is_string($key)) {
                 continue;
             }
-            if (!is_string($item)) {
+            if (!in_array($key, ['search', 'order', 'columns'], true) && !is_string($item)) {
                 throw new \LogicException("DataTables parameter {$key} must be a string");
             }
             $result[$key] = $item;
@@ -206,13 +206,26 @@ final class AliasController extends AbstractController
         $domain  = $this->storedDomain($session);
         $ima     = self::binaryInteger($this->param('ima'), 0, 'Include-mailbox-alias flag');
 
+        $minimum = $this->dataTableMinimumSearchLength();
+        try {
+            $request = self::requestArray($_GET);
+        } catch (\LogicException $e) {
+            foreach (['draw', 'start', 'length'] as $key) {
+                if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
+                    return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
+                }
+            }
+            throw $e;
+        }
         try {
             $q = DataTableQuery::fromArray(
-                self::requestArray($_GET),
-                $this->dataTableMinimumSearchLength(),
+                $request,
+                $minimum,
             );
         } catch (\LengthException $e) {
             return new Response($e->getMessage(), 400, 'text/plain; charset=utf-8');
+        } catch (\TypeError) {
+            return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
         }
         // Column index -> sortable field (matches JS column order; goto/controls
         // fall back to address).

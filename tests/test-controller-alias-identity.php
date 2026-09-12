@@ -169,6 +169,7 @@ final class ControllerAliasIdentityAliasRepository extends \Repositories\Alias
 final class ControllerAliasIdentityMailboxRepository extends \Repositories\Mailbox
 {
     public bool $purged = false;
+    public int $listLookups = 0;
 
     public function __construct(private readonly ?\Entities\Mailbox $mailbox) {}
 
@@ -186,6 +187,7 @@ final class ControllerAliasIdentityMailboxRepository extends \Repositories\Mailb
      */
     public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array
     {
+        $this->listLookups++;
         return $this->mailbox === null ? [] : [$this->mailbox];
     }
 
@@ -540,8 +542,9 @@ $wrongSession = new ControllerAliasIdentitySession([
     'csrfToken' => 'test-token',
 ]);
 $wrongView = new ControllerAliasIdentityView();
+$wrongMailboxRepository = new ControllerAliasIdentityMailboxRepository($orphanMailbox);
 $wrongEntityManager = controllerAliasIdentityEntityManager([
-    'Entities\\Mailbox' => new ControllerAliasIdentityMailboxRepository($orphanMailbox),
+    'Entities\\Mailbox' => $wrongMailboxRepository,
 ]);
 $wrongContainer = controllerAliasIdentityContainer($wrongEntityManager, $wrongSession, $wrongView);
 $wrongActions = [
@@ -592,18 +595,21 @@ controllerAliasIdentityCheck('present malformed list domain cannot widen into an
         && $invalidDidEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []);
 
 $oldGet = $_GET;
-$_GET = ['sEcho' => ['2']];
+$_GET = ['draw' => ['2']];
 $listDataController = new MailboxController(
     $wrongContainer,
     new RouteMatch('mailbox', 'list-data', MailboxController::class, 'listDataAction', []),
 );
+$listLookupsBefore = $wrongMailboxRepository->listLookups;
 $listDataResponse = $listDataController->listDataAction();
 $_GET = $oldGet;
-controllerAliasIdentityCheck('DataTables container input returns ko before repository access',
-    $listDataResponse->body === 'ko'
+controllerAliasIdentityCheck('DataTables container input returns 400 before repository access',
+    $listDataResponse->status === 400
+        && $listDataResponse->body === 'Invalid DataTables request'
+        && $wrongMailboxRepository->listLookups === $listLookupsBefore
         && $wrongEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []);
 
-$_GET = ['sSearch' => 'abc'];
+$_GET = ['search' => ['value' => 'abc']];
 $searchFloorOptions = ['defaults' => ['server_side' => ['pagination' => ['min_search_str' => 4]]]];
 foreach ([
     'alias' => new AliasController(

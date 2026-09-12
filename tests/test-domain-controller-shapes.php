@@ -102,12 +102,12 @@ $check('direct-cast mutant is killed by ambiguous route ids',
         && $invoke('positiveIntegerOrNull', true) === null
         && $invoke('positiveIntegerOrNull', ['12']) === null);
 
-$request = $invoke('requestArray', ['sEcho' => '2', 'sSearch' => 'mail', 0 => 'ignored']);
-$check('DataTables boundary retains string-keyed scalar parameters',
-    $request === ['sEcho' => '2', 'sSearch' => 'mail']);
+$request = $invoke('requestArray', ['draw' => '2', 'search' => ['value' => 'mail'], 0 => 'ignored']);
+$check('DataTables boundary retains modern scalar and nested parameters',
+    $request === ['draw' => '2', 'search' => ['value' => 'mail']]);
 $check('DataTables container values fail before query parsing', $fails(
-    static fn(): mixed => $invoke('requestArray', ['iDisplayLength' => ['500']]),
-    'DataTables parameter iDisplayLength must be a string',
+    static fn(): mixed => $invoke('requestArray', ['length' => ['500']]),
+    'DataTables parameter length must be a string',
 ));
 
 $check('absent and canonical INI booleans preserve pagination semantics',
@@ -123,7 +123,7 @@ $check('nested numeric configuration keys fail closed', $fails(
 ));
 
 $oldGet = $_GET;
-$_GET = ['sSearch' => 'abc'];
+$_GET = ['search' => ['value' => 'abc']];
 foreach ([
     'list-specific override' => ['defaults' => ['server_side' => ['pagination' => [
         'min_search_str' => 2,

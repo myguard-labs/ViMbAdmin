@@ -247,7 +247,7 @@ function archiveIdentityMcpState(McpController $controller, array $params, strin
 echo "== Archive identity caller boundaries ==\n";
 
 $oldGet = $_GET;
-$_GET = ['sSearch' => 'abc'];
+$_GET = ['search' => ['value' => 'abc']];
 foreach ([
     'list-specific override' => ['defaults' => ['server_side' => ['pagination' => [
         'min_search_str' => 2,

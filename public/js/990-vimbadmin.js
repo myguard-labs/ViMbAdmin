@@ -499,79 +499,6 @@ function randPasword( len, id )
 //****************************************************************************
 
 
-/* ---------------------------------------------------------------------------
- * TEMPORARY legacy wire-protocol shim  --  remove in VIM-A15.56a2
- * ---------------------------------------------------------------------------
- * DataTables 2.x speaks the modern server-side protocol:
- *
- *     request   draw / start / length / search[value]
- *               / order[0][column] / order[0][dir]
- *     response  draw / recordsTotal / recordsFiltered / data
- *
- * The PHP side of this application still speaks the DataTables 1.9 protocol:
- * src/Kernel/DataTable/DataTableResult.php emits sEcho / iTotalRecords /
- * iTotalDisplayRecords / aaData, and src/Kernel/DataTable/DataTableQuery.php
- * plus the Domain/Mailbox/Archive controllers parse sEcho / iDisplayStart /
- * iDisplayLength / sSearch / iSortCol_0 / sSortDir_0.
- *
- * VIM-A15.56a1 (this change) migrates the CLIENT ONLY. The two ends therefore
- * disagree on purpose, and this shim is the deliberate bridge between them so
- * a 2.x client can keep talking to the unchanged 1.9 server. It is a planned
- * two-step, not an accident: VIM-A15.56a2 retires the legacy protocol in PHP,
- * and when it lands this block is deleted and every list table collapses to a
- * plain `ajax: { url: ..., data: ... }` with no translation at all.
- *
- * The bridge is ASYMMETRIC, and only one half is ours:
- *
- *   response (server -> client)  NOT handled here. DataTables 2.3.4 still
- *       carries its own legacy fallbacks -- _fnAjaxDataSrc reads
- *       `json.aaData || json.data`, and _fnAjaxDataSrcParam maps sEcho ->
- *       draw, iTotalRecords -> recordsTotal, iTotalDisplayRecords ->
- *       recordsFiltered. The legacy response body is consumed natively, so
- *       adding our own mapper would be dead code. This holds only while no
- *       `ajax.dataSrc` is configured; setting one replaces the
- *       `aaData || data` fallback outright.
- *
- *   request (client -> server)   handled here, by vmDataTableLegacyRequest.
- *       2.x emits ONLY the modern parameter names (_fnAjaxParameters); it has
- *       no legacy request mode, and the PHP side reads no modern name. This
- *       translation is the one thing keeping the tables working.
- *
- * Do not build new behaviour on any of this.
- * ------------------------------------------------------------------------- */
-
-/**
- * Translate a DataTables 2.x request-parameter object into the legacy 1.9
- * scalar keys the PHP side still parses.
- *
- * Only the parameters this application's server actually reads are mapped.
- * 2.x also sends a full per-column block (`columns[i][...]`) that the legacy
- * PHP ignores entirely, so it is dropped rather than forwarded.
- *
- * @param {object} data 2.x request parameters.
- * @return {object} Legacy 1.9 request parameters.
- */
-function vmDataTableLegacyRequest( data )
-{
-        var order = ( data.order && data.order.length ) ? data.order[0] : null;
-
-        // 2.x `draw` is the 1.9 `sEcho` draw counter: echoed back unchanged by
-        // the server so DataTables can discard out-of-order responses.
-        var legacy = {
-                sEcho:          data.draw,
-                iDisplayStart:  data.start,
-                iDisplayLength: data.length,
-                sSearch:        ( data.search && data.search.value ) ? data.search.value : ''
-        };
-
-        if ( order ) {
-                legacy.iSortCol_0   = order.column;
-                legacy.sSortDir_0   = order.dir;
-        }
-
-        return legacy;
-}
-
 /**
  * Report an Ajax failure the way DataTables' own _fnLog() would.
  *
@@ -697,7 +624,7 @@ function vmDataTableServerData( source, minimum )
 
 			// The core's `_emptyRow` only reads `sZeroRecords` when
 			// `fnRecordsTotal()` is non-zero; a declined request answers
-			// `iTotalRecords: 0`, so it falls through to `sEmptyTable`
+			// `recordsTotal: 0`, so it falls through to `sEmptyTable`
 			// instead (when one is configured, as every list.js view's
 			// `language.emptyTable` does) -- so both have to carry the
 			// hint, or it never renders on this path.
@@ -711,9 +638,6 @@ function vmDataTableServerData( source, minimum )
 			oLanguage.sZeroRecords = hint;
 			oLanguage.sEmptyTable  = hint;
 
-			// Answer in the LEGACY response shape the rest of this
-			// bridge deals in; 2.x maps it natively (see the header).
-			//
 			// `callback` drives _fnAjaxUpdateDraw -> _fnDraw ->
 			// _emptyRow synchronously, so the hint has already been
 			// painted by the time this returns and the borrowed keys can
@@ -729,10 +653,10 @@ function vmDataTableServerData( source, minimum )
 			// as this table's PERMANENT empty-table text.
 			try {
 				callback( {
-					sEcho:                data.draw,
-					iTotalRecords:        0,
-					iTotalDisplayRecords: 0,
-					aaData:               []
+					draw:            data.draw,
+					recordsTotal:    0,
+					recordsFiltered: 0,
+					data:            []
 				} );
 			}
 			finally {
@@ -748,7 +672,7 @@ function vmDataTableServerData( source, minimum )
 			type:     settings.sServerMethod || 'GET',
 			dataType: 'json',
 			cache:    false,
-			data:     vmDataTableLegacyRequest( data ),
+			data:     data,
 			success:  callback,
 			error:    function( xhr, error ) {
 				// Mirrors the core's own baseAjax error handler: let an
@@ -864,13 +788,7 @@ $.extend( $.fn.dataTable.defaults, {
 		}
 	},
 
-	// The legacy request bridge forwards ONE sort column, because the PHP side
-	// reads only `iSortCol_0` / `sSortDir_0` -- there is no `iSortingCols` loop
-	// anywhere in src/Kernel (DataTableQuery reads the single pair). 2.x enables
-	// `orderMulti` by default, so without this a shift-click would paint sort
-	// indicators on several columns while the server sorted by exactly one,
-	// showing the user an ordering that was never applied. VIM-A15.56a2 removes
-	// this along with the rest of the bridge.
+	// The server applies only order[0]; keep the UI on one sort column.
 	orderMulti: false
 } );
 

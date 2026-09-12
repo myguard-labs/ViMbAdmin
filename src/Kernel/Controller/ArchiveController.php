@@ -56,7 +56,7 @@ final class ArchiveController extends AbstractController
      */
     private static function requestArray(array $value): array
     {
-        $scalarKeys = ['sEcho', 'iDisplayStart', 'iDisplayLength', 'sSearch', 'iSortCol_0', 'sSortDir_0'];
+        $scalarKeys = ['draw', 'start', 'length'];
         $result = [];
         foreach ($value as $key => $item) {
             if (!is_string($key)) {
@@ -232,13 +232,26 @@ final class ArchiveController extends AbstractController
         $storedDomain = $session->get('domain');
         $domain = $storedDomain instanceof \Entities\Domain ? $storedDomain : null;
 
+        $minimum = $this->dataTableMinimumSearchLength('archive');
+        try {
+            $request = self::requestArray($_GET);
+        } catch (LogicException $e) {
+            foreach (['draw', 'start', 'length'] as $key) {
+                if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
+                    return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
+                }
+            }
+            throw $e;
+        }
         try {
             $q = DataTableQuery::fromArray(
-                self::requestArray($_GET),
-                $this->dataTableMinimumSearchLength('archive'),
+                $request,
+                $minimum,
             );
         } catch (\LengthException $e) {
             return new Response($e->getMessage(), 400, 'text/plain; charset=utf-8');
+        } catch (\TypeError) {
+            return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
         }
         // Column index -> sortable field (matches JS column order; size / user-exists
         // / autoprune / controls fall back to archived date).

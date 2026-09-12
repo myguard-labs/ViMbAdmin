@@ -309,7 +309,7 @@ function tt_openModalDialog(event) {
                         $('#modal_dialog').html( data );
                         $( '.modal-body' ).scrollTop( 0 );
                         $( '#modal_dialog_cancel' ).on( 'click', function(){
-                            dialog.modal('hide');
+                            dialog.hide();
                         });
                      },
 
@@ -340,7 +340,7 @@ function ossAjaxErrorHandler( XMLHttpRequest, textStatus, errorThrown )
         {
             if( dialog )
             {
-                dialog.modal('hide');
+                dialog.hide();
             }
         }
     }
@@ -825,9 +825,10 @@ jQuery.extend( jQuery.fn.dataTableExt.oSort, {
 // now travels as a data-confirm attribute and one delegated handler enforces it,
 // which also covers rows the DataTables renderers build after page load.
 //
-// preventDefault() on cancel is what actually blocks the submit; returning false
-// from a delegated jQuery handler would too, but being explicit keeps the
-// behaviour obvious and testable.
+// The Bootstrap modal is asynchronous, so every guarded submit is stopped
+// immediately and only explicitly re-submitted after the user confirms. The
+// WeakSet lets that one replay pass without recursively opening another modal.
+var ossConfirmedForms = new WeakSet();
 jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
     var message = jQuery( this ).attr( 'data-confirm' );
 
@@ -835,8 +836,37 @@ jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
         return;
     }
 
-    if ( !window.confirm( message ) ) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
+    if ( ossConfirmedForms.has( this ) ) {
+        ossConfirmedForms.delete( this );
+        return;
     }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    var form = this;
+    var submitter = event.originalEvent && event.originalEvent.submitter;
+    ossConfirm( message, function( accepted ) {
+        if ( !accepted ) {
+            return;
+        }
+
+        ossConfirmedForms.add( form );
+        try {
+            if ( typeof form.requestSubmit === 'function' ) {
+                if ( submitter ) {
+                    form.requestSubmit( submitter );
+                }
+                else {
+                    form.requestSubmit();
+                }
+            }
+            else {
+                HTMLFormElement.prototype.submit.call( form );
+            }
+        }
+        finally {
+            ossConfirmedForms.delete( form );
+        }
+    } );
 } );

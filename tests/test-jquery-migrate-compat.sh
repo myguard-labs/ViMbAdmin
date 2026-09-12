@@ -69,7 +69,7 @@ for asset in \
   100-jquery.js 120-vimbadmin.validation.js \
   150-jquery.datatables.js 151-jquery.datatables.ext.js \
   152-jquery.datatables.bootstrap5.js \
-  800-bootstrap.js 850-bootbox.js \
+  800-bootstrap.js 850-vimbadmin.modals.js \
   910-vimbadmin.functions.js 990-vimbadmin.js \
   "$bundle_file"; do
   if ! cp "public/js/$asset" "$tmp/$asset" 2>/dev/null; then
@@ -102,7 +102,7 @@ cat >"$tmp/regression.html" <<'HTML'
 <!doctype html><html><head><meta charset="utf-8">
 <script>
 var mode = location.search.slice(1) || 'development';
-var failures = [], warnings = [], bootboxResult = null;
+var failures = [], warnings = [], alertResult = null;
 var originalWarn = console.warn;
 console.warn = function() {
     warnings.push(Array.prototype.join.call(arguments, ' '));
@@ -114,7 +114,7 @@ var scripts = mode === 'production'
     : ['100-jquery.js','120-vimbadmin.validation.js',
        '150-jquery.datatables.js','151-jquery.datatables.ext.js',
        '152-jquery.datatables.bootstrap5.js',
-       '800-bootstrap.js','850-bootbox.js',
+       '800-bootstrap.js','850-vimbadmin.modals.js',
        '910-vimbadmin.functions.js','990-vimbadmin.js',
        'view-admin-domains.js'];
 // Drives the 'missing plugin dependency' negative control. It removes a script
@@ -491,20 +491,17 @@ $(function() {
         return $.fn.dataTable.defaults.orderMulti === false;
     });
     // Chosen and Colorbox coverage was dropped here; see the file header.
-    // bootbox 3.3.0 is gone (it built Bootstrap 2 modal markup and drove the
-    // Bootstrap 2 lifecycle). The replacement shim deliberately provides only
-    // `bootbox.alert`, which is the whole of the API the application uses --
-    // `bootbox.confirm` has no call site anywhere in the tree. Assert the
-    // surface that exists and is depended upon, via the frozen OSS_Message
-    // contract, rather than one this migration intentionally dropped.
+    // Assert the application-owned informational dialog through the native
+    // Bootstrap 5 Modal lifecycle. It keeps the OSS_Message HTML contract but
+    // has no third-party dialog or jQuery dependency.
     // Opened here, asserted in the deferred block below: dismissal runs through
-    // Bootstrap 5's hide transition and the shim removes the dialog on
+    // Bootstrap 5's hide transition and the helper removes the dialog on
     // `hidden.bs.modal`, so neither the close nor the callback has happened yet
     // when this statement returns. Asserting synchronously would pass even with
     // a broken dismiss handler.
-    var bootboxDialog = bootbox.alert('<em id="bootbox-probe">Continue?</em>', function() { bootboxResult = true; });
-    check('Bootbox alert renders its message as HTML', function() {
-        return !!document.getElementById('bootbox-probe');
+    var alertDialog = ossAlert('<em id="alert-probe">Continue?</em>', function() { alertResult = true; });
+    check('native modal alert renders its message as HTML', function() {
+        return !!document.getElementById('alert-probe');
     });
     // Dismiss only after Bootstrap reports that its show transition completed.
     // A fixed delay races the component's `_isTransitioning` guard: Chromium
@@ -512,11 +509,11 @@ $(function() {
     // early click. The click itself must be a NATIVE event, because
     // `data-bs-dismiss` is bound by Bootstrap's own delegated native listener,
     // which a jQuery-triggered event never reaches.
-    bootboxDialog.one('shown.bs.modal', function() {
+    alertDialog.addEventListener('shown.bs.modal', function() {
         if (location.hash === '#alert-dismiss-disabled') return;
-        var button = bootboxDialog.get(0).querySelector('[data-bs-dismiss="modal"]');
+        var button = alertDialog.querySelector('[data-bs-dismiss="modal"]');
         if (button) button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+    }, { once: true });
     check('real admin view remove dialog operates', function() {
         $('#remove-domain-7').trigger('click');
         var selected = $('#remove_domain_form input[name="did"]').val();
@@ -589,13 +586,13 @@ $(function() {
         // in-page modal opened by an earlier check and legitimately still in the
         // DOM, so a global `.modal.show` count would assert someone else's state.
         // What matters here is that the per-call dialog the shim created is gone
-        // -- it is removed on `hidden.bs.modal`, so its absence proves the hide
+        // -- the helper removes it on `hidden.bs.modal`, so its absence proves the hide
         // transition completed rather than merely started.
-        check('Bootbox alert dismisses and removes its dialog', function() {
-            return document.getElementById('bootbox-probe') === null;
+        check('native modal alert dismisses and removes its dialog', function() {
+            return document.getElementById('alert-probe') === null;
         });
-        check('Bootbox alert invokes the caller callback on dismiss', function() {
-            return bootboxResult === true;
+        check('native modal alert invokes the caller callback on dismiss', function() {
+            return alertResult === true;
         });
 
         // tt_throbber.stop() fades out over 750ms and removes the element in
@@ -668,7 +665,7 @@ case "$mutation" in
     expect_fail 'injected Migrate warning' run_mode development '#warning-trigger'
     expect_fail 'missing plugin dependency' run_mode development '#missing-dependency'
     expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
-    expect_fail 'Bootbox alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
+    expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
     expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
     expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
     ;;

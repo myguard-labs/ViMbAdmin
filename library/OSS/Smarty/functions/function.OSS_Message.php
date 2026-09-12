@@ -164,7 +164,7 @@
                 $message .= <<<END_MESSAGE
 
     <div class="alert alert-block alert-{$class} fade in" id="oss-message-{$count}">
-        <a class="close" href="#" data-dismiss="alert">×</a>
+        <a class="close" href="#" data-bs-dismiss="alert">×</a>
         {$blockMessage}
 END_MESSAGE;
                 if( count( $actions ) )
@@ -197,7 +197,7 @@ END_MESSAGE;
         <script type="text/javascript">
             $( document ).ready( function()
             {
-                bootbox.alert( '{$item}' );
+                ossAlert( '{$item}' );
             })
         </script>
 
@@ -218,7 +218,7 @@ END_MESSAGE;
                         $message .= <<<END_MESSAGE
 
         <div class="alert alert-{$class} fade in" id="oss-message-{$count}">
-            <a class="close" href="#" data-dismiss="alert">×</a>
+            <a class="close" href="#" data-bs-dismiss="alert">×</a>
             {$item}
         </div>
 
@@ -254,7 +254,7 @@ END_MESSAGE;
                 $message .= <<<END_MESSAGE
 
         <div class="alert alert-{$fmClass} fade in" id="oss-message-{$count}">
-            <a class="close" href="#" data-dismiss="alert">×</a>
+            <a class="close" href="#" data-bs-dismiss="alert">×</a>
             {$fmOutput}
         </div>
 

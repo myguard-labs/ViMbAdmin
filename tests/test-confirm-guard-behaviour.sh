@@ -1,170 +1,182 @@
 #!/usr/bin/env bash
 
-# VIM-D07: the destructive-action confirmations used to be inline
-# onsubmit="return confirm('...')" attributes. Under a nonce-only script-src an
-# inline event handler never runs, so they were moved to data-confirm attributes
-# enforced by one delegated guard in public/js/990-vimbadmin.js.
-#
-# The failure mode that matters is a guard that stops guarding: a confirm the
-# user CANCELS must still block the submit. A string check cannot prove that, so
-# this drives the real production guard in a real browser with window.confirm
-# stubbed, and asserts the submit is prevented on cancel and allowed on accept.
+# Browser regression for the destructive-submit guard. The production handler
+# must stop the original submit, show the native Bootstrap 5 confirmation
+# modal, and replay the submit only after an explicit confirmation.
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-
-# Source the bundle resolver
 source tests/support/resolve-bundle-v.sh
 
-browser="${CHROMIUM_BIN:-}"
-if [[ -z "$browser" ]]; then
-  browser="$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)"
+browser=${CHROMIUM_BIN:-}
+if [[ -z $browser ]]; then
+  browser=$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)
 fi
-if [[ -z "$browser" ]]; then
-  echo "FAIL: Chromium is required for the confirm-guard regression" >&2
+if [[ -z $browser ]]; then
+  echo 'FAIL: Chromium is required for the confirm-guard regression' >&2
   exit 2
 fi
 
-tmp="$(mktemp -d /tmp/vimbadmin-confirm-guard.XXXXXX)"
+tmp=$(mktemp -d /tmp/vimbadmin-confirm-guard.XXXXXX)
 trap 'rm -rf "$tmp"' EXIT
 
 cp public/js/100-jquery.js "$tmp/jquery.js"
+cp public/js/800-bootstrap.js "$tmp/bootstrap.js"
+cp public/js/850-vimbadmin.modals.js "$tmp/modals.js"
 
-# The guard is exercised twice: once from the source file, and once from the
-# minified bundle production actually serves. A bundle whose minification broke
-# the guard would otherwise ship unnoticed -- a string check cannot catch that.
 extract_guard() {
-  # $1 = source file, $2 = destination
-  case "$1" in
-    *min.bundle*)
-      # The bundle is one line; ship it whole rather than trying to slice it.
-      cp "$1" "$2"
-      ;;
-    *)
-      awk '/^jQuery\( document \)\.on\( .submit., .form\[data-confirm\]./ { copying = 1 }
-           copying { print }' "$1" >"$2"
-      ;;
-  esac
+  awk '/^var ossConfirmedForms = new WeakSet\(\);/ { copying = 1 }
+       copying { print }' public/js/990-vimbadmin.js >"$tmp/guard.js"
 
-  if ! grep -q 'data-confirm' "$2"; then
-    echo "FAIL: could not extract the delegated confirm guard from $1" >&2
+  if ! grep -q 'ossConfirm( message' "$tmp/guard.js"; then
+    echo 'FAIL: could not extract the delegated native-modal confirm guard' >&2
     exit 2
   fi
 }
+extract_guard
 
 run_case() {
-  # $1 = label, $2 = js source file
-  extract_guard "$2" "$tmp/guard.js"
+  local label=$1 mode=$2 script_tags
+  local rendered="$tmp/rendered-$mode.html"
 
-cat >"$tmp/regression.html" <<HTML
+  if [[ $mode == source ]]; then
+    # Load the modal helper before jQuery: this lane proves the replacement has
+    # no hidden load-time dependency on the library the old dialog used.
+    script_tags='<script src="bootstrap.js"></script><script src="modals.js"></script><script src="jquery.js"></script><script src="guard.js"></script>'
+  else
+    local bundle_file
+    bundle_file=$(resolve_bundle_v) || exit $?
+    cp "public/js/$bundle_file" "$tmp/$bundle_file"
+    script_tags="<script src=\"$bundle_file\"></script>"
+  fi
+
+  sed "s|@@SCRIPT_TAGS@@|$script_tags|" >"$tmp/regression-$mode.html" <<'HTML'
 <!doctype html>
-<html><head><meta charset="utf-8"></head><body>
-<script src="file://$tmp/jquery.js"></script>
-HTML
-
-{
-  printf '<script>\n'
-  cat "$tmp/guard.js"
-  cat <<'HTML'
-</script>
-
+<html><head><meta charset="utf-8">@@SCRIPT_TAGS@@</head><body data-test-result="pending">
 <form id="guarded" method="post" action="/mailbox/queue-delete"
-      data-confirm="DELETE this mailbox?"></form>
+      data-confirm="DELETE &lt;em&gt;this mailbox&lt;/em&gt;?"></form>
 <form id="unguarded" method="post" action="/mailbox/list"></form>
 <form id="empty-message" method="post" action="/x" data-confirm=""></form>
 
 <script>
-var prompts = [];
-var submitted = [];
-
-// Record every submit that was NOT prevented; preventDefault() in the guard is
-// what has to stop it. Navigation is suppressed so the page survives to report.
-$(document).on('submit', function (event) {
-    if (!event.isDefaultPrevented()) {
-        submitted.push(event.target.id);
-    }
-    event.preventDefault();
-});
-
-function drive(answer, formId) {
-    window.confirm = function (message) { prompts.push(message); return answer; };
-    $('#' + formId).trigger('submit');
-}
-
-$(function () {
+(function () {
     var failures = [];
+    var submitted = [];
+    window.addEventListener('error', function (event) {
+        failures.push('page error: ' + event.message);
+    });
 
-    // 1. The user CANCELS: the submit must be blocked. This is the assertion the
-    //    whole item turns on -- a guard that silently stops confirming would let
-    //    the destructive POST through here.
-    drive(false, 'guarded');
-    if (submitted.indexOf('guarded') !== -1) {
-        failures.push('cancelled confirm did NOT block the submit');
-    }
-    if (prompts.length !== 1 || prompts[0] !== 'DELETE this mailbox?') {
-        failures.push('the data-confirm message was not put to the user: ' + JSON.stringify(prompts));
-    }
+    // Registered after the production delegated guard. It records only submits
+    // the guard allowed to continue, then suppresses navigation for the fixture.
+    document.addEventListener('submit', function (event) {
+        if (!event.defaultPrevented) submitted.push(event.target.id);
+        event.preventDefault();
+    });
 
-    // 2. The user ACCEPTS: the submit must proceed, or the guard has broken the
-    //    feature instead of protecting it.
-    submitted = [];
-    drive(true, 'guarded');
-    if (submitted.indexOf('guarded') === -1) {
-        failures.push('accepted confirm did not let the submit through');
-    }
-
-    // 3. A form with no data-confirm must never be prompted about.
-    submitted = [];
-    prompts = [];
-    drive(false, 'unguarded');
-    if (prompts.length !== 0) {
-        failures.push('a form without data-confirm was still prompted about');
-    }
-    if (submitted.indexOf('unguarded') === -1) {
-        failures.push('a form without data-confirm was blocked');
+    function waitFor(predicate, description) {
+        return new Promise(function (resolve, reject) {
+            var started = Date.now();
+            (function poll() {
+                if (predicate()) return resolve();
+                if (Date.now() - started > 1000) return reject(new Error('timed out waiting for ' + description));
+                setTimeout(poll, 10);
+            })();
+        });
     }
 
-    // 4. An empty data-confirm must not block silently with no prompt.
-    submitted = [];
-    prompts = [];
-    drive(false, 'empty-message');
-    if (prompts.length !== 0) {
-        failures.push('an empty data-confirm still prompted');
-    }
-    if (submitted.indexOf('empty-message') === -1) {
-        failures.push('an empty data-confirm blocked the submit with no prompt');
+    function submit(formId) {
+        document.getElementById(formId).requestSubmit();
     }
 
-    document.body.dataset.testResult = failures.length === 0 ? 'pass' : 'fail';
-    document.body.dataset.testFailures = failures.join('; ');
-});
+    async function drive() {
+        // Cancel is the destructive safety boundary: the original submit must
+        // be stopped before the asynchronous modal decision is available.
+        submit('guarded');
+        if (submitted.indexOf('guarded') !== -1)
+            failures.push('cancelled confirm did NOT block the destructive submit');
+
+        await waitFor(function () {
+            var button = document.querySelector('[data-oss-confirm]');
+            return button && !button.disabled;
+        }, 'shown confirm modal');
+        var confirmButton = document.querySelector('[data-oss-confirm]');
+        var modal = confirmButton.closest('.modal');
+        var message = modal.querySelector('.modal-body');
+        if (message.textContent !== 'DELETE <em>this mailbox</em>?')
+            failures.push('confirm modal did not preserve the data-confirm message as text: ' + message.textContent);
+        if (message.querySelector('em'))
+            failures.push('confirm modal interpreted the confirmation message as HTML');
+
+        modal.querySelector('[data-bs-dismiss="modal"]').click();
+        await waitFor(function () { return !document.body.contains(modal); }, 'cancelled modal removal');
+        if (submitted.indexOf('guarded') !== -1)
+            failures.push('dismissed confirm replayed the destructive submit');
+
+        // Explicit acceptance replays the submit exactly once.
+        submitted = [];
+        submit('guarded');
+        await waitFor(function () {
+            var button = document.querySelector('[data-oss-confirm]');
+            return button && !button.disabled;
+        }, 'second shown confirm modal');
+        document.querySelector('[data-oss-confirm]').click();
+        await waitFor(function () { return submitted.length > 0; }, 'accepted submit replay');
+        if (submitted.length !== 1 || submitted[0] !== 'guarded')
+            failures.push('accepted confirm did not replay the destructive submit exactly once: ' + JSON.stringify(submitted));
+
+        // Boundary: forms without a usable message are not guarded.
+        submitted = [];
+        submit('unguarded');
+        submit('empty-message');
+        if (submitted.join(',') !== 'unguarded,empty-message')
+            failures.push('unguarded or empty-message forms were blocked: ' + JSON.stringify(submitted));
+        if (document.querySelector('[data-oss-confirm]'))
+            failures.push('a form without a usable message opened a confirm modal');
+
+        // Error path: if Bootstrap JS is unavailable, fail closed. Never turn a
+        // missing dialog runtime into an unconfirmed destructive submission.
+        submitted = [];
+        var realBootstrap = window.bootstrap;
+        window.bootstrap = undefined;
+        submit('guarded');
+        window.bootstrap = realBootstrap;
+        if (submitted.indexOf('guarded') !== -1)
+            failures.push('missing Bootstrap Modal runtime allowed the destructive submit');
+
+        document.body.dataset.testResult = failures.length ? 'fail' : 'pass';
+        document.body.dataset.testFailures = failures.join('; ');
+    }
+
+    drive().catch(function (error) {
+        document.body.dataset.testResult = 'fail';
+        failures.push(error.message);
+        document.body.dataset.testFailures = failures.join('; ');
+    });
+})();
 </script>
-</body>
+</body></html>
 HTML
-} >>"$tmp/regression.html"
 
-  rm -rf "$tmp/profile"
+  rm -rf "$tmp/profile-$mode"
   "$browser" \
     --headless \
     --disable-gpu \
     --allow-file-access-from-files \
-    --user-data-dir="$tmp/profile" \
-    --virtual-time-budget=1000 \
-    --dump-dom "file://$tmp/regression.html" >"$tmp/rendered.html" 2>"$tmp/chromium.log"
+    --user-data-dir="$tmp/profile-$mode" \
+    --virtual-time-budget=3000 \
+    --dump-dom "file://$tmp/regression-$mode.html" >"$rendered" 2>"$tmp/chromium-$mode.log"
 
-  if ! grep -q 'data-test-result="pass"' "$tmp/rendered.html"; then
-    failures="$(grep -o 'data-test-failures="[^"]*"' "$tmp/rendered.html" || true)"
-    echo "FAIL: delegated confirm guard is unsafe in $1: ${failures:-no browser verdict}" >&2
-    exit 1
+  if ! grep -q 'data-test-result="pass"' "$rendered"; then
+    local failures
+    failures=$(grep -o 'data-test-failures="[^"]*"' "$rendered" || true)
+    echo "FAIL: native confirm guard is unsafe in $label: ${failures:-no browser verdict}" >&2
+    return 1
   fi
 
-  echo "ok   $1: a cancelled confirm blocks the submit and an accepted one lets it through"
+  echo "ok   $label: native confirm cancellation blocks and acceptance gates one destructive submit"
 }
 
-run_case "source (990-vimbadmin.js)" public/js/990-vimbadmin.js
-
-bundle_file=$(resolve_bundle_v) || exit $?
-run_case "minified bundle ($bundle_file)" "public/js/$bundle_file"
-
-echo "ALL PASSED"
+run_case 'source files' source
+run_case 'minified production bundle' bundle
+echo 'ALL PASSED'

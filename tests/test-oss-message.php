@@ -66,7 +66,8 @@ $smarty = new MessageSmartyDouble([
 
 $rendered = smarty_function_OSS_Message([], $smarty);
 $check('block render includes actions container', str_contains($rendered, 'alert-actions') && str_contains($rendered, 'Undo') && str_contains($rendered, 'Retry'));
-$check('popup render emits each bootbox item', str_contains($rendered, 'bootbox.alert(') && str_contains($rendered, "'One'") && str_contains($rendered, "'Two'"));
+$check('popup render emits each native modal item', str_contains($rendered, 'ossAlert(') && str_contains($rendered, "'One'") && str_contains($rendered, "'Two'"));
+$check('rendered alerts use Bootstrap 5 dismissal attributes', str_contains($rendered, 'data-bs-dismiss="alert"') && !str_contains($rendered, 'data-dismiss="alert"'));
 $check('plain render emits each message item', str_contains($rendered, 'Alpha') && str_contains($rendered, 'Beta') && str_contains($rendered, 'alert-error'));
 $check('default ids remain sequential', str_contains($rendered, 'id="oss-message-0"') && str_contains($rendered, 'id="oss-message-2"'));
 preg_match_all('/id="oss-message-([0-9]+)"/', $rendered, $renderedIdMatches);

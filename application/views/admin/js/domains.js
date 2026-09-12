@@ -41,6 +41,6 @@ function removeDomain( event ){
     $( '#remove_domain_form input[name="did"]' ).val( did );
 
     $( '#purge_dialog_cancel' ).on( 'click', function(){
-        delDialog.modal('hide');
+        delDialog.hide();
     });
 };

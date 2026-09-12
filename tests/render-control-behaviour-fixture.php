@@ -49,7 +49,7 @@ foreach ([$stubs, $compile] as $dir) {
 //
 // This fixture originally loaded public/js/min.bundle-v19.js, and that made
 // both of its behavioural assertions VACUOUS: neutering ossModal()'s .show()
-// in public/js/850-bootbox.js, or swapping data-bs-dismiss back to
+// in public/js/850-vimbadmin.modals.js, or swapping data-bs-dismiss back to
 // data-dismiss in public/js/990-vimbadmin.js, left the gate green, because
 // neither file was ever loaded. The bundle is a hand-regenerated artifact
 // (VIM-A15.36) last rebuilt in PR #168, while 990-vimbadmin.js has changed

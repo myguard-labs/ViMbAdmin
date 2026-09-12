@@ -58,7 +58,7 @@ function purgeAdmin( event ){
     delDialog = ossModal( '#purge_dialog' );
     
     $( '#purge_dialog_cancel' ).on( 'click', function(){
-        delDialog.modal('hide');
+        delDialog.hide();
     });
 };
 
@@ -77,4 +77,3 @@ jQuery( document ).on( 'click', '[data-toggle-super]', function() {
     var id = jQuery( this ).attr( 'data-toggle-super' );
     toggleSuper( 'toggle-super-' + id, id );
 } );
-

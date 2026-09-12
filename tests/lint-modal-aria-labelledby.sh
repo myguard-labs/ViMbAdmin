@@ -14,7 +14,7 @@
 #
 # DELIBERATELY EXEMPT -- `#modal_dialog_shell` in footer.phtml and
 # _skins/myskin/footer.phtml. Those are empty shells: `#modal_dialog` inside is
-# replaced wholesale at runtime by the bootbox helper, so there is no
+# replaced wholesale at runtime by the AJAX dialog loader, so there is no
 # statically-authored title element for an `id` to point at, and a hard-coded
 # `aria-labelledby` would be a permanently dangling reference (worse than none
 # -- assistive tech falls back to nothing either way, but the dangling

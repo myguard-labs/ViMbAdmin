@@ -199,7 +199,7 @@ check(
 // A CSP nonce whitelists <script> elements only; it does NOT whitelist inline
 // event-handler attributes, which 'unsafe-inline' used to permit. So a single
 // on*= attribute creeping back into a view is a silently dead handler --
-// including the confirm() guards on destructive actions. Scan the view JS files
+// including the confirmation guards on destructive actions. Scan the view JS files
 // too: several build HTML strings that used to carry the attributes.
 /** @var list<string> $handlerSources */
 $handlerSources = array_merge($views, $viewJs);
@@ -244,9 +244,11 @@ if (is_string($appJs)) {
         str_contains($appJs, "'submit', 'form[data-confirm]'")
     );
     check(
-        'the guard blocks the submit when confirm() is declined',
-        str_contains($appJs, 'if ( !window.confirm( message ) )')
-            && str_contains($appJs, 'event.preventDefault();')
+        'the guard blocks first and only replays an explicitly accepted submit',
+        str_contains($appJs, 'event.preventDefault();')
+            && str_contains($appJs, 'ossConfirm( message, function( accepted )')
+            && str_contains($appJs, 'if ( !accepted )')
+            && str_contains($appJs, 'form.requestSubmit(')
     );
 }
 
@@ -265,7 +267,9 @@ check($bundle !== null ? 'bundle readable' : 'bundle not found', is_string($bund
 if (is_string($bundle)) {
     check(
         'the minified bundle carries the delegated confirm guard',
-        str_contains($bundle, 'form[data-confirm]') && str_contains($bundle, 'window.confirm(')
+        str_contains($bundle, 'form[data-confirm]')
+            && str_contains($bundle, 'ossConfirm(')
+            && !str_contains($bundle, 'window.confirm(')
     );
 }
 

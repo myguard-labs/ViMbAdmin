@@ -15,11 +15,11 @@ if [[ -z $browser ]]; then
   browser=$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)
 fi
 if [[ -z $browser ]]; then
-  echo 'FAIL: Chromium is required for the jQuery compatibility regression' >&2
+  echo 'FAIL: Chromium is required for the dependency-free DataTables compatibility regression' >&2
   exit 2
 fi
 
-tmp=$(mktemp -d /tmp/vimbadmin-jquery-migrate.XXXXXX)
+tmp=$(mktemp -d /tmp/vimbadmin-datatables-dependency-free.XXXXXX)
 cleanup() {
   rm -rf "$tmp"
 }
@@ -60,6 +60,42 @@ done
 sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' \
   application/views/admin/js/domains.js >"$tmp/view-admin-domains.js"
 
+# Exercise the production archive status/date renderers with nonempty rows.
+# These two columns and their text-escaping helper contain no Smarty syntax;
+# extracting them avoids depending on a second copy of their implementation.
+awk '
+  /^function vmArchiveEsc\(/ { helperSource = $0; helper++ }
+  /render.*vmArchiveEsc/ && !/^function/ {
+    if (!columns++) print "var archiveProbeColumns = [";
+    print;
+  }
+  END {
+    if (columns) print "];";
+    print helperSource;
+    if (columns != 2 || helper != 1) exit 1;
+  }
+' application/views/archive/js/list.js >"$tmp/view-archive-renderers.js"
+
+# Use the actual ready bindings and draw callbacks, with an isolated stable
+# ancestor and stubbed actions. Replaced row nodes must never own DT listeners.
+awk '
+  BEGIN {
+    print "function bindRowLifecycleFixture(document, tt_openModalDialog, deleteAlias, showSizes, vmTooltips, vmPrefsCookie, vm_prefs, vm_cookie_options) {";
+  }
+  /select\( document \).*\.on\(.*(modal-dialog|delete-alias|dir-size)/ { print; bindings++ }
+  END { print "return ["; if (bindings != 3) exit 1 }
+' public/js/990-vimbadmin.js application/views/alias/js/list.js \
+  application/views/mailbox/js/list.js >"$tmp/view-row-lifecycle.js"
+for view in alias domain mailbox; do
+  awk '
+    /drawCallback.*function/ && !found++ { active = 1; print "function() {"; next }
+    active && /^[[:space:]]*},/ { print "},"; active = 0; complete++ }
+    active { print }
+    END { if (complete != 1) exit 1 }
+  ' "application/views/$view/js/list.js" >>"$tmp/view-row-lifecycle.js"
+done
+printf "];\n}\n" >>"$tmp/view-row-lifecycle.js"
+
 cat >"$tmp/regression.html" <<'HTML'
 <!doctype html><html><head><meta charset="utf-8">
 <script>
@@ -72,13 +108,13 @@ console.warn = function() {
 };
 window.onerror = function(message) { failures.push('page error: ' + message); };
 var scripts = mode === 'production'
-    ? ['@@VIMBADMIN_TEST_BUNDLE_FILE@@','view-admin-domains.js']
+    ? ['@@VIMBADMIN_TEST_BUNDLE_FILE@@','view-admin-domains.js','view-archive-renderers.js','view-row-lifecycle.js']
     : ['120-vimbadmin.validation.js',
        '150-datatables.js','151-datatables.ext.js',
        '152-datatables.bootstrap5.js',
        '800-bootstrap.js','850-vimbadmin.modals.js',
        '910-vimbadmin.functions.js','990-vimbadmin.js',
-       'view-admin-domains.js'];
+       'view-admin-domains.js','view-archive-renderers.js','view-row-lifecycle.js'];
 // Drives the 'missing plugin dependency' negative control. It removes a script
 // the development lane loads, so it is only meaningful there -- production
 // loads a single bundle. The lane is pinned to development by expect_fail below.
@@ -125,7 +161,7 @@ vmReady(function() {
     var wireEndpoint = '/tests/support/datatable-wire-endpoint.php';
     var wireDisabled = location.hash === '#wire-route-disabled';
     // A missing route leaves Chromium's dump-dom process waiting on the 404
-    // request even after jQuery reports it. Point the negative control at a
+    // request even after the transport reports it. Point the negative control at a
     // served response for the wrong scope instead: it keeps the route mutation
     // observable while settling promptly under both fixture servers.
     var wireRequestEndpoint = wireDisabled
@@ -334,6 +370,85 @@ vmReady(function() {
             return api.column(0, { order: 'applied' }).data().toArray().join() === '<b>10</b>,<span>2</span>,-3';
         }
         finally { api.destroy(); node.remove(); }
+    });
+    check('nonempty archive status and date renderers escape text and handle null values', function() {
+        window.archiveStatuses = { saved: 'Saved & ready' };
+        var payload = '<img src="data:image/png;base64,broken" onerror="window.archiveHandlerRan=true">';
+        window.archiveHandlerRan = false;
+        var node = document.createElement('table');
+        document.body.appendChild(node);
+        var api;
+        try {
+            api = new DataTable(node, {
+                data: [
+                    { status: 'saved', archived_at: '2026-09-12 09:00:00' },
+                    { status: payload, archived_at: payload },
+                    { status: null, archived_at: null }
+                ],
+                columns: archiveProbeColumns, order: []
+            });
+            var rows = Array.from(node.querySelectorAll('tbody tr'));
+            var values = rows.map(function(row) {
+                return Array.from(row.cells).map(function(cell) { return cell.textContent; });
+            });
+            return api.rows().count() === 3
+                && JSON.stringify(values) === JSON.stringify([
+                    ['Saved & ready', '2026-09-12 09:00:00'],
+                    [payload, payload], ['', '—']
+                ])
+                && node.querySelector('img,[onerror]') === null
+                && vmArchiveEsc(undefined) === ''
+                && vmArchiveEsc(0) === '0';
+        }
+        finally { if (api) api.destroy(); node.remove(); }
+    });
+    check('row actions survive redraw without retaining detached row listeners', function() {
+        var host = document.createElement('div');
+        var node = document.createElement('table');
+        host.appendChild(node);
+        document.body.appendChild(host);
+        var calls = [0, 0, 0];
+        var actions = calls.map(function(value, index) {
+            return function(event) { event.preventDefault(); calls[index]++; };
+        });
+        var noop = function() {};
+        var draws = bindRowLifecycleFixture(host, actions[0], actions[1], actions[2], noop, noop, {}, {});
+        // Keep this isolated fixture from also invoking the application's
+        // document-level modal handler after the fixture delegate has run.
+        host.addEventListener('click', function(event) { event.stopPropagation(); });
+        var api;
+        try {
+            api = new DataTable(node, {
+                data: [], columns: [{ title: 'Actions' }], order: [],
+                drawCallback: function() { draws.forEach(function(draw) { draw(); }); }
+            });
+            var oldControls = [];
+            for (var round = 0; round < 10; round++) {
+                api.clear().rows.add([[
+                    '<a id="modal-dialog-probe"><i>Modal</i></a>' +
+                    '<button id="delete-alias-probe"><i>Delete</i></button>' +
+                    '<a id="dir-size-probe"><i>Size</i></a>'
+                ]]).draw();
+                var controls = Array.from(node.querySelectorAll('tbody a,tbody button'));
+                if (controls.length !== 3) throw new Error('missing row controls');
+                controls.forEach(function(control) {
+                    if (control._event_uid !== undefined) throw new Error('row control owns a retained DataTables listener');
+                    control.firstChild.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                });
+                oldControls.forEach(function(control) {
+                    if (control.isConnected) throw new Error('old row was not detached');
+                    control.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                });
+                if (!calls.every(function(count) { return count === round + 1; })) throw new Error('missing, duplicate or detached action');
+                oldControls = oldControls.concat(controls);
+            }
+            return true;
+        }
+        finally {
+            if (api) api.destroy();
+            DataTable.Dom.select(host).off('click');
+            host.remove();
+        }
     });
     check('native AJAX handles JSON, malformed responses, HTTP errors, timeouts and aborts', function() {
         var NativeXHR = window.XMLHttpRequest;
@@ -660,7 +775,8 @@ vmReady(function() {
 
             if (!wireFinished) failures.push('server-side wire requests did not complete');
             if (window.decodeHandlerRan) failures.push('HTML entity decoding executed an active handler');
-            if (warnings.length) failures.push('Migrate warning: ' + warnings.join(' | '));
+            if (window.archiveHandlerRan) failures.push('archive renderer executed an active handler');
+            if (warnings.length) failures.push('Compatibility warning: ' + warnings.join(' | '));
             document.getElementById('output').textContent = JSON.stringify({ mode: mode, warnings: warnings, failures: failures });
             document.body.dataset.verdict = failures.length ? 'FAIL' : 'PASS';
         }, 900);
@@ -717,7 +833,7 @@ case "$mutation" in
     run_mode production
     # Negative controls run in the default lane, so a rotted oracle fails CI
     # instead of waiting for someone to remember an env var.
-    expect_fail 'injected Migrate warning' run_mode development '#warning-trigger'
+    expect_fail 'injected compatibility warning' run_mode development '#warning-trigger'
     expect_fail 'missing plugin dependency' run_mode development '#missing-dependency'
     expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
     expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'

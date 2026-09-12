@@ -127,7 +127,7 @@ jobs:
       - name: DataTables 3 runs without jQuery across source and bundle lanes
         run: >-
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
-          bash tests/test-jquery-migrate-compat.sh
+          bash tests/test-datatables-dependency-free-compat.sh
 
       - name: Deliberately broken compatibility lane must fail on this engine
         run: bash tests/test-browser-engine-negative-control.sh

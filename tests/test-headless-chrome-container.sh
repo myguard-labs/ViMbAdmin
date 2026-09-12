@@ -22,7 +22,7 @@ require "  --user \"${dollar}(id -u):${dollar}(id -g)\""
 require "  --env \"HOME=${dollar}fixture_dir\""
 require "  --mount \"type=bind,src=${dollar}fixture_dir,dst=${dollar}fixture_dir\""
 require "  \"${dollar}image\" google-chrome --no-sandbox \"${dollar}@\""
-require 'vimbadmin-(alias-destination|residual-stored-xss|confirm-guard|jquery-migrate|control-behaviour|source-defect-sweep|validate-group|browser-adapter)'
+require 'vimbadmin-(alias-destination|residual-stored-xss|confirm-guard|datatables-dependency-free|control-behaviour|source-defect-sweep|validate-group|browser-adapter)'
 require 'dst=/usr/local/bin/run-chrome-http-fixture,readonly'
 
 require_php() {

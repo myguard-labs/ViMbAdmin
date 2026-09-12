@@ -124,7 +124,7 @@ jobs:
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
           bash tests/test-source-defect-sweep-behaviour.sh
 
-      - name: jQuery 4 plugin compatibility has no console warnings
+      - name: DataTables 3 runs without jQuery across source and bundle lanes
         run: >-
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
           bash tests/test-jquery-migrate-compat.sh

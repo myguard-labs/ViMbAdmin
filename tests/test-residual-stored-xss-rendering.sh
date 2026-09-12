@@ -52,7 +52,7 @@ const serverRenderedLogHtml = (
 
 // Keep DataTables' normal error reporting observable without opening a modal
 // alert in headless Chrome.
-$.fn.dataTable.ext.sErrMode = $.fn.dataTable.ext.errMode = function (_settings, technicalNote, message) {
+DataTable.ext.sErrMode = DataTable.ext.errMode = function (_settings, technicalNote, message) {
     dataTableErrors.push({ technicalNote, message });
 };
 
@@ -68,7 +68,7 @@ function openTooltip(el) {
     if (el) el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
 }
 
-$(function () {
+vmReady(function () {
     openTooltip(document.getElementById('trusted-html-tooltip'));
     document.querySelectorAll('#mailbox-purge-fixture [id|="alias-goto"]').forEach(openTooltip);
     openTooltip(document.getElementById('log-message-91'));
@@ -82,12 +82,12 @@ $(function () {
     // and assert the same three properties as before -- a legitimate empty
     // response reaches the table, a transport failure does not, and the failure
     // surfaces through DataTables' own error channel as technicalNote 7.
-    const originalAjax = $.ajax;
+    const originalAjax = ossAjax;
     let emptyCallbacks = 0;
     let failureCallbacks = 0;
     let ajaxCalls = 0;
 
-    $.ajax = function (options) {
+    ossAjax = function (options) {
         ajaxCalls++;
         if (options.url === '/legitimate-empty') {
             options.success({
@@ -111,11 +111,11 @@ $(function () {
         // sweeps below.
         // The probe still gets its own id so repeated draws cannot collide.
         const probeId = 'serverside-probe-table-' + (++probeCounter);
-        const $host = $('<div class="serverside-probe" style="display:none"></div>');
-        const $table = $('<table id="' + probeId + '"><thead><tr><th>Col</th></tr></thead><tbody></tbody></table>');
+        const $host = DataTable.Dom.create('div').classAdd('serverside-probe').hide();
+        const $table = DataTable.Dom.create('table').attr('id', probeId).html('<thead><tr><th>Col</th></tr></thead><tbody></tbody>');
         $host.append($table);
-        $('body').append($host);
-        const api = $table.DataTable({
+        DataTable.Dom.select('body').append($host);
+        const api = new DataTable($table.get(0), {
             serverSide: true,
             paging: false,
             searching: false,
@@ -137,8 +137,8 @@ $(function () {
         && dataTableErrors[dataTableErrors.length - 1].technicalNote === 7;
     emptyTable.api.destroy();
     failedTable.api.destroy();
-    $('.serverside-probe').remove();
-    $.ajax = originalAjax;
+    DataTable.Dom.select('.serverside-probe').remove();
+    ossAjax = originalAjax;
 
     setTimeout(function () {
         const failures = [];

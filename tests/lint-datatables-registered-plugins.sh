@@ -3,12 +3,12 @@
 # VIM-A15.23. Every view-JS DataTables initialiser used to carry
 # `"sPaginationType": "bootstrap"`. That is NOT a styling hint: DataTables
 # resolves it as `DataTable.ext.pager["bootstrap"]` in `_fnFeatureHtmlPaginate`
-# (public/js/150-jquery.datatables.js) and, when the name is not registered,
+# (public/js/150-datatables.js) and, when the name is not registered,
 # immediately calls `plugin.fnInit(...)` on `undefined` -- a hard TypeError
 # that aborts table construction. The Bootstrap 2 era shipped a
 # `dataTables.bootstrap` plugin that registered that pager; the DataTables
 # 1.11.5 bundle does not, and neither did the BS5 integration that replaced
-# it (152-jquery.datatables.bootstrap5.js registers a
+# it (152-datatables.bootstrap5.js registers a
 # `DataTable.ext.renderer.pageButton.bootstrap` RENDERER, which is a
 # different extension point resolved by a different lookup). So the option
 # survived the upgrade as a silent, latent break on every list page and no
@@ -43,8 +43,8 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-engine='public/js/150-jquery.datatables.js'
-integration='public/js/152-jquery.datatables.bootstrap5.js'
+engine='public/js/150-datatables.js'
+integration='public/js/152-datatables.bootstrap5.js'
 
 fail=0
 
@@ -79,12 +79,12 @@ strict_grep() {
 require_file "$engine"
 
 # --- built-in pager names, harvested from the engine's own registration ---
-# The engine registers them as `$.extend( extPagination, { simple: ..., })`
-# inside its pagination block. Harvest the keys of that object literal.
+# DataTables 3 registers the pagination functions in its `pager` object.
+# Harvest those keys directly so missing/changed registrations fail closed.
 builtin_pagers=$(
   awk '
-    /\$\.extend\( *extPagination, *\{/ { inblock=1; next }
-    inblock && /^[[:space:]]*\}[[:space:]]*\);/ { inblock=0 }
+    /^var pager = \{/ { inblock=1; next }
+    inblock && /^\};/ { inblock=0 }
     inblock && match($0, /^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:/, m) { print m[1] }
   ' "$engine" | sort -u
 )

@@ -22,7 +22,7 @@ $textSinks = [
 foreach ($textSinks as $path => $safeCall) {
     $source = file_get_contents(__DIR__ . '/../' . $path);
     $check($path . ' inserts the confirmation label as text',
-        is_string($source) && str_contains($source, $safeCall));
+        is_string($source) && str_contains($source, str_replace('$(', 'DataTable.Dom.select(', $safeCall)));
 }
 
 $mailboxList = file_get_contents(__DIR__ . '/../application/views/mailbox/js/list.js');
@@ -53,9 +53,9 @@ $check('email-settings modal emits native required constraints',
         && !$emailSettingsHasLegacyRequiredClass);
 $check('email-settings modal validates before AJAX and tracks conditional email requirement',
     is_string($mailboxList)
-        && str_contains($mailboxList, "jQuery( '#email' ).prop( 'required', other );")
+        && str_contains($mailboxList, "DataTable.Dom.select( '#email' ).prop( 'required', other );")
         && str_contains($mailboxList, 'if( !form[0].reportValidity() )')
-        && strpos($mailboxList, 'if( !form[0].reportValidity() )') < strpos($mailboxList, 'jQuery.ajax({'));
+        && preg_match('/if\( !form\[0\]\.reportValidity\(\) \)\s*return;[\s\S]*?ossAjax\(\{/', $mailboxList) === 1);
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

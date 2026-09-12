@@ -95,17 +95,15 @@ defined( 'SCRIPTDIR' ) || define( 'SCRIPTDIR', __DIR__ );
 // JavaScript. Arrow functions and template literals need ECMASCRIPT_2015 and
 // its object-literal spread needs ECMASCRIPT_2018, so anything lower makes the
 // compiler fail to parse `public/js/800-bootstrap.js` even in WHITESPACE_ONLY
-// mode. ES2018 is a superset of the ES5-shaped own code and of jQuery 3.7.1,
-// so raising it costs those files nothing. (The previous ECMASCRIPT5 setting
-// existed because the default ECMASCRIPT3 mode reserves identifiers such as
-// `final` that jQuery 3.7.1 uses as ordinary variable names.)
+// mode. This also accepts the ES6 target of DataTables 3 and the first-party
+// browser APIs. The output is tested in Chromium, Firefox and WebKit.
 // NB: SCRIPTDIR is the vendor script's OWN directory
 // (vendor/opensolutions/minify), not this config file's. The per-machine build
 // prerequisites live next to this file in bin/, so they are anchored on __DIR__.
 // --charset UTF-8: Closure Compiler's own default is "accept UTF-8 as input,
 // emit US-ASCII (with \uXXXX escapes) as output". That silently mangles any
 // non-ASCII byte a vendored source legitimately carries -- e.g. the "©" in
-// 150-jquery.datatables.js's licence header -- into `?` once concatenated through PHP's
+// 150-datatables.js's licence header -- into `?` once concatenated through PHP's
 // escapeshellarg()/exec() pipeline (VIM-A15.60). Setting --charset explicitly
 // makes both directions UTF-8, so those bytes survive unmodified into
 // min.bundle-v<N>.js.

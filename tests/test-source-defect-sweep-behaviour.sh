@@ -53,23 +53,16 @@ fi
 tmp="$(mktemp -d /tmp/vimbadmin-source-defect-sweep.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 
-cp public/js/100-jquery.js "$tmp/jquery.js"
+cp public/js/150-datatables.js public/js/800-bootstrap.js "$tmp/"
 cp public/js/990-vimbadmin.js "$tmp/990-vimbadmin.js"
 cp public/js/850-vimbadmin.modals.js "$tmp/850-vimbadmin.modals.js"
 
 cat >"$tmp/regression.html" <<'HTML'
 <!doctype html>
 <html><head><meta charset="utf-8"></head><body>
-<script src="jquery.js"></script>
+<script src="150-datatables.js"></script><script src="800-bootstrap.js"></script>
 <script src="990-vimbadmin.js"></script>
-<script>
-// ossAddMessage() (invoked on a failed toggle) ends by calling the Bootstrap
-// jQuery plugin .alert() on the message it just inserted. The real Bootstrap
-// JS bundle is out of scope for this fixture, so this stubs the plugin as a
-// no-op -- ossAddMessage's own insertion logic and ossToggle's delElement
-// handling are what is under test.
-jQuery.fn.alert = function () { return this; };
-</script>
+
 <script src="850-vimbadmin.modals.js"></script>
 
 <button id="toggle-target" class="btn btn-success" data-throb-key="t1"></button>
@@ -84,7 +77,7 @@ jQuery.fn.alert = function () { return this; };
 <script>
 var results = { toggleRan: false, toggleDelRemoved: null, undefinedCallSeen: false, alertMessage: null, alertCallbackRan: false, pluginTabClass: null, failedToggleDelSurvived: null, retriedToggleDelRemoved: null };
 
-$(function () {
+vmReady(function () {
     var failures = [];
 
     // -- VIM-A15.43: absent delElement must not enter the cleanup branch at all --
@@ -99,20 +92,16 @@ $(function () {
     // the jQuery constructor `$` was ever invoked with `undefined` from inside
     // that cleanup at all: the fixed guard (`if( delElement )`) never calls
     // $(undefined) when delElement is omitted, the old guard always did.
-    var realJQuery = window.$;
-    var wrappedJQuery = function (selector) {
+    var realSelect = DataTable.Dom.select;
+    var wrappedSelect = function (selector) {
         if (selector === undefined) results.undefinedCallSeen = true;
-        return realJQuery.apply(this, arguments);
+        return realSelect.apply(this, arguments);
     };
-    for (var key in realJQuery) { if (Object.prototype.hasOwnProperty.call(realJQuery, key)) wrappedJQuery[key] = realJQuery[key]; }
-    wrappedJQuery.fn = realJQuery.fn;
-    wrappedJQuery.prototype = realJQuery.prototype;
-    window.$ = wrappedJQuery;
-    jQuery = wrappedJQuery;
+    DataTable.Dom.select = wrappedSelect;
 
     var xhr = { open: function () {}, send: function () {} };
-    var realAjax = wrappedJQuery.ajax;
-    wrappedJQuery.ajax = function (opts) {
+    var realAjax = ossAjax;
+    ossAjax = function (opts) {
         // Synchronously resolve as success, mirroring the shape ossToggle's
         // own success/complete handlers expect, with NO delElement passed to
         // ossToggle at all -- the exact absent-argument path VIM-A15.43 named.
@@ -121,16 +110,15 @@ $(function () {
         return xhr;
     };
     try {
-        var target = wrappedJQuery('#toggle-target');
+        var target = wrappedSelect('#toggle-target');
         ossToggle(target, '/x', {});
         results.toggleRan = true;
         results.toggleDelRemoved = target.prop('disabled') === false && target.hasClass('btn-danger');
     } catch (e) {
         failures.push('ossToggle with absent delElement threw: ' + e);
     } finally {
-        wrappedJQuery.ajax = realAjax;
-        window.$ = realJQuery;
-        jQuery = realJQuery;
+        ossAjax = realAjax;
+        DataTable.Dom.select = realSelect;
     }
 
     // -- VIM-A15.49: a failed toggle request must not remove delElement --
@@ -142,14 +130,10 @@ $(function () {
     // directions. Stub .hide() to invoke its completion callback synchronously
     // so the assertion below reflects whether ossToggle's `if( delElement [&&
     // ok] )` branch ran at all, not whether an unrelated animation finished.
-    var realHide = jQuery.fn.hide;
-    jQuery.fn.hide = function ( duration, callback ) {
-        if ( typeof callback === 'function' ) callback.call( this );
-        else if ( typeof duration === 'function' ) duration.call( this );
-        return this;
-    };
-    var realAjax2 = wrappedJQuery.ajax;
-    wrappedJQuery.ajax = function (opts) {
+    var realTransitions = DataTable.Dom.transitions;
+    DataTable.Dom.transitions = false;
+    var realAjax2 = ossAjax;
+    ossAjax = function (opts) {
         // Mirror the real failure path: success is invoked with a non-"ok"
         // body (so ok stays false and complete() reverts the toggle), with
         // delElement passed in exactly as ossToggle's real callers do.
@@ -157,10 +141,9 @@ $(function () {
         opts.complete();
         return xhr;
     };
-    window.$ = wrappedJQuery;
-    jQuery = wrappedJQuery;
+    DataTable.Dom.select = wrappedSelect;
     try {
-        var failTarget = wrappedJQuery('#toggle-target-fail');
+        var failTarget = wrappedSelect('#toggle-target-fail');
         ossToggle(failTarget, '/x', {}, '#del-target-fail');
         results.failedToggleDelSurvived = document.getElementById('del-target-fail') !== null;
 
@@ -170,7 +153,7 @@ $(function () {
         // mirror-image defect of the one fixed above. Retry through the real
         // rebound handler (not another direct ossToggle call) with a
         // succeeding request, and require the row to be gone.
-        wrappedJQuery.ajax = function (opts) {
+        ossAjax = function (opts) {
             opts.success('ok');
             opts.complete();
             return xhr;
@@ -180,10 +163,9 @@ $(function () {
     } catch (e) {
         failures.push('ossToggle with failed request threw: ' + e);
     } finally {
-        wrappedJQuery.ajax = realAjax2;
-        jQuery.fn.hide = realHide;
-        window.$ = realJQuery;
-        jQuery = realJQuery;
+        ossAjax = realAjax2;
+        DataTable.Dom.transitions = realTransitions;
+        DataTable.Dom.select = realSelect;
     }
 
     // -- VIM-A15.47: Modal unavailable must still surface the message --

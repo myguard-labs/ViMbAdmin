@@ -124,7 +124,7 @@ fi
 {
   printf '<script nonce="">\n'
   cat <<'HTML'
-$(function () {
+vmReady(function () {
     var failures = [];
 
     function assertModalOperates(done) {

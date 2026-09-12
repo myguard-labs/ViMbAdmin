@@ -27,7 +27,7 @@ $check('shared transport suppresses short nonempty server requests with feedback
         && !str_contains($helper, 'error: function() { callback( emptyResult ); }'));
 $check('shared transport counts Unicode code points like the server',
     is_string($helper)
-        && str_contains($helper, "replace( /[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]/g, '_' ).length"));
+        && str_contains($helper, "replace(/[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]/g, '_').length"));
 
 try {
     $bundleFile = resolveBundleV();

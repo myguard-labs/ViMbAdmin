@@ -96,11 +96,10 @@ $check('cssExcluded is empty now that Chosen and Colorbox are deleted', $lists['
 // order. An exact comparison rather than a subset check: a bundle that gained
 // an unreviewed file is as much a defect as one that lost a library.
 $expectedJs = [
-    '100-jquery.js',
     '120-vimbadmin.validation.js',
-    '150-jquery.datatables.js',
-    '151-jquery.datatables.ext.js',
-    '152-jquery.datatables.bootstrap5.js',
+    '150-datatables.js',
+    '151-datatables.ext.js',
+    '152-datatables.bootstrap5.js',
     '800-bootstrap.js',
     '850-vimbadmin.modals.js',
     '910-vimbadmin.functions.js',
@@ -132,6 +131,27 @@ $check('runtime JS has no jQuery Validation API references',
         && preg_match('/\.validate\s*\(/', $runtimeJs) !== 1);
 $check('runtime JS has no Bootbox references',
     stripos($runtimeJs, 'bootbox') === false);
+$check('jQuery is not shipped or loaded',
+    !is_file($root . '/public/js/100-jquery.js')
+        && !str_contains((string) file_get_contents($root . '/application/views/header-js.phtml'), 'jquery'));
+// Vendor files retain optional interoperability. First-party code must never
+// invoke it; scan source so a forgotten bundle rebuild cannot conceal a regression.
+$ownSources = array_merge(
+    glob($root . '/public/js/*vimbadmin*.js') ?: [],
+    glob($root . '/application/views/*/js/*.js') ?: [],
+    [$root . '/public/js/151-datatables.ext.js']
+);
+foreach ($ownSources as $source) {
+    $check('no first-party jQuery runtime reference: ' . basename($source),
+        preg_match('/\bjQuery\b|(?:^|[^A-Za-z0-9_$])\$\s*[.(]/m', (string) file_get_contents($source)) === 0);
+}
+foreach ([
+    'public/js/150-datatables.js' => 'dd3a93d478a57278f4fe629674c5760222b1e2c5ec96511c7675a5034f249b38',
+    'public/js/152-datatables.bootstrap5.js' => 'cb335f90908b20599ec84d5396940f3ecbb958d43b231e58fb2ddb7fa11b63d3',
+    'public/css/816-datatables-bootstrap5.css' => '92a010aa4be02fb5de612cad3aeefc67cdd18ba24529767b9625e60dc70d0c8e',
+] as $asset => $hash) {
+    $check('DataTables 3.0.3 provenance: ' . $asset, hash_file('sha256', $root . '/' . $asset) === $hash);
+}
 $modalJs = (string) file_get_contents($root . '/public/js/850-vimbadmin.modals.js');
 $check('native modal helper has no jQuery runtime dependency',
     !str_contains($modalJs, 'jQuery')

@@ -193,7 +193,7 @@ $(function() {
         options.url = '/tests/support/datatable-wire/' + match[1] + '-' + data.draw + '.json';
     });
     // Each list uses the shared transport, with its own scoped fixture rows.
-    var wireChecks = (wireDisabled ? [] : ['domain', 'mailbox', 'alias', 'archive', 'log']).map(function(scope) {
+    var wireChecks = ['domain', 'mailbox', 'alias', 'archive', 'log'].map(function(scope) {
         return new Promise(function(resolve, reject) {
             var element = $('<table><thead><tr><th>Name</th></tr></thead></table>').appendTo('body');
             var step = 0;
@@ -223,19 +223,15 @@ $(function() {
             element.DataTable({
                 serverSide: true, pageLength: 2, order: [[0, 'asc']],
                 columns: [{ data: 'name' }],
-                ajax: vmDataTableServerData(wireEndpoint + '?scope=' + scope, 3)
+                ajax: vmDataTableServerData((wireDisabled ? '/tests/support/missing-datatable-wire-endpoint.php' : wireEndpoint) + '?scope=' + scope, 3)
             });
         });
     });
-    var wireFinished = wireDisabled;
-    if (wireDisabled) {
-        failures.push('server-side wire: endpoint disabled by negative control');
-    } else {
-        Promise.all(wireChecks).then(function() { wireFinished = true; }, function(error) {
-            failures.push('server-side wire: ' + error.message);
-            wireFinished = true;
-        });
-    }
+    var wireFinished = false;
+    Promise.all(wireChecks).then(function() { wireFinished = true; }, function(error) {
+        failures.push('server-side wire: ' + error.message);
+        wireFinished = true;
+    });
     // Drives the 'injected Migrate warning' negative control (name kept for
     // history/CI-label continuity; the mechanism is jQuery-4-native, not
     // Migrate -- Migrate is deleted). jQuery 4.0.0 added
@@ -495,21 +491,21 @@ $(function() {
     // `hidden.bs.modal`, so neither the close nor the callback has happened yet
     // when this statement returns. Asserting synchronously would pass even with
     // a broken dismiss handler.
-    bootbox.alert('<em id="bootbox-probe">Continue?</em>', function() { bootboxResult = true; });
+    var bootboxDialog = bootbox.alert('<em id="bootbox-probe">Continue?</em>', function() { bootboxResult = true; });
     check('Bootbox alert renders its message as HTML', function() {
         return !!document.getElementById('bootbox-probe');
     });
-    // Dismissal is deferred to the next tick: Bootstrap 5 shows the dialog
-    // through a transition, and clicking the OK button before the modal has
-    // finished opening is a no-op. The click itself must be a NATIVE event,
-    // because `data-bs-dismiss` is bound by Bootstrap's own delegated native
-    // listener, which a jQuery-triggered event never reaches.
-    setTimeout(function() {
-        var button = document.querySelector('#bootbox-probe')
-            && document.querySelector('#bootbox-probe').closest('.modal')
-                .querySelector('[data-bs-dismiss="modal"]');
+    // Dismiss only after Bootstrap reports that its show transition completed.
+    // A fixed delay races the component's `_isTransitioning` guard: Chromium
+    // happened to finish in time while Firefox and WebKit correctly ignored an
+    // early click. The click itself must be a NATIVE event, because
+    // `data-bs-dismiss` is bound by Bootstrap's own delegated native listener,
+    // which a jQuery-triggered event never reaches.
+    bootboxDialog.one('shown.bs.modal', function() {
+        if (location.hash === '#alert-dismiss-disabled') return;
+        var button = bootboxDialog.get(0).querySelector('[data-bs-dismiss="modal"]');
         if (button) button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    }, 60);
+    });
     check('real admin view remove dialog operates', function() {
         $('#remove-domain-7').trigger('click');
         var selected = $('#remove_domain_form input[name="did"]').val();
@@ -605,7 +601,7 @@ $(function() {
             document.getElementById('output').textContent = JSON.stringify({ mode: mode, warnings: warnings, failures: failures });
             document.body.dataset.verdict = failures.length ? 'FAIL' : 'PASS';
         }, 900);
-    }, 300);
+    }, 700);
 });
 </script></body></html>
 HTML
@@ -661,6 +657,7 @@ case "$mutation" in
     expect_fail 'injected Migrate warning' run_mode development '#warning-trigger'
     expect_fail 'missing plugin dependency' run_mode development '#missing-dependency'
     expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
+    expect_fail 'Bootbox alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
     expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
     expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
     ;;
@@ -672,6 +669,9 @@ case "$mutation" in
     ;;
   button-disabled)
     run_mode development '#button-disabled'
+    ;;
+  alert-dismiss-disabled)
+    run_mode development '#alert-dismiss-disabled'
     ;;
   wire-route-disabled)
     run_mode development '#wire-route-disabled'

@@ -25,7 +25,9 @@ foreach ($textSinks as $path => $safeCall) {
         is_string($source) && str_contains($source, $safeCall));
 }
 
-$mailboxList = file_get_contents(__DIR__ . '/../application/views/mailbox/js/list.js');
+$mailboxListPath = getenv('VIMBADMIN_MAILBOX_LIST_SOURCE')
+    ?: __DIR__ . '/../application/views/mailbox/js/list.js';
+$mailboxList = file_get_contents($mailboxListPath);
 $check('mailbox size dialog escapes every dynamic table value',
     is_string($mailboxList)
         && str_contains($mailboxList, 'htmlEntity( mdirsize.toFixed( 5 ) )')
@@ -51,11 +53,25 @@ $check('email-settings modal emits native required constraints',
         && str_contains($emailSettings, 'class="form-control"')
         && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}")
         && !$emailSettingsHasLegacyRequiredClass);
-$check('email-settings modal validates before AJAX and tracks conditional email requirement',
+$emailSettingsSaveHandler = '';
+if (is_string($mailboxList)
+    && preg_match(
+        "/DataTable\\.Dom\\.select\\( document \\)\\.on\\( 'click', '#modal_dialog_save', function\\(\\) \\{"
+            . "(?<handler>.*?)^\\} \\);/ms",
+        $mailboxList,
+        $saveHandlerMatch
+    ) === 1
+) {
+    $emailSettingsSaveHandler = $saveHandlerMatch['handler'];
+}
+$check('email-settings modal validates before AJAX in the same save handler',
+    preg_match(
+        '/if\( !form\[0\]\.reportValidity\(\) \)\s*return;[\s\S]*?ossAjax\(\{/',
+        $emailSettingsSaveHandler
+    ) === 1);
+$check('email-settings modal tracks conditional email requirement',
     is_string($mailboxList)
-        && str_contains($mailboxList, "DataTable.Dom.select( '#email' ).prop( 'required', other );")
-        && str_contains($mailboxList, 'if( !form[0].reportValidity() )')
-        && preg_match('/if\( !form\[0\]\.reportValidity\(\) \)\s*return;[\s\S]*?ossAjax\(\{/', $mailboxList) === 1);
+        && str_contains($mailboxList, "DataTable.Dom.select( '#email' ).prop( 'required', other );"));
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

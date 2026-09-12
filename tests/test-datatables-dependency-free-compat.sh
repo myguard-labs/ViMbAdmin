@@ -41,6 +41,25 @@ for asset in \
     exit 1
   fi
 done
+
+mutation=${VIMBADMIN_MUTATION:-}
+case "$mutation" in
+native-get-serialize)
+  perl -pi -e "s/if \(data\) url\.search \+=/if (false \&\& data) url.search +=/" "$tmp/990-vimbadmin.js"
+  grep -qF 'if (false && data) url.search +=' "$tmp/990-vimbadmin.js"
+  ;;
+native-get-cache-buster)
+  perl -pi -e "s/if \(options\.cache === false\) url\.searchParams\.set\('_', String\(Date\.now\(\)\)\);/if (false) url.searchParams.set('_', String(Date.now()));/" "$tmp/990-vimbadmin.js"
+  grep -qF "if (false) url.searchParams.set('_', String(Date.now()));" "$tmp/990-vimbadmin.js"
+  ;;
+native-get-304)
+  perl -pi -e 's/xhr\.status < 300 \|\| xhr\.status === 304/xhr.status < 300/' "$tmp/990-vimbadmin.js"
+  grep -qF "finish(xhr.status >= 200 && xhr.status < 300 ? 'success' : 'error')" "$tmp/990-vimbadmin.js"
+  ;;
+esac
+if [[ -n ${VIMBADMIN_MUTATION_ARTIFACT:-} ]]; then
+  cp "$tmp/990-vimbadmin.js" "$VIMBADMIN_MUTATION_ARTIFACT"
+fi
 mkdir -p "$tmp/src/Kernel/DataTable" "$tmp/tests/support"
 cp src/Kernel/DataTable/{DataTableQuery,DataTableResult}.php "$tmp/src/Kernel/DataTable/"
 cp tests/support/datatable-wire-endpoint.php "$tmp/tests/support/"
@@ -584,6 +603,48 @@ vmReady(function() {
         }
         finally { window.XMLHttpRequest = NativeXHR; }
     });
+    var nativeGetProbe = {};
+    (function() {
+        var NativeXHR = window.XMLHttpRequest;
+        window.XMLHttpRequest = function() {
+            nativeGetProbe.xhr = this;
+            this.headers = {};
+            this.open = function(method, url, async) { this.method = method; this.url = url; this.async = async; };
+            this.setRequestHeader = function(name, value) { this.headers[name] = value; };
+            this.getResponseHeader = function() { return 'application/json'; };
+            this.send = function(body) { this.body = body; };
+        };
+        try {
+            ossAjax({
+                url: '/native-get?existing=kept',
+                data: { term: 'a b', tag: 'x&y' },
+                dataType: 'json', cache: false,
+                success: function(value, status) { nativeGetProbe.success = [value, status]; },
+                error: function(xhr, status) { nativeGetProbe.error = status; },
+                complete: function(xhr, status) { nativeGetProbe.complete = status; }
+            });
+            nativeGetProbe.url = new URL(nativeGetProbe.xhr.url);
+            nativeGetProbe.xhr.status = 304;
+            nativeGetProbe.xhr.responseText = '{not-json-on-purpose';
+            nativeGetProbe.xhr.onload();
+        }
+        finally { window.XMLHttpRequest = NativeXHR; }
+    }());
+    check('native AJAX GET appends serialized query data', function() {
+        return nativeGetProbe.xhr.method === 'GET' && nativeGetProbe.xhr.body === null
+            && nativeGetProbe.url.searchParams.get('existing') === 'kept'
+            && nativeGetProbe.url.searchParams.get('term') === 'a b'
+            && nativeGetProbe.url.searchParams.get('tag') === 'x&y';
+    });
+    check('native AJAX cache:false appends a numeric cache buster', function() {
+        return /^\d+$/.test(nativeGetProbe.url.searchParams.get('_') || '');
+    });
+    check('native AJAX treats HTTP 304 as successful notmodified', function() {
+        return !nativeGetProbe.error && nativeGetProbe.success
+            && nativeGetProbe.success[0] === undefined
+            && nativeGetProbe.success[1] === 'notmodified'
+            && nativeGetProbe.complete === 'notmodified';
+    });
     // Exercise the actual source/bundle transport in every mode. Request
     // interception observes whether the minimum gate runs before network I/O,
     // and checks that accepted contains searches retain their original sigil.
@@ -923,7 +984,6 @@ expect_fail() {
   fi
 }
 
-mutation=${VIMBADMIN_MUTATION:-}
 case "$mutation" in
 '')
   run_mode development
@@ -959,6 +1019,9 @@ legacy-wire-key)
   ;;
 transition-completion-disabled)
   run_mode development '#transition-completion-disabled'
+  ;;
+native-get-serialize|native-get-cache-buster|native-get-304)
+  run_mode development
   ;;
 *)
   echo "FAIL: unknown VIMBADMIN_MUTATION: $mutation" >&2

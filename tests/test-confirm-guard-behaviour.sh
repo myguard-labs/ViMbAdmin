@@ -117,6 +117,14 @@ run_case() {
             failures.push(label + ' did not restore focus to #' + expectedId + ': got #' + actualId);
     }
 
+    function activateConfirmAfterDismissal(button) {
+        button.click();
+        button.dispatchEvent(new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true
+        }));
+    }
+
     async function drive() {
         // Cancel is the destructive safety boundary: the original submit must
         // be stopped before the asynchronous modal decision is available.
@@ -137,9 +145,10 @@ run_case() {
             failures.push('confirm modal interpreted the confirmation message as HTML');
 
         modal.querySelector('.modal-footer [data-bs-dismiss="modal"]').click();
+        activateConfirmAfterDismissal(confirmButton);
         await waitFor(function () { return !document.body.contains(modal); }, 'cancelled modal removal');
         if (submitted.indexOf('guarded') !== -1)
-            failures.push('dismissed confirm replayed the destructive submit');
+            failures.push('Cancel dismissal race replayed the destructive submit');
         assertFocusReturned('Cancel dismissal', 'guarded-submit');
 
         // Header Close and Escape are separate Bootstrap dismissal paths. Both
@@ -150,11 +159,13 @@ run_case() {
             var button = document.querySelector('[data-oss-confirm]');
             return button && !button.disabled;
         }, 'close-button confirm modal');
-        modal = document.querySelector('[data-oss-confirm]').closest('.modal');
+        confirmButton = document.querySelector('[data-oss-confirm]');
+        modal = confirmButton.closest('.modal');
         modal.querySelector('.btn-close').click();
+        activateConfirmAfterDismissal(confirmButton);
         await waitFor(function () { return !document.body.contains(modal); }, 'close-button modal removal');
         if (submitted.length !== 0)
-            failures.push('Close dismissal replayed the destructive submit');
+            failures.push('Close dismissal race replayed the destructive submit');
         assertFocusReturned('Close dismissal', 'guarded-submit');
 
         submitted = [];
@@ -163,16 +174,18 @@ run_case() {
             var button = document.querySelector('[data-oss-confirm]');
             return button && !button.disabled;
         }, 'Escape confirm modal');
-        modal = document.querySelector('[data-oss-confirm]').closest('.modal');
+        confirmButton = document.querySelector('[data-oss-confirm]');
+        modal = confirmButton.closest('.modal');
         modal.dispatchEvent(new KeyboardEvent('keydown', {
             key: 'Escape',
             code: 'Escape',
             bubbles: true,
             cancelable: true
         }));
+        activateConfirmAfterDismissal(confirmButton);
         await waitFor(function () { return !document.body.contains(modal); }, 'Escape modal removal');
         if (submitted.length !== 0)
-            failures.push('Escape dismissal replayed the destructive submit');
+            failures.push('Escape dismissal race replayed the destructive submit');
         assertFocusReturned('Escape dismissal', 'guarded-submit');
 
         // Explicit acceptance replays the submit exactly once.

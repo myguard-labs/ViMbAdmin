@@ -183,17 +183,30 @@
             backdrop: true,
             keyboard: true
         } );
-        var accepted = false;
+        var decision = null;
         var confirmButton = element.querySelector( '[data-oss-confirm]' );
         confirmButton.disabled = true;
 
         element.addEventListener( 'shown.bs.modal', function() {
+            if( decision !== null )
+                return;
+
             confirmButton.disabled = false;
             confirmButton.focus();
         }, { once: true } );
 
+        element.addEventListener( 'hide.bs.modal', function() {
+            if( decision === null )
+                decision = false;
+            confirmButton.disabled = true;
+        } );
+
         confirmButton.addEventListener( 'click', function() {
-            accepted = true;
+            if( decision !== null )
+                return;
+
+            decision = true;
+            confirmButton.disabled = true;
             instance.hide();
         }, { once: true } );
 
@@ -202,7 +215,7 @@
             element.remove();
             restoreFocus( previouslyFocused );
             if( typeof callback === 'function' )
-                callback( accepted );
+                callback( decision === true );
         }, { once: true } );
 
         instance.show();

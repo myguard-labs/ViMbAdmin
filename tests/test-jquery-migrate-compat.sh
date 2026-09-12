@@ -80,6 +80,19 @@ done
 mkdir -p "$tmp/src/Kernel/DataTable" "$tmp/tests/support"
 cp src/Kernel/DataTable/{DataTableQuery,DataTableResult}.php "$tmp/src/Kernel/DataTable/"
 cp tests/support/datatable-wire-endpoint.php "$tmp/tests/support/"
+mkdir -p "$tmp/tests/support/datatable-wire"
+render_wire_response() {
+  local scope=$1 draw=$2 start=$3 search=$4 direction=$5
+  php "$tmp/tests/support/datatable-wire-endpoint.php" \
+    "scope=$scope&draw=$draw&start=$start&length=2&search%5Bvalue%5D=$search&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=$direction" \
+    >"$tmp/tests/support/datatable-wire/$scope-$draw.json"
+}
+for scope in domain mailbox alias archive log; do
+  render_wire_response "$scope" 1 0 '' asc
+  render_wire_response "$scope" 2 2 '' asc
+  render_wire_response "$scope" 3 0 '' desc
+  render_wire_response "$scope" 4 0 "${scope}-Beta" desc
+done
 # The search text contains a literal Smarty variable, not a shell variable.
 # shellcheck disable=SC2016
 sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' \
@@ -147,7 +160,28 @@ function check(name, test) {
 }
 
 $(function() {
-    // Real HTTP serialization -> PHP parser -> modern response -> DataTables.
+    // The network-isolated multi-engine runner is a static server. Its finite
+    // response set was rendered through the real PHP parser above; route each
+    // fully formed modern request to the matching result while retaining real
+    // HTTP serialization and DataTables' response handling.
+    if (location.hash !== '#wire-route-disabled') {
+        $.ajaxPrefilter(function(options, originalOptions) {
+            var match = /^\/tests\/support\/datatable-wire-endpoint\.php\?scope=(domain|mailbox|alias|archive|log)$/.exec(options.url);
+            if (!match) return;
+            var data = originalOptions.data;
+            if (!data || data.draw < 1 || data.draw > 4) return;
+            var expected = [
+                { start: 0, search: '', dir: 'asc' },
+                { start: 2, search: '', dir: 'asc' },
+                { start: 0, search: '', dir: 'desc' },
+                { start: 0, search: match[1] + '-Beta', dir: 'desc' }
+            ][data.draw - 1];
+            if (data.start !== expected.start || data.length !== 2 ||
+                data.search.value !== expected.search || data.order[0].column !== 0 ||
+                data.order[0].dir !== expected.dir) return;
+            options.url = '/tests/support/datatable-wire/' + match[1] + '-' + data.draw + '.json';
+        });
+    }
     // Each list uses the shared transport, with its own scoped fixture rows.
     var wireChecks = ['domain', 'mailbox', 'alias', 'archive', 'log'].map(function(scope) {
         return new Promise(function(resolve, reject) {
@@ -613,6 +647,7 @@ case "$mutation" in
     expect_fail 'injected Migrate warning' run_mode development '#warning-trigger'
     expect_fail 'missing plugin dependency' run_mode development '#missing-dependency'
     expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
+    expect_fail 'server-side wire static route' run_mode development '#wire-route-disabled'
     ;;
   warning)
     run_mode development '#warning-trigger'
@@ -622,6 +657,9 @@ case "$mutation" in
     ;;
   button-disabled)
     run_mode development '#button-disabled'
+    ;;
+  wire-route-disabled)
+    run_mode development '#wire-route-disabled'
     ;;
   *)
     echo "FAIL: unknown VIMBADMIN_MUTATION: $mutation" >&2

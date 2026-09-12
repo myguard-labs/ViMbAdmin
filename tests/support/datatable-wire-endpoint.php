@@ -9,6 +9,13 @@ require __DIR__ . '/../../src/Kernel/DataTable/DataTableResult.php';
 use ViMbAdmin\Kernel\DataTable\DataTableQuery;
 use ViMbAdmin\Kernel\DataTable\DataTableResult;
 
+// The multi-engine browser fixture serves files from a network-isolated Node
+// process, so render its finite response set through this same endpoint before
+// launching the browser. Web requests continue to use PHP's populated $_GET.
+if (PHP_SAPI === 'cli' && isset($argv[1])) {
+    parse_str($argv[1], $_GET);
+}
+
 $scope = $_GET['scope'] ?? '';
 if (!is_string($scope) || !in_array($scope, ['domain', 'mailbox', 'alias', 'archive', 'log'], true)) {
     http_response_code(400);

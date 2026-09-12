@@ -309,6 +309,16 @@ $check(
 $toolPackage = json_decode((string) file_get_contents($root . '/bin/package.json'), true);
 $toolLock = json_decode((string) file_get_contents($root . '/bin/package-lock.json'), true);
 $assetsDoc = (string) file_get_contents($root . '/docs/ASSETS.md');
+$toolDependencies = is_array($toolPackage) && isset($toolPackage['dependencies'])
+    && is_array($toolPackage['dependencies']) ? $toolPackage['dependencies'] : [];
+$toolPackages = is_array($toolLock) && isset($toolLock['packages'])
+    && is_array($toolLock['packages']) ? $toolLock['packages'] : [];
+$cleanCssCliLock = isset($toolPackages['node_modules/clean-css-cli'])
+    && is_array($toolPackages['node_modules/clean-css-cli'])
+    ? $toolPackages['node_modules/clean-css-cli'] : [];
+$cleanCssLock = isset($toolPackages['node_modules/clean-css'])
+    && is_array($toolPackages['node_modules/clean-css'])
+    ? $toolPackages['node_modules/clean-css'] : [];
 $check(
     'Closure Compiler digest is enforced by the build configuration',
     str_contains($optionsSource, "230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f")
@@ -316,15 +326,14 @@ $check(
 );
 $check(
     'clean-css CLI is an exact direct dependency',
-    is_array($toolPackage)
-        && ($toolPackage['dependencies']['clean-css-cli'] ?? null) === '5.6.3'
+    ($toolDependencies['clean-css-cli'] ?? null) === '5.6.3'
 );
 $check(
     'clean-css dependency graph is locked',
     is_array($toolLock)
         && ($toolLock['lockfileVersion'] ?? null) === 3
-        && ($toolLock['packages']['node_modules/clean-css-cli']['version'] ?? null) === '5.6.3'
-        && ($toolLock['packages']['node_modules/clean-css']['version'] ?? null) === '5.3.3'
+        && ($cleanCssCliLock['version'] ?? null) === '5.6.3'
+        && ($cleanCssLock['version'] ?? null) === '5.3.3'
 );
 $check(
     'asset documentation describes enforced toolchain verification',

@@ -329,7 +329,7 @@ vmReady(function() {
         };
         var originalAjax = ossAjax;
         var sent;
-        var table = new DataTable('#table', );
+        var table = new DataTable('#table');
         try {
             ossAjax = function(options) { sent = options.data; };
             vmDataTableServerData('/list-data', 3)(request, function() {}, table.settings()[0]);
@@ -613,11 +613,9 @@ vmReady(function() {
         var originalAjax = ossAjax;
         ossAjax = function() { requested = true; return { abort: function() {} }; };
 
-        // A real `language`, as the core always supplies (150-…js:453
-        // initialises it before any table option is applied) -- unlike the
-        // production path, this is the only object the shim is given, so if
-        // the hint or its restore lands anywhere else, this assertion is the
-        // one place that would notice.
+        // A real `language`, as the core always supplies before applying table
+        // options. Unlike the production path, this is the only object the shim
+        // is given, so this assertion detects a misplaced hint or restore.
         var settings = {
             serverMethod: 'GET',
             language: {
@@ -648,9 +646,9 @@ vmReady(function() {
         if (answered.data.length !== 0) return false;
 
         // The hint is written to BOTH language keys and restored before the
-        // transport returns -- see the `_emptyRow` note beside the hint in
-        // vmDataTableServerData for why both keys are needed. `callback`
-        // paints synchronously, so by the time the call is over the borrowed
+        // transport returns. DataTables chooses between the keys according to
+        // whether the table has data, so both must carry the temporary hint.
+        // `callback` paints synchronously, so by the time it returns the borrowed
         // keys must already be back: a declined search that is never followed
         // by another one (the table is destroyed, the view torn down) must
         // not leave the hint behind.
@@ -839,7 +837,7 @@ vmReady(function() {
         });
 
         // tt_throbber.stop() fades out over 750ms and removes the element in
-        // the fadeOut completion callback, so the teardown assertion and the
+        // the transition completion callback, so the teardown assertion and the
         // verdict must both wait beyond that. Asserting at 300ms would pass
         // even when stop() never removes anything.
         setTimeout(function() {

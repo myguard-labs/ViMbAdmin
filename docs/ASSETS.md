@@ -2,14 +2,16 @@
 
 DataTables core and its Bootstrap 5 JavaScript/CSS integration are pinned to
 3.0.3, released 31 August 2026. The originals came from the official
-[release directory](https://cdn.datatables.net/3.0.3/), verified 12 September 2026.
+[release directory](https://cdn.datatables.net/3.0.3/), verified 12 September
+2026.
 No commercial extensions or external runtime requests are needed.
 
-- `public/js/150-datatables.js`: upstream `js/dataTables.js` with the local fixes below.
+- `public/js/150-datatables.js`: upstream `js/dataTables.js` with the local
+  fixes below.
   Original upstream SHA-256:
   `dd3a93d478a57278f4fe629674c5760222b1e2c5ec96511c7675a5034f249b38`
   Shipped SHA-256:
-  `2d0d745d24600d8b450d3fe610b85593af16959e3b408dff3abbe88e11c73d3d`
+  `ae3173803747ce7ac8867df685a88b048350f874717cbc3b07a3f59c7f56a19c`
 - `public/js/152-datatables.bootstrap5.js`:
   upstream `js/dataTables.bootstrap5.js`. SHA-256:
   `cb335f90908b20599ec84d5396940f3ecbb958d43b231e58fb2ddb7fa11b63d3`
@@ -17,12 +19,13 @@ No commercial extensions or external runtime requests are needed.
   upstream `css/dataTables.bootstrap5.css`. SHA-256:
   `92a010aa4be02fb5de612cad3aeefc67cdd18ba24529767b9625e60dc70d0c8e`
 
-The core carries three local fixes: deep option/translation merges discard
-`__proto__`, `prototype` and `constructor`; `destroy()` restores hidden columns;
-and event wrappers use a `WeakMap` so pagination redraws cannot retain detached
-buttons through a global array. The Bootstrap integration files are unmodified.
-`tests/test-minify-bundle-inputs.php` pins the shipped bytes; the browser regression
-exercises these fixes in source and bundle modes.
+The core carries local fixes: deep option/translation merges discard
+`__proto__`, `prototype` and `constructor`; `destroy()` restores hidden columns
+and the original inline table width; event wrappers use a `WeakMap` so
+pagination redraws cannot retain detached buttons through a global array; and
+bulk event removal cannot skip handlers. The Bootstrap integration files are
+unmodified. `tests/test-minify-bundle-inputs.php` pins the shipped bytes; the
+browser regression exercises these fixes in source and bundle modes.
 
 `151-datatables.ext.js` registers the existing numeric-HTML ordering contract
 through `DataTable.ext.type.order`. It replaces the duplicated legacy plugin

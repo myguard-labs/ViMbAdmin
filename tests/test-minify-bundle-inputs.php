@@ -146,8 +146,8 @@ foreach ($ownSources as $source) {
         preg_match('/\bjQuery\b|(?:^|[^A-Za-z0-9_$])\$\s*[.(]/m', (string) file_get_contents($source)) === 0);
 }
 foreach ([
-    // Core includes the three local fixes documented with its upstream hash in docs/ASSETS.md.
-    'public/js/150-datatables.js' => '2d0d745d24600d8b450d3fe610b85593af16959e3b408dff3abbe88e11c73d3d',
+    // Core includes the local fixes documented with its upstream hash in docs/ASSETS.md.
+    'public/js/150-datatables.js' => 'ae3173803747ce7ac8867df685a88b048350f874717cbc3b07a3f59c7f56a19c',
     'public/js/152-datatables.bootstrap5.js' => 'cb335f90908b20599ec84d5396940f3ecbb958d43b231e58fb2ddb7fa11b63d3',
     'public/css/816-datatables-bootstrap5.css' => '92a010aa4be02fb5de612cad3aeefc67cdd18ba24529767b9625e60dc70d0c8e',
 ] as $asset => $hash) {

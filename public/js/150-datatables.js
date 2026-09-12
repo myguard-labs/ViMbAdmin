@@ -1748,7 +1748,9 @@ function remove(el, nameFull, handler, selector) {
     }
     else {
         // No name, use all events
-        removeEvents = stored;
+        // Copy the store: remove$1() splices the live array as listeners are
+        // removed, which would otherwise skip every second matching handler.
+        removeEvents = stored.slice();
     }
     // If namespaces were given then we need to filter down to just those event
     // handlers which have the given namespaces
@@ -9468,7 +9470,7 @@ register('destroy()', function (remove) {
             orig.insertBefore(table, insertBefore);
             // Restore the width of the original table - was read from the style property,
             // so we can restore directly to that
-            jqTable.css('width', settings + 'px').classRemove(classes.table);
+            jqTable.css('width', settings.destroyWidth).classRemove(classes.table);
         }
         /* Remove the settings object from the settings array */
         var idx = ext.settings.indexOf(settings);
@@ -12052,7 +12054,7 @@ const defaults$1 = {
     containerWidth: -1,
     data: [],
     deferLoading: false,
-    destroyWidth: 0,
+    destroyWidth: '',
     destroying: false,
     display: [],
     displayMaster: [],
@@ -12420,7 +12422,7 @@ const DataTable = function (selector, options) {
         // Create the settings object for this table and set some of the default
         // parameters
         var settings = create({
-            destroyWidth: table.width(),
+            destroyWidth: tableEl.style.width,
             unique: id,
             tableId: id,
             colgroup: Dom.c('colgroup'),

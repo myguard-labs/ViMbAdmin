@@ -188,6 +188,54 @@ function runDataTablesReviewRegressions(check) {
         } finally { if (api) api.destroy(); node.remove(); }
     });
 
+    check('R7 Dom.off removes zero, one and mixed handlers repeatedly', function() {
+        var node = document.createElement('button');
+        var dom = DataTable.Dom.select(node);
+        var calls = [];
+        var named = function() { calls.push('named'); };
+
+        dom.off().off('click.missing');
+        dom.on('click.one', named).off('click.one', named).off('click.one', named);
+        node.click();
+        require(calls.length === 0, 'single or repeated removal retained a handler');
+
+        dom.on('click.keep', function() { calls.push('keep-click'); })
+            .on('click.drop', function() { calls.push('drop-click-1'); })
+            .on('keyup.drop', function() { calls.push('drop-keyup'); })
+            .on('click.drop.extra', function() { calls.push('drop-click-2'); });
+        dom.off('.drop').off('.drop');
+        node.click();
+        node.dispatchEvent(new Event('keyup'));
+        require(calls.join() === 'keep-click', 'mixed namespace removal skipped a handler: ' + calls);
+
+        dom.on('click', function() { calls.push('all-1'); })
+            .on('keyup', function() { calls.push('all-2'); })
+            .on('click.more', function() { calls.push('all-3'); });
+        dom.off().off();
+        node.click();
+        node.dispatchEvent(new Event('keyup'));
+        require(calls.join() === 'keep-click', 'unnamed removal skipped a handler: ' + calls);
+        return true;
+    });
+
+    check('R8 destroy restores pixel, percentage and absent inline widths', function() {
+        ['321px', '65%', ''].forEach(function(width) {
+            var node = table(), api;
+            node.style.width = width;
+            try {
+                api = new DataTable(node, { data: [['value']], columns: [{ title: 'Name' }] });
+                api.destroy(); api = null;
+                require(node.style.width === width,
+                    'destroy changed ' + (width || 'absent') + ' inline width to ' + node.style.width);
+                api = new DataTable(node, { data: [['value']], columns: [{ title: 'Name' }] });
+                api.destroy(); api = null;
+                require(node.style.width === width,
+                    'reinitialization changed ' + (width || 'absent') + ' inline width to ' + node.style.width);
+            } finally { if (api) api.destroy(); node.remove(); }
+        });
+        return true;
+    });
+
     return new Promise(function(resolve, reject) {
         var node = table();
         DataTable.Dom.select(node).one('init.dt', function(event, settings) {

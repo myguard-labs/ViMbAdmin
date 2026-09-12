@@ -28,10 +28,10 @@ function toggleActive( elid, id ){
 };
 
 function toggleSuper( elid, id ){
-    var on = ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='admin' action='ajax-toggle-super'}", { "aid": id, "csrf": "{$csrfToken}" } );
-    if( typeof on === 'undefined' )
-        return;
-    document.getElementById( 'admin_domains_' + id ).classList.toggle( 'd-none', on );
+    ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='admin' action='ajax-toggle-super'}", { "aid": id, "csrf": "{$csrfToken}" }, undefined, function( ok, on ) {
+        if( ok )
+            document.getElementById( 'admin_domains_' + id ).classList.toggle( 'd-none', on );
+    } );
 };
 
 function purgeAdmin( event ){

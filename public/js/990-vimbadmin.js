@@ -277,7 +277,7 @@ function tt_throbber( size, lines, strokewidth, fallback )
  */
 var ossPendingToggles = new WeakSet();
 
-function ossToggle( e, Url, data, delElement )
+function ossToggle( e, Url, data, delElement, committed )
 {
     var element = e.get( 0 );
     if( !element || e.hasClass( 'disabled' ) || ossPendingToggles.has( element ) )
@@ -332,6 +332,9 @@ function ossToggle( e, Url, data, delElement )
                     DataTable.Dom.select( delElement ).remove();
                 });
             }
+
+            if( typeof committed === 'function' )
+                committed( ok, on );
 
         }
     });

@@ -495,6 +495,7 @@ if ($version === null || preg_match('/^[0-9]+$/', $version) !== 1) {
 // not re-implemented. It defines APPLICATION_PATH and SCRIPTDIR itself when
 // they are not already defined.
 try {
+    define('VIMBADMIN_MINIFY_LANE', $whatToCompress);
     $options = vimbadminLoadMinifyOptions(__DIR__ . '/minify-options.php');
 } catch (RuntimeException $error) {
     fwrite(STDERR, 'FATAL: ' . $error->getMessage() . "\n");

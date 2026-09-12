@@ -252,8 +252,8 @@ vmReady(function () {
         table.remove();
     }
 
-    // The exact admin wrapper must leave dependent UI alone for ignored clicks
-    // and restore the Bootstrap .btn cascade, not force a block-level display.
+    // The exact admin wrapper updates dependent UI only after the server has
+    // committed the privilege change. Failed and pending attempts leave it.
     var adminHost = document.createElement('div');
     adminHost.innerHTML = '<div id="throb-toggle-super-admin"></div>' +
         '<span id="toggle-super-admin" data-toggle-super="admin" class="btn btn-danger">No</span>' +
@@ -265,19 +265,25 @@ vmReady(function () {
         var superControl = document.getElementById('toggle-super-admin');
         var domains = document.getElementById('admin_domains_admin');
         if (getComputedStyle(domains).display !== 'inline-block') throw new Error('fixture lacks Bootstrap button CSS');
+        ['failed: in use', 'error', 'timeout', 'abort'].forEach(function(outcome, index) {
+            clickToggle(superControl);
+            if (adminRequests.length !== index + 1 || getComputedStyle(domains).display !== 'inline-block') throw new Error('pending super toggle changed domains visibility');
+            if (outcome === 'failed: in use') adminRequests[index].success(outcome);
+            else adminRequests[index].error(xhr, outcome, 'fixture error');
+            adminRequests[index].complete();
+            if (getComputedStyle(domains).display !== 'inline-block') throw new Error(outcome + ' super toggle changed domains visibility');
+        });
         clickToggle(superControl);
-        if (adminRequests.length !== 1 || getComputedStyle(domains).display !== 'none') throw new Error('accepted super toggle did not hide domains');
+        if (adminRequests.length !== 5 || getComputedStyle(domains).display !== 'inline-block') throw new Error('pending successful super toggle changed domains visibility');
+        adminRequests[4].success('ok'); adminRequests[4].complete();
+        if (getComputedStyle(domains).display !== 'none') throw new Error('committed super toggle did not hide domains');
         clickToggle(superControl);
-        if (adminRequests.length !== 1 || getComputedStyle(domains).display !== 'none') throw new Error('pending super toggle changed domains visibility');
-        adminRequests[0].success('ok'); adminRequests[0].complete();
-        clickToggle(superControl);
-        if (adminRequests.length !== 2 || getComputedStyle(domains).display !== 'inline-block') throw new Error('normal-admin domains button did not restore inline-block cascade');
-        clickToggle(superControl);
-        if (adminRequests.length !== 2 || getComputedStyle(domains).display !== 'inline-block') throw new Error('pending normal-admin toggle changed domains visibility');
-        adminRequests[1].success('ok'); adminRequests[1].complete();
+        if (adminRequests.length !== 6 || getComputedStyle(domains).display !== 'none') throw new Error('pending normal-admin toggle changed domains visibility');
+        adminRequests[5].success('ok'); adminRequests[5].complete();
+        if (getComputedStyle(domains).display !== 'inline-block') throw new Error('normal-admin domains button did not restore inline-block cascade');
         superControl.classList.add('disabled');
         clickToggle(superControl);
-        if (adminRequests.length !== 2 || getComputedStyle(domains).display !== 'inline-block') throw new Error('disabled super toggle changed domains visibility');
+        if (adminRequests.length !== 6 || getComputedStyle(domains).display !== 'inline-block') throw new Error('disabled super toggle changed domains visibility');
     } catch (e) {
         failures.push('admin super toggle: ' + e.message);
     } finally {

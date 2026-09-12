@@ -16,6 +16,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  assets:
+    name: Pinned browser asset regeneration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Assert pull-request runner isolation
+        run: bash .github/scripts/assert-pr-runner-isolation.sh
+
+      - name: Install pinned asset toolchain
+        run: |
+          curl --fail --silent --show-error --location \
+            https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v20230802/closure-compiler-v20230802.jar \
+            --output bin/compiler.jar
+          printf '%s  %s\n' \
+            230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f \
+            bin/compiler.jar | sha256sum --check
+          npm ci --prefix bin --ignore-scripts
+
+      - name: Regenerate and compare committed browser assets
+        run: |
+          bash tests/test-minify-tool-selection.sh
+          bash tests/test-pinned-asset-regeneration.sh
+
   # ------------------------------------------------------------------ #
   # Static/browser regressions — no DB. Fast first signal.             #
   # ------------------------------------------------------------------ #

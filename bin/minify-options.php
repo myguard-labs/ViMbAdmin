@@ -113,7 +113,8 @@ $js_compiler = "java -jar " . escapeshellarg( __DIR__ . '/compiler.jar' ) . " --
 $compiler_jar = __DIR__ . '/compiler.jar';
 $compiler_sha256 = '230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f';
 $actual_compiler_sha256 = is_file( $compiler_jar ) ? hash_file( 'sha256', $compiler_jar ) : false;
-if( $actual_compiler_sha256 !== $compiler_sha256 )
+if( ( !defined( 'VIMBADMIN_MINIFY_LANE' ) || VIMBADMIN_MINIFY_LANE !== 'css' )
+    && $actual_compiler_sha256 !== $compiler_sha256 )
 {
     fwrite( STDERR,
         "FATAL: Closure Compiler digest mismatch for {$compiler_jar}.\n" .
@@ -219,7 +220,8 @@ $cleancss_bin = __DIR__ . '/node_modules/.bin/cleancss';
 // that could disagree with it.
 $cleancss_real = realpath( $cleancss_bin );
 
-if( $cleancss_real === false || !is_file( $cleancss_real ) || !is_executable( $cleancss_real ) )
+if( ( !defined( 'VIMBADMIN_MINIFY_LANE' ) || VIMBADMIN_MINIFY_LANE !== 'js' )
+    && ( $cleancss_real === false || !is_file( $cleancss_real ) || !is_executable( $cleancss_real ) ) )
 {
     fwrite( STDERR,
         "FATAL: clean-css CLI not found at {$cleancss_bin}.\n" .
@@ -259,7 +261,7 @@ if( $graph_matches )
     }
 }
 
-if( !$graph_matches )
+if( ( !defined( 'VIMBADMIN_MINIFY_LANE' ) || VIMBADMIN_MINIFY_LANE !== 'js' ) && !$graph_matches )
 {
     fwrite( STDERR,
         "FATAL: installed clean-css dependency graph does not match bin/package-lock.json.\n" .
@@ -269,7 +271,8 @@ if( !$graph_matches )
 
 // -O2 is clean-css's structural optimisation level; --format keep-breaks keeps
 // one rule per line so the shipped bundle stays diffable and reviewable.
-$css_compiler = escapeshellarg( $cleancss_real ) . ' -O2 --format keep-breaks';
+$cleancss_command = is_string( $cleancss_real ) ? $cleancss_real : $cleancss_bin;
+$css_compiler = escapeshellarg( $cleancss_command ) . ' -O2 --format keep-breaks';
 
 // CSS files to compress. As with $js_files above, this glob no longer selects
 // the bundle: bin/minify-bundle-files.php does, and the glob is only the

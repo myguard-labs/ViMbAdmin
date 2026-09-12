@@ -39,11 +39,10 @@
     *
     * @param string (note, this is not a real function parameter, it is a prototype method, so method chaining is happening here)
     * @return string
-    * @uses jQuery
     */
     String.prototype.htmlEntity = function()
     {
-        return $("<div/>").text( this.substr() ).html();
+        return htmlEntity( this.toString() );
     }
 
 
@@ -53,11 +52,10 @@
     *
     * @param string (note, this is not a real function parameter, it is a prototype method, so method chaining is happening here)
     * @return string
-    * @uses jQuery
     */
     String.prototype.htmlEntityDecode = function()
     {
-        return $("<div/>").html( this.substr() ).text();
+        return htmlEntityDecode( this.toString() );
     }
 
 
@@ -83,11 +81,12 @@
     *
     * @param string str
     * @return string
-    * @uses jQuery
     */
     function htmlEntity(str)
     {
-        return $( '<div />' ).text( str ).html();
+        var element = document.createElement('div');
+        element.textContent = str;
+        return element.innerHTML;
     }
 
    /**
@@ -101,7 +100,6 @@
     *
     * @param string str
     * @return string
-    * @uses jQuery
     */
     function htmlAttr(str)
     {
@@ -117,35 +115,17 @@
     *
     * @param string str
     * @return string
-    * @uses jQuery
     */
     function htmlEntityDecode(str)
     {
-        return $( '<div />').html( str ).text();
+        // RCDATA decodes entities as text; it never creates active image/script
+        // nodes from markup supplied to this string helper.
+        var element = document.createElement('textarea');
+        element.innerHTML = str;
+        return element.value;
     }
 
 
-    /**
-    * jQuery Unserialize
-    *
-    * @author: James Campbell
-    */
-    (function($)
-    {
-        $.unserialise = function( Data )
-        {
-            var Data = Data.split("&");
-            var Serialised = new Array();
-
-            $.each(Data, function()
-            {
-                var Properties = this.split("=");
-                Serialised[Properties[0]] = Properties[1];
-            });
-
-            return Serialised;
-        };
-    })(jQuery);
 
 
     /**

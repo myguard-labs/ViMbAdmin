@@ -8,14 +8,14 @@ function vmAliasServerData( source )
 }
 
 
-$(document).ready( function()
+vmReady( function()
 {
-    $( "button[id|='delete-alias']" ).on( 'click', deleteAlias );
-    
+    DataTable.Dom.select( "button[id|='delete-alias']" ).on( 'click', deleteAlias );
+
     {if !isset($options.defaults.server_side.pagination.enable) || $options.defaults.server_side.pagination.enable }
     /* Server-side processing: the full alias list is paged/sorted/searched via
        /alias/list-data, fetching only the visible page. Text cells escaped. */
-    oDataTable = $( '#list_table' ).dataTable({
+    oDataTable = new DataTable('#list_table', {
         'processing': true,
         'serverSide': true,
         'serverMethod': 'GET',
@@ -25,26 +25,26 @@ $(document).ready( function()
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
         'language': { 'processing': 'Loading…', 'emptyTable': 'No aliases.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
-            $( "button[id|='delete-alias']" ).off().on( 'click', deleteAlias );
-            $( "a[id|='modal-dialog']" ).off().on( 'click', tt_openModalDialog );
-            $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
-            if( vm_prefs['iLength'] != $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            DataTable.Dom.select( "button[id|='delete-alias']" ).off('click').on( 'click', deleteAlias );
+            DataTable.Dom.select( "a[id|='modal-dialog']" ).off('click').on( 'click', tt_openModalDialog );
+            vmTooltips();
+            if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'columns': [
-            { 'data': 'address', 'render': $.fn.dataTable.render.text() },
-            { 'data': 'domain',  'render': $.fn.dataTable.render.text() },
+            { 'data': 'address', 'render': DataTable.render.text() },
+            { 'data': 'domain',  'render': DataTable.render.text() },
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return formatActive( row.id, row.active ); } },
             { 'data': 'goto', 'orderable': false, 'render': function( d, t, row ){ return formatGoto( row.id, row.goto ); } },
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return formatControlls( row.id ); } }
         ]
     });
     {else}
-    oDataTable = $( '#list_table' ).dataTable({
+    oDataTable = new DataTable('#list_table', {
         'drawCallback': function() {
-            if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            if( vm_prefs['iLength'] !=  DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
@@ -59,11 +59,11 @@ $(document).ready( function()
         ]
     });
     {/if}
-    
+
 }); // document onready
 
 function toggleActive( elid, id ){
-    ossToggle( $( '#' + elid ), "{genUrl controller='alias' action='ajax-toggle-active'}", { "alid": id, "csrf": "{$csrfToken}" } );
+    ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='alias' action='ajax-toggle-active'}", { "alid": id, "csrf": "{$csrfToken}" } );
 };
 
 
@@ -73,20 +73,20 @@ function deleteAlias( event ){
 
     delDialog = ossModal( '#purge_dialog' );
 
-    if( $( event.target ).is( "i" ) )
-        element = $( event.target ).parent();
+    if( DataTable.Dom.select( event.target ).is( "i" ) )
+        element = DataTable.Dom.select( event.target ).parent();
     else
-        element = $( event.target );
+        element = DataTable.Dom.select( event.target );
 
     // The control is a submit button inside a CSRF-bearing POST form; the
     // dialog's confirm button submits that form so the token stays in the body.
     var targetForm = element.closest( 'form' );
-    $( '#purge_dialog_delete' ).off( 'click' ).on( 'click', function( ev ){
+    DataTable.Dom.select( '#purge_dialog_delete' ).off( 'click' ).on( 'click', function( ev ){
         ev.preventDefault();
         targetForm.get( 0 ).submit();
     });
 
-    $( '#purge_dialog_cancel' ).on( 'click', function(){
+    DataTable.Dom.select( '#purge_dialog_cancel' ).on( 'click', function(){
         delDialog.hide();
     });
 };
@@ -102,24 +102,24 @@ var ignore_keys = [ 13, 38, 40, 37, 39 ,27, 32, 17, 18, 9, 16, 20, 36, 35, 33, 3
 
 function getEntries( event ){
     event.preventDefault();
-    if( jQuery.inArray( event.which, ignore_keys ) != -1 )
+    if( ignore_keys.indexOf( event.which ) != -1 )
         return;
-     
-    clearTimeout( timeOut );    
-    if( String( $( event.target ).val() ).trim().length >= str_len ){ 
-        timeOut = setTimeout( function(){ 
-            $('body').css('cursor', 'wait');
+
+    clearTimeout( timeOut );
+    if( String( DataTable.Dom.select( event.target ).val() ).trim().length >= str_len ){
+        timeOut = setTimeout( function(){
+            DataTable.Dom.select('body').css('cursor', 'wait');
             setTimeout( function(){
                 vmDataTableApi( oDataTable ).clear().draw();
-                $.ajax({
+                ossAjax({
                   async: false,
-                  url: "{genUrl controller='alias' action='list-search' ima=$ima}/search/" + String( $( event.target ).val() ).trim(),
+                  url: "{genUrl controller='alias' action='list-search' ima=$ima}/search/" + String( DataTable.Dom.select( event.target ).val() ).trim(),
                   success: function(data){
                     if( data !== "ko" && data.substr( 0, 1 ) == "[" )
                     {
                         data = JSON.parse( data );
                         var tableApi = vmDataTableApi( oDataTable );
-                        $.each( data, function( index, row ){
+                        data.forEach( function( row, index ){
                                tableApi.row.add([
                                     row.address,
                                     row.domain,
@@ -132,10 +132,10 @@ function getEntries( event ){
                     }
                   }
                 });
-                $('body').css('cursor', 'default');
+                DataTable.Dom.select('body').css('cursor', 'default');
             }, 300);
         }, 500 );
-        
+
     }
     else
     {
@@ -172,8 +172,8 @@ function formatControlls( id )
     var tmpstr = "";
     var item_id = "";
     var href = "";
-                    
-                    
+
+
     var str = '<div class="btn-group">\
             <a class="btn btn-sm have-tooltip" id="edit_alias_' + id + '" title="Edit" href="{genUrl controller="alias" action="edit"}/alid/' + id + '">\
                 <i class="bi-pencil"></i>\
@@ -200,7 +200,7 @@ function formatControlls( id )
                     {/if}
                 {/foreach}
             {/if}
-            
+
     str += '<form method="post" action="{genUrl controller="alias" action="delete"}" class="delete-alias-form" style="display: inline;">\
                 <input type="hidden" name="alid" value="' + id + '" />\
                 <input type="hidden" name="csrf" value="{$csrfToken}" />\
@@ -208,7 +208,7 @@ function formatControlls( id )
                     <i class="bi-trash"></i>\
                 </button>\
             </form>';
-            
+
             {if isset( $action_list_menu)}
                 {assign var="action" value=$action_list_menu}
                 str += '<{$action.tagName} ';
@@ -241,7 +241,7 @@ function formatControlls( id )
             {/if}
     str += '</div>';
     return str;
-    
+
 }
 {/if}
 
@@ -251,7 +251,7 @@ function formatControlls( id )
 // from `document` also covers the rows the DataTables renderers build after page
 // load, which per-element binding at ready-time would miss.
 //
-jQuery( document ).on( 'click', '[data-toggle-active]', function() {
-    var id = jQuery( this ).attr( 'data-toggle-active' );
+DataTable.Dom.select( document ).on( 'click', '[data-toggle-active]', function() {
+    var id = DataTable.Dom.select( this ).attr( 'data-toggle-active' );
     toggleActive( 'toggle-active-' + id, id );
 } );

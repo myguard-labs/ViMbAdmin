@@ -7,10 +7,10 @@ function vmMailboxServerData( source )
     return vmDataTableServerData( source, minimum );
 }
 
-$(document).ready( function() {
+vmReady( function() {
 
     {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-        $( "a[id|='dir-size']" ).on( "click", showSizes );
+        DataTable.Dom.select( "a[id|='dir-size']" ).on( "click", showSizes );
     {/if}
     
     {if !isset($options.defaults.server_side.pagination.enable) || $options.defaults.server_side.pagination.enable }
@@ -18,7 +18,7 @@ $(document).ready( function() {
        through /mailbox/list-data, fetching only the visible page — the initial
        HTML carries no rows. Cells are rendered client-side by the same format
        helpers used below. */
-    oDataTable = $( '#list_table' ).dataTable({
+    oDataTable = new DataTable('#list_table', {
         'processing': true,
         'serverSide': true,
         'serverMethod': 'GET',
@@ -29,31 +29,31 @@ $(document).ready( function() {
         'language': { 'processing': 'Loading…', 'emptyTable': 'No mailboxes.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
             {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                $( "a[id|='dir-size']" ).off().on( "click", showSizes );
+                DataTable.Dom.select( "a[id|='dir-size']" ).off('click').on( "click", showSizes );
             {/if}
-            $( "a[id|='modal-dialog']" ).off().on( 'click', tt_openModalDialog );
-            $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
-            if( vm_prefs['iLength'] != $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            DataTable.Dom.select( "a[id|='modal-dialog']" ).off('click').on( 'click', tt_openModalDialog );
+            vmTooltips();
+            if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'columns': [
-            { 'data': 'username', 'render': $.fn.dataTable.render.text() },
-            { 'data': 'name',     'render': $.fn.dataTable.render.text() },
+            { 'data': 'username', 'render': DataTable.render.text() },
+            { 'data': 'name',     'render': DataTable.render.text() },
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return formatUsedQuota( row.id, row.quota_bytes, row.quota ); } },
             { 'data': 'last_login', 'orderable': false, 'render': function( d ){ return formatLastLogin( d ); } },
             {if !isset($options.defaults.list_domain.disabled) || !$options.defaults.list_domain.disabled}
-            { 'data': 'domain', 'render': $.fn.dataTable.render.text() },
+            { 'data': 'domain', 'render': DataTable.render.text() },
             {/if}
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return formatActive( row.id, row.active ); } },
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return formatControlls( row.id ); } }
         ]
     });
     {else}
-    oDataTable = $( '#list_table' ).dataTable({
+    oDataTable = new DataTable('#list_table', {
         'drawCallback': function() {
-            if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            if( vm_prefs['iLength'] !=  DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
@@ -79,14 +79,14 @@ $(document).ready( function() {
 }); // document onready
 
 function toggleActive(elid, id) {
-    ossToggle( $( '#' + elid ), "{genUrl controller='mailbox' action='ajax-toggle-active'}", { "mid": id, "csrf": "{$csrfToken}" } );
+    ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='mailbox' action='ajax-toggle-active'}", { "mid": id, "csrf": "{$csrfToken}" } );
 };
 
 {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
     function showSizes( event ) {
         event.preventDefault();
         // data-sizes layout (Dovecot quota-clone): bytes|multiplier|size_multiplier|quota_limit|messages
-        data = $( event.target ).attr( 'data-sizes' ).split( '|' );
+        data = DataTable.Dom.select( event.target ).attr( 'data-sizes' ).split( '|' );
         mdirsize = data[0] / data[1];
         msg =  "<table class=\"table\"><thead>";
         msg += "<tr><th>Source:</th><td>Live (Dovecot quota-clone)</td></tr></thead>";
@@ -119,26 +119,26 @@ function toggleActive(elid, id) {
     function getEntries( event ) {
         event.preventDefault();
 
-        if( jQuery.inArray( event.which, ignore_keys ) != -1 )
+        if( ignore_keys.indexOf( event.which ) != -1 )
             return;
          
         clearTimeout( timeOut );    
         
-        if( String( $( event.target ).val() ).trim().length >= str_len )
+        if( String( DataTable.Dom.select( event.target ).val() ).trim().length >= str_len )
         { 
             timeOut = setTimeout( function() { 
-                $('body').css('cursor', 'wait');
+                DataTable.Dom.select('body').css('cursor', 'wait');
                 setTimeout( function() {
                     vmDataTableApi( oDataTable ).clear().draw();
-                    $.ajax({
+                    ossAjax({
                       async: false,
-                      url: "{genUrl controller='mailbox' action='list-search'}/search/" + String( $( event.target ).val() ).trim(),
+                      url: "{genUrl controller='mailbox' action='list-search'}/search/" + String( DataTable.Dom.select( event.target ).val() ).trim(),
                       success: function(data){
                         if( data !== "ko" && data.substr( 0, 1 ) == "[" )
                         {
                             data = JSON.parse( data );
                             var tableApi = vmDataTableApi( oDataTable );
-                            $.each( data, function( index, row ){
+                            data.forEach( function( row, index ){
                                    tableApi.row.add([
                                         row.username,
                                         row.name,
@@ -153,7 +153,7 @@ function toggleActive(elid, id) {
                         }
                       }
                     });
-                    $('body').css('cursor', 'default');
+                    DataTable.Dom.select('body').css('cursor', 'default');
                 }, 300);
             }, 500 );
         }
@@ -312,8 +312,8 @@ function toggleActive(elid, id) {
 // from `document` also covers the rows the DataTables renderers build after page
 // load, which per-element binding at ready-time would miss.
 //
-jQuery( document ).on( 'click', '[data-toggle-active]', function() {
-    var id = jQuery( this ).attr( 'data-toggle-active' );
+DataTable.Dom.select( document ).on( 'click', '[data-toggle-active]', function() {
+    var id = DataTable.Dom.select( this ).attr( 'data-toggle-active' );
     toggleActive( 'toggle-active-' + id, id );
 } );
 
@@ -328,31 +328,31 @@ jQuery( document ).on( 'click', '[data-toggle-active]', function() {
 // moment it is injected. The POST target is read from the form's own action
 // attribute rather than templated in, so no per-fragment data is needed.
 //
-jQuery( document ).on( 'change', '#type', function() {
-    var other = jQuery( this ).val() == "other";
-    jQuery( '#email' ).prop( 'required', other );
+DataTable.Dom.select( document ).on( 'change', '#type', function() {
+    var other = DataTable.Dom.select( this ).val() == "other";
+    DataTable.Dom.select( '#email' ).prop( 'required', other );
     if( other )
-        jQuery( '#other_email' ).slideDown( "slow" );
+        DataTable.Dom.select( '#other_email' ).show();
     else
-        jQuery( '#other_email' ).slideUp( "slow" );
+        DataTable.Dom.select( '#other_email' ).hide();
 } );
 
-jQuery( document ).on( 'click', '#modal_dialog_save', function() {
-    var form = jQuery( '#email_settings_form' );
+DataTable.Dom.select( document ).on( 'click', '#modal_dialog_save', function() {
+    var form = DataTable.Dom.select( '#email_settings_form' );
     if( form.length === 0 )
         return;
 
     if( !form[0].reportValidity() )
         return;
 
-    tt_throbber( 32, 14, 1.8 ).appendTo( jQuery( '#esfooter' ).get(0) ).start();
+    tt_throbber( 32, 14, 1.8 ).appendTo( DataTable.Dom.select( '#esfooter' ).get(0) ).start();
 
-    jQuery('#modal_dialog_save').prop('disabled', true ).addClass( 'disabled' );
-    jQuery('#modal_dialog_cancel').prop('disabled', true ).addClass( 'disabled' );
+    DataTable.Dom.select('#modal_dialog_save').prop('disabled', true ).addClass( 'disabled' );
+    DataTable.Dom.select('#modal_dialog_cancel').prop('disabled', true ).addClass( 'disabled' );
 
-    jQuery.ajax({
+    ossAjax({
         url: form.attr( 'action' ),
-        data: form.serialize(),
+        data: new URLSearchParams(new FormData(form.get(0))).toString(),
         async: true,
         cache: false,
         type: 'POST',
@@ -367,7 +367,7 @@ jQuery( document ).on( 'click', '#modal_dialog_save', function() {
                 location.reload();
             }
             else if( data.substring(0, 26) == '<div class="modal-header">' ){
-                jQuery('#modal_dialog').html( data );
+                DataTable.Dom.select('#modal_dialog').html( data );
             }
             else {
                 dialog.hide();
@@ -379,7 +379,7 @@ jQuery( document ).on( 'click', '#modal_dialog_save', function() {
 } );
 
 // The fragment's Close button; previously bound inline on re-render only.
-jQuery( document ).on( 'click', '#modal_dialog_cancel', function() {
+DataTable.Dom.select( document ).on( 'click', '#modal_dialog_cancel', function() {
     if( typeof dialog !== 'undefined' && dialog )
         dialog.hide();
 } );

@@ -37,6 +37,75 @@
 // ViMbAdmin cookies
 //****************************************************************************
 
+function vmReady(callback)
+{
+    if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', callback, { once: true });
+    else
+        callback();
+}
+
+function vmTooltips()
+{
+    ['.have-tooltip', '.have-tooltip-below', '.have-tooltip-long'].forEach(function(selector) {
+        document.querySelectorAll(selector).forEach(function(element) {
+            var previous = bootstrap.Tooltip.getInstance(element);
+            if (previous) previous.dispose();
+            var options = { html: true, trigger: 'hover', placement: 'top' };
+            if (selector !== '.have-tooltip-long') options.delay = { show: 500, hide: 2 };
+            if (selector === '.have-tooltip-below') options.placement = 'bottom';
+            new bootstrap.Tooltip(element, options);
+        });
+    });
+}
+
+/** Native transport with the existing timeout, text/JSON and form wire contract. */
+function ossAjax(options)
+{
+    var xhr = new XMLHttpRequest();
+    var method = (options.type || 'GET').toUpperCase();
+    var url = new URL(options.url, document.baseURI);
+    var data = typeof options.data === 'string' ? options.data
+        : DataTable.ajax.serialize(options.data || {}).replace(/%20/g, '+');
+    if (method === 'GET' || method === 'HEAD') {
+        if (data) url.search += (url.search ? '&' : '') + data;
+        if (options.cache === false) url.searchParams.set('_', String(Date.now()));
+        data = null;
+    }
+    xhr.open(method, url.href, options.async !== false);
+    if (data !== null) xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+    if (url.origin === location.origin) xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.setRequestHeader('Accept', options.dataType === 'json'
+        ? 'application/json, text/javascript, */*; q=0.01' : '*/*');
+    if (options.async !== false) xhr.timeout = options.timeout || 0;
+    var finished = false;
+    function finish(status) {
+        if (finished) return;
+        finished = true;
+        var value = xhr.responseText;
+        if (status === 'success' && (options.dataType === 'json'
+            || (!options.dataType && /\bjson\b/i.test(xhr.getResponseHeader('Content-Type') || '')))) {
+            try { value = JSON.parse(value); }
+            catch (error) { status = 'parsererror'; }
+        }
+        try {
+            if (status === 'success') {
+                if (options.success) options.success(value, status, xhr);
+            }
+            else if (options.error) options.error(xhr, status, xhr.statusText);
+        }
+        finally {
+            if (options.complete) options.complete(xhr, status);
+        }
+    }
+    xhr.onload = function() { finish(xhr.status >= 200 && xhr.status < 300 || xhr.status === 304 ? 'success' : 'error'); };
+    xhr.onerror = function() { finish('error'); };
+    xhr.ontimeout = function() { finish('timeout'); };
+    xhr.onabort = function() { finish('abort'); };
+    xhr.send(data || null);
+    return xhr;
+}
+
 var vm_cookie_options = {
     'expires': 90,
     'path': "/",
@@ -50,7 +119,7 @@ var vm_prefs = {
 };
 
 /**
- * Read or write the JSON preferences cookie without legacy jQuery plugins.
+ * Read or write the JSON preferences cookie with native browser APIs.
  *
  * The cookie value and attributes deliberately match the retired helper so
  * existing installations retain their saved preferences across the upgrade.
@@ -58,7 +127,7 @@ var vm_prefs = {
 function vmPrefsCookie( key, value, options )
 {
     if( arguments.length > 1 ) {
-        options = $.extend( {}, options );
+        options = Object.assign( {}, options );
 
         if( value === null || value === undefined )
             options.expires = -1;
@@ -109,16 +178,16 @@ if( cprefs != null )
 
 
 
-$( 'document' ).ready( function(){
+vmReady( function(){
 
 	// Activate the modal dialog pop up
-    $( "a[id|='modal-dialog']" ).on( 'click', tt_openModalDialog );
+    DataTable.Dom.select( "a[id|='modal-dialog']" ).on( 'click', tt_openModalDialog );
 
-    $("[rel=popover]").popover( { html: true } );
+    document.querySelectorAll('[rel=popover]').forEach(function(el) {
+        bootstrap.Popover.getOrCreateInstance(el, { html: true });
+    });
 
-    $( '.have-tooltip' ).tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
-    $( '.have-tooltip-below' ).tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover', placement: 'bottom' } );
-    $( '.have-tooltip-long' ).tooltip( { html: true, trigger: 'hover', placement: 'top' } );
+    vmTooltips();
 
 });
 
@@ -148,26 +217,25 @@ function tt_throbber( size, lines, strokewidth, fallback )
     // vb-throbber marks the spinners this wrapper owns. The error handler tears
     // down throbbers by that class, never by the generic Bootstrap utility
     // class, so an unrelated spinner elsewhere on the page survives.
-    var $el = $('<div></div>')
+    var el = DataTable.Dom.create('div')
         .addClass('spinner-border')
         .addClass('vb-throbber')
         .addClass(sizeClass)
         .attr('role', 'status')
-        .append($('<span></span>').addClass('visually-hidden').text('Loading...'));
+        .append(DataTable.Dom.create('span').addClass('visually-hidden').text('Loading...'));
 
-    // Return a controller object that survives jQuery DOM operations like appendTo
     var controller = {
-        $el: $el,
+        el: el,
         appendTo: function(target) {
-            this.$el.appendTo(target);
+            this.el.appendTo(target);
             return this;
         },
         start: function() {
             return this;
         },
         stop: function() {
-            var el = this.$el;
-            el.fadeOut(750, function() {
+            var el = this.el;
+            el.transition({ opacity: 0 }, 750, 'ease', function() {
                 el.remove();
             });
             return this;
@@ -195,7 +263,7 @@ function tt_throbber( size, lines, strokewidth, fallback )
  */
 function ossToggle( e, Url, data, delElement )
 {
-    e.off();
+    e.off('click');
 
     if( e.hasClass( 'disabled' ) )
         return;
@@ -209,11 +277,11 @@ function ossToggle( e, Url, data, delElement )
         e.removeClass( "btn-success" ).prop( 'disabled', true );
     }
 
-    var Throb = tt_throbber( 18, 10, 1, 'images/throbber_16px.gif' ).appendTo( $( '#throb-' + e.attr( 'id' ) ).get(0) ).start();
+    var Throb = tt_throbber( 18, 10, 1, 'images/throbber_16px.gif' ).appendTo( DataTable.Dom.select( '#throb-' + e.attr( 'id' ) ).get(0) ).start();
 
     var ok = false;
 
-    $.ajax({
+    ossAjax({
         url: Url,
         data: data,
         async: true,
@@ -238,14 +306,16 @@ function ossToggle( e, Url, data, delElement )
                 e.html( "No" ).addClass( "btn-danger" ).prop( 'disabled', false );
             }
 
-            $( '#throb-' + e.attr( 'id' ) ).html( "" );
+            DataTable.Dom.select( '#throb-' + e.attr( 'id' ) ).html( "" );
 
             e.on( 'click', function( event ){
                 ossToggle( e, Url, data, delElement );
             });
 
             if( delElement && ok ) {
-            	$( delElement ).hide( 'slow', function(){ $( delElement ).remove() } );
+                DataTable.Dom.select( delElement ).transition({ opacity: 0 }, 600, 'ease', function() {
+                    DataTable.Dom.select( delElement ).remove();
+                });
             }
 
         }
@@ -262,72 +332,72 @@ function ossToggle( e, Url, data, delElement )
  * When form is load the throbber is replaced by it. If ajax gets en error the
  * ossAjaxErrorHandler is called.
  *
- * @param event event Its jQuery event, needed to prevent element from default actions.
+ * @param event event The browser event, needed to prevent element from default actions.
  */
 function tt_openModalDialog(event) {
 
     event.preventDefault();
 
-    if( $( event.target ).is( "i" ) )
-        element = $( event.target ).parent();
+    if( DataTable.Dom.select( event.target ).is( "i" ) )
+        element = DataTable.Dom.select( event.target ).parent();
     else
-        element = $( event.target );
+        element = DataTable.Dom.select( event.target );
 
 
     id = element.attr( 'id' ).substr( element.attr( 'id' ).lastIndexOf( '-' ) + 1 );
 
     if( id.substring( 0, 4 ) == "wide" )
     {
-        $( '#modal_dialog_shell .modal-dialog' ).addClass( 'modal-wide' );
-        $( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-email' );
+        DataTable.Dom.select( '#modal_dialog_shell .modal-dialog' ).addClass( 'modal-wide' );
+        DataTable.Dom.select( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-email' );
     }
     else if( id.substring( 0, 5 ) == "email" )
     {
-        $( '#modal_dialog_shell .modal-dialog' ).addClass( 'modal-email' );
-        $( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-wide' );
+        DataTable.Dom.select( '#modal_dialog_shell .modal-dialog' ).addClass( 'modal-email' );
+        DataTable.Dom.select( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-wide' );
     }
     else
     {
-        $( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-wide' );
-        $( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-email' );
+        DataTable.Dom.select( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-wide' );
+        DataTable.Dom.select( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-email' );
     }
 
-    var modalShell = $( '#modal_dialog_shell' );
+    var modalShell = DataTable.Dom.select( '#modal_dialog_shell' );
     var loadingLabel = element.attr( 'aria-label' ) || element.attr( 'title' )
         || element.attr( 'data-bs-original-title' );
     if( typeof loadingLabel !== 'string' || loadingLabel.trim() === '' )
         loadingLabel = 'Loading dialog';
-    modalShell.removeAttr( 'aria-labelledby' ).attr( 'aria-label', loadingLabel );
+    modalShell.attrRemove( 'aria-labelledby' ).attr( 'aria-label', loadingLabel );
 
-    $('#modal_dialog').html( '<div id="throb" style="padding-left:230px; padding-top:175px; height:275px;"></div>' );
+    DataTable.Dom.select('#modal_dialog').html( '<div id="throb" style="padding-left:230px; padding-top:175px; height:275px;"></div>' );
 
 
-    var Throb = tt_throbber( 100, 20, 1.8 ).appendTo( $( '#throb' ).get(0) ).start();
+    var Throb = tt_throbber( 100, 20, 1.8 ).appendTo( DataTable.Dom.select( '#throb' ).get(0) ).start();
 
     dialog = ossModal( '#modal_dialog_shell' );
 
-    $.ajax({
+    ossAjax({
         url: element.attr( 'href' ) ,
         async: true,
         cache: false,
         type: 'POST',
         timeout: 10000,
         success:    function(data) {
-                        $('#modal_dialog').html( data );
+                        DataTable.Dom.select('#modal_dialog').html( data );
                         var modalTitle = modalShell.find( '.modal-title' ).first();
                         var modalTitleId = modalTitle.attr( 'id' );
                         var modalTitleText = modalTitle.text();
                         var modalTitleIdIsToken = typeof modalTitleId === 'string'
                             && modalTitleId !== '' && !/[\t\n\f\r ]/.test( modalTitleId );
-                        var matchingIds = $( '[id]' ).filter( function() {
-                            return this.id === modalTitleId;
+                        var matchingIds = DataTable.Dom.select( '[id]' ).filter( function(node) {
+                            return node.id === modalTitleId;
                         } ).length;
                         if( modalTitle.length && modalTitleIdIsToken
                             && modalTitleText.trim() !== ''
                             && matchingIds === 1 )
-                            modalShell.attr( 'aria-labelledby', modalTitleId ).removeAttr( 'aria-label' );
-                        $( '.modal-body' ).scrollTop( 0 );
-                        $( '#modal_dialog_cancel' ).on( 'click', function(){
+                            modalShell.attr( 'aria-labelledby', modalTitleId ).attrRemove( 'aria-label' );
+                        DataTable.Dom.select( '.modal-body' ).scrollTop( 0 );
+                        DataTable.Dom.select( '#modal_dialog_cancel' ).on( 'click', function(){
                             dialog.hide();
                         });
                      },
@@ -349,11 +419,11 @@ function tt_openModalDialog(event) {
  */
 function ossAjaxErrorHandler( XMLHttpRequest, textStatus, errorThrown )
 {
-    if( $('#modal_dialog_shell:visible').length )
+    if( DataTable.Dom.select('#modal_dialog_shell').isVisible() )
     {
-        if( $('#modal_dialog_save').length ){
-            $('#modal_dialog_save').prop( 'disabled', false ).removeClass( 'disabled' );
-            $('#modal_dialog_cancel').prop( 'disabled', false ).removeClass( 'disabled' );
+        if( DataTable.Dom.select('#modal_dialog_save').length ){
+            DataTable.Dom.select('#modal_dialog_save').prop( 'disabled', false ).removeClass( 'disabled' );
+            DataTable.Dom.select('#modal_dialog_cancel').prop( 'disabled', false ).removeClass( 'disabled' );
         }
         else
         {
@@ -364,12 +434,12 @@ function ossAjaxErrorHandler( XMLHttpRequest, textStatus, errorThrown )
         }
     }
 
-    if( $('canvas').length ){
-        $('canvas').remove();
+    if( DataTable.Dom.select('canvas').length ){
+        DataTable.Dom.select('canvas').remove();
     }
 
-    if( $('.vb-throbber').length ){
-        $('.vb-throbber').remove();
+    if( DataTable.Dom.select('.vb-throbber').length ){
+        DataTable.Dom.select('.vb-throbber').remove();
     }
     ossAddMessage( 'An unexpected error occurred.', 'danger', true );
 }
@@ -396,32 +466,32 @@ function ossAddMessage( msg, type, handled )
                                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>\
                                     '+ msg + '</div>';
 
-    if( $('.modal-body:visible').length && handled )
+    if( DataTable.Dom.select('.modal-body').isVisible() && handled )
     {
-        $('.modal-body').prepend( msgbox );
+        DataTable.Dom.select('.modal-body').prepend( msgbox );
 
 
     }
-    else if( $('.page-header').length )
+    else if( DataTable.Dom.select('.page-header').length )
     {
-        $('.page-header').after( msgbox );
+        DataTable.Dom.select('.page-header').each(function(el) { el.insertAdjacentHTML('afterend', msgbox); });
 
     }
-    else if( $('.page-content').length )
+    else if( DataTable.Dom.select('.page-content').length )
     {
-        $('.page-content').prepend( msgbox );
+        DataTable.Dom.select('.page-content').prepend( msgbox );
 
     }
-    else if( $( ".container" ).length )
+    else if( DataTable.Dom.select( ".container" ).length )
     {
-        $('.container').before( msgbox );
+        DataTable.Dom.select('.container').each(function(el) { el.insertAdjacentHTML('beforebegin', msgbox); });
     }
-    else if( $('#main').length )
+    else if( DataTable.Dom.select('#main').length )
     {
-        $('#main').prepend( msgbox );
+        DataTable.Dom.select('#main').prepend( msgbox );
     }
 
-    $( "#oss-message-" + rand ).alert();
+    bootstrap.Alert.getOrCreateInstance(document.getElementById('oss-message-' + rand));
 }
 
 /**
@@ -439,20 +509,20 @@ function ossAddMessage( msg, type, handled )
  */
 function ossJscriptFieldValidator( fieldName, email )
 {
-    if( $( '#' + fieldName ).val() != "" )
+    if( DataTable.Dom.select( '#' + fieldName ).val() != "" )
     {
         if( email )
         {
-            if( ossValidateEmail( $( '#' + fieldName ).val() ) )
+            if( ossValidateEmail( DataTable.Dom.select( '#' + fieldName ).val() ) )
             {
-               $( '#div-form-' + fieldName ).removeClass( 'error' );
-               $( '#help-' + fieldName ).html( "" );
+               DataTable.Dom.select( '#div-form-' + fieldName ).removeClass( 'error' );
+               DataTable.Dom.select( '#help-' + fieldName ).html( "" );
             }
         }
         else
         {
-            $( '#div-form-' + fieldName ).removeClass( 'error' );
-            $( '#help-' + fieldName ).html( "" );
+            DataTable.Dom.select( '#div-form-' + fieldName ).removeClass( 'error' );
+            DataTable.Dom.select( '#help-' + fieldName ).html( "" );
         }
     }
 }
@@ -473,11 +543,11 @@ function addPluginTab( title, id )
 
 	    var tab = "<li><a data-bs-toggle=\"tab\"";
 	    
-	    if( $( "#" + id ).has( ".error" ).length )
+	    if( DataTable.Dom.select( "#" + id ).find( '.error' ).length )
 	        tab += " class=\"text-danger\"";
 	    
 	    tab += " href=\"#" + id + "\">" + title + "</a></li>\n";
-	    $( "#plugin_tabs" ).show().append( tab );
+	    DataTable.Dom.select( "#plugin_tabs" ).show().append( tab );
 }
 
 
@@ -508,8 +578,8 @@ function ossValidateEmail( email)
  */
 function randPasword( len, id )
 {
-    $( '#' + id ).val( randomPassword( len ) );
-    $( '#' + id ).trigger( 'blur' );
+    DataTable.Dom.select( '#' + id ).val( randomPassword( len ) );
+    DataTable.Dom.select( '#' + id ).trigger( 'blur' );
 }
 
 
@@ -519,319 +589,104 @@ function randPasword( len, id )
 
 
 /**
- * Report an Ajax failure the way DataTables' own _fnLog() would.
- *
- * 2.x exposes no internals at all -- `$.fn.dataTableExt.oApi` carried
- * _fnLog/_fnCallbackFire/_fnProcessingDisplay under 1.x, and `ext.internal` is
- * gone -- so a caller that runs its own transport has to reproduce the public
- * half of that reporting itself: build a real event carrying `e.dt` (the way
- * `_fnCallbackFire` does) and trigger the `.dt`-namespaced `dt-error` event,
- * honour `ext.errMode`, and use the same technical-note numbers the core uses
- * (1 for a malformed JSON body, 7 for a transport failure). A falsy/unhandled
- * mode reports nothing further, matching `_fnLog`'s own silence outside
- * alert/throw/function -- so `errMode: 'none'` stays silent here too.
+ * Emit the DataTables 3 native error event, preserving detached-table bubbling.
+ * Consumers cancel xhr errors with preventDefault() (or return false via Api.on).
  */
 function vmDataTableLogAjaxError( api, technicalNote, message )
 {
-	var settings = api.settings()[0];
-	var ext      = $.fn.dataTable.ext;
-	var mode     = ext.sErrMode || ext.errMode;
-	var full     = 'DataTables warning: table id=' + settings.sTableId
-		+ ' - ' + message + '. For more information about this error, please see '
-		+ 'https://datatables.net/tn/' + technicalNote;
-
-	var e     = $.Event( 'dt-error.dt' );
-	var table = $( settings.nTable );
-	e.dt = settings.api;
-
-	table.trigger( e, [ settings, technicalNote, message ] );
-
-	// Stand in for _fnCallbackFire's bubble fallback: if the table is not
-	// yet attached to the document, the trigger above never reaches `body`,
-	// so re-fire there to simulate the bubble. Two deliberate differences
-	// from the core:
-	//
-	//   - we dispatch a FRESH event, because a jQuery.Event carries
-	//     isPropagationStopped() as instance state, so re-triggering the
-	//     same object is a silent no-op once any handler on the detached
-	//     table has stopped propagation -- exactly the case this fallback
-	//     exists to serve;
-	//   - we skip the fallback entirely when propagation was stopped. The
-	//     core re-fires unconditionally, which still reaches handlers bound
-	//     directly on `body`; we treat a stopped propagation as stopped,
-	//     which is what an attached table would have done.
-	//
-	// The fresh event also means a body-bound handler's return value lands
-	// on `bubbled` and is discarded, where the core's single re-fired object
-	// would have carried it back in `e.result`. That is acceptable here only
-	// because `dt-error` has no claim channel -- nothing reads the return.
-	// Do NOT copy this shape to an event whose return value is consulted
-	// (the `xhr.dt` trigger below is exactly such a case).
-	if ( table.parents( 'body' ).length === 0 && ! e.isPropagationStopped() ) {
-		var bubbled = $.Event( 'dt-error.dt' );
-		bubbled.dt = settings.api;
-
-		$( 'body' ).trigger( bubbled, [ settings, technicalNote, message ] );
-	}
-
-	if ( typeof mode === 'function' ) {
-		mode( settings, technicalNote, full );
-	}
-	else if ( mode === 'throw' ) {
-		throw new Error( full );
-	}
-	else if ( mode === 'alert' ) {
-		alert( full );
-	}
+    var settings = api.settings()[0];
+    var mode = DataTable.ext.sErrMode || DataTable.ext.errMode;
+    var full = 'DataTables warning: table id=' + api.table().node().id
+        + ' - ' + message + '. For more information about this error, please see '
+        + 'https://datatables.net/tn/' + technicalNote;
+    var table = DataTable.Dom.select(api.table().node());
+    var stopped = false;
+    var event = table.trigger('dt-error.dt', true,
+        [settings, technicalNote, message], {
+            dt: settings.api,
+            stopPropagation: function() {
+                stopped = true;
+                Event.prototype.stopPropagation.call(this);
+            },
+            stopImmediatePropagation: function() {
+                stopped = true;
+                Event.prototype.stopImmediatePropagation.call(this);
+            }
+        }, true)[0];
+    if (!table.isAttached() && !stopped) {
+        DataTable.Dom.select(document.body).trigger('dt-error.dt', true,
+            [settings, technicalNote, message], { dt: settings.api });
+    }
+    if (typeof mode === 'function') mode(settings, technicalNote, full);
+    else if (mode === 'throw') throw new Error(full);
+    else if (mode === 'alert') alert(full);
 }
 
 /**
- * Build the shared `ajax` option for a server-side list table.
- *
- * Replaces the 1.9 `sAjaxSource` + `fnServerData` pair, which DataTables 2.x
- * removed outright (zero occurrences in 2.3.4).
- *
- * Returns the FUNCTION form of `ajax`, not the object form, because this
- * helper has to be able to DECLINE a request: a search shorter than `minimum`
- * must resolve to an empty result set without touching the server. An
- * `ajax: { data: ... }` callback can only rewrite parameters, so blanking the
- * search term there would still issue the XHR and the server would answer
- * with the full unfiltered page -- the opposite of the intent, and with no
- * empty row for the hint below to be written into. 2.3.4's `preXhr` cannot
- * stand in for this either: its handlers' return value is discarded
- * (_fnBuildAjax fires it purely to let plug-ins mutate the request), so it
- * offers no way to cancel.
- *
- * `settings.oLanguage` is required: the core always supplies it (the per-table deep
- * copy is at 150-jquery.datatables.js:174 and the language merge onto it at
- * 150-jquery.datatables.js:453-455), so a caller that builds a
- * settings object by hand has to provide one too.
- *
- * @param {string} source  list-data URL.
- * @param {number} minimum minimum search string length.
- * @return {function} A DataTables 2.x `ajax` option.
+ * Decline short searches without sending an unfiltered request.
+ * DataTables 3 copies language into settings.language using camelCase keys.
  */
 function vmDataTableServerData( source, minimum )
 {
-	return function( data, callback, settings )
-	{
-		var api = new $.fn.dataTable.Api( settings );
-		var oLanguage = settings.oLanguage;
-
-		// PHP trim excludes form feed and Unicode whitespace such as NBSP.
-		var search = ( data.search && data.search.value )
-			? String( data.search.value ).replace( /^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '' )
-			: '';
-
-		// Match DataTableQuery's leading contains sigil and PHP ltrim set.
-		// Keep the raw request unchanged so the server still sees the sigil.
-		var searchTerm = search.charAt( 0 ) === '*'
-			? search.slice( 1 ).replace( /^[ \t\n\r\0\x0B]+/, '' )
-			: search;
-
-		// Count a surrogate pair as one character, so an astral
-		// character is not mistaken for a long enough search.
-		var searchLength = searchTerm
-			.replace( /[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_' ).length;
-
-		if ( searchLength > 0 && searchLength < minimum ) {
-			// Captured per call, so the restore is faithful to whatever
-			// this table's view configured (e.g. list.js's
-			// `language.emptyTable`) rather than a hard-coded guess.
-			var originalZeroRecords = oLanguage.sZeroRecords;
-			var originalEmptyTable  = oLanguage.sEmptyTable;
-
-			// The core's `_emptyRow` only reads `sZeroRecords` when
-			// `fnRecordsTotal()` is non-zero; a declined request answers
-			// `recordsTotal: 0`, so it falls through to `sEmptyTable`
-			// instead (when one is configured, as every list.js view's
-			// `language.emptyTable` does) -- so both have to carry the
-			// hint, or it never renders on this path.
-			//
-			// Set the hint text BEFORE calling back, so it renders in the
-			// first paint instead of flashing the view's configured
-			// `emptyTable`/`zeroRecords` text (e.g. "No log entries.")
-			// first.
-			var hint = 'Enter at least ' + minimum
-				+ ' characters to search.';
-			oLanguage.sZeroRecords = hint;
-			oLanguage.sEmptyTable  = hint;
-
-			// `callback` drives _fnAjaxUpdateDraw -> _fnDraw ->
-			// _emptyRow synchronously, so the hint has already been
-			// painted by the time this returns and the borrowed keys can
-			// go straight back. Restoring here rather than on the next
-			// call is what keeps the mutation from outliving the draw it
-			// was for.
-			//
-			// `finally`, because that same synchronous draw fires
-			// `aoDrawCallback` (150-jquery.datatables.js:3539) and then
-			// _fnInitComplete: a view's own draw callback, a column
-			// renderer or a resize handler throwing anywhere in there
-			// would otherwise skip the restore and leave the search hint
-			// as this table's PERMANENT empty-table text.
-			try {
-				callback( {
-					draw:            data.draw,
-					recordsTotal:    0,
-					recordsFiltered: 0,
-					data:            []
-				} );
-			}
-			finally {
-				oLanguage.sZeroRecords = originalZeroRecords;
-				oLanguage.sEmptyTable  = originalEmptyTable;
-			}
-
-			return;
-		}
-
-		return $.ajax( {
-			url:      source,
-			type:     settings.sServerMethod || 'GET',
-			dataType: 'json',
-			cache:    false,
-			data:     data,
-			success:  callback,
-			error:    function( xhr, error ) {
-				// Mirrors the core's own baseAjax error handler: let an
-				// `xhr` listener claim the failure first, and otherwise log
-				// it, then always clear the processing indicator.
-				//
-				// The core suppresses when any entry of `ret` is true
-				// (150-jquery.datatables.js:4230). For EVENT listeners that
-				// array holds exactly one entry, `e.result`
-				// (_fnCallbackFire, 150-jquery.datatables.js:6705) -- the core
-				// passes null for `callbackArr` on this path, so its other
-				// `ret` entries never materialise. `e.result` is jQuery's
-				// last-non-undefined handler return, so a later listener
-				// returning false un-claims what an earlier one claimed -- in
-				// the core exactly as here. Matching that quirk is deliberate:
-				// this shim is a bridge, and behaving differently from the
-				// engine it wraps would be the worse surprise.
-				var event = $.Event( 'xhr.dt' );
-				event.dt  = settings.api;
-
-				$( settings.nTable ).trigger(
-					event, [ settings, null, xhr ]
-				);
-
-				if ( event.result !== true ) {
-					if ( error === 'parsererror' ) {
-						vmDataTableLogAjaxError(
-							api, 1, 'Invalid JSON response'
-						);
-					}
-					else if ( xhr.readyState === 4 ) {
-						vmDataTableLogAjaxError(
-							api, 7, 'Ajax error'
-						);
-					}
-				}
-
-				api.processing( false );
-			}
-		} );
-	};
+    return function( data, callback, settings )
+    {
+        var api = new DataTable.Api(settings);
+        var language = settings.language;
+        var search = (data.search && data.search.value)
+            ? String(data.search.value).replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '')
+            : '';
+        var searchTerm = search.charAt(0) === '*'
+            ? search.slice(1).replace(/^[ \t\n\r\0\x0B]+/, '') : search;
+        var searchLength = searchTerm.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '_').length;
+        if (searchLength > 0 && searchLength < minimum) {
+            var originalZeroRecords = language.zeroRecords;
+            var originalEmptyTable = language.emptyTable;
+            var hint = 'Enter at least ' + minimum + ' characters to search.';
+            language.zeroRecords = hint;
+            language.emptyTable = hint;
+            try {
+                callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
+            }
+            finally {
+                language.zeroRecords = originalZeroRecords;
+                language.emptyTable = originalEmptyTable;
+            }
+            return;
+        }
+        return ossAjax({
+            url: source, type: settings.serverMethod || 'GET',
+            dataType: 'json', cache: false, data: data, success: callback,
+            error: function(xhr, error) {
+                var event = DataTable.Dom.select(api.table().node()).trigger(
+                    'xhr.dt', true, [settings, null, xhr], { dt: settings.api }, true)[0];
+                try {
+                    if (!event.defaultPrevented) {
+                        if (error === 'parsererror')
+                            vmDataTableLogAjaxError(api, 1, 'Invalid JSON response');
+                        else if (xhr.readyState === 4)
+                            vmDataTableLogAjaxError(api, 7, 'Ajax error');
+                    }
+                }
+                finally {
+                    api.processing(false);
+                }
+            }
+        });
+    };
 }
 
-/* ------------------------------------------------------------------------- */
-
-/**
- * Get the DataTables 2.x API instance for a table.
- *
- * DataTables 1.x returned an object carrying the legacy `fn*` methods
- * (`fnClearTable`, `fnAddData`, ...) directly from `$( sel ).dataTable()`. 2.x
- * removed that method set -- only the private `_fnClearTable`/`_fnAddData`
- * internals remain -- so those calls have to go through the modern API
- * (`clear()`, `row.add()`, `draw()`) instead.
- *
- * `$.fn.dataTable.Api` accepts the table node, selector or an existing
- * instance, so this works whether it is handed the object returned by
- * `.dataTable()` or a plain selector.
- *
- * @param {*} table Table node, selector, or DataTables instance.
- * @return {object} A DataTables 2.x API instance.
- */
 function vmDataTableApi( table )
 {
-        return new $.fn.dataTable.Api( table );
+    return new DataTable.Api(table);
 }
 
-/* Bootstrap 5 pagination.
- *
- * 1.x needed a hand-written pager plugin here: it registered a `bootstrap`
- * entry on `$.fn.dataTableExt.oPagination` implementing the `fnInit`/`fnUpdate`
- * contract, plus an `fnPagingInfo` API method, to emit a
- * `<ul class="pagination"><li>` structure with a five-number window and
- * prev/next controls.
- *
- * DataTables 2.x provides that structure natively. `ext.pager` entries are now
- * plain functions returning a button-name list, and the rendering is done by
- * `ext.renderer.pagingButton` / `ext.renderer.pagingContainer` -- both of which
- * the vendored public/js/152-jquery.datatables.bootstrap5.js registers under
- * the name `bootstrap`, producing exactly the same
- * `<ul class="pagination"><li class="page-item"><button class="page-link">`
- * markup with `active`/`disabled` states. The built-in `simple_numbers` pager
- * supplies the previous / numbers / next button set, and
- * `ext.pager.numbers_length` carries the number window the old plugin
- * hard-coded as `iListLength`.
- *
- * So the custom plugin is not ported -- it is replaced by the stock 2.x pager
- * plus the vendored Bootstrap 5 renderer, none of which needs the old
- * private-API coupling. It is not, however, the same visual result: the old
- * plugin emitted literal `&larr; Previous` / `Next &rarr;` arrows and always
- * rendered exactly `iListLength` numbers with no ellipsis. 2.x's
- * `simple_numbers` pager emits plain Previous/Next text and inserts
- * `ellipsis` spans once the page count exceeds the number window -- that
- * ellipsis behaviour is new in 2.x, not a port of anything the old plugin
- * did. The arrows are restored below via `language.paginate.previous`/`next`.
- * Rendering plain `&larr;`/`&rarr;` text as literal HTML entities is safe
- * only because the vendored BS5 renderer writes button labels with
- * `.html(content)` (public/js/152-jquery.datatables.bootstrap5.js:108); a
- * renderer that switched to `.text(content)` would surface the raw entity
- * text instead of the arrow glyph, so this pairing has to move together.
- * `fnPagingInfo` has no 2.x counterpart and is not reintroduced; the public
- * `page.info()` API supersedes it and nothing in this project called it
- * outside the deleted plugin.
- */
-$.extend( $.fn.dataTable.defaults, {
-	pagingType: 'simple_numbers',
-
-	// Restore the old plugin's literal arrows; 2.x's stock default is plain
-	// "Previous" / "Next" text.
-	language: {
-		paginate: {
-			previous: '&larr; Previous',
-			next:     'Next &rarr;'
-		}
-	},
-
-	// The server applies only order[0]; keep the UI on one sort column.
-	orderMulti: false
-} );
-
-// The old plugin hard-coded a five-number window (`iListLength = 5`). In 2.x
-// that window is `ext.pager.numbers_length` (default 7, and it must be odd),
-// read as the default for the paging feature's `buttons` option.
-$.fn.dataTable.ext.pager.numbers_length = 5;
-
-//Adding more sort filters
-jQuery.extend( jQuery.fn.dataTableExt.oSort, {
-    "num-html-pre": function ( a ) {
-        var x = String(a).replace( /<[\s\S]*?>/g, "" );
-        return parseFloat( x );
-    },
-
-    "num-html-asc": function ( a, b ) {
-        return ((a < b) ? -1 : ((a > b) ? 1 : 0));
-    },
-
-    "num-html-desc": function ( a, b ) {
-        return ((a < b) ? 1 : ((a > b) ? -1 : 0));
-    }
-} );
-
+// Keep Bootstrap pagination, five numbers, arrow labels and single-column order.
+DataTable.util.object.assignDeep(DataTable.defaults, {
+    pagingType: 'simple_numbers',
+    language: { paginate: { previous: '&larr; Previous', next: 'Next &rarr;' } },
+    orderMulti: false
+});
+DataTable.ext.pager.numbers_length = 5;
 
 //****************************************************************************
 // Delegated confirmation guard for destructive submits (VIM-D07)
@@ -850,8 +705,8 @@ jQuery.extend( jQuery.fn.dataTableExt.oSort, {
 // other blocks rapid duplicate submits while a decision is still pending.
 var ossConfirmedForms = new WeakSet();
 var ossPendingConfirmForms = new WeakSet();
-jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
-    var message = jQuery( this ).attr( 'data-confirm' );
+DataTable.Dom.select( document ).on( 'submit', 'form[data-confirm]', function( event ) {
+    var message = DataTable.Dom.select( this ).attr( 'data-confirm' );
 
     if ( typeof message !== 'string' || message === '' ) {
         return;
@@ -871,7 +726,7 @@ jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
     }
     ossPendingConfirmForms.add( form );
 
-    var submitter = event.originalEvent && event.originalEvent.submitter;
+    var submitter = event.submitter;
     ossConfirm( message, function( accepted ) {
         ossPendingConfirmForms.delete( form );
 

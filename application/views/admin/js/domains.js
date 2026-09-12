@@ -2,12 +2,12 @@ var removeDialog;
 var oDataTable;
 
 
-$(document).ready( function()
+vmReady( function()
 {
-    oDataTable = $( '#list_table' ).dataTable({
+    oDataTable = new DataTable('#list_table', {
         'drawCallback': function() {
-            if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            if( vm_prefs['iLength'] !=  DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
 
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
@@ -20,7 +20,7 @@ $(document).ready( function()
         ]
     });
 
-     $( "a[id|='remove-domain']" ).on( 'click', removeDomain );
+     DataTable.Dom.select( "a[id|='remove-domain']" ).on( 'click', removeDomain );
 
 }); // document onready
 
@@ -28,19 +28,19 @@ function removeDomain( event ){
 
     event.preventDefault();
 
-    if( $( event.target ).is( "i" ) )
-        element = $( event.target ).parent();
+    if( DataTable.Dom.select( event.target ).is( "i" ) )
+        element = DataTable.Dom.select( event.target ).parent();
     else
-        element = $( event.target );
+        element = DataTable.Dom.select( event.target );
     
-    $( "#purge_domain_name" ).text( element.attr( "ref" ) );
+    DataTable.Dom.select( "#purge_domain_name" ).text( element.attr( "ref" ) );
 
     delDialog = ossModal( '#purge_dialog' );
 
     var did = element.attr( 'id' ).replace( 'remove-domain-', '' );
-    $( '#remove_domain_form input[name="did"]' ).val( did );
+    DataTable.Dom.select( '#remove_domain_form input[name="did"]' ).val( did );
 
-    $( '#purge_dialog_cancel' ).on( 'click', function(){
+    DataTable.Dom.select( '#purge_dialog_cancel' ).on( 'click', function(){
         delDialog.hide();
     });
 };

@@ -6,13 +6,13 @@ function vmArchiveServerData( source )
     return vmDataTableServerData( source, minimum );
 }
 
-$(document).ready( function()
+vmReady( function()
 {
     {if !isset($options.defaults.server_side.pagination.archive.enable) || $options.defaults.server_side.pagination.archive.enable }
     /* Server-side processing: the full archive list is paged/sorted/searched via
        /archive/list-data, fetching only the visible page. Text cells escaped;
        action links carry the CSRF token + an inline confirm(). */
-    oDataTable = $( '#list_table' ).dataTable({
+    oDataTable = new DataTable('#list_table', {
         'processing': true,
         'serverSide': true,
         'serverMethod': 'GET',
@@ -23,15 +23,15 @@ $(document).ready( function()
         'order': [[ 4, 'desc' ]],
         'language': { 'processing': 'Loading…', 'emptyTable': 'No archives.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
-            $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
-            if( vm_prefs['iLength'] != $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            vmTooltips();
+            if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'columns': [
-            { 'data': 'username', 'render': $.fn.dataTable.render.text() },
+            { 'data': 'username', 'render': DataTable.render.text() },
             { 'data': null, 'render': function( d, t, row ){ return vmArchiveEsc( archiveStatuses[ row.status ] || row.status ); } },
-            { 'data': 'domain', 'render': $.fn.dataTable.render.text() },
+            { 'data': 'domain', 'render': DataTable.render.text() },
             // Column 3 (maildir size) has no entry in ArchiveController's
             // sortField map ([0=>'username', 1=>'status', 2=>'domain',
             // 4=>'archived_at']; no key 3), so the server's `?? 'archived_at'`
@@ -46,10 +46,10 @@ $(document).ready( function()
         ]
     });
     {else}
-    oDataTable = $( '#list_table' ).dataTable({
+    oDataTable = new DataTable('#list_table', {
         'drawCallback': function() {
-            if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            if( vm_prefs['iLength'] !=  DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
 
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
@@ -81,7 +81,7 @@ var archiveStatuses = { {foreach $statuses as $k => $v}'{$k}': "{$v|escape:'java
 var archiveAllowRestore = [ {foreach $allowRestore as $s}'{$s|escape:'javascript'}'{if !$s@last}, {/if}{/foreach} ];
 var archiveAllowDelete  = [ {foreach $allowDelete as $s}'{$s|escape:'javascript'}'{if !$s@last}, {/if}{/foreach} ];
 
-function vmArchiveEsc( s ){ return $( '<div>' ).text( s == null ? '' : s ).html(); }
+function vmArchiveEsc( s ){ return DataTable.Dom.select( '<div>' ).text( s == null ? '' : s ).html(); }
 
 function vmArchiveBytes( v )
 {
@@ -105,7 +105,7 @@ function formatArchiveControls( row )
     var jsName = htmlAttr( row.username );
     var str   = '<div class="btn-group">';
 
-    if( $.inArray( row.status, archiveAllowRestore ) != -1 )
+    if( archiveAllowRestore.indexOf( row.status ) != -1 )
         str += '<form method="post" action="{genUrl controller="archive" action="restore"}" class="archive-action-form" style="display: inline;"'
              + ' data-confirm="Restore ' + jsName + '? Recreates the mailbox if it was deleted, syncs the backed-up mail back, then removes the backup.">'
              + '<input type="hidden" name="arid" value="' + id + '" />'
@@ -113,7 +113,7 @@ function formatArchiveControls( row )
              + '<button class="btn btn-sm have-tooltip" id="restore-archive-' + id + '" title="Restore mail back into the mailbox" type="submit">'
              + '<i class="bi-arrow-repeat"></i></button></form>';
 
-    if( $.inArray( row.status, archiveAllowDelete ) != -1 )
+    if( archiveAllowDelete.indexOf( row.status ) != -1 )
         str += '<form method="post" action="{genUrl controller="archive" action="delete"}" class="archive-action-form" style="display: inline;"'
              + ' data-confirm="Permanently delete the backup for ' + jsName + '? This removes the /backups maildir and cannot be undone.">'
              + '<input type="hidden" name="arid" value="' + id + '" />'

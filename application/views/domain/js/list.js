@@ -8,12 +8,12 @@ function vmDomainServerData( source )
 }
 
 
-$(document).ready(function()
+vmReady(function()
 {
     {if !isset($options.defaults.server_side.pagination.domain.enable) || $options.defaults.server_side.pagination.domain.enable }
     /* Server-side processing: the full domain list is paged/sorted/searched via
        /domain/list-data, fetching only the visible page. Text cells escaped. */
-    oDataTable = $('#list_table').dataTable({
+    oDataTable = new DataTable('#list_table', {
         'processing': true,
         'serverSide': true,
         'serverMethod': 'GET',
@@ -23,14 +23,14 @@ $(document).ready(function()
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
         'language': { 'processing': 'Loading…', 'emptyTable': 'No domains.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
-            $( "a[id|='modal-dialog']" ).off().on( 'click', tt_openModalDialog );
-            $( '.have-tooltip' ).tooltip("destroy").tooltip( { html: true, delay: { show: 500, hide: 2 }, trigger: 'hover' } );
-            if( vm_prefs['iLength'] != $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            DataTable.Dom.select( "a[id|='modal-dialog']" ).off('click').on( 'click', tt_openModalDialog );
+            vmTooltips();
+            if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'columns': [
-            { 'data': 'name', 'render': $.fn.dataTable.render.text() },
+            { 'data': 'name', 'render': DataTable.render.text() },
             { 'data': null, 'render': function( d, t, row ){ return formatMailboxes( row.id, row.mailboxes, row.maxmailboxes ); } },
             { 'data': null, 'render': function( d, t, row ){ return formatAliases( row.id, row.aliases, row.maxaliases ); } },
             {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
@@ -38,17 +38,17 @@ $(document).ready(function()
             {/if}
             { 'data': null, 'render': function( d, t, row ){ return formatQuotaLimit( row.quota ); } },
             { 'data': null, 'render': function( d, t, row ){ return formatActive( row.id, row.active ); } },
-            { 'data': 'transport', 'render': $.fn.dataTable.render.text() },
+            { 'data': 'transport', 'render': DataTable.render.text() },
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return row.backupmx ? 'Yes' : 'No'; } },
             { 'data': 'created', 'render': function( d ){ return ( d || '' ).substr( 0, 10 ); } },
             { 'data': null, 'orderable': false, 'render': function( d, t, row ){ return formatControlls( row.id, row.name ); } }
         ]
     });
     {else}
-    oDataTable = $('#list_table').dataTable({
+    oDataTable = new DataTable('#list_table', {
         'drawCallback': function() {
-            if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+            if( vm_prefs['iLength'] !=  DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
+                vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
         'pageLength': ( typeof vm_prefs != 'undefined' && 'iLength' in vm_prefs )
@@ -74,19 +74,19 @@ $(document).ready(function()
 }); // document onready
 
 function toggleActive( elid, id) {
-    ossToggle( $( '#' + elid ), "{genUrl controller='domain' action='ajax-toggle-active'}", { "did": id, "csrf": "{$csrfToken}" } );
+    ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='domain' action='ajax-toggle-active'}", { "did": id, "csrf": "{$csrfToken}" } );
 };
 
 
 function purgeDomain( id, domain )
 {
-    $( "#purge_domain_name" ).text( domain );
+    DataTable.Dom.select( "#purge_domain_name" ).text( domain );
 
     delDialog = ossModal( '#purge_dialog' );
 
-    $( '#purge_domain_form input[name="did"]' ).val( id );
+    DataTable.Dom.select( '#purge_domain_form input[name="did"]' ).val( id );
 
-    $( '#purge_dialog_cancel' ).on( 'click', function(){
+    DataTable.Dom.select( '#purge_dialog_cancel' ).on( 'click', function(){
         delDialog.hide();
     });
 };
@@ -102,24 +102,24 @@ var ignore_keys = [ 13, 38, 40, 37, 39 ,27, 32, 17, 18, 9, 16, 20, 36, 35, 33, 3
 
 function getEntries( event ){
     event.preventDefault();
-    if( jQuery.inArray( event.which, ignore_keys ) != -1 )
+    if( ignore_keys.indexOf( event.which ) != -1 )
         return;
-     
-    clearTimeout( timeOut );    
-    if( String( $( event.target ).val() ).trim().length >= str_len ){ 
-        timeOut = setTimeout( function(){ 
-            $('body').css('cursor', 'wait');
+
+    clearTimeout( timeOut );
+    if( String( DataTable.Dom.select( event.target ).val() ).trim().length >= str_len ){
+        timeOut = setTimeout( function(){
+            DataTable.Dom.select('body').css('cursor', 'wait');
             setTimeout( function(){
                 vmDataTableApi( oDataTable ).clear().draw();
-                $.ajax({
+                ossAjax({
                   async: false,
-                  url: "{genUrl controller='domain' action='list-search'}/search/" + String( $( event.target ).val() ).trim(),
+                  url: "{genUrl controller='domain' action='list-search'}/search/" + String( DataTable.Dom.select( event.target ).val() ).trim(),
                   success: function(data){
                     if( data !== "ko" && data.substr( 0, 1 ) == "[" )
                     {
                         data = JSON.parse( data );
                         var tableApi = vmDataTableApi( oDataTable );
-                        $.each( data, function( index, row ){
+                        data.forEach( function( row, index ){
                                tableApi.row.add([
                                     row.name,
                                     formatMailboxes( row.id, row.mailboxes, row.maxmailboxes ),
@@ -139,10 +139,10 @@ function getEntries( event ){
                     }
                   }
                 });
-                $('body').css('cursor', 'default');
+                DataTable.Dom.select('body').css('cursor', 'default');
             }, 300);
         }, 500 );
-        
+
     }
     else
     {
@@ -169,7 +169,7 @@ function formatActive( id, active )
     var active_msg = active ? 'Yes': 'No';
     return '<div id="throb-toggle-active-' + id + '" style="float: right;"></div>'
         + '<span id="toggle-active-' + id + '" '
-        + 'data-toggle-active="' + id + '" class="btn btn-sm btn-' + active_class + '">' 
+        + 'data-toggle-active="' + id + '" class="btn btn-sm btn-' + active_class + '">'
         + active_msg + '</span>';
 }
 
@@ -201,8 +201,8 @@ function formatControlls( id, name )
 {
     var tmpstr = "";
     var item_id = "";
-    var href = "";       
-                    
+    var href = "";
+
     var str = '<div class="btn-group">\
             <a class="btn btn-sm have-tooltip" id="edit_domain_' + id + '" title="Edit" href="{genUrl controller="domain" action="edit"}/did/' + id + '">\
                 <i class="bi-pencil"></i>\
@@ -229,23 +229,23 @@ function formatControlls( id, name )
             {/if}
         {/foreach}
     {/if}
-     
+
     {if $user->isSuper()}
         str += '<a class="btn btn-sm have-tooltip" id="domain_admins_' + id + '" title="Administrators" href="{genUrl controller="domain" action="admins"}/did/' + id + '">\
             <i class="bi-person"></i>\
         </a>';
     {/if}
-            
+
     str += '<a class="btn btn-sm have-tooltip" id="domain_logs_' + id + '" title="Logs" href="{genUrl controller="log" action="list"}/did/' + id + '">\
                 <i class="bi-list-ul"></i>\
             </a>';
-            
+
      {if $user->isSuper()}
         str += '<span  class="btn btn-sm have-tooltip"  id="purge-domain-' + id + '" title="Purge" data-purge-domain="' + id + '" data-domain-name="' + htmlAttr( name ) + '">\
             <i class="bi-trash"></i>\
         </span>';
     {/if}
-            
+
     {if isset( $action_list_menu)}
         {assign var="action" value=$action_list_menu}
         str += '<{$action.tagName} ';
@@ -278,7 +278,7 @@ function formatControlls( id, name )
     {/if}
     str += '</div>';
     return str;
-    
+
 }
 {/if}
 
@@ -288,12 +288,12 @@ function formatControlls( id, name )
 // from `document` also covers the rows the DataTables renderers build after page
 // load, which per-element binding at ready-time would miss.
 //
-jQuery( document ).on( 'click', '[data-toggle-active]', function() {
-    var id = jQuery( this ).attr( 'data-toggle-active' );
+DataTable.Dom.select( document ).on( 'click', '[data-toggle-active]', function() {
+    var id = DataTable.Dom.select( this ).attr( 'data-toggle-active' );
     toggleActive( 'toggle-active-' + id, id );
 } );
 
-jQuery( document ).on( 'click', '[data-purge-domain]', function() {
-    var el = jQuery( this );
+DataTable.Dom.select( document ).on( 'click', '[data-purge-domain]', function() {
+    var el = DataTable.Dom.select( this );
     purgeDomain( el.attr( 'data-purge-domain' ), el.attr( 'data-domain-name' ) );
 } );

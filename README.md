@@ -172,15 +172,18 @@ sessions/CLI native and ZF1-free; `composer audit` reports **no advisories**.
 
 ### Supported browsers
 
-The admin UI ships jQuery **4.0.0** (VIM-A15.29; previously 3.7.1 + Migrate).
-jQuery 4 [dropped support for IE 10 and older, Edge Legacy, Android Browser and
-old iOS/Firefox](https://jquery.com/upgrade-guide/4.0/). It targets current
-Chrome, Firefox, Safari and Edge, and their immediately preceding major
-versions. IE 11 is still supported by jQuery 4 upstream — the shipped
-`public/js/100-jquery.js` retains its `document.documentMode` branches — but
-ViMbAdmin does not test against it, and jQuery has scheduled IE 11 removal for
-jQuery 5. Treat IE 11 as unsupported-but-not-yet-broken; anything older than
-IE 11 needs the 3.7.1 + Migrate release.
+The admin UI ships dependency-free **DataTables 3.0.3** with its matching
+Bootstrap 5 integration and **Bootstrap 5.3.8**. jQuery is no longer shipped,
+loaded or required. First-party scripts use browser and DataTables APIs.
+Unmodified upstream assets retain dormant optional jQuery interoperability;
+this is not a runtime dependency or a fallback download.
+
+The supported policy remains current Chrome, Firefox, Safari and Edge and
+their immediately preceding major versions. CI exercises Chromium, Firefox
+and WebKit with both source assets and the production bundle. DataTables 3
+[targets ES6](https://datatables.net/download/upgrade/core/3.0/upgrade#ES6-target);
+IE 11 and older browsers are unsupported. Asset versions, licences, checksums
+and packaging instructions are in [docs/ASSETS.md](docs/ASSETS.md).
 
 ---
 

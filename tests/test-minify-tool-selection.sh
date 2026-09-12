@@ -4,6 +4,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 tmp=$(mktemp -d /tmp/vimbadmin-minify-tools.XXXXXX)
 readonly tmp
+readonly generated=(
+  public/js/min.bundle-v29.js
+  public/css/min.bundle-v29.css
+  application/views/header-js.phtml
+  application/views/header-css.phtml
+)
 
 restore() {
   if [[ -f $tmp/compiler.jar ]]; then
@@ -12,12 +18,19 @@ restore() {
   if [[ -d $tmp/node_modules ]]; then
     mv "$tmp/node_modules" bin/node_modules
   fi
+  for path in "${generated[@]}"; do
+    cp "$tmp/${path//\//__}" "$path"
+  done
 }
 cleanup() {
   restore
   rm -rf -- "$tmp"
 }
 trap cleanup EXIT
+
+for path in "${generated[@]}"; do
+  cp "$path" "$tmp/${path//\//__}"
+done
 
 mv bin/compiler.jar "$tmp/compiler.jar"
 php bin/minify-bundle.php --version 29 --css-only --quiet
@@ -41,3 +54,9 @@ echo 'ok   JS-only requires no CSS tool; CSS-only rejects missing clean-css'
 
 php bin/minify-bundle.php --version 29 --quiet
 echo 'ok   combined build accepts both restored pinned tools'
+
+restore
+for path in "${generated[@]}"; do
+  cmp "$tmp/${path//\//__}" "$path"
+done
+echo 'ok   tool-selection probes preserve the committed comparison baseline'

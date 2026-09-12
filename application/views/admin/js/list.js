@@ -29,8 +29,9 @@ function toggleActive( elid, id ){
 
 function toggleSuper( elid, id ){
     ossToggle( DataTable.Dom.select( '#' + elid ), "{genUrl controller='admin' action='ajax-toggle-super'}", { "aid": id, "csrf": "{$csrfToken}" }, undefined, function( ok, on ) {
-        if( ok )
-            document.getElementById( 'admin_domains_' + id ).classList.toggle( 'd-none', on );
+        var domains = document.getElementById( 'admin_domains_' + id );
+        if( ok && domains )
+            domains.classList.toggle( 'd-none', on );
     } );
 };
 

@@ -281,9 +281,41 @@ vmReady(function () {
         if (adminRequests.length !== 6 || getComputedStyle(domains).display !== 'none') throw new Error('pending normal-admin toggle changed domains visibility');
         adminRequests[5].success('ok'); adminRequests[5].complete();
         if (getComputedStyle(domains).display !== 'inline-block') throw new Error('normal-admin domains button did not restore inline-block cascade');
+
+        // Completion can race a DataTables redraw. It must update the current
+        // row on success, ignore failure, and tolerate a fully detached row.
+        clickToggle(superControl);
+        if (adminRequests.length !== 7) throw new Error('pre-redraw super toggle did not send exactly one request');
+        adminHost.innerHTML = '<div id="throb-toggle-super-admin"></div>' +
+            '<span id="toggle-super-admin" data-toggle-super="admin" class="btn btn-danger">No</span>' +
+            '<a id="admin_domains_admin" class="btn btn-sm">Domains</a>';
+        domains = document.getElementById('admin_domains_admin');
+        adminRequests[6].success('ok'); adminRequests[6].complete();
+        if (getComputedStyle(domains).display !== 'none') throw new Error('redrawn row missed committed super visibility');
+
+        superControl = document.getElementById('toggle-super-admin');
+        clickToggle(superControl);
+        if (adminRequests.length !== 8) throw new Error('redrawn failure toggle did not send exactly one request');
+        adminHost.innerHTML = '<div id="throb-toggle-super-admin"></div>' +
+            '<span id="toggle-super-admin" data-toggle-super="admin" class="btn btn-success">Yes</span>' +
+            '<a id="admin_domains_admin" class="btn btn-sm d-none">Domains</a>';
+        domains = document.getElementById('admin_domains_admin');
+        adminRequests[7].success('failed: in use'); adminRequests[7].complete();
+        if (getComputedStyle(domains).display !== 'none') throw new Error('redrawn failed super toggle changed domains visibility');
+
+        superControl = document.getElementById('toggle-super-admin');
+        clickToggle(superControl);
+        if (adminRequests.length !== 9) throw new Error('detached completion toggle did not send exactly one request');
+        adminHost.innerHTML = '';
+        adminRequests[8].success('ok'); adminRequests[8].complete();
+
+        adminHost.innerHTML = '<span id="toggle-super-admin" data-toggle-super="admin" class="btn btn-danger">No</span>' +
+            '<a id="admin_domains_admin" class="btn btn-sm">Domains</a>';
+        superControl = document.getElementById('toggle-super-admin');
+        domains = document.getElementById('admin_domains_admin');
         superControl.classList.add('disabled');
         clickToggle(superControl);
-        if (adminRequests.length !== 6 || getComputedStyle(domains).display !== 'inline-block') throw new Error('disabled super toggle changed domains visibility');
+        if (adminRequests.length !== 9 || getComputedStyle(domains).display !== 'inline-block') throw new Error('disabled super toggle changed domains visibility');
     } catch (e) {
         failures.push('admin super toggle: ' + e.message);
     } finally {
@@ -371,4 +403,5 @@ echo "ok   ossAlert surfaces its message when Modal is unavailable (VIM-A15.47)"
 echo "ok   ossToggle leaves delElement in place when the request fails (VIM-A15.49)"
 echo "ok   a successful retry after a failed ossToggle removes delElement (VIM-A15.49)"
 echo "ok   production toggle delegate sends one request, suppresses pending clicks and survives redraw without direct listeners"
+echo "ok   deferred admin completion is safe across successful, failed and detached redraws"
 echo "ALL PASSED"

@@ -31,8 +31,10 @@ jobs:
 
       - name: Install pinned asset toolchain
         run: |
+          compiler_url=https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/
+          compiler_url+=v20230802/closure-compiler-v20230802.jar
           curl --fail --silent --show-error --location \
-            https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v20230802/closure-compiler-v20230802.jar \
+            "$compiler_url" \
             --output bin/compiler.jar
           printf '%s  %s\n' \
             230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f \
@@ -96,7 +98,7 @@ jobs:
       - name: Glyphicons icon-* classes must not reappear (VIM-A15.18)
         run: bash tests/lint-no-glyphicon-classes.sh
 
-      - name: DataTables dom/sDom strings must not carry BS2 grid tokens (VIM-A15.23)
+      - name: DataTables dom/sDom rejects BS2 grid tokens (VIM-A15.23)
         run: bash tests/lint-datatables-bs5-dom.sh
 
       - name: DataTables extension names must be registered (VIM-A15.23)

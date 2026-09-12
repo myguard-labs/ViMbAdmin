@@ -270,10 +270,15 @@ function tt_throbber( size, lines, strokewidth, fallback )
  * or success handlers function sets back label type and pointer by flags On and Ok , kills throbber
  * and releases the pending guard. List-view delegates own all click bindings.
  *
- * @param e Element witch will be edited
- * @param Url This is URL for AJAX.
- * @param data Data for AJAX to post.
- * @param delElement Element witch will be removed
+ * @param {DataTable.Dom} e Element which will be edited.
+ * @param {string} Url URL for the AJAX request.
+ * @param {Object} data Data to post.
+ * @param {string|Element} [delElement] Element to remove after a successful request.
+ * @param {function(boolean, boolean): void} [committed] Called after completion has
+ * restored the toggle UI, cleared its throbber and released its pending guard.
+ * The arguments are the request result and visible toggle state: success reports
+ * `(true, newState)`, while failure reports `(false, originalState)`. A successful
+ * `delElement` transition is scheduled before this callback but may still be running.
  */
 var ossPendingToggles = new WeakSet();
 

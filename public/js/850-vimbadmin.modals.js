@@ -85,7 +85,7 @@
     {
         var titleId = 'oss-modal-title-' + (++nextDialogId);
         var element = document.createElement( 'div' );
-        element.className = 'modal fade';
+        element.className = 'modal';
         element.tabIndex = -1;
         element.setAttribute( 'aria-hidden', 'true' );
         element.setAttribute( 'aria-labelledby', titleId );

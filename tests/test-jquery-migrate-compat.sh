@@ -503,17 +503,19 @@ $(function() {
     check('native modal alert renders its message as HTML', function() {
         return !!document.getElementById('alert-probe');
     });
-    // Dismiss only after Bootstrap reports that its show transition completed.
-    // A fixed delay races the component's `_isTransitioning` guard: Chromium
-    // happened to finish in time while Firefox and WebKit correctly ignored an
-    // early click. The click itself must be a NATIVE event, because
-    // `data-bs-dismiss` is bound by Bootstrap's own delegated native listener,
-    // which a jQuery-triggered event never reaches.
-    alertDialog.addEventListener('shown.bs.modal', function() {
+    // The click must be a NATIVE event because `data-bs-dismiss` is bound by
+    // Bootstrap's own delegated native listener, which a jQuery-triggered event
+    // never reaches. Generated dialogs are intentionally not animated, so they
+    // are already shown when ossAlert() returns.
+    function dismissAlert() {
         if (location.hash === '#alert-dismiss-disabled') return;
         var button = alertDialog.querySelector('[data-bs-dismiss="modal"]');
         if (button) button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    }, { once: true });
+    }
+    if (alertDialog.classList.contains('fade'))
+        alertDialog.addEventListener('shown.bs.modal', dismissAlert, { once: true });
+    else
+        dismissAlert();
     check('real admin view remove dialog operates', function() {
         $('#remove-domain-7').trigger('click');
         var selected = $('#remove_domain_form input[name="did"]').val();

@@ -113,7 +113,9 @@ run_case() {
 
   sed "s|@@SCRIPT_TAGS@@|$script_tags|" >"$tmp/regression-$mode.html" <<'HTML'
 <!doctype html>
-<html><head><meta charset="utf-8">@@SCRIPT_TAGS@@</head><body data-test-result="pending">
+<html><head><meta charset="utf-8">
+<style>.modal.fade .modal-dialog, .modal-backdrop.fade { transition: none !important; }</style>
+@@SCRIPT_TAGS@@</head><body data-test-result="pending">
 <form id="guarded" method="post" action="/mailbox/queue-delete"
       data-confirm="DELETE &lt;em&gt;this mailbox&lt;/em&gt;?">
   <button id="guarded-submit" type="submit">Delete mailbox</button>
@@ -190,7 +192,40 @@ run_case() {
         }));
     }
 
+    async function assertEarlyDismiss(action, label) {
+        submitted = [];
+        submit('guarded');
+        var modal = document.querySelector('[data-oss-confirm]').closest('.modal');
+        var shown = false;
+        modal.addEventListener('shown.bs.modal', function() { shown = true; }, { once: true });
+        action(modal);
+        await waitFor(function() { return shown || !document.body.contains(modal); }, label + ' decision');
+        if (document.body.contains(modal)) {
+            failures.push(label + ' before shown left the generated modal open');
+            bootstrap.Modal.getInstance(modal).hide();
+            await waitFor(function() { return !document.body.contains(modal); }, label + ' cleanup');
+        }
+        if (submitted.length !== 0)
+            failures.push(label + ' before shown replayed the destructive submit');
+        assertFocusReturned(label + ' before shown', 'guarded-submit');
+    }
+
     async function drive() {
+        await assertEarlyDismiss(function(modal) {
+            modal.querySelector('.modal-footer [data-bs-dismiss="modal"]').click();
+        }, 'Cancel dismissal');
+        await assertEarlyDismiss(function(modal) {
+            modal.querySelector('.btn-close').click();
+        }, 'Close dismissal');
+        await assertEarlyDismiss(function(modal) {
+            modal.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Escape',
+                code: 'Escape',
+                bubbles: true,
+                cancelable: true
+            }));
+        }, 'Escape dismissal');
+
         // Cancel is the destructive safety boundary: the original submit must
         // be stopped before the asynchronous modal decision is available.
         submit('guarded');
@@ -333,9 +368,11 @@ run_case() {
         var alertTrigger = document.getElementById('alert-trigger');
         alertTrigger.focus();
         var alertModal = ossAlert('Mailbox action completed');
-        await new Promise(function (resolve) {
-            alertModal.addEventListener('shown.bs.modal', resolve, { once: true });
-        });
+        if (alertModal.classList.contains('fade')) {
+            await new Promise(function (resolve) {
+                alertModal.addEventListener('shown.bs.modal', resolve, { once: true });
+            });
+        }
         alertModal.querySelector('.modal-footer [data-bs-dismiss="modal"]').click();
         await waitFor(function () { return !document.body.contains(alertModal); }, 'alert modal removal');
         assertFocusReturned('alert dismissal', 'alert-trigger');
@@ -426,6 +463,31 @@ run_case() {
                 'AJAX modal embedded-whitespace-id state',
                 false
             );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="">Empty ID</h3></div>',
+                'AJAX modal empty-id state',
+                false
+            );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="title&#9;second">Tab ID</h3></div>',
+                'AJAX modal tab-id state',
+                false
+            );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="title&#10;second">LF ID</h3></div>',
+                'AJAX modal LF-id state',
+                false
+            );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="title&#12;second">FF ID</h3></div>',
+                'AJAX modal FF-id state',
+                false
+            );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="title&#13;second">CR ID</h3></div>',
+                'AJAX modal CR-id state',
+                false
+            );
         }
         finally {
             jQuery.ajax = realAjax;
@@ -482,7 +544,7 @@ HTML
     --disable-gpu \
     --allow-file-access-from-files \
     --user-data-dir="$tmp/profile" \
-    --virtual-time-budget=3000 \
+    --virtual-time-budget=15000 \
     --dump-dom "file://$tmp/regression-$mode.html" >"$rendered" 2>"$tmp/browser-$mode.log"; then
     cat "$tmp/browser-$mode.log" >&2
     return 1

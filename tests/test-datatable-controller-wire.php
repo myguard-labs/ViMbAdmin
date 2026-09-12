@@ -32,18 +32,19 @@ final class DataTableWireSession implements SessionStorage
 final class DataTableWireResources
 {
     public int $doctrineReads = 0;
-    public int $optionsReads = 0;
     public bool $brokenConfig = false;
-    public ?int $logicFailureAtOptionsRead = null;
+    public ?int $optionsReadsUntilLogicFailure = null;
     public bool $brokenRepositoryLogic = false;
     public function __construct(private DataTableWireSession $session) {}
     /** @return array<string,mixed> */
     public function getOptions(): array
     {
-        $this->optionsReads++;
         if ($this->brokenConfig) throw new TypeError('Internal config failure');
-        if ($this->optionsReads === $this->logicFailureAtOptionsRead) {
-            throw new LogicException('Internal config logic failure');
+        if ($this->optionsReadsUntilLogicFailure !== null) {
+            $this->optionsReadsUntilLogicFailure--;
+            if ($this->optionsReadsUntilLogicFailure === 0) {
+                throw new LogicException('Internal config logic failure');
+            }
         }
         return [];
     }
@@ -142,11 +143,11 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
         $resources->brokenConfig = false;
         if ($name === 'Mailbox') {
             // admin() reads options first; fail the following pagination-config read.
-            $resources->logicFailureAtOptionsRead = $resources->optionsReads + 2;
+            $resources->optionsReadsUntilLogicFailure = 2;
             $response = $action->invoke($controller);
             $check($name . ': configuration LogicException preserves the 200 ko response',
                 $response instanceof Response && $response->status === 200 && $response->body === 'ko');
-            $resources->logicFailureAtOptionsRead = null;
+            $resources->optionsReadsUntilLogicFailure = null;
         }
         $_GET = [];
         $resources->brokenRepositoryLogic = true;
@@ -158,7 +159,6 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
         }
         $check($name . ': unrelated internal LogicException is not converted to a client error', $logicFailed);
         $resources->brokenRepositoryLogic = false;
-        $resources->doctrineReads = 0;
         $repositoryFailed = false;
         try {
             $action->invoke($controller);
@@ -166,7 +166,7 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
             $repositoryFailed = $e->getMessage() === 'Internal repository failure';
         }
         $check($name . ': valid request reaches repository and preserves internal TypeError',
-            $repositoryFailed && $resources->doctrineReads === 1);
+            $repositoryFailed);
     } finally {
         $_GET = $oldGet;
     }

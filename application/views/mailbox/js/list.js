@@ -10,7 +10,7 @@ function vmMailboxServerData( source )
 vmReady( function() {
 
     {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-        DataTable.Dom.select( "a[id|='dir-size']" ).on( "click", showSizes );
+        DataTable.Dom.select( document ).on( "click", "a[id|='dir-size']", showSizes );
     {/if}
     
     {if !isset($options.defaults.server_side.pagination.enable) || $options.defaults.server_side.pagination.enable }
@@ -28,10 +28,6 @@ vmReady( function() {
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
         'language': { 'processing': 'Loading…', 'emptyTable': 'No mailboxes.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
-            {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                DataTable.Dom.select( "a[id|='dir-size']" ).off('click').on( "click", showSizes );
-            {/if}
-            DataTable.Dom.select( "a[id|='modal-dialog']" ).off('click').on( 'click', tt_openModalDialog );
             vmTooltips();
             if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
                 vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();

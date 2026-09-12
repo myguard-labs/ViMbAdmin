@@ -46,7 +46,8 @@ THE SOFTWARE.
 
 Install the exact input list in `bin/minify-bundle-files.php` and regenerate
 both bundles with `php bin/minify-bundle.php --version 29`. The compiler and
-CSS tool pins are documented and verified in `bin/minify-options.php`.
+CSS tool pins and manual compiler verification commands are documented in
+`bin/minify-options.php`; the build does not enforce those tool pins.
 Ship the regenerated headers together with both bundles. Remove the old
 `100-jquery.js`, `150-jquery.datatables.js`, `151-jquery.datatables.ext.js`
 and `152-jquery.datatables.bootstrap5.js` files when updating an existing

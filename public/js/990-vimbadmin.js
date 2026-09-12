@@ -181,7 +181,7 @@ if( cprefs != null )
 vmReady( function(){
 
 	// Activate the modal dialog pop up
-    DataTable.Dom.select( "a[id|='modal-dialog']" ).on( 'click', tt_openModalDialog );
+    DataTable.Dom.select( document ).on( 'click', "a[id|='modal-dialog']", tt_openModalDialog );
 
     document.querySelectorAll('[rel=popover]').forEach(function(el) {
         bootstrap.Popover.getOrCreateInstance(el, { html: true });

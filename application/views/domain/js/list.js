@@ -23,7 +23,6 @@ vmReady(function()
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
         'language': { 'processing': 'Loading…', 'emptyTable': 'No domains.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
-            DataTable.Dom.select( "a[id|='modal-dialog']" ).off('click').on( 'click', tt_openModalDialog );
             vmTooltips();
             if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
                 vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();

@@ -10,7 +10,7 @@ function vmAliasServerData( source )
 
 vmReady( function()
 {
-    DataTable.Dom.select( "button[id|='delete-alias']" ).on( 'click', deleteAlias );
+    DataTable.Dom.select( document ).on( 'click', "button[id|='delete-alias']", deleteAlias );
 
     {if !isset($options.defaults.server_side.pagination.enable) || $options.defaults.server_side.pagination.enable }
     /* Server-side processing: the full alias list is paged/sorted/searched via
@@ -25,8 +25,6 @@ vmReady( function()
                 : {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if},
         'language': { 'processing': 'Loading…', 'emptyTable': 'No aliases.', 'search': 'Search (prefix * to match anywhere):' },
         'drawCallback': function() {
-            DataTable.Dom.select( "button[id|='delete-alias']" ).off('click').on( 'click', deleteAlias );
-            DataTable.Dom.select( "a[id|='modal-dialog']" ).off('click').on( 'click', tt_openModalDialog );
             vmTooltips();
             if( vm_prefs['iLength'] != DataTable.Dom.select( "select[name|='list_table_length']" ).val() )
                 vm_prefs['iLength'] = DataTable.Dom.select( "select[name|='list_table_length']" ).val();

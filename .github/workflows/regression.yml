@@ -16,6 +16,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  assets:
+    name: Pinned browser asset regeneration
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Assert pull-request runner isolation
+        run: bash .github/scripts/assert-pr-runner-isolation.sh
+
+      - name: Install pinned asset toolchain
+        run: |
+          compiler_url=https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/
+          compiler_url+=v20230802/closure-compiler-v20230802.jar
+          curl --fail --silent --show-error --location \
+            "$compiler_url" \
+            --output bin/compiler.jar
+          printf '%s  %s\n' \
+            230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f \
+            bin/compiler.jar | sha256sum --check
+          npm ci --prefix bin --ignore-scripts
+
+      - name: Regenerate and compare committed browser assets
+        run: |
+          bash tests/test-minify-tool-selection.sh
+          bash tests/test-minify-tool-selection-negative-control.sh
+          bash tests/test-pinned-asset-regeneration.sh
+
   # ------------------------------------------------------------------ #
   # Static/browser regressions — no DB. Fast first signal.             #
   # ------------------------------------------------------------------ #
@@ -47,9 +79,6 @@ jobs:
       - name: 2FA session-hygiene invariants (audit 2026-07-10 MAJOR)
         run: bash tests/lint-2fa-session-hygiene.sh
 
-      - name: jQuery APIs removed in 4.0 must not reappear (VIM-A15 phase 2)
-        run: bash tests/lint-no-removed-jquery-apis.sh
-
       - name: Bootstrap 2 grid classes must not reappear (VIM-A15 phase 4)
         run: bash tests/lint-bs2-grid-classes.sh
 
@@ -68,7 +97,7 @@ jobs:
       - name: Glyphicons icon-* classes must not reappear (VIM-A15.18)
         run: bash tests/lint-no-glyphicon-classes.sh
 
-      - name: DataTables dom/sDom strings must not carry BS2 grid tokens (VIM-A15.23)
+      - name: DataTables dom/sDom rejects BS2 grid tokens (VIM-A15.23)
         run: bash tests/lint-datatables-bs5-dom.sh
 
       - name: DataTables extension names must be registered (VIM-A15.23)
@@ -124,10 +153,10 @@ jobs:
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
           bash tests/test-source-defect-sweep-behaviour.sh
 
-      - name: jQuery 4 plugin compatibility has no console warnings
+      - name: DataTables 3 runs without jQuery across source and bundle lanes
         run: >-
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
-          bash tests/test-jquery-migrate-compat.sh
+          bash tests/test-datatables-dependency-free-compat.sh
 
       - name: Deliberately broken compatibility lane must fail on this engine
         run: bash tests/test-browser-engine-negative-control.sh

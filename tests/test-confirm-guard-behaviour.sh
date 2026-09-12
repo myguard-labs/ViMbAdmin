@@ -23,22 +23,10 @@ fi
 tmp=$(mktemp -d /tmp/vimbadmin-confirm-guard.XXXXXX)
 trap 'rm -rf "$tmp"' EXIT
 
-cp public/js/100-jquery.js "$tmp/jquery.js"
+cp public/js/150-datatables.js "$tmp/datatables.js"
+cp public/js/990-vimbadmin.js "$tmp/runtime.js"
 cp public/js/800-bootstrap.js "$tmp/bootstrap.js"
 cp public/js/850-vimbadmin.modals.js "$tmp/modals.js"
-
-awk '/^function tt_throbber/ { copying = 1 }
-     /^function ossToggle/ { copying = 0 }
-     /^function tt_openModalDialog/ { copying = 1 }
-     /^function ossAjaxErrorHandler/ { copying = 0 }
-     copying { print }' public/js/990-vimbadmin.js >"$tmp/ajax-modal.js"
-awk '/^var ossConfirmedForms = new WeakSet\(\);/ { copying = 1 }
-     copying { print }' public/js/990-vimbadmin.js >"$tmp/guard.js"
-if ! grep -q 'function tt_openModalDialog' "$tmp/ajax-modal.js" ||
-  ! grep -q 'ossConfirm( message' "$tmp/guard.js"; then
-  echo 'FAIL: could not extract production AJAX modal and confirm handlers' >&2
-  exit 2
-fi
 
 modal_shell_has_fallback_name() {
   local file=$1 tag id classes label
@@ -101,9 +89,8 @@ run_case() {
   local rendered="$tmp/rendered-$mode.html"
 
   if [[ $mode == source ]]; then
-    # Load the modal helper before jQuery: this lane proves the replacement has
-    # no hidden load-time dependency on the library the old dialog used.
-    script_tags='<script src="modals.js"></script><script src="jquery.js"></script><script src="bootstrap.js"></script><script src="ajax-modal.js"></script><script src="guard.js"></script>'
+    # Load the modal helper before DataTables, then the complete production source.
+    script_tags='<script src="modals.js"></script><script src="datatables.js"></script><script src="bootstrap.js"></script><script src="runtime.js"></script>'
   else
     local bundle_file
     bundle_file=$(resolve_bundle_v) || exit $?
@@ -382,11 +369,11 @@ run_case() {
         // fragment title; malformed fragments retain the safe fallback.
         var ajaxTrigger = document.getElementById('modal-dialog-email-7');
         var ajaxShell = document.getElementById('modal_dialog_shell');
-        var realAjax = jQuery.ajax;
+        var realAjax = ossAjax;
 
         async function assertAjaxModalName(response, label, expectTitleLink) {
             var ajaxRequest = null;
-            jQuery.ajax = function(options) { ajaxRequest = options; };
+            ossAjax = function(options) { ajaxRequest = options; };
             ajaxTrigger.focus();
             tt_openModalDialog({
                 preventDefault: function() {},
@@ -490,7 +477,7 @@ run_case() {
             );
         }
         finally {
-            jQuery.ajax = realAjax;
+            ossAjax = realAjax;
         }
 
         // Boundary: forms without a usable message are not guarded.
@@ -547,7 +534,7 @@ run_case() {
         document.body.dataset.testFailures = failures.join('; ');
     }
 
-    jQuery(function() {
+    vmReady(function() {
         drive().catch(function (error) {
             document.body.dataset.testResult = 'fail';
             failures.push(error.message);

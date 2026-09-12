@@ -3,23 +3,22 @@ var addDialog;
 var oDataTable;
 
 
-$(document).ready( function()
+vmReady( function()
 {
-    oDataTable = $( '#list_table' ).dataTable({
-        'drawCallback': function() {
-            if( vm_prefs['iLength'] !=  $( "select[name|='list_table_length']" ).val() )
-                vm_prefs['iLength'] = $( "select[name|='list_table_length']" ).val();
+    oDataTable = new DataTable('#list_table', {
+        'drawCallback': function(settings) {
+            vm_prefs['iLength'] = settings.api.page.len();
 
             vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
         },
-        'pageLength': vm_prefs['iLength']? vm_prefs['iLength']: {$options.defaults.table.entries},
+        'pageLength': vmDataTablePageLength( {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if} ),
         'columns': [
             null,
             { 'orderable': false, "searchable": false }
         ]
     });
     
-    $( "button[id|='remove-admin']" ).on( 'click', removeAdmin );
+    DataTable.Dom.select( "button[id|='remove-admin']" ).on( 'click', removeAdmin );
 
 }); // document onready
 
@@ -27,24 +26,24 @@ function removeAdmin( event ) {
 
     event.preventDefault();
 
-    if( $( event.target ).is( "i" ) )
-        element = $( event.target ).parent();
+    if( DataTable.Dom.select( event.target ).is( "i" ) )
+        element = DataTable.Dom.select( event.target ).parent();
     else
-        element = $( event.target );
+        element = DataTable.Dom.select( event.target );
 
-    $( "#purge_admin_name" ).text( element.attr( "ref" ) );
+    DataTable.Dom.select( "#purge_admin_name" ).text( element.attr( "ref" ) );
 
     delDialog = ossModal( '#purge_dialog' );
 
     // The control is a submit button inside a CSRF-bearing POST form; the
     // dialog's confirm button submits that form so the token stays in the body.
     var targetForm = element.closest( 'form' );
-    $( '#purge_dialog_delete' ).off( 'click' ).on( 'click', function( ev ){
+    DataTable.Dom.select( '#purge_dialog_delete' ).off( 'click' ).on( 'click', function( ev ){
         ev.preventDefault();
         targetForm.get( 0 ).submit();
     });
 
-    $( '#purge_dialog_cancel' ).on( 'click', function(){
+    DataTable.Dom.select( '#purge_dialog_cancel' ).on( 'click', function(){
         delDialog.hide();
     });
  };

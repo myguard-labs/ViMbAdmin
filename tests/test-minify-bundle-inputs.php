@@ -96,11 +96,10 @@ $check('cssExcluded is empty now that Chosen and Colorbox are deleted', $lists['
 // order. An exact comparison rather than a subset check: a bundle that gained
 // an unreviewed file is as much a defect as one that lost a library.
 $expectedJs = [
-    '100-jquery.js',
     '120-vimbadmin.validation.js',
-    '150-jquery.datatables.js',
-    '151-jquery.datatables.ext.js',
-    '152-jquery.datatables.bootstrap5.js',
+    '150-datatables.js',
+    '151-datatables.ext.js',
+    '152-datatables.bootstrap5.js',
     '800-bootstrap.js',
     '850-vimbadmin.modals.js',
     '910-vimbadmin.functions.js',
@@ -132,6 +131,28 @@ $check('runtime JS has no jQuery Validation API references',
         && preg_match('/\.validate\s*\(/', $runtimeJs) !== 1);
 $check('runtime JS has no Bootbox references',
     stripos($runtimeJs, 'bootbox') === false);
+$check('jQuery is not shipped or loaded',
+    !is_file($root . '/public/js/100-jquery.js')
+        && !str_contains((string) file_get_contents($root . '/application/views/header-js.phtml'), 'jquery'));
+// Vendor files retain optional interoperability. First-party code must never
+// invoke it; scan source so a forgotten bundle rebuild cannot conceal a regression.
+$ownSources = array_merge(
+    glob($root . '/public/js/*vimbadmin*.js') ?: [],
+    glob($root . '/application/views/*/js/*.js') ?: [],
+    [$root . '/public/js/151-datatables.ext.js']
+);
+foreach ($ownSources as $source) {
+    $check('no first-party jQuery runtime reference: ' . basename($source),
+        preg_match('/\bjQuery\b|(?:^|[^A-Za-z0-9_$])\$\s*[.(]/m', (string) file_get_contents($source)) === 0);
+}
+foreach ([
+    // Core includes the local fixes documented with its upstream hash in docs/ASSETS.md.
+    'public/js/150-datatables.js' => 'ae3173803747ce7ac8867df685a88b048350f874717cbc3b07a3f59c7f56a19c',
+    'public/js/152-datatables.bootstrap5.js' => 'cb335f90908b20599ec84d5396940f3ecbb958d43b231e58fb2ddb7fa11b63d3',
+    'public/css/816-datatables-bootstrap5.css' => '92a010aa4be02fb5de612cad3aeefc67cdd18ba24529767b9625e60dc70d0c8e',
+] as $asset => $hash) {
+    $check('DataTables 3.0.3 shipped asset integrity: ' . $asset, hash_file('sha256', $root . '/' . $asset) === $hash);
+}
 $modalJs = (string) file_get_contents($root . '/public/js/850-vimbadmin.modals.js');
 $check('native modal helper has no jQuery runtime dependency',
     !str_contains($modalJs, 'jQuery')
@@ -284,6 +305,41 @@ $optionsSource = (string) file_get_contents($root . '/bin/minify-options.php');
 $check(
     'bin/minify-options.php points at the repo-owned driver',
     str_contains($optionsSource, 'bin/minify-bundle.php')
+);
+$toolPackage = json_decode((string) file_get_contents($root . '/bin/package.json'), true);
+$toolLock = json_decode((string) file_get_contents($root . '/bin/package-lock.json'), true);
+$assetsDoc = (string) file_get_contents($root . '/docs/ASSETS.md');
+$toolDependencies = is_array($toolPackage) && isset($toolPackage['dependencies'])
+    && is_array($toolPackage['dependencies']) ? $toolPackage['dependencies'] : [];
+$toolPackages = is_array($toolLock) && isset($toolLock['packages'])
+    && is_array($toolLock['packages']) ? $toolLock['packages'] : [];
+$cleanCssCliLock = isset($toolPackages['node_modules/clean-css-cli'])
+    && is_array($toolPackages['node_modules/clean-css-cli'])
+    ? $toolPackages['node_modules/clean-css-cli'] : [];
+$cleanCssLock = isset($toolPackages['node_modules/clean-css'])
+    && is_array($toolPackages['node_modules/clean-css'])
+    ? $toolPackages['node_modules/clean-css'] : [];
+$check(
+    'Closure Compiler digest is enforced by the build configuration',
+    str_contains($optionsSource, "230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f")
+        && str_contains($optionsSource, "hash_file( 'sha256', \$compiler_jar )")
+);
+$check(
+    'clean-css CLI is an exact direct dependency',
+    ($toolDependencies['clean-css-cli'] ?? null) === '5.6.3'
+);
+$check(
+    'clean-css dependency graph is locked',
+    is_array($toolLock)
+        && ($toolLock['lockfileVersion'] ?? null) === 3
+        && ($cleanCssCliLock['version'] ?? null) === '5.6.3'
+        && ($cleanCssLock['version'] ?? null) === '5.3.3'
+);
+$check(
+    'asset documentation describes enforced toolchain verification',
+    str_contains($assetsDoc, 'npm ci --prefix bin')
+        && str_contains($assetsDoc, 'verifies the compiler SHA-256')
+        && str_contains($assetsDoc, 'clean-css dependency')
 );
 
 // VIM-A15.46: public/css/816-datatables-bootstrap5.css opens with a real

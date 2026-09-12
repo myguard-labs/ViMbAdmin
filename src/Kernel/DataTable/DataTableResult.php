@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\DataTable;
 
 /**
- * Builds the JSON envelope the DataTables 2 server-side protocol expects in
+ * Builds the JSON envelope the DataTables server-side protocol expects in
  * response to a {@see DataTableQuery}:
  *
  *   - `draw`            — the draw counter, validated as an integer by the

@@ -22,7 +22,7 @@ trap 'rm -f -- "$output"' EXIT
 status=0
 VIMBADMIN_MUTATION=button-disabled \
   CHROMIUM_BIN="$PWD/.github/scripts/run-headless-chrome.sh" \
-  timeout 90 bash tests/test-jquery-migrate-compat.sh >"$output" 2>&1 || status=$?
+  timeout 90 bash tests/test-datatables-dependency-free-compat.sh >"$output" 2>&1 || status=$?
 if [[ $status != 1 ]] ||
   ! grep -qF 'a button restored after the work completes is enabled again' "$output"; then
   cat "$output" >&2

@@ -7,7 +7,7 @@ and WebKit. Build the runner from the repository root:
 docker build -t vimbadmin-browser:1.63.0 .github/scripts/browser
 VIMBADMIN_BROWSER=firefox \
   CHROMIUM_BIN="$PWD/.github/scripts/run-headless-chrome.sh" \
-  bash tests/test-jquery-migrate-compat.sh
+  bash tests/test-datatables-dependency-free-compat.sh
 ```
 
 The image pins Playwright 1.63.0 and its matching noble **linux/amd64** browser

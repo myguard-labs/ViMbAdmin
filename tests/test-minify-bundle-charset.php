@@ -7,7 +7,7 @@ declare(strict_types=1);
  * default US-ASCII output.
  *
  * Closure Compiler defaults to "accept UTF-8 input, emit US-ASCII output", which
- * mangled the "©" in 150-jquery.datatables.js's licence header into `?`;
+ * mangled the "©" in 150-datatables.js's licence header into `?`;
  * bin/minify-options.php now passes
  * `--charset UTF-8` so both directions are UTF-8 (VIM-A15.60).
  *

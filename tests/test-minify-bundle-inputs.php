@@ -129,7 +129,7 @@ foreach ($expectedJs as $live) {
 $check('runtime JS has no jQuery Validation API references',
     !str_contains($runtimeJs, 'jQuery.validator')
         && !str_contains($runtimeJs, '$.validator')
-        && !str_contains($runtimeJs, '.validate('));
+        && preg_match('/\.validate\s*\(/', $runtimeJs) !== 1);
 foreach ($expectedCss as $live) {
     $check("live CSS asset resolves to a real file: {$live}", is_file($root . '/public/css/' . $live));
 }

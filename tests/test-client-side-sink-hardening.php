@@ -36,7 +36,8 @@ $check('mailbox size dialog escapes every dynamic table value',
 $emailSettings = file_get_contents(__DIR__ . '/../application/views/mailbox/native-email-settings.phtml');
 $check('email-settings modal emits native required constraints',
     is_string($emailSettings)
-        && str_contains($emailSettings, '<select name="type" id="type" required')
+        && str_contains($emailSettings, '<select name="type" id="type" class="form-select" required')
+        && str_contains($emailSettings, 'class="form-control"')
         && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}")
         && !str_contains($emailSettings, 'class="required"'));
 $check('email-settings modal validates before AJAX and tracks conditional email requirement',

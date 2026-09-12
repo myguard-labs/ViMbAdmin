@@ -30,7 +30,6 @@
 
         element.classList.toggle('is-invalid', !valid);
         element.classList.toggle('is-valid', valid);
-        return valid;
     }
 
     function refreshGroup(element) {

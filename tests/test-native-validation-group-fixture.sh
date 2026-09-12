@@ -25,16 +25,16 @@ cleanup() {
 trap cleanup EXIT
 
 bundle_file=$(resolve_bundle_v) || exit $?
-cp public/js/120-vimbadmin.validation.js "public/js/$bundle_file" "$tmp/"
+cp public/css/800-bootstrap.css public/js/120-vimbadmin.validation.js "public/js/$bundle_file" "$tmp/"
 
 cat >"$tmp/regression.html" <<'HTML'
-<!doctype html><html><head><meta charset="utf-8">
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="800-bootstrap.css">
 <script src="120-vimbadmin.validation.js" defer></script>
 </head><body>
 <form id="grouped-form">
-  <input id="first" name="first" required data-validation-group="pair">
-  <input id="second" name="second" required data-validation-group="pair">
-  <input id="optional" name="optional">
+  <input id="first" class="form-control" name="first" required data-validation-group="pair">
+  <input id="second" class="form-control" name="second" required data-validation-group="pair">
+  <input id="optional" class="form-control" name="optional">
   <input id="malformed" name="malformed" required data-validation-group="">
 </form>
 <form id="bypass-form">
@@ -74,20 +74,32 @@ window.addEventListener('DOMContentLoaded', function() {
     var groupedSubmits = 0;
     var bypassSubmits = 0;
     var novalidateSubmits = 0;
+    var interactivePrevented = null;
+    var groupedPrevented = null;
+    var bypassPrevented = null;
+    var novalidatePrevented = null;
+    var staleBackground = null;
 
     // The production listener was registered by the deferred asset before
     // this one. Record its decision, then cancel every successful submit so
     // the real requestSubmit()/click() paths cannot navigate away.
     document.addEventListener('submit', function(event) {
-        if (event.target === interactiveForm)
+        if (event.target === interactiveForm) {
             interactiveSubmits++;
-        if (event.target === form)
+            interactivePrevented = event.defaultPrevented;
+        }
+        if (event.target === form) {
             groupedSubmits++;
-        if (event.target === bypass.form)
+            groupedPrevented = event.defaultPrevented;
+        }
+        if (event.target === bypass.form) {
             bypassSubmits++;
-        if (event.target.id === 'novalidate-form')
+            bypassPrevented = event.defaultPrevented;
+        }
+        if (event.target.id === 'novalidate-form') {
             novalidateSubmits++;
-        event.validationPrevented = event.defaultPrevented;
+            novalidatePrevented = event.defaultPrevented;
+        }
         event.preventDefault();
     });
 
@@ -99,7 +111,7 @@ window.addEventListener('DOMContentLoaded', function() {
     nativeRequired.value = 'valid';
     check('unconstrained legacy class does not invent client-side validity', function() {
         interactiveForm.requestSubmit();
-        return !interactiveLegacy.required && interactiveSubmits === 1 &&
+        return !interactiveLegacy.required && interactiveSubmits === 1 && interactivePrevented === false &&
             !interactiveLegacy.classList.contains('is-valid') &&
             !interactiveLegacy.classList.contains('is-invalid');
     });
@@ -114,14 +126,18 @@ window.addEventListener('DOMContentLoaded', function() {
             first.classList.contains('is-invalid') && second.classList.contains('is-invalid');
     });
 
+    form.classList.remove('was-validated');
     first.value = 'now valid';
     check('precondition: valid grouped sibling still has stale invalid state', function() {
-        return first.checkValidity() && first.classList.contains('is-invalid');
+        staleBackground = getComputedStyle(first).backgroundImage;
+        return first.checkValidity() && first.classList.contains('is-invalid') &&
+            staleBackground !== 'none';
     });
     second.value = 'also valid';
     second.dispatchEvent(new Event('input', { bubbles: true }));
     check('grouped sibling clears stale error state once valid', function() {
-        return !first.classList.contains('is-invalid') && first.classList.contains('is-valid');
+        return !first.classList.contains('is-invalid') && first.classList.contains('is-valid') &&
+            getComputedStyle(first).backgroundImage !== staleBackground;
     });
 
     check('empty optional field is valid at the boundary', function() {
@@ -138,19 +154,21 @@ window.addEventListener('DOMContentLoaded', function() {
 
     check('formnovalidate submitter preserves the native validation bypass', function() {
         bypass.click();
-        return bypassSubmits === 1 && !bypass.form.classList.contains('was-validated');
+        return bypassSubmits === 1 && bypassPrevented === false &&
+            !bypass.form.classList.contains('was-validated');
     });
 
     check('novalidate form preserves the native validation bypass', function() {
         var novalidateForm = document.getElementById('novalidate-form');
         novalidateForm.requestSubmit();
-        return novalidateSubmits === 1 && !novalidateForm.classList.contains('was-validated');
+        return novalidateSubmits === 1 && novalidatePrevented === false &&
+            !novalidateForm.classList.contains('was-validated');
     });
 
     malformed.value = 'valid';
     check('valid submit is not cancelled', function() {
         form.requestSubmit();
-        return groupedSubmits === 1;
+        return groupedSubmits === 1 && groupedPrevented === false;
     });
 
     document.getElementById('output').textContent = JSON.stringify({ failures: failures });
@@ -159,7 +177,7 @@ window.addEventListener('DOMContentLoaded', function() {
 </script></body></html>
 HTML
 
-sed "s#120-vimbadmin.validation.js#$bundle_file#" "$tmp/regression.html" > "$tmp/bundle.html"
+sed "s#120-vimbadmin.validation.js#$bundle_file#" "$tmp/regression.html" >"$tmp/bundle.html"
 
 run_case() {
   local page=$1

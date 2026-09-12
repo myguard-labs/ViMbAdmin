@@ -137,6 +137,11 @@ jobs:
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
           bash tests/test-native-validation-group-fixture.sh
 
+      - name: Email-settings modal enforces native constraints (VIM-A15.56b)
+        run: >-
+          CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
+          bash tests/test-email-settings-validation-fixture.sh
+
       - name: Migrated Bootstrap 5 controls operate in a browser (VIM-A15.25)
         run: >-
           PHP_RENDERER="$GITHUB_WORKSPACE/.github/scripts/run-static-php-container.sh"

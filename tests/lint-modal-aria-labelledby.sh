@@ -12,14 +12,10 @@
 #
 # Scope: statically-authored modals in application/views/**/*.phtml only.
 #
-# DELIBERATELY EXEMPT -- `#modal_dialog_shell` in footer.phtml and
-# _skins/myskin/footer.phtml. Those are empty shells: `#modal_dialog` inside is
-# replaced wholesale at runtime by the AJAX dialog loader, so there is no
-# statically-authored title element for an `id` to point at, and a hard-coded
-# `aria-labelledby` would be a permanently dangling reference (worse than none
-# -- assistive tech falls back to nothing either way, but the dangling
-# attribute hides the gap from this gate). Labelling those belongs with the
-# runtime dialog work, not here.
+# `#modal_dialog_shell` is named with aria-label while its AJAX content loads;
+# the runtime replaces that fallback with aria-labelledby once a fragment title
+# exists. The gate permits that one dynamic shell only when its fallback name is
+# present, rather than exempting it unconditionally.
 #
 # Exit 0 = every in-scope modal is labelled, 1 = at least one is not.
 #
@@ -61,7 +57,7 @@ runtime_shell_ids='modal_dialog_shell'
 # unlabelled dialogs written in either of those equally valid orders passed the
 # gate. Attribute order is not a property this gate may depend on.
 check_file() {
-  local f="$1" fail=0 num tag id label
+  local f="$1" fail=0 num tag id label fallback_label
   while IFS=$'\t' read -r num tag; do
     [ -n "$tag" ] || continue
 
@@ -86,6 +82,11 @@ check_file() {
     label=$(tag_attr "$tag" aria-labelledby)
 
     if [ -n "$id" ] && grep -qx "$runtime_shell_ids" <<<"$id"; then
+      fallback_label=$(tag_attr "$tag" aria-label)
+      if [ -z "${fallback_label//[[:space:]]/}" ]; then
+        echo "  Runtime modal #$id has no loading-state aria-label in $f:$num"
+        fail=1
+      fi
       continue
     fi
 
@@ -385,27 +386,43 @@ EOF
     status=1
   fi
 
-  echo "== self-test: the runtime shell is exempt by id, and only by id =="
+  echo "== self-test: the runtime shell requires a fallback name, keyed by id =="
   cat >"$tmpdir/shell.phtml" <<'EOF'
-<div id="modal_dialog_shell" class="modal fade" tabindex="-1" aria-hidden="true">
+<div id="modal_dialog_shell" class="modal fade" tabindex="-1" aria-label="Loading dialog" aria-hidden="true">
     <div id="modal_dialog" class="modal-content"> </div>
 </div>
 EOF
   if scan_files "$tmpdir/shell.phtml" >/dev/null 2>&1; then
-    echo "  OK: runtime shell exempted"
+    echo "  OK: named runtime shell accepted"
   else
-    echo "  FAIL: runtime shell was flagged despite its exemption" >&2
+    echo "  FAIL: named runtime shell was rejected" >&2
     status=1
   fi
-  # Prove the exemption is the id and not the shape: the same markup under any
-  # other id must still be caught, so renaming the shell cannot silently widen
-  # the exemption.
-  sed 's/modal_dialog_shell/some_other_dialog/' "$tmpdir/shell.phtml" >"$tmpdir/shell-renamed.phtml"
-  if scan_files "$tmpdir/shell-renamed.phtml" >/dev/null 2>&1; then
-    echo "  FAIL: exemption is shape-based, not id-based; renaming the shell escapes the gate" >&2
+
+  sed 's/ aria-label="Loading dialog"//' "$tmpdir/shell.phtml" >"$tmpdir/shell-unnamed.phtml"
+  if scan_files "$tmpdir/shell-unnamed.phtml" >/dev/null 2>&1; then
+    echo "  FAIL: unnamed runtime shell escaped the gate" >&2
     status=1
   else
-    echo "  OK: exemption is keyed on the id, not the markup shape"
+    echo "  OK: unnamed runtime shell caught"
+  fi
+
+  sed 's/Loading dialog/   /' "$tmpdir/shell.phtml" >"$tmpdir/shell-blank-name.phtml"
+  if scan_files "$tmpdir/shell-blank-name.phtml" >/dev/null 2>&1; then
+    echo "  FAIL: blank runtime-shell name escaped the gate" >&2
+    status=1
+  else
+    echo "  OK: blank runtime-shell name caught"
+  fi
+
+  # Prove the allowance is the id and not the shape: the same markup under any
+  # other id must still require a statically resolvable aria-labelledby.
+  sed 's/modal_dialog_shell/some_other_dialog/' "$tmpdir/shell.phtml" >"$tmpdir/shell-renamed.phtml"
+  if scan_files "$tmpdir/shell-renamed.phtml" >/dev/null 2>&1; then
+    echo "  FAIL: runtime-shell allowance widened to another id" >&2
+    status=1
+  else
+    echo "  OK: runtime-shell allowance is keyed on the id"
   fi
 
   return "$status"

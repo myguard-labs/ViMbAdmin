@@ -25,16 +25,30 @@ cp public/js/100-jquery.js "$tmp/jquery.js"
 cp public/js/800-bootstrap.js "$tmp/bootstrap.js"
 cp public/js/850-vimbadmin.modals.js "$tmp/modals.js"
 
-extract_guard() {
-  awk '/^var ossConfirmedForms = new WeakSet\(\);/ { copying = 1 }
-       copying { print }' public/js/990-vimbadmin.js >"$tmp/guard.js"
+awk '/^function tt_throbber/ { copying = 1 }
+     /^function ossToggle/ { copying = 0 }
+     /^function tt_openModalDialog/ { copying = 1 }
+     /^function ossAjaxErrorHandler/ { copying = 0 }
+     copying { print }' public/js/990-vimbadmin.js >"$tmp/ajax-modal.js"
+awk '/^var ossConfirmedForms = new WeakSet\(\);/ { copying = 1 }
+     copying { print }' public/js/990-vimbadmin.js >"$tmp/guard.js"
+if ! grep -q 'function tt_openModalDialog' "$tmp/ajax-modal.js" ||
+  ! grep -q 'ossConfirm( message' "$tmp/guard.js"; then
+  echo 'FAIL: could not extract production AJAX modal and confirm handlers' >&2
+  exit 2
+fi
 
-  if ! grep -q 'ossConfirm( message' "$tmp/guard.js"; then
-    echo 'FAIL: could not extract the delegated native-modal confirm guard' >&2
-    exit 2
+for footer in application/views/footer.phtml application/views/_skins/myskin/footer.phtml; do
+  if ! grep -q 'id="modal_dialog_shell".*aria-label="Loading dialog"' "$footer"; then
+    echo "FAIL: AJAX modal shell has no loading-state accessible name in $footer" >&2
+    exit 1
   fi
-}
-extract_guard
+done
+if ! grep -q 'class="modal-title" id="email_settings_dialog_title"' \
+  application/views/mailbox/native-email-settings.phtml; then
+  echo 'FAIL: email-settings fragment title has no stable id' >&2
+  exit 1
+fi
 
 run_case() {
   local label=$1 mode=$2 script_tags
@@ -43,7 +57,7 @@ run_case() {
   if [[ $mode == source ]]; then
     # Load the modal helper before jQuery: this lane proves the replacement has
     # no hidden load-time dependency on the library the old dialog used.
-    script_tags='<script src="bootstrap.js"></script><script src="modals.js"></script><script src="jquery.js"></script><script src="guard.js"></script>'
+    script_tags='<script src="modals.js"></script><script src="jquery.js"></script><script src="bootstrap.js"></script><script src="ajax-modal.js"></script><script src="guard.js"></script>'
   else
     local bundle_file
     bundle_file=$(resolve_bundle_v) || exit $?
@@ -62,6 +76,10 @@ run_case() {
 <form id="empty-message" method="post" action="/x" data-confirm=""></form>
 <button id="alert-trigger" type="button">Show message</button>
 <button id="in-page-trigger" type="button">Open existing modal</button>
+<a id="modal-dialog-email-7" data-bs-original-title="Send Settings" href="/email-settings/7"></a>
+<div id="modal_dialog_shell" class="modal fade" tabindex="-1" aria-label="Loading dialog" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div id="modal_dialog" class="modal-content"></div></div>
+</div>
 <div id="in-page-modal" class="modal fade" tabindex="-1" aria-labelledby="in-page-title" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
     <div class="modal-header">
@@ -77,6 +95,7 @@ run_case() {
 (function () {
     var failures = [];
     var submitted = [];
+    window.ossAjaxErrorHandler = function() {};
     window.addEventListener('error', function (event) {
         failures.push('page error: ' + event.message);
     });
@@ -275,6 +294,50 @@ run_case() {
         await waitFor(function () { return !document.body.contains(alertModal); }, 'alert modal removal');
         assertFocusReturned('alert dismissal', 'alert-trigger');
 
+        // The shared AJAX shell must be named while its throbber is visible,
+        // then transfer that name to the real fragment title after insertion.
+        var ajaxTrigger = document.getElementById('modal-dialog-email-7');
+        var ajaxShell = document.getElementById('modal_dialog_shell');
+        var ajaxRequest = null;
+        var realAjax = jQuery.ajax;
+        jQuery.ajax = function(options) { ajaxRequest = options; };
+        ajaxTrigger.focus();
+        tt_openModalDialog({
+            preventDefault: function() {},
+            target: ajaxTrigger
+        });
+        if (ajaxShell.getAttribute('aria-label') !== 'Send Settings')
+            failures.push('AJAX modal loading state did not use the trigger label');
+        if (ajaxShell.hasAttribute('aria-labelledby'))
+            failures.push('AJAX modal loading state retained a dangling aria-labelledby');
+        if (!ajaxRequest || typeof ajaxRequest.success !== 'function') {
+            failures.push('AJAX modal did not issue its content request');
+        }
+        else {
+            ajaxRequest.success(
+                '<div class="modal-header"><h3 class="modal-title" id="email_settings_dialog_title">' +
+                'Email Settings</h3></div><div class="modal-body"></div>' +
+                '<div class="modal-footer"><button id="modal_dialog_cancel">Close</button></div>'
+            );
+            var loadedTitle = ajaxShell.querySelector('.modal-title');
+            var loadedTitleId = loadedTitle ? loadedTitle.id : '';
+            var matchingTitleIds = Array.from(document.querySelectorAll('[id]')).filter(function(node) {
+                return node.id === loadedTitleId;
+            }).length;
+            if (!loadedTitleId || matchingTitleIds !== 1)
+                failures.push('AJAX modal loaded title id was absent or non-unique');
+            if (ajaxShell.getAttribute('aria-labelledby') !== loadedTitleId)
+                failures.push('AJAX modal loaded state was not labelled by its title');
+            if (ajaxShell.hasAttribute('aria-label'))
+                failures.push('AJAX modal loaded state retained its loading label');
+        }
+        jQuery.ajax = realAjax;
+        await waitFor(function () { return ajaxShell.classList.contains('show'); }, 'AJAX modal shown state');
+        dialog.hide();
+        await waitFor(function () {
+            return document.activeElement === ajaxTrigger;
+        }, 'AJAX modal focus restoration');
+
         // Boundary: forms without a usable message are not guarded.
         submitted = [];
         submit('unguarded');
@@ -306,10 +369,12 @@ run_case() {
         document.body.dataset.testFailures = failures.join('; ');
     }
 
-    drive().catch(function (error) {
-        document.body.dataset.testResult = 'fail';
-        failures.push(error.message);
-        document.body.dataset.testFailures = failures.join('; ');
+    jQuery(function() {
+        drive().catch(function (error) {
+            document.body.dataset.testResult = 'fail';
+            failures.push(error.message);
+            document.body.dataset.testFailures = failures.join('; ');
+        });
     });
 })();
 </script>
@@ -333,11 +398,11 @@ HTML
   if ! grep -q 'data-test-result="pass"' "$rendered"; then
     local failures
     failures=$(grep -o 'data-test-failures="[^"]*"' "$rendered" || true)
-    echo "FAIL: native confirm guard is unsafe in $label: ${failures:-no browser verdict}" >&2
+    echo "FAIL: native modal behavior is unsafe in $label: ${failures:-no browser verdict}" >&2
     return 1
   fi
 
-  echo "ok   $label: native confirm gates one destructive submit and coalesces rapid duplicates"
+  echo "ok   $label: confirm gating and AJAX modal accessible naming behave safely"
 }
 
 run_popup_csp_case() {

@@ -292,6 +292,13 @@ function tt_openModalDialog(event) {
         $( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-email' );
     }
 
+    var modalShell = $( '#modal_dialog_shell' );
+    var loadingLabel = element.attr( 'aria-label' ) || element.attr( 'title' )
+        || element.attr( 'data-bs-original-title' );
+    if( typeof loadingLabel !== 'string' || loadingLabel.trim() === '' )
+        loadingLabel = 'Loading dialog';
+    modalShell.removeAttr( 'aria-labelledby' ).attr( 'aria-label', loadingLabel );
+
     $('#modal_dialog').html( '<div id="throb" style="padding-left:230px; padding-top:175px; height:275px;"></div>' );
 
 
@@ -307,6 +314,14 @@ function tt_openModalDialog(event) {
         timeout: 10000,
         success:    function(data) {
                         $('#modal_dialog').html( data );
+                        var modalTitle = modalShell.find( '.modal-title' ).first();
+                        var modalTitleId = modalTitle.attr( 'id' );
+                        var matchingIds = $( '[id]' ).filter( function() {
+                            return this.id === modalTitleId;
+                        } ).length;
+                        if( modalTitle.length && typeof modalTitleId === 'string'
+                            && modalTitleId !== '' && matchingIds === 1 )
+                            modalShell.attr( 'aria-labelledby', modalTitleId ).removeAttr( 'aria-label' );
                         $( '.modal-body' ).scrollTop( 0 );
                         $( '#modal_dialog_cancel' ).on( 'click', function(){
                             dialog.hide();

@@ -33,5 +33,17 @@ $check('mailbox size dialog escapes every dynamic table value',
         && str_contains($mailboxList, 'htmlEntity( prc.toFixed(0) )')
         && str_contains($mailboxList, 'htmlEntity( data[4] )'));
 
+$emailSettings = file_get_contents(__DIR__ . '/../application/views/mailbox/native-email-settings.phtml');
+$check('email-settings modal emits native required constraints',
+    is_string($emailSettings)
+        && str_contains($emailSettings, '<select name="type" id="type" required')
+        && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}")
+        && !str_contains($emailSettings, 'class="required"'));
+$check('email-settings modal validates before AJAX and tracks conditional email requirement',
+    is_string($mailboxList)
+        && str_contains($mailboxList, "jQuery( '#email' ).prop( 'required', other );")
+        && str_contains($mailboxList, 'if( !form[0].reportValidity() )')
+        && strpos($mailboxList, 'if( !form[0].reportValidity() )') < strpos($mailboxList, 'jQuery.ajax({'));
+
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

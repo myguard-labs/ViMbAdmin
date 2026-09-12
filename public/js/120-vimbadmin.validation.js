@@ -11,17 +11,18 @@
 
     function formControls(form) {
         return Array.prototype.filter.call(form.elements, function(element) {
-            return typeof element.checkValidity === 'function' &&
-                !element.disabled &&
-                !/^(?:button|reset|submit)$/i.test(element.type);
+            return isValidationControl(element);
         });
     }
 
-    function applyLegacyRequired(form) {
-        form.querySelectorAll('.required').forEach(function(element) {
-            if (/^(?:input|select|textarea)$/i.test(element.tagName))
-                element.required = true;
-        });
+    function isValidationControl(element) {
+        return typeof element.checkValidity === 'function' &&
+            element.willValidate &&
+            (element.matches('[required], [pattern], [minlength], [maxlength], [min], [max], [step], [type="email"], [type="url"], [type="number"]') ||
+                element.validity.customError ||
+                element.hasAttribute('data-validation-group') ||
+                element.classList.contains('is-invalid') ||
+                element.classList.contains('is-valid'));
     }
 
     function showValidity(element) {
@@ -45,14 +46,16 @@
     }
 
     document.addEventListener('invalid', function(event) {
-        if (event.target.form)
+        if (event.target.form) {
+            event.target.form.classList.add('was-validated');
             event.target.classList.add('is-invalid');
+        }
     }, true);
 
     function handleFieldEvent(event) {
         const element = event.target;
 
-        if (!element.form || typeof element.checkValidity !== 'function')
+        if (!element.form || !isValidationControl(element))
             return;
 
         showValidity(element);
@@ -71,7 +74,6 @@
         if (form.noValidate || (event.submitter && event.submitter.formNoValidate))
             return;
 
-        applyLegacyRequired(form);
         form.classList.add('was-validated');
 
         const valid = form.checkValidity();

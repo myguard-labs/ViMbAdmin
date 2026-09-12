@@ -329,7 +329,9 @@ jQuery( document ).on( 'click', '[data-toggle-active]', function() {
 // attribute rather than templated in, so no per-fragment data is needed.
 //
 jQuery( document ).on( 'change', '#type', function() {
-    if( jQuery( this ).val() == "other" )
+    var other = jQuery( this ).val() == "other";
+    jQuery( '#email' ).prop( 'required', other );
+    if( other )
         jQuery( '#other_email' ).slideDown( "slow" );
     else
         jQuery( '#other_email' ).slideUp( "slow" );
@@ -338,6 +340,9 @@ jQuery( document ).on( 'change', '#type', function() {
 jQuery( document ).on( 'click', '#modal_dialog_save', function() {
     var form = jQuery( '#email_settings_form' );
     if( form.length === 0 )
+        return;
+
+    if( !form[0].reportValidity() )
         return;
 
     tt_throbber( 32, 14, 1.8 ).appendTo( jQuery( '#esfooter' ).get(0) ).start();

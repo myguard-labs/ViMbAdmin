@@ -248,26 +248,29 @@ function tt_throbber( size, lines, strokewidth, fallback )
 /**
  * This function is handling toggle elements.
  *
- * First function unbinds toggle element, removes label type and pointer.
+ * First function guards the pending element and removes its label type.
  * Then creates throbber and add it to div trobber with id throb-{toggle element id}.
  * div for throbber should be created manually. Function only assigns throbber to it. After
  * that it calls AJAX for passed URL and data. If response ok flag ok is set to true otherwise
  * error message is show. If we have AJAX error ten ossAjaxErrorHandler calls. After AJAX error
  * or success handlers function sets back label type and pointer by flags On and Ok , kills throbber
- * end bind same function again for toggle element.
+ * and releases the pending guard. List-view delegates own all click bindings.
  *
  * @param e Element witch will be edited
  * @param Url This is URL for AJAX.
  * @param data Data for AJAX to post.
  * @param delElement Element witch will be removed
  */
+var ossPendingToggles = new WeakSet();
+
 function ossToggle( e, Url, data, delElement )
 {
-    e.off('click');
-
-    if( e.hasClass( 'disabled' ) )
+    var element = e.get( 0 );
+    if( !element || e.hasClass( 'disabled' ) || ossPendingToggles.has( element ) )
         return;
-
+    // Active controls are also spans: their disabled property is visual state,
+    // not a browser event guard. Never accept a second request while pending.
+    ossPendingToggles.add( element );
 
     var on = true;
     if( e.hasClass( 'btn-danger' ) ) {
@@ -308,9 +311,7 @@ function ossToggle( e, Url, data, delElement )
 
             DataTable.Dom.select( '#throb-' + e.attr( 'id' ) ).html( "" );
 
-            e.on( 'click', function( event ){
-                ossToggle( e, Url, data, delElement );
-            });
+            ossPendingToggles.delete( element );
 
             if( delElement && ok ) {
                 DataTable.Dom.select( delElement ).transition({ opacity: 0 }, 600, 'ease', function() {

@@ -38,7 +38,8 @@ $emailSettingsHasLegacyRequiredClass = false;
 if (is_string($emailSettings)
     && preg_match_all('/\\bclass=(["\'])(.*?)\\1/', $emailSettings, $classAttributes)) {
     foreach ($classAttributes[2] as $classAttribute) {
-        if (in_array('required', preg_split('/\\s+/', trim($classAttribute)), true)) {
+        $classTokens = preg_split('/\\s+/', trim($classAttribute));
+        if ($classTokens !== false && in_array('required', $classTokens, true)) {
             $emailSettingsHasLegacyRequiredClass = true;
             break;
         }

@@ -2,6 +2,8 @@
 
 # Exercise the dependency-free DataTables 3 and Bootstrap stack in each asset lane.
 # The second load also verifies preference-cookie persistence.
+# Retired Chosen/Colorbox assets are not loaded or tested: their replacements
+# are native form controls and application-owned Bootstrap dialogs.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -115,13 +117,11 @@ var scripts = mode === 'production'
        '800-bootstrap.js','850-vimbadmin.modals.js',
        '910-vimbadmin.functions.js','990-vimbadmin.js',
        'view-admin-domains.js','view-archive-renderers.js','view-row-lifecycle.js'];
-// Drives the 'missing plugin dependency' negative control. It removes a script
+// Drives the 'missing DataTables dependency' negative control. It removes a script
 // the development lane loads, so it is only meaningful there -- production
 // loads a single bundle. The lane is pinned to development by expect_fail below.
-// Re-pointed (2026-09-08) at DataTables, which every non-production lane still
-// loads and which the 'DataTables sorts, searches and tears down' check below
-// still asserts against, after Chosen was dropped from this file's coverage
-// (see the file header for why).
+// The 'DataTables sorts, searches and tears down' assertion exercises that
+// required core directly; removing it must fail before any compatibility claim.
 if (location.hash === '#missing-dependency') {
     scripts = scripts.filter(function(file) { return file !== '150-datatables.js'; });
 }
@@ -657,7 +657,6 @@ vmReady(function() {
     check('multi-column ordering is disabled for the single-order server contract', function() {
         return DataTable.defaults.orderMulti === false;
     });
-    // Chosen and Colorbox coverage was dropped here; see the file header.
     // Assert the application-owned informational dialog through the native
     // Bootstrap 5 Modal lifecycle. It keeps the OSS_Message HTML contract but
     // has no third-party dialog or jQuery dependency.
@@ -834,7 +833,7 @@ case "$mutation" in
     # Negative controls run in the default lane, so a rotted oracle fails CI
     # instead of waiting for someone to remember an env var.
     expect_fail 'injected compatibility warning' run_mode development '#warning-trigger'
-    expect_fail 'missing plugin dependency' run_mode development '#missing-dependency'
+    expect_fail 'missing DataTables dependency' run_mode development '#missing-dependency'
     expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
     expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
     expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'

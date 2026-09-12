@@ -11,9 +11,8 @@
 # VIM-A15.43: ossToggle()'s cleanup used `typeof( delElement ) != undefined`.
 # `typeof` always yields a STRING, so `"undefined" != undefined` is ALWAYS
 # TRUE regardless of whether delElement was passed -- the guard guarded
-# nothing. It was harmless only by luck (`$(undefined)` is an empty jQuery
-# set and `.hide()` on it is a no-op), so this asserts the callback the guard
-# is supposed to gate is never invoked when delElement is absent.
+# nothing. An empty selection can silently do nothing, so this asserts the
+# selector is never invoked when delElement is absent.
 #
 # VIM-A15.47: ossAlert(), when Bootstrap's Modal constructor is
 # unavailable, removed the dialog and ran the callback WITHOUT ever showing
@@ -28,8 +27,8 @@
 # indicator; the Bootstrap 5 spelling is `text-danger`. This asserts the
 # emitted tab markup carries `text-danger` and never `text-error`.
 #
-# VIM-A15.49: ossToggle()'s $.ajax `complete:` handler ran
-# `if( delElement ) { ... remove() }` unconditionally. jQuery's `complete`
+# VIM-A15.49: ossToggle()'s AJAX `complete:` handler ran
+# `if( delElement ) { ... remove() }` unconditionally. The transport's `complete`
 # fires on success AND on error/timeout/non-"ok" response body -- on failure
 # the handler correctly reverts the toggle (`if( !ok ) on = !on;`) but then
 # deleted the associated row anyway, so the page claimed the row was gone
@@ -40,6 +39,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+source tests/support/resolve-bundle-v.sh
 
 browser="${CHROMIUM_BIN:-}"
 if [[ -z "$browser" ]]; then
@@ -56,14 +56,32 @@ trap 'rm -rf "$tmp"' EXIT
 cp public/js/150-datatables.js public/js/800-bootstrap.js "$tmp/"
 cp public/js/990-vimbadmin.js "$tmp/990-vimbadmin.js"
 cp public/js/850-vimbadmin.modals.js "$tmp/850-vimbadmin.modals.js"
+bundle_file=$(resolve_bundle_v) || exit $?
+cp "public/js/$bundle_file" "$tmp/bundle.js"
+# Extract the production toggle wrapper and document delegate, replacing only
+# server-rendered URL/token literals with fixed fixture values.
+# The token placeholder is Smarty syntax, not a shell variable.
+# shellcheck disable=SC2016
+awk '
+  /^function toggleActive\(/ { active = 1; wrappers++ }
+  /^DataTable.Dom.select\( document \).on.*data-toggle-active/ { active = 1; delegates++ }
+  active { print }
+  active && /^};|^} \);/ { active = 0 }
+  END { if (wrappers != 1 || delegates != 1) exit 1 }
+' application/views/alias/js/list.js |
+  sed -e 's/{genUrl[^}]*}/\/x/g' -e 's/{$csrfToken}/fixture-csrf/g' >"$tmp/toggle-view.js"
 
 cat >"$tmp/regression.html" <<'HTML'
 <!doctype html>
 <html><head><meta charset="utf-8"></head><body>
-<script src="150-datatables.js"></script><script src="800-bootstrap.js"></script>
-<script src="990-vimbadmin.js"></script>
-
-<script src="850-vimbadmin.modals.js"></script>
+<script>
+var assets = new URL(location.href).searchParams.get('assets') === 'production'
+    ? ['bundle.js']
+    : ['150-datatables.js', '800-bootstrap.js', '990-vimbadmin.js', '850-vimbadmin.modals.js'];
+assets.concat(['toggle-view.js']).forEach(function(file) {
+    document.write('<script src="' + file + '"><\/script>');
+});
+</script>
 
 <button id="toggle-target" class="btn btn-success" data-throb-key="t1"></button>
 <div id="throb-toggle-target"></div>
@@ -83,15 +101,9 @@ vmReady(function () {
     // -- VIM-A15.43: absent delElement must not enter the cleanup branch at all --
     //
     // The old guard, `typeof( delElement ) != undefined`, is a string-vs-value
-    // comparison that is ALWAYS true, so it always called $( delElement ).hide(...)
-    // regardless of whether delElement was passed. $(undefined) is an empty
-    // jQuery set and .hide() on it silently no-ops, so the DOM end state is
-    // identical whether the branch ran or not -- an end-state assertion cannot
-    // discriminate the fixed guard from the broken one (this is the "harmless
-    // today only by luck" the item names). What DOES discriminate is whether
-    // the jQuery constructor `$` was ever invoked with `undefined` from inside
-    // that cleanup at all: the fixed guard (`if( delElement )`) never calls
-    // $(undefined) when delElement is omitted, the old guard always did.
+    // comparison that is ALWAYS true. An empty selection has no visible effect,
+    // so an end-state assertion cannot distinguish a missing guard. Observe
+    // DataTable.Dom.select directly: omitted delElement must never reach it.
     var realSelect = DataTable.Dom.select;
     var wrappedSelect = function (selector) {
         if (selector === undefined) results.undefinedCallSeen = true;
@@ -123,11 +135,11 @@ vmReady(function () {
 
     // -- VIM-A15.49: a failed toggle request must not remove delElement --
     //
-    // The real cleanup calls $(delElement).hide('slow', function(){ remove() }),
-    // an animated (~600ms) removal. Headless dump-dom under a bounded virtual
+    // The real cleanup calls DataTable.Dom.select(delElement).transition(...),
+    // an animated (600ms) removal. Headless dump-dom under a bounded virtual
     // time budget can catch that animation mid-flight regardless of whether the
     // removal branch even ran, which would make this control vacuous in both
-    // directions. Stub .hide() to invoke its completion callback synchronously
+    // directions. Disable transitions to invoke completion synchronously
     // so the assertion below reflects whether ossToggle's `if( delElement [&&
     // ok] )` branch ran at all, not whether an unrelated animation finished.
     var realTransitions = DataTable.Dom.transitions;
@@ -147,18 +159,14 @@ vmReady(function () {
         ossToggle(failTarget, '/x', {}, '#del-target-fail');
         results.failedToggleDelSurvived = document.getElementById('del-target-fail') !== null;
 
-        // The failure path rebinds a click handler for the user's retry. If
-        // that rebound handler drops delElement, a later SUCCESSFUL retry
-        // toggles the state but leaves the row on the page forever -- the
-        // mirror-image defect of the one fixed above. Retry through the real
-        // rebound handler (not another direct ossToggle call) with a
-        // succeeding request, and require the row to be gone.
+        // A later successful call must still honor the optional removal
+        // argument. Click/delegate retries are exercised separately below.
         ossAjax = function (opts) {
             opts.success('ok');
             opts.complete();
             return xhr;
         };
-        failTarget.trigger('click');
+        ossToggle(failTarget, '/x', {}, '#del-target-fail');
         results.retriedToggleDelRemoved = document.getElementById('del-target-fail') === null;
     } catch (e) {
         failures.push('ossToggle with failed request threw: ' + e);
@@ -166,6 +174,65 @@ vmReady(function () {
         ossAjax = realAjax2;
         DataTable.Dom.transitions = realTransitions;
         DataTable.Dom.select = realSelect;
+    }
+
+    // Production toggleActive wrapper + document delegate + ossToggle. Spans
+    // deliberately match shipped row markup: disabled does not stop clicks.
+    var table = document.createElement('table');
+    document.body.appendChild(table);
+    var toggleApi;
+    var requests = [];
+    ossAjax = function(opts) { requests.push(opts); return xhr; };
+    try {
+        toggleApi = new DataTable(table, { data: [], columns: [{ title: 'Active' }], order: [] });
+        var markup = '<div id="throb-toggle-active-probe"></div>' +
+            '<span id="toggle-active-probe" data-toggle-active="probe" class="btn btn-success"><i>Yes</i></span>';
+        toggleApi.rows.add([[markup]]).draw();
+        var control = table.querySelector('[data-toggle-active]');
+        function clickToggle(node) {
+            (node.firstElementChild || node).dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }
+        control.classList.add('disabled');
+        clickToggle(control);
+        if (requests.length !== 0) throw new Error('disabled toggle sent a request');
+        control.classList.remove('disabled');
+        var outcomes = ['ok', 'failed: in use', 'error', 'timeout', 'abort', '<malformed>'];
+        outcomes.forEach(function(outcome, index) {
+            var oldClass = control.className;
+            clickToggle(control);
+            if (requests.length !== index + 1) throw new Error('accepted click did not send exactly one request');
+            var request = requests[index];
+            if (request.url !== '/x' || request.type !== 'POST' || request.data.alid !== 'probe'
+                || request.data.csrf !== 'fixture-csrf') throw new Error('toggle request contract changed');
+            clickToggle(control);
+            clickToggle(control);
+            if (requests.length !== index + 1) throw new Error('pending toggle accepted another request');
+            if (['error', 'timeout', 'abort'].indexOf(outcome) !== -1) request.error(xhr, outcome, 'fixture error');
+            else request.success(outcome);
+            request.complete();
+            if (control.disabled !== false) throw new Error('completed toggle remained disabled');
+            if (control._event_uid !== undefined) throw new Error('toggle owns a direct DataTables listener after completion');
+            if (outcome === 'ok' ? !control.classList.contains('btn-danger') : control.className !== oldClass)
+                throw new Error('toggle success/failure state incorrect');
+        });
+        // Replace a row after success/error/retry use, then click both detached
+        // and current controls. Only the current control may reach transport.
+        var detached = control;
+        toggleApi.clear().rows.add([[markup]]).draw();
+        clickToggle(detached);
+        if (requests.length !== outcomes.length) throw new Error('detached toggle sent a request');
+        control = table.querySelector('[data-toggle-active]');
+        clickToggle(control);
+        if (requests.length !== outcomes.length + 1) throw new Error('redrawn toggle lost delegation');
+        requests[outcomes.length].success('ok');
+        requests[outcomes.length].complete();
+        if (control._event_uid !== undefined) throw new Error('redrawn toggle owns a direct listener');
+    } catch (e) {
+        failures.push('delegated toggle lifecycle: ' + e.message);
+    } finally {
+        ossAjax = realAjax;
+        if (toggleApi) toggleApi.destroy();
+        table.remove();
     }
 
     // -- VIM-A15.47: Modal unavailable must still surface the message --
@@ -192,9 +259,9 @@ vmReady(function () {
 
     if (!results.toggleRan) failures.push('ossToggle did not run with delElement omitted');
     if (results.toggleDelRemoved !== true) failures.push('ossToggle left the toggle button in a bad state with delElement omitted');
-    if (results.undefinedCallSeen) failures.push('ossToggle called $(undefined) even though delElement was omitted -- the guard is not gating anything');
+    if (results.undefinedCallSeen) failures.push('ossToggle selected undefined even though delElement was omitted -- the guard is not gating anything');
     if (results.failedToggleDelSurvived !== true) failures.push('ossToggle removed delElement even though the request failed -- the row vanished from the page while the server still has it');
-    if (results.retriedToggleDelRemoved !== true) failures.push('a successful retry after a failed ossToggle left delElement on the page -- the rebound click handler dropped delElement');
+    if (results.retriedToggleDelRemoved !== true) failures.push('a successful retry after a failed ossToggle left delElement on the page');
     if (results.alertMessage !== 'Delete failed, contact support') {
         failures.push('ossAlert did not surface its message via window.alert when Modal was unavailable: got ' + JSON.stringify(results.alertMessage));
     }
@@ -213,6 +280,7 @@ vmReady(function () {
 </body></html>
 HTML
 
+for mode in source production; do
 rm -rf "$tmp/profile"
 "$browser" \
   --headless \
@@ -220,17 +288,20 @@ rm -rf "$tmp/profile"
   --allow-file-access-from-files \
   --user-data-dir="$tmp/profile" \
   --virtual-time-budget=1000 \
-  --dump-dom "file://$tmp/regression.html" >"$tmp/rendered.html" 2>"$tmp/chromium.log"
+  --dump-dom "file://$tmp/regression.html?assets=$mode" >"$tmp/rendered.html" 2>"$tmp/chromium.log"
 
 if ! grep -q 'data-test-result="pass"' "$tmp/rendered.html"; then
   failures="$(grep -o 'data-test-failures="[^"]*"' "$tmp/rendered.html" || true)"
-  echo "FAIL: source-defect-sweep regression: ${failures:-no browser verdict}" >&2
+  echo "FAIL: source-defect-sweep regression ($mode): ${failures:-no browser verdict}" >&2
   exit 1
 fi
+echo "ok   source-defect-sweep $mode asset lane"
+done
 
 echo "ok   ossToggle with delElement omitted runs cleanly (VIM-A15.43)"
 echo "ok   addPluginTab emits text-danger, not text-error (VIM-A15.44)"
 echo "ok   ossAlert surfaces its message when Modal is unavailable (VIM-A15.47)"
 echo "ok   ossToggle leaves delElement in place when the request fails (VIM-A15.49)"
 echo "ok   a successful retry after a failed ossToggle removes delElement (VIM-A15.49)"
+echo "ok   production toggle delegate sends one request, suppresses pending clicks and survives redraw without direct listeners"
 echo "ALL PASSED"

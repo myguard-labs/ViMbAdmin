@@ -57,6 +57,7 @@ $check('popup type is set', $popup->getType() === OSS_Message::TYPE_POP_UP);
 $check('popup actions default null', $popup->getActions() === null);
 
 $smarty = new MessageSmartyDouble([
+    'cspNonce' => 'test-popup-nonce',
     'OSS_Messages' => [
         $block,
         $popup,
@@ -66,12 +67,37 @@ $smarty = new MessageSmartyDouble([
 
 $rendered = smarty_function_OSS_Message([], $smarty);
 $check('block render includes actions container', str_contains($rendered, 'alert-actions') && str_contains($rendered, 'Undo') && str_contains($rendered, 'Retry'));
-$check('popup render emits each bootbox item', str_contains($rendered, 'bootbox.alert(') && str_contains($rendered, "'One'") && str_contains($rendered, "'Two'"));
+$check('popup render emits each native modal item', str_contains($rendered, 'ossAlert( "One" )') && str_contains($rendered, 'ossAlert( "Two" )'));
+$check('popup scripts carry the response CSP nonce', substr_count($rendered, 'nonce="test-popup-nonce"') === 2);
+$check('rendered alerts use Bootstrap 5 dismissal attributes', str_contains($rendered, 'data-bs-dismiss="alert"') && !str_contains($rendered, 'data-dismiss="alert"'));
 $check('plain render emits each message item', str_contains($rendered, 'Alpha') && str_contains($rendered, 'Beta') && str_contains($rendered, 'alert-error'));
 $check('default ids remain sequential', str_contains($rendered, 'id="oss-message-0"') && str_contains($rendered, 'id="oss-message-2"'));
 preg_match_all('/id="oss-message-([0-9]+)"/', $rendered, $renderedIdMatches);
 $renderedIds = $renderedIdMatches[1];
 $check('array messages receive unique alert ids', count($renderedIds) === count(array_unique($renderedIds)));
+
+$hostilePopupText = 'Quotes "double" and \'single\' &amp; entity </script><b>tail</b>';
+$hostilePopupSmarty = new MessageSmartyDouble([
+    'cspNonce' => 'test-popup-nonce',
+    'OSS_Messages' => [new OSS_Message_Pop_Up($hostilePopupText, OSS_Message::INFO, false)],
+]);
+$hostilePopup = smarty_function_OSS_Message([], $hostilePopupSmarty);
+$check('popup JSON encoding cannot terminate its script element',
+    substr_count($hostilePopup, '</script>') === 1
+    && str_contains($hostilePopup, '\\u003C\\/script\\u003E')
+    && str_contains($hostilePopup, '\\u0022double\\u0022')
+    && str_contains($hostilePopup, '\\u0026amp;'));
+
+$missingPopupNonceRejected = false;
+try {
+    $missingNonceSmarty = new MessageSmartyDouble([
+        'OSS_Messages' => [new OSS_Message_Pop_Up('blocked', OSS_Message::INFO, false)],
+    ]);
+    smarty_function_OSS_Message([], $missingNonceSmarty);
+} catch (InvalidArgumentException $exception) {
+    $missingPopupNonceRejected = $exception->getMessage() === 'OSS popup messages require a valid CSP nonce';
+}
+$check('popup render fails closed without a valid CSP nonce', $missingPopupNonceRejected);
 
 $randomSmarty = new MessageSmartyDouble([
     'OSS_Messages' => [new OSS_Message('Random', OSS_Message::SUCCESS, false)],

@@ -164,7 +164,7 @@
                 $message .= <<<END_MESSAGE
 
     <div class="alert alert-block alert-{$class} fade in" id="oss-message-{$count}">
-        <a class="close" href="#" data-dismiss="alert">×</a>
+        <a class="close" href="#" data-bs-dismiss="alert">×</a>
         {$blockMessage}
 END_MESSAGE;
                 if( count( $actions ) )
@@ -189,16 +189,37 @@ END_MESSAGE;
             {
 
                 $items = $messageItems( $ossm->getMessage() );
+                $cspNonce = $smarty->getTemplateVars( 'cspNonce' );
+                if( !is_string( $cspNonce )
+                    || preg_match( '/^[A-Za-z0-9+\/_-]+={0,2}$/D', $cspNonce ) !== 1 )
+                    throw new \InvalidArgumentException( 'OSS popup messages require a valid CSP nonce' );
+                $nonceAttribute = htmlspecialchars(
+                    $cspNonce,
+                    ENT_QUOTES | ENT_SUBSTITUTE,
+                    'UTF-8'
+                );
 
                 foreach( $items as $item )
                 {
+                        $jsonItem = json_encode(
+                            $item,
+                            JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS
+                                | JSON_HEX_QUOT | JSON_THROW_ON_ERROR
+                                | JSON_UNESCAPED_UNICODE
+                        );
+                        if( !is_string( $jsonItem ) )
+                            throw new \UnexpectedValueException( 'OSS popup message could not be JSON encoded' );
                         $message .= <<<END_MESSAGE
 
-        <script type="text/javascript">
-            $( document ).ready( function()
-            {
-                bootbox.alert( '{$item}' );
-            })
+        <script type="text/javascript" nonce="{$nonceAttribute}">
+            if( document.readyState === 'loading' ) {
+                document.addEventListener( 'DOMContentLoaded', function() {
+                    ossAlert( {$jsonItem} );
+                }, { once: true } );
+            }
+            else {
+                ossAlert( {$jsonItem} );
+            }
         </script>
 
 END_MESSAGE;
@@ -218,7 +239,7 @@ END_MESSAGE;
                         $message .= <<<END_MESSAGE
 
         <div class="alert alert-{$class} fade in" id="oss-message-{$count}">
-            <a class="close" href="#" data-dismiss="alert">×</a>
+            <a class="close" href="#" data-bs-dismiss="alert">×</a>
             {$item}
         </div>
 
@@ -254,7 +275,7 @@ END_MESSAGE;
                 $message .= <<<END_MESSAGE
 
         <div class="alert alert-{$fmClass} fade in" id="oss-message-{$count}">
-            <a class="close" href="#" data-dismiss="alert">×</a>
+            <a class="close" href="#" data-bs-dismiss="alert">×</a>
             {$fmOutput}
         </div>
 

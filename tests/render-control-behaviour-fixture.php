@@ -47,18 +47,6 @@ foreach ([$stubs, $compile] as $dir) {
 //
 // SOURCE, NOT THE BUNDLE.
 //
-// This fixture originally loaded public/js/min.bundle-v19.js, and that made
-// both of its behavioural assertions VACUOUS: neutering ossModal()'s .show()
-// in public/js/850-bootbox.js, or swapping data-bs-dismiss back to
-// data-dismiss in public/js/990-vimbadmin.js, left the gate green, because
-// neither file was ever loaded. The bundle is a hand-regenerated artifact
-// (VIM-A15.36) last rebuilt in PR #168, while 990-vimbadmin.js has changed
-// since and 152-jquery.datatables.bootstrap5.js is absent from it entirely --
-// so the gate asserted against a months-old copy of the very code it claimed
-// to test. A negative control that mutates the bundle proves only that the
-// harness reacts to the bundle; it says nothing about whether the bundle
-// reflects source.
-//
 // The script list is PARSED FROM application/views/header-js.phtml's
 // non-minified branch rather than duplicated here, so a script added to or
 // removed from the application cannot silently drift out of this gate's

@@ -292,6 +292,13 @@ function tt_openModalDialog(event) {
         $( '#modal_dialog_shell .modal-dialog' ).removeClass( 'modal-email' );
     }
 
+    var modalShell = $( '#modal_dialog_shell' );
+    var loadingLabel = element.attr( 'aria-label' ) || element.attr( 'title' )
+        || element.attr( 'data-bs-original-title' );
+    if( typeof loadingLabel !== 'string' || loadingLabel.trim() === '' )
+        loadingLabel = 'Loading dialog';
+    modalShell.removeAttr( 'aria-labelledby' ).attr( 'aria-label', loadingLabel );
+
     $('#modal_dialog').html( '<div id="throb" style="padding-left:230px; padding-top:175px; height:275px;"></div>' );
 
 
@@ -307,9 +314,21 @@ function tt_openModalDialog(event) {
         timeout: 10000,
         success:    function(data) {
                         $('#modal_dialog').html( data );
+                        var modalTitle = modalShell.find( '.modal-title' ).first();
+                        var modalTitleId = modalTitle.attr( 'id' );
+                        var modalTitleText = modalTitle.text();
+                        var modalTitleIdIsToken = typeof modalTitleId === 'string'
+                            && modalTitleId !== '' && !/[\t\n\f\r ]/.test( modalTitleId );
+                        var matchingIds = $( '[id]' ).filter( function() {
+                            return this.id === modalTitleId;
+                        } ).length;
+                        if( modalTitle.length && modalTitleIdIsToken
+                            && modalTitleText.trim() !== ''
+                            && matchingIds === 1 )
+                            modalShell.attr( 'aria-labelledby', modalTitleId ).removeAttr( 'aria-label' );
                         $( '.modal-body' ).scrollTop( 0 );
                         $( '#modal_dialog_cancel' ).on( 'click', function(){
-                            dialog.modal('hide');
+                            dialog.hide();
                         });
                      },
 
@@ -340,7 +359,7 @@ function ossAjaxErrorHandler( XMLHttpRequest, textStatus, errorThrown )
         {
             if( dialog )
             {
-                dialog.modal('hide');
+                dialog.hide();
             }
         }
     }
@@ -825,9 +844,12 @@ jQuery.extend( jQuery.fn.dataTableExt.oSort, {
 // now travels as a data-confirm attribute and one delegated handler enforces it,
 // which also covers rows the DataTables renderers build after page load.
 //
-// preventDefault() on cancel is what actually blocks the submit; returning false
-// from a delegated jQuery handler would too, but being explicit keeps the
-// behaviour obvious and testable.
+// The Bootstrap modal is asynchronous, so every guarded submit is stopped
+// immediately and only explicitly re-submitted after the user confirms. One
+// WeakSet lets that replay pass without recursively opening another modal; the
+// other blocks rapid duplicate submits while a decision is still pending.
+var ossConfirmedForms = new WeakSet();
+var ossPendingConfirmForms = new WeakSet();
 jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
     var message = jQuery( this ).attr( 'data-confirm' );
 
@@ -835,8 +857,44 @@ jQuery( document ).on( 'submit', 'form[data-confirm]', function( event ) {
         return;
     }
 
-    if ( !window.confirm( message ) ) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
+    if ( ossConfirmedForms.has( this ) ) {
+        ossConfirmedForms.delete( this );
+        return;
     }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    var form = this;
+    if ( ossPendingConfirmForms.has( form ) ) {
+        return;
+    }
+    ossPendingConfirmForms.add( form );
+
+    var submitter = event.originalEvent && event.originalEvent.submitter;
+    ossConfirm( message, function( accepted ) {
+        ossPendingConfirmForms.delete( form );
+
+        if ( !accepted ) {
+            return;
+        }
+
+        ossConfirmedForms.add( form );
+        try {
+            if ( typeof form.requestSubmit === 'function' ) {
+                if ( submitter ) {
+                    form.requestSubmit( submitter );
+                }
+                else {
+                    form.requestSubmit();
+                }
+            }
+            else {
+                HTMLFormElement.prototype.submit.call( form );
+            }
+        }
+        finally {
+            ossConfirmedForms.delete( form );
+        }
+    } );
 } );

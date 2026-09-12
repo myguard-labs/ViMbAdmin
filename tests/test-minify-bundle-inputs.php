@@ -102,7 +102,7 @@ $expectedJs = [
     '151-jquery.datatables.ext.js',
     '152-jquery.datatables.bootstrap5.js',
     '800-bootstrap.js',
-    '850-bootbox.js',
+    '850-vimbadmin.modals.js',
     '910-vimbadmin.functions.js',
     '990-vimbadmin.js',
 ];
@@ -130,6 +130,12 @@ $check('runtime JS has no jQuery Validation API references',
     !str_contains($runtimeJs, 'jQuery.validator')
         && !str_contains($runtimeJs, '$.validator')
         && preg_match('/\.validate\s*\(/', $runtimeJs) !== 1);
+$check('runtime JS has no Bootbox references',
+    stripos($runtimeJs, 'bootbox') === false);
+$modalJs = (string) file_get_contents($root . '/public/js/850-vimbadmin.modals.js');
+$check('native modal helper has no jQuery runtime dependency',
+    !str_contains($modalJs, 'jQuery')
+        && preg_match('/(^|[^A-Za-z0-9_$])\$\s*\(/', $modalJs) !== 1);
 foreach ($expectedCss as $live) {
     $check("live CSS asset resolves to a real file: {$live}", is_file($root . '/public/css/' . $live));
 }

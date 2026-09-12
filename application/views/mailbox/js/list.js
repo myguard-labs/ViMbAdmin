@@ -101,7 +101,7 @@ function toggleActive(elid, id) {
         if( data[4] !== undefined && data[4] !== '' )
             msg += "<tr><th>Messages:</th><td> " + htmlEntity( data[4] ) + "</td></tr>";
         msg += "</table>";
-        bootbox.alert( msg );
+        ossAlert( msg );
     }
 {/if}
 
@@ -359,18 +359,18 @@ jQuery( document ).on( 'click', '#modal_dialog_save', function() {
         timeout: 10000,
         success: function(data) {
             if( data == "ok" ) {
-                dialog.modal('hide');
+                dialog.hide();
                 location.reload();
             }
             else if( data == "error" ) {
-                dialog.modal('hide');
+                dialog.hide();
                 location.reload();
             }
             else if( data.substring(0, 26) == '<div class="modal-header">' ){
                 jQuery('#modal_dialog').html( data );
             }
             else {
-                dialog.modal('hide');
+                dialog.hide();
                 ossAddMessage( 'An unexpected error has occurred.', 'danger' );
             }
         },
@@ -381,5 +381,5 @@ jQuery( document ).on( 'click', '#modal_dialog_save', function() {
 // The fragment's Close button; previously bound inline on re-render only.
 jQuery( document ).on( 'click', '#modal_dialog_cancel', function() {
     if( typeof dialog !== 'undefined' && dialog )
-        dialog.modal('hide');
+        dialog.hide();
 } );

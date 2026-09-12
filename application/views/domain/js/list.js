@@ -87,7 +87,7 @@ function purgeDomain( id, domain )
     $( '#purge_domain_form input[name="did"]' ).val( id );
 
     $( '#purge_dialog_cancel' ).on( 'click', function(){
-        delDialog.modal('hide');
+        delDialog.hide();
     });
 };
 

@@ -13,7 +13,7 @@
 # that their markup carries the right class:
 #
 #   1. modal    -- clicking a row's delete button calls deleteAlias(), which
-#                  calls ossModal('#purge_dialog') (public/js/850-bootbox.js),
+#                  calls ossModal('#purge_dialog') (public/js/850-vimbadmin.modals.js),
 #                  which must actually show the Bootstrap 5 modal.
 #   2. alert-dismiss -- ossAddMessage() (public/js/990-vimbadmin.js) emits an
 #                  alert with data-bs-dismiss="alert"; Bootstrap 5's own Alert
@@ -73,15 +73,6 @@ tmp="$(mktemp -d /tmp/vimbadmin-control-behaviour.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 
 # Stage the SOURCE JavaScript, not public/js/min.bundle-v19.js.
-#
-# Loading the bundle made both behavioural assertions below VACUOUS: neutering
-# ossModal()'s .show() in public/js/850-bootbox.js, or swapping data-bs-dismiss
-# back to data-dismiss in public/js/990-vimbadmin.js, left this gate green,
-# because neither file was ever loaded. The bundle is hand-regenerated
-# (VIM-A15.36), was last rebuilt in PR #168, and already omits changes to
-# 990-vimbadmin.js plus the whole of 152-jquery.datatables.bootstrap5.js. A
-# negative control that mutates the bundle proves only that the harness reacts
-# to the bundle.
 #
 # The fixture parses the authoritative load order out of header-js.phtml's
 # non-minified branch, so staging here is a plain directory copy and the two

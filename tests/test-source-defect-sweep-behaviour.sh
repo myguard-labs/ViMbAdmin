@@ -15,9 +15,9 @@
 # set and `.hide()` on it is a no-op), so this asserts the callback the guard
 # is supposed to gate is never invoked when delElement is absent.
 #
-# VIM-A15.47: bootbox's alertDialog(), when Bootstrap's Modal constructor is
+# VIM-A15.47: ossAlert(), when Bootstrap's Modal constructor is
 # unavailable, removed the dialog and ran the callback WITHOUT ever showing
-# the message -- so `bootbox.alert('Delete failed, contact support')` told the
+# the message -- so `ossAlert('Delete failed, contact support')` told the
 # user nothing while the caller believed the alert had been acknowledged. This
 # asserts the message text still reaches the user (via window.alert) on that
 # fallback path, and that the callback still fires.
@@ -55,7 +55,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 cp public/js/100-jquery.js "$tmp/jquery.js"
 cp public/js/990-vimbadmin.js "$tmp/990-vimbadmin.js"
-cp public/js/850-bootbox.js "$tmp/850-bootbox.js"
+cp public/js/850-vimbadmin.modals.js "$tmp/850-vimbadmin.modals.js"
 
 cat >"$tmp/regression.html" <<'HTML'
 <!doctype html>
@@ -70,7 +70,7 @@ cat >"$tmp/regression.html" <<'HTML'
 // handling are what is under test.
 jQuery.fn.alert = function () { return this; };
 </script>
-<script src="850-bootbox.js"></script>
+<script src="850-vimbadmin.modals.js"></script>
 
 <button id="toggle-target" class="btn btn-success" data-throb-key="t1"></button>
 <div id="throb-toggle-target"></div>
@@ -190,14 +190,14 @@ $(function () {
     var realAlert = window.alert;
     var realModal = window.bootstrap;
     window.alert = function (msg) { results.alertMessage = msg; };
-    // Simulate Bootstrap's JS not having loaded: bootbox's alertDialog() looks
+    // Simulate Bootstrap's JS not having loaded: ossAlert() looks
     // up the Modal constructor lazily, so removing window.bootstrap makes that
     // lookup fail exactly like an unloaded Bootstrap bundle would.
     window.bootstrap = undefined;
     try {
-        bootbox.alert('Delete failed, contact support', function () { results.alertCallbackRan = true; });
+        ossAlert('Delete failed, contact support', function () { results.alertCallbackRan = true; });
     } catch (e) {
-        failures.push('bootbox.alert with Modal unavailable threw: ' + e);
+        failures.push('ossAlert with Modal unavailable threw: ' + e);
     } finally {
         window.alert = realAlert;
         window.bootstrap = realModal;
@@ -214,9 +214,9 @@ $(function () {
     if (results.failedToggleDelSurvived !== true) failures.push('ossToggle removed delElement even though the request failed -- the row vanished from the page while the server still has it');
     if (results.retriedToggleDelRemoved !== true) failures.push('a successful retry after a failed ossToggle left delElement on the page -- the rebound click handler dropped delElement');
     if (results.alertMessage !== 'Delete failed, contact support') {
-        failures.push('bootbox.alert did not surface its message via window.alert when Modal was unavailable: got ' + JSON.stringify(results.alertMessage));
+        failures.push('ossAlert did not surface its message via window.alert when Modal was unavailable: got ' + JSON.stringify(results.alertMessage));
     }
-    if (results.alertCallbackRan !== true) failures.push('bootbox.alert callback did not run when Modal was unavailable');
+    if (results.alertCallbackRan !== true) failures.push('ossAlert callback did not run when Modal was unavailable');
     if (results.pluginTabClass === null) {
         failures.push('addPluginTab did not emit a tab anchor for the errored plugin panel');
     } else {
@@ -248,7 +248,7 @@ fi
 
 echo "ok   ossToggle with delElement omitted runs cleanly (VIM-A15.43)"
 echo "ok   addPluginTab emits text-danger, not text-error (VIM-A15.44)"
-echo "ok   bootbox.alert surfaces its message when Modal is unavailable (VIM-A15.47)"
+echo "ok   ossAlert surfaces its message when Modal is unavailable (VIM-A15.47)"
 echo "ok   ossToggle leaves delElement in place when the request fails (VIM-A15.49)"
 echo "ok   a successful retry after a failed ossToggle removes delElement (VIM-A15.49)"
 echo "ALL PASSED"

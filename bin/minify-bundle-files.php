@@ -49,7 +49,7 @@ return [
         '151-jquery.datatables.ext.js',
         '152-jquery.datatables.bootstrap5.js',
         '800-bootstrap.js',
-        '850-bootbox.js',
+        '850-vimbadmin.modals.js',
         '910-vimbadmin.functions.js',
         '990-vimbadmin.js',
     ],

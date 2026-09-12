@@ -58,7 +58,7 @@ function purgeAdmin( event ){
     delDialog = ossModal( '#purge_dialog' );
     
     $( '#purge_dialog_cancel' ).on( 'click', function(){
-        delDialog.modal('hide');
+        delDialog.hide();
     });
 };
 

@@ -87,7 +87,7 @@ function deleteAlias( event ){
     });
 
     $( '#purge_dialog_cancel' ).on( 'click', function(){
-        delDialog.modal('hide');
+        delDialog.hide();
     });
 };
 

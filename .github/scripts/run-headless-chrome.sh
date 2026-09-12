@@ -53,7 +53,7 @@ if [[ $browser != chrome ]]; then
     vimbadmin-browser:1.63.0 "$browser" "$fixture_dir" "$@"
 fi
 
-if [[ ( $fixture_dir == /tmp/vimbadmin-datatables-dependency-free.* || $fixture_dir == /tmp/vimbadmin-validate-group.* ) && -n $fixture_url ]]; then
+if [[ ($fixture_dir == /tmp/vimbadmin-datatables-dependency-free.* || $fixture_dir == /tmp/vimbadmin-validate-group.*) && -n $fixture_url ]]; then
   exec docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
     --user "$(id -u):$(id -g)" \
     --env "HOME=$fixture_dir" \

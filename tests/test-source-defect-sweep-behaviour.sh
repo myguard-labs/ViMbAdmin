@@ -58,6 +58,8 @@ cp public/js/990-vimbadmin.js "$tmp/990-vimbadmin.js"
 cp public/js/850-vimbadmin.modals.js "$tmp/850-vimbadmin.modals.js"
 bundle_file=$(resolve_bundle_v) || exit $?
 cp "public/js/$bundle_file" "$tmp/bundle.js"
+cp public/css/800-bootstrap.css "$tmp/bootstrap.css"
+cp "public/css/${bundle_file%.js}.css" "$tmp/bundle.css"
 # Extract the production toggle wrapper and document delegate, replacing only
 # server-rendered URL/token literals with fixed fixture values.
 # The token placeholder is Smarty syntax, not a shell variable.
@@ -70,12 +72,23 @@ awk '
   END { if (wrappers != 1 || delegates != 1) exit 1 }
 ' application/views/alias/js/list.js |
   sed -e 's/{genUrl[^}]*}/\/x/g' -e 's/{$csrfToken}/fixture-csrf/g' >"$tmp/toggle-view.js"
+# shellcheck disable=SC2016
+awk '
+  /^function toggleSuper\(/ { active = 1; wrappers++ }
+  /^DataTable.Dom.select\( document \).on.*data-toggle-super/ { active = 1; delegates++ }
+  active { print }
+  active && /^};|^} \);/ { active = 0 }
+  END { if (wrappers != 1 || delegates != 1) exit 1 }
+' application/views/admin/js/list.js |
+  sed -e 's/{genUrl[^}]*}/\/x/g' -e 's/{$csrfToken}/fixture-csrf/g' >>"$tmp/toggle-view.js"
 
 cat >"$tmp/regression.html" <<'HTML'
 <!doctype html>
 <html><head><meta charset="utf-8"></head><body>
 <script>
-var assets = new URL(location.href).searchParams.get('assets') === 'production'
+var production = new URL(location.href).searchParams.get('assets') === 'production';
+document.write('<link rel="stylesheet" href="' + (production ? 'bundle.css' : 'bootstrap.css') + '">');
+var assets = production
     ? ['bundle.js']
     : ['150-datatables.js', '800-bootstrap.js', '990-vimbadmin.js', '850-vimbadmin.modals.js'];
 assets.concat(['toggle-view.js']).forEach(function(file) {
@@ -235,6 +248,39 @@ vmReady(function () {
         table.remove();
     }
 
+    // The exact admin wrapper must leave dependent UI alone for ignored clicks
+    // and restore the Bootstrap .btn cascade, not force a block-level display.
+    var adminHost = document.createElement('div');
+    adminHost.innerHTML = '<div id="throb-toggle-super-admin"></div>' +
+        '<span id="toggle-super-admin" data-toggle-super="admin" class="btn btn-danger">No</span>' +
+        '<a id="admin_domains_admin" class="btn btn-sm">Domains</a>';
+    document.body.appendChild(adminHost);
+    var adminRequests = [];
+    ossAjax = function(opts) { adminRequests.push(opts); return xhr; };
+    try {
+        var superControl = document.getElementById('toggle-super-admin');
+        var domains = document.getElementById('admin_domains_admin');
+        if (getComputedStyle(domains).display !== 'inline-block') throw new Error('fixture lacks Bootstrap button CSS');
+        clickToggle(superControl);
+        if (adminRequests.length !== 1 || getComputedStyle(domains).display !== 'none') throw new Error('accepted super toggle did not hide domains');
+        clickToggle(superControl);
+        if (adminRequests.length !== 1 || getComputedStyle(domains).display !== 'none') throw new Error('pending super toggle changed domains visibility');
+        adminRequests[0].success('ok'); adminRequests[0].complete();
+        clickToggle(superControl);
+        if (adminRequests.length !== 2 || getComputedStyle(domains).display !== 'inline-block') throw new Error('normal-admin domains button did not restore inline-block cascade');
+        clickToggle(superControl);
+        if (adminRequests.length !== 2 || getComputedStyle(domains).display !== 'inline-block') throw new Error('pending normal-admin toggle changed domains visibility');
+        adminRequests[1].success('ok'); adminRequests[1].complete();
+        superControl.classList.add('disabled');
+        clickToggle(superControl);
+        if (adminRequests.length !== 2 || getComputedStyle(domains).display !== 'inline-block') throw new Error('disabled super toggle changed domains visibility');
+    } catch (e) {
+        failures.push('admin super toggle: ' + e.message);
+    } finally {
+        ossAjax = realAjax;
+        adminHost.remove();
+    }
+
     // -- VIM-A15.47: Modal unavailable must still surface the message --
     var realAlert = window.alert;
     var realModal = window.bootstrap;
@@ -281,21 +327,21 @@ vmReady(function () {
 HTML
 
 for mode in source production; do
-rm -rf "$tmp/profile"
-"$browser" \
-  --headless \
-  --disable-gpu \
-  --allow-file-access-from-files \
-  --user-data-dir="$tmp/profile" \
-  --virtual-time-budget=1000 \
-  --dump-dom "file://$tmp/regression.html?assets=$mode" >"$tmp/rendered.html" 2>"$tmp/chromium.log"
+  rm -rf "$tmp/profile"
+  "$browser" \
+    --headless \
+    --disable-gpu \
+    --allow-file-access-from-files \
+    --user-data-dir="$tmp/profile" \
+    --virtual-time-budget=1000 \
+    --dump-dom "file://$tmp/regression.html?assets=$mode" >"$tmp/rendered.html" 2>"$tmp/chromium.log"
 
-if ! grep -q 'data-test-result="pass"' "$tmp/rendered.html"; then
-  failures="$(grep -o 'data-test-failures="[^"]*"' "$tmp/rendered.html" || true)"
-  echo "FAIL: source-defect-sweep regression ($mode): ${failures:-no browser verdict}" >&2
-  exit 1
-fi
-echo "ok   source-defect-sweep $mode asset lane"
+  if ! grep -q 'data-test-result="pass"' "$tmp/rendered.html"; then
+    failures="$(grep -o 'data-test-failures="[^"]*"' "$tmp/rendered.html" || true)"
+    echo "FAIL: source-defect-sweep regression ($mode): ${failures:-no browser verdict}" >&2
+    exit 1
+  fi
+  echo "ok   source-defect-sweep $mode asset lane"
 done
 
 echo "ok   ossToggle with delElement omitted runs cleanly (VIM-A15.43)"

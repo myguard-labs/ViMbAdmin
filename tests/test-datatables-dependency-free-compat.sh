@@ -82,7 +82,7 @@ awk '
 # ancestor and stubbed actions. Replaced row nodes must never own DT listeners.
 awk '
   BEGIN {
-    print "function bindRowLifecycleFixture(document, tt_openModalDialog, deleteAlias, showSizes, vmTooltips, vmPrefsCookie, vm_prefs, vm_cookie_options) {";
+    print "function bindRowLifecycleFixture(document, tt_openModalDialog, deleteAlias, showSizes, vmPrefsCookie, vm_prefs, vm_cookie_options) {";
   }
   /select\( document \).*\.on\(.*(modal-dialog|delete-alias|dir-size)/ { print; bindings++ }
   END { print "return ["; if (bindings != 3) exit 1 }
@@ -412,7 +412,7 @@ vmReady(function() {
             return function(event) { event.preventDefault(); calls[index]++; };
         });
         var noop = function() {};
-        var draws = bindRowLifecycleFixture(host, actions[0], actions[1], actions[2], noop, noop, {}, {});
+        var draws = bindRowLifecycleFixture(host, actions[0], actions[1], actions[2], noop, {}, {});
         // Keep this isolated fixture from also invoking the application's
         // document-level modal handler after the fixture delegate has run.
         host.addEventListener('click', function(event) { event.stopPropagation(); });
@@ -422,15 +422,39 @@ vmReady(function() {
                 data: [], columns: [{ title: 'Actions' }], order: [],
                 drawCallback: function() { draws.forEach(function(draw) { draw(); }); }
             });
-            var oldControls = [];
+            var oldControls = [], tooltipRecords = [];
+            function assertDisposed(record) {
+                if (bootstrap.Tooltip.getInstance(record.node) !== null || record.instance._element !== null)
+                    throw new Error('detached Bootstrap tooltip instance retained');
+                if (!record.disposedConnected || record.removed < 2)
+                    throw new Error('tooltip not disposed with listeners removed before detachment');
+            }
             for (var round = 0; round < 10; round++) {
                 api.clear().rows.add([[
-                    '<a id="modal-dialog-probe"><i>Modal</i></a>' +
+                    '<a id="modal-dialog-probe" class="have-tooltip" title="Modal"><i>Modal</i></a>' +
                     '<button id="delete-alias-probe"><i>Delete</i></button>' +
                     '<a id="dir-size-probe"><i>Size</i></a>'
                 ]]).draw();
                 var controls = Array.from(node.querySelectorAll('tbody a,tbody button'));
                 if (controls.length !== 3) throw new Error('missing row controls');
+                tooltipRecords.forEach(assertDisposed);
+                var tipNode = controls[0];
+                var tip = bootstrap.Tooltip.getInstance(tipNode);
+                if (!tip) throw new Error('actual vmTooltips did not initialize the drawn row');
+                var record = { node: tipNode, instance: tip, disposedConnected: false, removed: 0 };
+                (function(current) {
+                    var dispose = current.instance.dispose;
+                    current.instance.dispose = function() {
+                        current.disposedConnected = current.node.isConnected;
+                        return dispose.apply(this, arguments);
+                    };
+                    var remove = current.node.removeEventListener;
+                    current.node.removeEventListener = function() {
+                        current.removed++;
+                        return remove.apply(this, arguments);
+                    };
+                }(record));
+                tooltipRecords.push(record);
                 controls.forEach(function(control) {
                     if (control._event_uid !== undefined) throw new Error('row control owns a retained DataTables listener');
                     control.firstChild.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
@@ -442,6 +466,8 @@ vmReady(function() {
                 if (!calls.every(function(count) { return count === round + 1; })) throw new Error('missing, duplicate or detached action');
                 oldControls = oldControls.concat(controls);
             }
+            api.destroy(); api = null;
+            tooltipRecords.forEach(assertDisposed);
             return true;
         }
         finally {
@@ -449,6 +475,25 @@ vmReady(function() {
             DataTable.Dom.select(host).off('click');
             host.remove();
         }
+    });
+    check('failed server redraw restores tooltips on retained rows', function() {
+        var node = document.createElement('table');
+        document.body.appendChild(node);
+        var api = new DataTable(node, {
+            data: [['<span class="have-tooltip" title="Retained">Row</span>']],
+            columns: [{ title: 'Name' }]
+        });
+        try {
+            var control = node.querySelector('.have-tooltip');
+            var original = bootstrap.Tooltip.getInstance(control);
+            if (!original) return false;
+            var settings = api.settings()[0];
+            DataTable.defaults.preDrawCallback(settings);
+            if (bootstrap.Tooltip.getInstance(control) !== null) return false;
+            DataTable.Dom.select(node).trigger('xhr.dt', true, [settings, null, {}], { dt: api });
+            return original._element === null && bootstrap.Tooltip.getInstance(control) !== null;
+        }
+        finally { api.destroy(); node.remove(); }
     });
     check('native AJAX handles JSON, malformed responses, HTTP errors, timeouts and aborts', function() {
         var NativeXHR = window.XMLHttpRequest;
@@ -826,41 +871,41 @@ expect_fail() {
 
 mutation=${VIMBADMIN_MUTATION:-}
 case "$mutation" in
-  '')
-    run_mode development
-    run_mode second-load
-    run_mode production
-    # Negative controls run in the default lane, so a rotted oracle fails CI
-    # instead of waiting for someone to remember an env var.
-    expect_fail 'injected compatibility warning' run_mode development '#warning-trigger'
-    expect_fail 'missing DataTables dependency' run_mode development '#missing-dependency'
-    expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
-    expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
-    expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
-    expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
-    ;;
-  warning)
-    run_mode development '#warning-trigger'
-    ;;
-  missing-dependency)
-    run_mode development '#missing-dependency'
-    ;;
-  button-disabled)
-    run_mode development '#button-disabled'
-    ;;
-  alert-dismiss-disabled)
-    run_mode development '#alert-dismiss-disabled'
-    ;;
-  wire-route-disabled)
-    run_mode development '#wire-route-disabled'
-    ;;
-  legacy-wire-key)
-    run_mode development '#legacy-wire-key'
-    ;;
-  *)
-    echo "FAIL: unknown VIMBADMIN_MUTATION: $mutation" >&2
-    exit 2
-    ;;
+'')
+  run_mode development
+  run_mode second-load
+  run_mode production
+  # Negative controls run in the default lane, so a rotted oracle fails CI
+  # instead of waiting for someone to remember an env var.
+  expect_fail 'injected compatibility warning' run_mode development '#warning-trigger'
+  expect_fail 'missing DataTables dependency' run_mode development '#missing-dependency'
+  expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
+  expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
+  expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
+  expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
+  ;;
+warning)
+  run_mode development '#warning-trigger'
+  ;;
+missing-dependency)
+  run_mode development '#missing-dependency'
+  ;;
+button-disabled)
+  run_mode development '#button-disabled'
+  ;;
+alert-dismiss-disabled)
+  run_mode development '#alert-dismiss-disabled'
+  ;;
+wire-route-disabled)
+  run_mode development '#wire-route-disabled'
+  ;;
+legacy-wire-key)
+  run_mode development '#legacy-wire-key'
+  ;;
+*)
+  echo "FAIL: unknown VIMBADMIN_MUTATION: $mutation" >&2
+  exit 2
+  ;;
 esac
 
 echo 'OK: DataTables 3 without jQuery, console warnings, validation and preferences cookie'

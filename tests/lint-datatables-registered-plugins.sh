@@ -97,8 +97,9 @@ fi
 
 # --- names registered by our own vendored/first-party assets ---
 registered_pagers=$(
-  { strict_grep grep -hPo 'DataTable\.ext\.pager\.\K[A-Za-z_][A-Za-z0-9_]*' public/js/*.js
-    strict_grep grep -hPo "DataTable\.ext\.pager\[\s*['\"]\K[^'\"]+"        public/js/*.js
+  {
+    strict_grep grep -hPo 'DataTable\.ext\.pager\.\K[A-Za-z_][A-Za-z0-9_]*' public/js/*.js
+    strict_grep grep -hPo "DataTable\.ext\.pager\[\s*['\"]\K[^'\"]+" public/js/*.js
   } | sort -u
 )
 
@@ -131,7 +132,8 @@ renderer_scan_input=$(mktemp)
 cat public/js/*.js | strip_line_comments >"$renderer_scan_input"
 
 registered_renderers=$(
-  { strict_grep harvest_renderers_dot     "$renderer_scan_input"
+  {
+    strict_grep harvest_renderers_dot "$renderer_scan_input"
     strict_grep harvest_renderers_bracket "$renderer_scan_input"
   } | sort -u
 )
@@ -142,7 +144,7 @@ known_pagers=$(printf '%s\n%s\n' "$builtin_pagers" "$registered_pagers" | sed '/
 known_renderers=$(printf '%s\n' "$registered_renderers" | sed '/^$/d' | sort -u)
 
 echo "== DataTables extension names referenced by our code must be registered =="
-echo "  known pagers:    $(echo "$known_pagers"    | tr '\n' ' ')"
+echo "  known pagers:    $(echo "$known_pagers" | tr '\n' ' ')"
 echo "  known renderers: $(echo "$known_renderers" | tr '\n' ' ')"
 
 # --- scan our own (non-vendored) sources for referenced names ---
@@ -229,8 +231,8 @@ cat >"$mention_only" <<'EOF'
 EOF
 mention_stripped=$(mktemp)
 strip_line_comments <"$mention_only" >"$mention_stripped"
-if harvest_renderers_dot "$mention_stripped" 2>/dev/null | grep -q . \
-  || harvest_renderers_bracket "$mention_stripped" 2>/dev/null | grep -q .; then
+if harvest_renderers_dot "$mention_stripped" 2>/dev/null | grep -q . ||
+  harvest_renderers_bracket "$mention_stripped" 2>/dev/null | grep -q .; then
   echo "  FAIL: the renderer harvest accepts a commented mention as a registration" >&2
   fail=1
 else
@@ -247,7 +249,8 @@ EOF
 real_stripped=$(mktemp)
 strip_line_comments <"$real_registration" >"$real_stripped"
 found_real=$(
-  { harvest_renderers_dot     "$real_stripped" 2>/dev/null
+  {
+    harvest_renderers_dot "$real_stripped" 2>/dev/null
     harvest_renderers_bracket "$real_stripped" 2>/dev/null
   } | sort -u | tr '\n' ' '
 )

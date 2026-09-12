@@ -24,8 +24,8 @@
  * bin/minify-options.php is still the single source of truth for everything
  * else -- the compiler command lines, the clean-css presence check, the
  * destination directories, the {genUrl} prefixes and the hand-written
- * $mini_*_conditional_* header fragments (the dev-only jQuery Migrate <script>
- * row and the unconditional $skinCss block). It is required here, unmodified,
+ * $mini_*_conditional_* header fragments (including the $skinCss block).
+ * It is required here, unmodified,
  * rather than duplicated; only its $js_files / $css_files globs are ignored.
  *
  * Usage:

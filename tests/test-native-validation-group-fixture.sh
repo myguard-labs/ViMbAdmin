@@ -16,7 +16,7 @@ if [[ -z $browser ]]; then
   exit 2
 fi
 
-tmp=$(mktemp -d /tmp/vimbadmin-native-validation.XXXXXX)
+tmp=$(mktemp -d /tmp/vimbadmin-validate-group.XXXXXX)
 cleanup() {
   rm -rf "${tmp:?}"
 }
@@ -60,10 +60,18 @@ window.addEventListener('DOMContentLoaded', function() {
     var legacy = document.getElementById('legacy');
     var bypass = document.getElementById('bypass');
 
+    // The production listener was registered by the deferred asset before
+    // this one. Record its decision, then cancel every synthetic submit so a
+    // successful case cannot navigate away from the fixture.
+    document.addEventListener('submit', function(event) {
+        event.validationPrevented = event.defaultPrevented;
+        event.preventDefault();
+    });
+
     check('invalid submit is cancelled and receives Bootstrap state', function() {
         var submit = new Event('submit', { bubbles: true, cancelable: true });
         form.dispatchEvent(submit);
-        return submit.defaultPrevented && form.classList.contains('was-validated') &&
+        return submit.validationPrevented && form.classList.contains('was-validated') &&
             first.classList.contains('is-invalid') && second.classList.contains('is-invalid');
     });
 
@@ -91,7 +99,7 @@ window.addEventListener('DOMContentLoaded', function() {
     check('legacy required class maps to the native required constraint', function() {
         var submit = new Event('submit', { bubbles: true, cancelable: true });
         legacy.form.dispatchEvent(submit);
-        return submit.defaultPrevented && legacy.required && legacy.classList.contains('is-invalid');
+        return submit.validationPrevented && legacy.required && legacy.classList.contains('is-invalid');
     });
 
     check('formnovalidate submitter preserves the native validation bypass', function() {
@@ -99,21 +107,21 @@ window.addEventListener('DOMContentLoaded', function() {
             bubbles: true, cancelable: true, submitter: bypass
         });
         bypass.form.dispatchEvent(submit);
-        return !submit.defaultPrevented && !bypass.form.classList.contains('was-validated');
+        return !submit.validationPrevented && !bypass.form.classList.contains('was-validated');
     });
 
     check('novalidate form preserves the native validation bypass', function() {
         var novalidateForm = document.getElementById('novalidate-form');
         var submit = new Event('submit', { bubbles: true, cancelable: true });
         novalidateForm.dispatchEvent(submit);
-        return !submit.defaultPrevented && !novalidateForm.classList.contains('was-validated');
+        return !submit.validationPrevented && !novalidateForm.classList.contains('was-validated');
     });
 
     malformed.value = 'valid';
     check('valid submit is not cancelled', function() {
         var submit = new Event('submit', { bubbles: true, cancelable: true });
         form.dispatchEvent(submit);
-        return !submit.defaultPrevented;
+        return !submit.validationPrevented;
     });
 
     document.getElementById('output').textContent = JSON.stringify({ failures: failures });
@@ -129,7 +137,10 @@ chrome_args=(
   http://127.0.0.1:8765/regression.html
 )
 if [[ $browser == *run-headless-chrome.sh ]]; then
-  "$browser" "${chrome_args[@]}" >"$output" 2>&1
+  if ! "$browser" "${chrome_args[@]}" >"$output" 2>&1; then
+    cat "$output" >&2
+    exit 1
+  fi
 else
   CHROME_BIN=$browser "$http_runner" "$tmp" "${chrome_args[@]}" >"$output" 2>&1
 fi

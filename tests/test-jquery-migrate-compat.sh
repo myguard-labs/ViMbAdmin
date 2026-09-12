@@ -160,30 +160,40 @@ function check(name, test) {
 }
 
 $(function() {
+    var wireEndpoint = '/tests/support/datatable-wire-endpoint.php';
+    var wireDisabled = location.hash === '#wire-route-disabled';
     // The network-isolated multi-engine runner is a static server. Its finite
     // response set was rendered through the real PHP parser above; route each
     // fully formed modern request to the matching result while retaining real
     // HTTP serialization and DataTables' response handling.
-    if (location.hash !== '#wire-route-disabled') {
-        $.ajaxPrefilter(function(options, originalOptions) {
-            var match = /^\/tests\/support\/datatable-wire-endpoint\.php\?scope=(domain|mailbox|alias|archive|log)$/.exec(options.url);
-            if (!match) return;
-            var data = originalOptions.data;
-            if (!data || data.draw < 1 || data.draw > 4) return;
-            var expected = [
-                { start: 0, search: '', dir: 'asc' },
-                { start: 2, search: '', dir: 'asc' },
-                { start: 0, search: '', dir: 'desc' },
-                { start: 0, search: match[1] + '-Beta', dir: 'desc' }
-            ][data.draw - 1];
-            if (data.start !== expected.start || data.length !== 2 ||
-                data.search.value !== expected.search || data.order[0].column !== 0 ||
-                data.order[0].dir !== expected.dir) return;
+    $.ajaxPrefilter(function(options, originalOptions) {
+        var match = /^\/tests\/support\/datatable-wire-endpoint\.php\?scope=(domain|mailbox|alias|archive|log)$/.exec(options.url);
+        if (!match) return;
+        var data = originalOptions.data;
+        if (!data || data.draw < 1 || data.draw > 4) return;
+        if (location.hash === '#legacy-wire-key' && data.draw === 1) data.sEcho = data.draw;
+        var allowedName = /^(?:draw|start|length|search%5B(?:value|regex)%5D|order%5B[0-9]+%5D%5B(?:column|dir|name)%5D|columns%5B[0-9]+%5D%5B(?:data|name|searchable|orderable)%5D|columns%5B[0-9]+%5D%5Bsearch%5D%5B(?:value|regex)%5D|_)$/i;
+        var rejected = $.param(data).split('&').map(function(pair) {
+            return pair.split('=', 1)[0];
+        }).filter(function(name) { return !allowedName.test(name); });
+        if (rejected.length) {
+            failures.push('server-side wire: rejected request key ' + rejected[0]);
             options.url = '/tests/support/datatable-wire/' + match[1] + '-' + data.draw + '.json';
-        });
-    }
+            return;
+        }
+        var expected = [
+            { start: 0, search: '', dir: 'asc' },
+            { start: 2, search: '', dir: 'asc' },
+            { start: 0, search: '', dir: 'desc' },
+            { start: 0, search: match[1] + '-Beta', dir: 'desc' }
+        ][data.draw - 1];
+        if (data.start !== expected.start || data.length !== 2 ||
+            data.search.value !== expected.search || data.order[0].column !== 0 ||
+            data.order[0].dir !== expected.dir) return;
+        options.url = '/tests/support/datatable-wire/' + match[1] + '-' + data.draw + '.json';
+    });
     // Each list uses the shared transport, with its own scoped fixture rows.
-    var wireChecks = ['domain', 'mailbox', 'alias', 'archive', 'log'].map(function(scope) {
+    var wireChecks = (wireDisabled ? [] : ['domain', 'mailbox', 'alias', 'archive', 'log']).map(function(scope) {
         return new Promise(function(resolve, reject) {
             var element = $('<table><thead><tr><th>Name</th></tr></thead></table>').appendTo('body');
             var step = 0;
@@ -213,15 +223,19 @@ $(function() {
             element.DataTable({
                 serverSide: true, pageLength: 2, order: [[0, 'asc']],
                 columns: [{ data: 'name' }],
-                ajax: vmDataTableServerData('/tests/support/datatable-wire-endpoint.php?scope=' + scope, 3)
+                ajax: vmDataTableServerData(wireEndpoint + '?scope=' + scope, 3)
             });
         });
     });
-    var wireFinished = false;
-    Promise.all(wireChecks).then(function() { wireFinished = true; }, function(error) {
-        failures.push('server-side wire: ' + error.message);
-        wireFinished = true;
-    });
+    var wireFinished = wireDisabled;
+    if (wireDisabled) {
+        failures.push('server-side wire: endpoint disabled by negative control');
+    } else {
+        Promise.all(wireChecks).then(function() { wireFinished = true; }, function(error) {
+            failures.push('server-side wire: ' + error.message);
+            wireFinished = true;
+        });
+    }
     // Drives the 'injected Migrate warning' negative control (name kept for
     // history/CI-label continuity; the mechanism is jQuery-4-native, not
     // Migrate -- Migrate is deleted). jQuery 4.0.0 added
@@ -647,7 +661,8 @@ case "$mutation" in
     expect_fail 'injected Migrate warning' run_mode development '#warning-trigger'
     expect_fail 'missing plugin dependency' run_mode development '#missing-dependency'
     expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
-    expect_fail 'server-side wire static route' run_mode development '#wire-route-disabled'
+    expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
+    expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
     ;;
   warning)
     run_mode development '#warning-trigger'
@@ -660,6 +675,9 @@ case "$mutation" in
     ;;
   wire-route-disabled)
     run_mode development '#wire-route-disabled'
+    ;;
+  legacy-wire-key)
+    run_mode development '#legacy-wire-key'
     ;;
   *)
     echo "FAIL: unknown VIMBADMIN_MUTATION: $mutation" >&2

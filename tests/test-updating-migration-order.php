@@ -14,6 +14,10 @@ $ok = $ok && is_string($migration)
     && str_contains($migration, "@have_last_login_table = 1 AND @have = 0");
 $ok = $ok && is_string($migration)
     && str_contains($migration, "@have_archive_table = 1 AND @have = 0");
+$ok = $ok
+    && str_contains($updating, '`myguard-labs/vimbadmin-crs-plugin#9` DataTables 2 allowlist')
+    && str_contains($updating, 'All three components must be deployed')
+    && str_contains($updating, 'simultaneously.');
 echo ($ok ? 'ok   ' : 'FAIL ') . "migration seeds legacy quota before schema update\n";
 if (!$ok) {
     exit(1);

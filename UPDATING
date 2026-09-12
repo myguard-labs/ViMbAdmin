@@ -19,7 +19,10 @@ release notes before
 restarting the application.
 
 Server-side list tables now use the DataTables 2 wire protocol. Deploy the PHP
-code and JavaScript assets together and reload open panel tabs after upgrading.
+code and JavaScript assets together with the companion
+`myguard-labs/vimbadmin-crs-plugin#9` DataTables 2 allowlist, then reload open
+panel tabs after upgrading. All three components must be deployed
+simultaneously.
 Custom list-data clients must send draw/start/length, search[value], and
 order[0][column]/order[0][dir]; responses contain draw, recordsTotal,
 recordsFiltered, and data. Only the first ordering is applied. Paging bounds

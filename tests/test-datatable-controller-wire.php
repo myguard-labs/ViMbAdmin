@@ -32,14 +32,19 @@ final class DataTableWireSession implements SessionStorage
 final class DataTableWireResources
 {
     public int $doctrineReads = 0;
+    public int $optionsReads = 0;
     public bool $brokenConfig = false;
-    public bool $brokenLogic = false;
+    public ?int $logicFailureAtOptionsRead = null;
+    public bool $brokenRepositoryLogic = false;
     public function __construct(private DataTableWireSession $session) {}
     /** @return array<string,mixed> */
     public function getOptions(): array
     {
+        $this->optionsReads++;
         if ($this->brokenConfig) throw new TypeError('Internal config failure');
-        if ($this->brokenLogic) throw new LogicException('Internal logic failure');
+        if ($this->optionsReads === $this->logicFailureAtOptionsRead) {
+            throw new LogicException('Internal config logic failure');
+        }
         return [];
     }
     public function getResource(string $name): object
@@ -47,6 +52,7 @@ final class DataTableWireResources
         if ($name === 'namespace') return $this->session;
         if ($name === 'doctrine2') {
             $this->doctrineReads++;
+            if ($this->brokenRepositoryLogic) throw new LogicException('Internal repository logic failure');
             throw new TypeError('Internal repository failure');
         }
         throw new LogicException('Unexpected resource: ' . $name);
@@ -106,7 +112,7 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
             'search' => ['search' => ['value' => ['abc']]],
             'order' => ['order' => [['dir' => ['desc']]]],
         ];
-        if (in_array($name, ['Alias', 'Archive', 'Domain'], true)) {
+        if (in_array($name, ['Alias', 'Archive', 'Domain', 'Mailbox'], true)) {
             $malformedRequests += [
                 'draw' => ['draw' => ['7']],
                 'start' => ['start' => ['0']],
@@ -134,16 +140,25 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
         }
         $check($name . ': config TypeError is not converted to a client error', $configFailed);
         $resources->brokenConfig = false;
-        $resources->brokenLogic = true;
+        if ($name === 'Mailbox') {
+            // admin() reads options first; fail the following pagination-config read.
+            $resources->logicFailureAtOptionsRead = $resources->optionsReads + 2;
+            $response = $action->invoke($controller);
+            $check($name . ': configuration LogicException preserves the 200 ko response',
+                $response instanceof Response && $response->status === 200 && $response->body === 'ko');
+            $resources->logicFailureAtOptionsRead = null;
+        }
+        $_GET = [];
+        $resources->brokenRepositoryLogic = true;
         $logicFailed = false;
         try {
             $action->invoke($controller);
         } catch (LogicException $e) {
-            $logicFailed = $e->getMessage() === 'Internal logic failure';
+            $logicFailed = $e->getMessage() === 'Internal repository logic failure';
         }
         $check($name . ': unrelated internal LogicException is not converted to a client error', $logicFailed);
-        $resources->brokenLogic = false;
-        $_GET = [];
+        $resources->brokenRepositoryLogic = false;
+        $resources->doctrineReads = 0;
         $repositoryFailed = false;
         try {
             $action->invoke($controller);

@@ -11,6 +11,7 @@
     'use strict';
 
     var nextDialogId = 0;
+    var inPageModalFocus = new WeakMap();
 
     function modalCtor()
     {
@@ -39,6 +40,13 @@
         element.focus();
     }
 
+    function messageText( message )
+    {
+        var template = document.createElement( 'template' );
+        template.innerHTML = String( message );
+        return template.content.textContent || '';
+    }
+
     /**
      * Show an existing in-page modal.
      *
@@ -57,6 +65,17 @@
             backdrop: true,
             keyboard: true
         } );
+
+        if( !inPageModalFocus.has( element ) )
+        {
+            inPageModalFocus.set( element, document.activeElement );
+            element.addEventListener( 'hidden.bs.modal', function() {
+                var previouslyFocused = inPageModalFocus.get( element );
+                inPageModalFocus.delete( element );
+                restoreFocus( previouslyFocused );
+            }, { once: true } );
+        }
+
         instance.show();
 
         return instance;
@@ -114,7 +133,7 @@
 
         if( !Modal )
         {
-            window.alert( String( message ).replace( /<[^>]*>/g, '' ) );
+            window.alert( messageText( message ) );
             if( typeof callback === 'function' )
                 callback();
             return null;

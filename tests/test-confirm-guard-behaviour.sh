@@ -61,6 +61,17 @@ run_case() {
 <form id="unguarded" method="post" action="/mailbox/list"></form>
 <form id="empty-message" method="post" action="/x" data-confirm=""></form>
 <button id="alert-trigger" type="button">Show message</button>
+<button id="in-page-trigger" type="button">Open existing modal</button>
+<div id="in-page-modal" class="modal fade" tabindex="-1" aria-labelledby="in-page-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header">
+      <h3 id="in-page-title" class="modal-title">Existing modal</h3>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    <div class="modal-body">Existing application dialog</div>
+    <div class="modal-footer"><button id="in-page-cancel" type="button">Cancel</button></div>
+  </div></div>
+</div>
 
 <script>
 (function () {
@@ -196,6 +207,49 @@ run_case() {
             failures.push('rapid duplicate submits replayed the destructive form ' + submitted.length + ' times');
         assertFocusReturned('rapid-submit confirmation', 'guarded-submit');
 
+        // Existing application modals are also opened programmatically by
+        // ossModal(), so Bootstrap has no data-api trigger from which to infer
+        // return focus. Cover header Close, the application's instance.hide()
+        // Cancel pattern, and Escape over repeated lifecycles of one element.
+        var inPageTrigger = document.getElementById('in-page-trigger');
+        var inPageModal = document.getElementById('in-page-modal');
+        var inPageInstance;
+        document.getElementById('in-page-cancel').addEventListener('click', function() {
+            inPageInstance.hide();
+        });
+
+        async function openInPageModal() {
+            var shown = new Promise(function (resolve) {
+                inPageModal.addEventListener('shown.bs.modal', resolve, { once: true });
+            });
+            inPageTrigger.focus();
+            inPageInstance = ossModal(inPageModal);
+            await shown;
+        }
+
+        async function dismissInPageModal(action, label) {
+            var hidden = new Promise(function (resolve) {
+                inPageModal.addEventListener('hidden.bs.modal', resolve, { once: true });
+            });
+            action();
+            await hidden;
+            assertFocusReturned(label, 'in-page-trigger');
+        }
+
+        await openInPageModal();
+        await dismissInPageModal(function() { inPageModal.querySelector('.btn-close').click(); }, 'in-page Close');
+        await openInPageModal();
+        await dismissInPageModal(function() { document.getElementById('in-page-cancel').click(); }, 'in-page Cancel');
+        await openInPageModal();
+        await dismissInPageModal(function() {
+            inPageModal.dispatchEvent(new KeyboardEvent('keydown', {
+                key: 'Escape',
+                code: 'Escape',
+                bubbles: true,
+                cancelable: true
+            }));
+        }, 'in-page Escape');
+
         // Programmatic informational modals have no data-api trigger for
         // Bootstrap to remember, so the helper owns focus restoration here too.
         var alertTrigger = document.getElementById('alert-trigger');
@@ -221,11 +275,19 @@ run_case() {
         // missing dialog runtime into an unconfirmed destructive submission.
         submitted = [];
         var realBootstrap = window.bootstrap;
+        var realAlert = window.alert;
+        var fallbackAlertMessage = null;
         window.bootstrap = undefined;
         submit('guarded');
+        alertTrigger.focus();
+        window.alert = function (message) { fallbackAlertMessage = message; };
+        ossAlert('<strong>Delete &amp; retry</strong> &quot;now&quot;');
+        window.alert = realAlert;
         window.bootstrap = realBootstrap;
         if (submitted.indexOf('guarded') !== -1)
             failures.push('missing Bootstrap Modal runtime allowed the destructive submit');
+        if (fallbackAlertMessage !== 'Delete & retry "now"')
+            failures.push('fallback alert did not convert markup and entities to text: ' + JSON.stringify(fallbackAlertMessage));
 
         document.body.dataset.testResult = failures.length ? 'fail' : 'pass';
         document.body.dataset.testFailures = failures.join('; ');
@@ -265,9 +327,36 @@ HTML
   echo "ok   $label: native confirm gates one destructive submit and coalesces rapid duplicates"
 }
 
+run_popup_csp_case() {
+  local rendered="$tmp/rendered-popup-csp.html"
+  php tests/render-popup-csp-fixture.php "$tmp/popup-csp.html"
+
+  rm -rf "$tmp/profile"
+  if ! "$browser" \
+    --headless \
+    --disable-gpu \
+    --allow-file-access-from-files \
+    --user-data-dir="$tmp/profile" \
+    --virtual-time-budget=1000 \
+    --dump-dom "file://$tmp/popup-csp.html" >"$rendered" 2>"$tmp/browser-popup-csp.log"; then
+    cat "$tmp/browser-popup-csp.log" >&2
+    return 1
+  fi
+
+  if ! grep -q 'data-test-result="pass"' "$rendered"; then
+    local failures
+    failures=$(grep -o 'data-test-failures="[^"]*"' "$rendered" || true)
+    echo "FAIL: nonced popup execution is unsafe: ${failures:-no browser verdict}" >&2
+    return 1
+  fi
+
+  echo 'ok   nonced popup executes once with quotes, entities, and </script> preserved'
+}
+
 status=0
 run_case 'source files' source || status=1
 run_case 'minified production bundle' bundle || status=1
+run_popup_csp_case || status=1
 if [[ $status -ne 0 ]]; then
   exit "$status"
 fi

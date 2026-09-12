@@ -158,14 +158,19 @@ run_case() {
 </body></html>
 HTML
 
-  rm -rf "$tmp/profile-$mode"
-  "$browser" \
+  # The container adapter accepts only a test-owned basename `profile`; use a
+  # fresh profile for each lane while preserving that security contract.
+  rm -rf "$tmp/profile"
+  if ! "$browser" \
     --headless \
     --disable-gpu \
     --allow-file-access-from-files \
-    --user-data-dir="$tmp/profile-$mode" \
+    --user-data-dir="$tmp/profile" \
     --virtual-time-budget=3000 \
-    --dump-dom "file://$tmp/regression-$mode.html" >"$rendered" 2>"$tmp/chromium-$mode.log"
+    --dump-dom "file://$tmp/regression-$mode.html" >"$rendered" 2>"$tmp/browser-$mode.log"; then
+    cat "$tmp/browser-$mode.log" >&2
+    return 1
+  fi
 
   if ! grep -q 'data-test-result="pass"' "$rendered"; then
     local failures

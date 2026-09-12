@@ -77,3 +77,4 @@ jQuery( document ).on( 'click', '[data-toggle-super]', function() {
     var id = jQuery( this ).attr( 'data-toggle-super' );
     toggleSuper( 'toggle-super-' + id, id );
 } );
+

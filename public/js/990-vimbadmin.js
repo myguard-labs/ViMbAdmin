@@ -317,11 +317,13 @@ function tt_openModalDialog(event) {
                         var modalTitle = modalShell.find( '.modal-title' ).first();
                         var modalTitleId = modalTitle.attr( 'id' );
                         var modalTitleText = modalTitle.text();
+                        var modalTitleIdIsToken = typeof modalTitleId === 'string'
+                            && modalTitleId !== '' && !/[\t\n\f\r ]/.test( modalTitleId );
                         var matchingIds = $( '[id]' ).filter( function() {
                             return this.id === modalTitleId;
                         } ).length;
-                        if( modalTitle.length && typeof modalTitleId === 'string'
-                            && modalTitleId !== '' && modalTitleText.trim() !== ''
+                        if( modalTitle.length && modalTitleIdIsToken
+                            && modalTitleText.trim() !== ''
                             && matchingIds === 1 )
                             modalShell.attr( 'aria-labelledby', modalTitleId ).removeAttr( 'aria-label' );
                         $( '.modal-body' ).scrollTop( 0 );

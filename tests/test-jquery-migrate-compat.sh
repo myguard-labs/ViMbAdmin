@@ -585,7 +585,7 @@ $(function() {
         // Scoped to the alert's OWN dialog: #purge_dialog is a persistent
         // in-page modal opened by an earlier check and legitimately still in the
         // DOM, so a global `.modal.show` count would assert someone else's state.
-        // What matters here is that the per-call dialog the shim created is gone
+        // What matters here is that the per-call dialog the helper created is gone
         // -- the helper removes it on `hidden.bs.modal`, so its absence proves the hide
         // transition completed rather than merely started.
         check('native modal alert dismisses and removes its dialog', function() {

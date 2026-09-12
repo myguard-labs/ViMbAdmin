@@ -416,6 +416,16 @@ run_case() {
                 'AJAX modal blank-title state',
                 false
             );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="   ">Whitespace ID</h3></div>',
+                'AJAX modal whitespace-only-id state',
+                false
+            );
+            await assertAjaxModalName(
+                '<div class="modal-header"><h3 class="modal-title" id="title second">IDREF list</h3></div>',
+                'AJAX modal embedded-whitespace-id state',
+                false
+            );
         }
         finally {
             jQuery.ajax = realAjax;

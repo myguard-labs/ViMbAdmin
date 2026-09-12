@@ -127,7 +127,7 @@ function toggleActive(elid, id) {
                         {
                             data = JSON.parse( data );
                             var tableApi = vmDataTableApi( oDataTable );
-                            data.forEach( function( row, index ){
+                            data.forEach( function( row ){
                                    tableApi.row.add([
                                         row.username,
                                         row.name,

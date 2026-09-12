@@ -24,6 +24,13 @@ require "  --mount \"type=bind,src=${dollar}fixture_dir,dst=${dollar}fixture_dir
 require "  \"${dollar}image\" google-chrome --no-sandbox \"${dollar}@\""
 require 'vimbadmin-(alias-destination|residual-stored-xss|confirm-guard|datatables-dependency-free|control-behaviour|source-defect-sweep|validate-group|browser-adapter)'
 require 'dst=/usr/local/bin/run-chrome-http-fixture,readonly'
+require 'browser fixture runner requires a test-owned --user-data-dir'
+require 'browser fixture runner requires a private test fixture directory'
+
+if grep -Fq 'Chrome container requires' "$runner"; then
+  echo 'FAIL: browser fixture diagnostics must not name a Chrome container' >&2
+  exit 1
+fi
 
 require_php() {
   local pattern=$1

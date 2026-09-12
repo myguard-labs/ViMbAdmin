@@ -25,6 +25,7 @@ class Test_SpinnerReplacement
         $this->test_minify_inputs_no_throbber();
         $this->test_header_no_throbber_tag();
         $this->test_about_page_credits_updated();
+        $this->test_about_page_dependency_punctuation();
         $this->test_wrapper_function_uses_spinner();
 
         if ( empty($this->failures) )
@@ -152,6 +153,18 @@ class Test_SpinnerReplacement
         else
         {
             echo "  OK: about.phtml credits updated\n";
+        }
+    }
+
+    private function test_about_page_dependency_punctuation(): void
+    {
+        $content = file_get_contents($this->base_dir . '/application/views/index/about.phtml');
+        $expected = '<a href="https://datatables.net/">DataTables</a>, a dependency-free'
+            . "\n            table library, and <a href=\"https://icons.getbootstrap.com/\">Bootstrap Icons</a>.";
+        if ($content === false || !str_contains($content, $expected)) {
+            $this->failures[] = 'about.phtml dependency list should use grammatical comma punctuation';
+        } else {
+            echo "  OK: about.phtml dependency punctuation updated\n";
         }
     }
 

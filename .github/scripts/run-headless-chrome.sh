@@ -32,7 +32,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$profile" || "${profile##*/}" != profile ]]; then
-  echo 'FAIL: Chrome container requires a test-owned --user-data-dir' >&2
+  echo 'FAIL: browser fixture runner requires a test-owned --user-data-dir' >&2
   exit 64
 fi
 
@@ -41,7 +41,7 @@ if [[ ! $fixture_dir =~ ^/tmp/vimbadmin-(alias-destination|residual-stored-xss|c
   [[ -L $fixture_dir ]] ||
   [[ ! -d $fixture_dir || ! -w $fixture_dir ]] ||
   [[ $(stat -c '%u:%a' "$fixture_dir") != "$(id -u):700" ]]; then
-  echo 'FAIL: Chrome container requires a private test fixture directory' >&2
+  echo 'FAIL: browser fixture runner requires a private test fixture directory' >&2
   exit 64
 fi
 

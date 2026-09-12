@@ -294,7 +294,7 @@ function ossToggle( e, Url, data, delElement )
         e.removeClass( "btn-success" ).prop( 'disabled', true );
     }
 
-    var Throb = tt_throbber( 18, 10, 1, 'images/throbber_16px.gif' ).appendTo( DataTable.Dom.select( '#throb-' + e.attr( 'id' ) ).get(0) ).start();
+    tt_throbber( 18, 10, 1, 'images/throbber_16px.gif' ).appendTo( DataTable.Dom.select( '#throb-' + e.attr( 'id' ) ).get(0) ).start();
 
     var ok = false;
 
@@ -387,7 +387,7 @@ function tt_openModalDialog(event) {
     DataTable.Dom.select('#modal_dialog').html( '<div id="throb" style="padding-left:230px; padding-top:175px; height:275px;"></div>' );
 
 
-    var Throb = tt_throbber( 100, 20, 1.8 ).appendTo( DataTable.Dom.select( '#throb' ).get(0) ).start();
+    tt_throbber( 100, 20, 1.8 ).appendTo( DataTable.Dom.select( '#throb' ).get(0) ).start();
 
     dialog = ossModal( '#modal_dialog_shell' );
 

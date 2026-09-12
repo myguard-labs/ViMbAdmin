@@ -51,7 +51,7 @@
  *     printf '%s  %s\n' \
  *       230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f \
  *       bin/compiler.jar | sha256sum -c -
- *     npm install --prefix bin clean-css-cli@5.6.3
+ *     npm ci --prefix bin
  */
 
 declare(strict_types=1);

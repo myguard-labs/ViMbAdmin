@@ -306,6 +306,32 @@ $check(
     'bin/minify-options.php points at the repo-owned driver',
     str_contains($optionsSource, 'bin/minify-bundle.php')
 );
+$toolPackage = json_decode((string) file_get_contents($root . '/bin/package.json'), true);
+$toolLock = json_decode((string) file_get_contents($root . '/bin/package-lock.json'), true);
+$assetsDoc = (string) file_get_contents($root . '/docs/ASSETS.md');
+$check(
+    'Closure Compiler digest is enforced by the build configuration',
+    str_contains($optionsSource, "230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f")
+        && str_contains($optionsSource, "hash_file( 'sha256', \$compiler_jar )")
+);
+$check(
+    'clean-css CLI is an exact direct dependency',
+    is_array($toolPackage)
+        && ($toolPackage['dependencies']['clean-css-cli'] ?? null) === '5.6.3'
+);
+$check(
+    'clean-css dependency graph is locked',
+    is_array($toolLock)
+        && ($toolLock['lockfileVersion'] ?? null) === 3
+        && ($toolLock['packages']['node_modules/clean-css-cli']['version'] ?? null) === '5.6.3'
+        && ($toolLock['packages']['node_modules/clean-css']['version'] ?? null) === '5.3.3'
+);
+$check(
+    'asset documentation describes enforced toolchain verification',
+    str_contains($assetsDoc, 'npm ci --prefix bin')
+        && str_contains($assetsDoc, 'verifies the compiler SHA-256')
+        && str_contains($assetsDoc, 'clean-css dependency')
+);
 
 // VIM-A15.46: public/css/816-datatables-bootstrap5.css opens with a real
 // `@charset "UTF-8";`, which is only valid as the very first byte of a

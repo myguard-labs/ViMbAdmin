@@ -21,10 +21,8 @@ vendor/[a-zA-Z0-9]*
 bin/compiler.jar
 # clean-css is the CSS minifier for bin/minify-options.php (the vendored
 # yuicompressor.jar corrupts Bootstrap 5 CSS). Installed per-machine with
-# `npm install --prefix bin clean-css-cli@5.6.3`, never vendored.
+# `npm ci --prefix bin`; the manifest and lockfile are committed below.
 bin/node_modules/
-bin/package.json
-bin/package-lock.json
 vimbadmin.sublime-project
 vimbadmin.sublime-workspace
 vimbadmin3.sublime-project

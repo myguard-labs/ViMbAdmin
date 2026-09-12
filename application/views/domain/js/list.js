@@ -111,7 +111,7 @@ function getEntries( event ){
                     {
                         data = JSON.parse( data );
                         var tableApi = vmDataTableApi( oDataTable );
-                        data.forEach( function( row, index ){
+                        data.forEach( function( row ){
                                tableApi.row.add([
                                     row.name,
                                     formatMailboxes( row.id, row.mailboxes, row.maxmailboxes ),

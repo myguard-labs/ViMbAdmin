@@ -13,16 +13,16 @@ $check = static function (string $label, bool $condition) use (&$failures): void
 echo "== Client-side sink hardening ==\n";
 
 $textSinks = [
-    'application/views/admin/js/domains.js' => '$( "#purge_domain_name" ).text( element.attr( "ref" ) );',
-    'application/views/admin/js/list.js' => "$( \"#purge_admin_name\" ).text( element.attr( 'ref' ) );",
-    'application/views/domain/js/admins.js' => '$( "#purge_admin_name" ).text( element.attr( "ref" ) );',
-    'application/views/domain/js/list.js' => '$( "#purge_domain_name" ).text( domain );',
-    'application/views/mailbox/js/aliases.js' => "$( \"#purge_alias_name\" ).text( element.attr( 'ref' ) );",
+    'application/views/admin/js/domains.js' => 'DataTable.Dom.select( "#purge_domain_name" ).text( element.attr( "ref" ) );',
+    'application/views/admin/js/list.js' => "DataTable.Dom.select( \"#purge_admin_name\" ).text( element.attr( 'ref' ) );",
+    'application/views/domain/js/admins.js' => 'DataTable.Dom.select( "#purge_admin_name" ).text( element.attr( "ref" ) );',
+    'application/views/domain/js/list.js' => 'DataTable.Dom.select( "#purge_domain_name" ).text( domain );',
+    'application/views/mailbox/js/aliases.js' => "DataTable.Dom.select( \"#purge_alias_name\" ).text( element.attr( 'ref' ) );",
 ];
 foreach ($textSinks as $path => $safeCall) {
     $source = file_get_contents(__DIR__ . '/../' . $path);
     $check($path . ' inserts the confirmation label as text',
-        is_string($source) && str_contains($source, str_replace('$(', 'DataTable.Dom.select(', $safeCall)));
+        is_string($source) && str_contains($source, $safeCall));
 }
 
 $mailboxList = file_get_contents(__DIR__ . '/../application/views/mailbox/js/list.js');

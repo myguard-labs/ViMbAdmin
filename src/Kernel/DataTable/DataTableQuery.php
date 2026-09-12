@@ -85,6 +85,18 @@ final class DataTableQuery
             $length = $length === -1 ? self::MAX_LENGTH : ($length <= 0 ? 10 : self::MAX_LENGTH);
         }
 
+        [$search, $contains, $searchTerm] = self::parseSearch($p, $minimumSearchLength);
+        [$sortCol, $sortDir] = self::parseFirstOrder($p);
+
+        return new self($draw, $start, $length, $search, $contains, $searchTerm, $sortCol, $sortDir);
+    }
+
+    /**
+     * @param array<string,mixed> $p
+     * @return array{string,bool,string}
+     */
+    private static function parseSearch(array $p, int $minimumSearchLength): array
+    {
         $searchParams = self::arrayParameter($p['search'] ?? [], 'search');
         $searchValue = $searchParams['value'] ?? null;
         if ($searchValue !== null && !is_string($searchValue)) {
@@ -105,6 +117,15 @@ final class DataTableQuery
         if ($searchTerm !== '' && mb_strlen($searchTerm, 'UTF-8') < $minimumSearchLength) {
             throw new \LengthException("Search must be empty or at least {$minimumSearchLength} characters");
         }
+        return [$search, $contains, $searchTerm];
+    }
+
+    /**
+     * @param array<string,mixed> $p
+     * @return array{int,string}
+     */
+    private static function parseFirstOrder(array $p): array
+    {
         $orders = self::arrayParameter($p['order'] ?? [], 'order');
         $order = self::arrayParameter($orders[0] ?? [], 'order[0]');
         $sortCol = max(0, self::integer($order['column'] ?? null, 0, 'order[0][column]'));
@@ -113,8 +134,7 @@ final class DataTableQuery
             throw new \TypeError('order[0][dir] must be a string');
         }
         $sortDir = strtoupper($sortDirection ?? 'asc') === 'DESC' ? 'DESC' : 'ASC';
-
-        return new self($draw, $start, $length, $search, $contains, $searchTerm, $sortCol, $sortDir);
+        return [$sortCol, $sortDir];
     }
 
     /** @return array<array-key,mixed> */

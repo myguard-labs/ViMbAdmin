@@ -39,10 +39,10 @@ $check('mailbox size dialog escapes every dynamic table value',
 
 $emailSettingsPath = __DIR__ . '/../application/views/mailbox/native-email-settings.phtml';
 $emailSettings = file_get_contents($emailSettingsPath);
-$renderEmailSettings = static function (string $path, string $selectedType): ?string {
+$renderEmailSettings = static function (string $selectedType): ?string {
     try {
         $smarty = new Smarty\Smarty();
-        $smarty->setTemplateDir(dirname($path));
+        $smarty->setTemplateDir(__DIR__ . '/../application/views/mailbox');
         $smarty->setCompileDir(__DIR__ . '/../var/templates_c');
         $smarty->setForceCompile(true);
         // Constant-output test stub: rendering only needs the URL tag to compile.
@@ -62,8 +62,14 @@ $renderEmailSettings = static function (string $path, string $selectedType): ?st
             'csrfToken' => 'fixture-token',
             'emailValue' => '',
         ]);
-        return $smarty->fetch(basename($path));
-    } catch (Throwable) {
+        return $smarty->fetch('native-email-settings.phtml');
+    } catch (Throwable $exception) {
+        $message = preg_replace('/\\s+/', ' ', $exception->getMessage()) ?? 'unknown error';
+        error_log(sprintf(
+            'email-settings Smarty render failed (%s): %.240s',
+            get_debug_type($exception),
+            $message
+        ));
         return null;
     }
 };
@@ -78,6 +84,18 @@ $renderFailedOrHasRequiredClass = static function (?string $html): bool {
     libxml_clear_errors();
     libxml_use_internal_errors($previous);
     if (!$loaded || $parseErrors !== []) {
+        if ($parseErrors === []) {
+            error_log('email-settings HTML parse failed without a libxml diagnostic');
+        }
+        foreach (array_slice($parseErrors, 0, 3) as $parseError) {
+            $message = preg_replace('/\\s+/', ' ', trim($parseError->message)) ?? 'unknown error';
+            error_log(sprintf(
+                'email-settings HTML parse failed (code %d, line %d): %.160s',
+                $parseError->code,
+                $parseError->line,
+                $message
+            ));
+        }
         return true;
     }
     foreach ((new DOMXPath($document))->query('//*[@class]') ?: [] as $element) {
@@ -91,15 +109,15 @@ $renderFailedOrHasRequiredClass = static function (?string $html): bool {
     }
     return false;
 };
-$emailSettingsHasLegacyRequiredClass = $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'username'))
-    || $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'alt_email'))
-    || $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'other'));
+$emailSettingsRenderFailedOrHasLegacyRequiredClass = $renderFailedOrHasRequiredClass($renderEmailSettings('username'))
+    || $renderFailedOrHasRequiredClass($renderEmailSettings('alt_email'))
+    || $renderFailedOrHasRequiredClass($renderEmailSettings('other'));
 $check('email-settings modal emits native required constraints',
     is_string($emailSettings)
         && str_contains($emailSettings, '<select name="type" id="type" class="form-select" required')
         && str_contains($emailSettings, 'class="form-control"')
         && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}")
-        && !$emailSettingsHasLegacyRequiredClass);
+        && !$emailSettingsRenderFailedOrHasLegacyRequiredClass);
 $emailSettingsSaveHandler = '';
 if (is_string($mailboxList)
     && preg_match(

@@ -53,7 +53,11 @@ $renderEmailSettings = static function (string $path, string $selectedType): ?st
                 public function getId(): int { return 1; }
             },
             'esError' => false,
-            'typeOptions' => ['other' => 'Other'],
+            'typeOptions' => [
+                'username' => 'fixture@example.test',
+                'alt_email' => 'alternate@example.test',
+                'other' => 'Other',
+            ],
             'selectedType' => $selectedType,
             'csrfToken' => 'fixture-token',
             'emailValue' => '',
@@ -87,8 +91,9 @@ $renderFailedOrHasRequiredClass = static function (?string $html): bool {
     }
     return false;
 };
-$emailSettingsHasLegacyRequiredClass = $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'other'))
-    || $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'local'));
+$emailSettingsHasLegacyRequiredClass = $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'username'))
+    || $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'alt_email'))
+    || $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'other'));
 $check('email-settings modal emits native required constraints',
     is_string($emailSettings)
         && str_contains($emailSettings, '<select name="type" id="type" class="form-select" required')

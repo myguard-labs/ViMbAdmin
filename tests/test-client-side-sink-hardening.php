@@ -38,7 +38,7 @@ $check('mailbox size dialog escapes every dynamic table value',
 $emailSettings = file_get_contents(__DIR__ . '/../application/views/mailbox/native-email-settings.phtml');
 $classAttributes = [];
 $classAttributeMatchCount = is_string($emailSettings)
-    ? preg_match_all('/\\bclass=(["\'])(.*?)\\1/s', $emailSettings, $classAttributes)
+    ? preg_match_all('/(?:^|\\s)class\\s*=\\s*(["\'])(.*?)\\1/is', $emailSettings, $classAttributes)
     : false;
 $emailSettingsHasLegacyRequiredClass = $classAttributeMatchCount === false;
 if ($classAttributeMatchCount !== false) {

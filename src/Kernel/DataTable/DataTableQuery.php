@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ViMbAdmin\Kernel\DataTable;
 
 /**
- * Parsed DataTables 2 server-side processing request parameters.
+ * Parsed DataTables server-side processing request parameters.
  *
  * The list pages render server-side paged: the table is configured with
  * `serverSide` + an AJAX source, and DataTables sends the draw counter

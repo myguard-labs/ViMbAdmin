@@ -20,13 +20,13 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cp public/css/800-bootstrap.css public/js/100-jquery.js public/js/120-vimbadmin.validation.js "$tmp/"
+cp public/css/800-bootstrap.css public/js/120-vimbadmin.validation.js public/js/150-datatables.js public/js/800-bootstrap.js public/js/990-vimbadmin.js "$tmp/"
 awk '
-  /^jQuery\( document \)\.on\( .change., .#type./ { emit = 1 }
+  /^DataTable\.Dom\.select\( document \)\.on\( .change., .#type./ { emit = 1 }
   emit { print }
   emit && /^} \);$/ { blocks++; if (blocks == 2) exit }
 ' application/views/mailbox/js/list.js >"$tmp/email-settings.js"
-if [[ $(grep -c '^jQuery( document ).on' "$tmp/email-settings.js") -ne 2 ]]; then
+if [[ $(grep -c '^DataTable.Dom.select( document ).on' "$tmp/email-settings.js") -ne 2 ]]; then
   echo 'FAIL: could not extract both production email-settings handlers' >&2
   exit 1
 fi
@@ -34,7 +34,8 @@ fi
 cat >"$tmp/regression.html" <<'HTML'
 <!doctype html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="800-bootstrap.css">
-<script src="100-jquery.js"></script><script src="120-vimbadmin.validation.js"></script>
+<script src="150-datatables.js"></script><script src="120-vimbadmin.validation.js"></script>
+<script src="800-bootstrap.js"></script><script src="990-vimbadmin.js"></script>
 </head><body>
 <div id="modal_dialog">
   <form id="email_settings_form" action="/email-settings">
@@ -54,24 +55,24 @@ function check(name, test) { try { if (!test()) throw new Error('false oracle');
 var dialog = { modal: function() {} };
 function tt_throbber() { return { appendTo: function() { return this; }, start: function() { return this; } }; }
 function ossAjaxErrorHandler() {}
-jQuery.fx.off = true;
-jQuery.ajax = function(options) { ajaxCalls++; options.success(response); };
+DataTable.Dom.transitions = false;
+ossAjax = function(options) { ajaxCalls++; options.success(response); };
 </script>
 <script src="email-settings.js"></script>
 <script>
-jQuery(function() {
-  var type = jQuery('#type'), email = document.getElementById('email');
-  check('initial local recipient hides and does not require email', function() { return !email.required && jQuery('#other_email').is(':hidden'); });
+vmReady(function() {
+  var type = DataTable.Dom.select('#type'), email = document.getElementById('email');
+  check('initial local recipient hides and does not require email', function() { return !email.required && !DataTable.Dom.select('#other_email').isVisible(); });
   type.val('other').trigger('change');
-  check('other recipient reveals and requires email', function() { return email.required && !jQuery('#other_email').is(':hidden'); });
-  jQuery('#modal_dialog_save').trigger('click');
+  check('other recipient reveals and requires email', function() { return email.required && DataTable.Dom.select('#other_email').isVisible(); });
+  DataTable.Dom.select('#modal_dialog_save').trigger('click');
   check('invalid save is styled and does not call AJAX', function() { return ajaxCalls === 0 && email.classList.contains('is-invalid') && getComputedStyle(email).backgroundImage !== 'none'; });
   email.value = 'person@example.test';
-  jQuery('#modal_dialog_save').trigger('click');
-  check('valid save calls AJAX and renders server error fragment', function() { return ajaxCalls === 1 && jQuery('#modal_dialog .modal-header').text() === 'server error'; });
-  jQuery('#modal_dialog').html('<form id="email_settings_form"><select id="type"><option value="other">Other</option><option value="local">Local</option></select><div id="other_email"><input id="email" required></div></form>');
-  jQuery('#type').val('local').trigger('change');
-  check('local transition hides and removes email requirement after rerender', function() { return !document.getElementById('email').required && jQuery('#other_email').is(':hidden'); });
+  DataTable.Dom.select('#modal_dialog_save').trigger('click');
+  check('valid save calls AJAX and renders server error fragment', function() { return ajaxCalls === 1 && DataTable.Dom.select('#modal_dialog .modal-header').text() === 'server error'; });
+  DataTable.Dom.select('#modal_dialog').html('<form id="email_settings_form"><select id="type"><option value="other">Other</option><option value="local">Local</option></select><div id="other_email"><input id="email" required></div></form>');
+  DataTable.Dom.select('#type').val('local').trigger('change');
+  check('local transition hides and removes email requirement after rerender', function() { return !document.getElementById('email').required && !DataTable.Dom.select('#other_email').isVisible(); });
   document.getElementById('output').textContent = JSON.stringify({ failures: failures });
   document.body.dataset.verdict = failures.length ? 'FAIL' : 'PASS';
 });

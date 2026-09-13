@@ -43,11 +43,10 @@ return [
     // Shipped in public/js/min.bundle-v<N>.js and listed in the {else} branch
     // of application/views/header-js.phtml.
     'js' => [
-        '100-jquery.js',
         '120-vimbadmin.validation.js',
-        '150-jquery.datatables.js',
-        '151-jquery.datatables.ext.js',
-        '152-jquery.datatables.bootstrap5.js',
+        '150-datatables.js',
+        '151-datatables.ext.js',
+        '152-datatables.bootstrap5.js',
         '800-bootstrap.js',
         '850-vimbadmin.modals.js',
         '910-vimbadmin.functions.js',

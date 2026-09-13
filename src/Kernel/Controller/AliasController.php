@@ -204,19 +204,14 @@ final class AliasController extends AbstractController
 
         $session = new MagicPropertyStorage($this->session());
         $domain  = $this->storedDomain($session);
-        $ima     = self::binaryInteger($this->param('ima'), 0, 'Include-mailbox-alias flag');
+        try {
+            $ima = self::binaryInteger($this->param('ima'), 0, 'Include-mailbox-alias flag');
+            $request = self::requestArray($_GET);
+        } catch (\LogicException) {
+            return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
+        }
 
         $minimum = $this->dataTableMinimumSearchLength();
-        try {
-            $request = self::requestArray($_GET);
-        } catch (\LogicException $e) {
-            foreach (['draw', 'start', 'length'] as $key) {
-                if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
-                    return new Response('Invalid DataTables request', 400, 'text/plain; charset=utf-8');
-                }
-            }
-            throw $e;
-        }
         try {
             $q = DataTableQuery::fromArray(
                 $request,

@@ -3,7 +3,7 @@
 # VIM-A15.23 removed the hard-coded Bootstrap 2 `sDom`/`dom` domPositioning
 # strings (`<'row'<'span6'l><'span6'f>r>t<'row'<'span6'i><'span6'p>>`) from
 # every view-JS DataTables initialiser and let the vendored
-# `public/js/152-jquery.datatables.bootstrap5.js` integration's own default
+# `public/js/152-datatables.bootstrap5.js` integration's own default
 # `dom` string apply instead. tests/lint-bs2-grid-classes.sh deliberately
 # does NOT scan these strings (see its own comment) because `span6` there is
 # a DataTables domPositioning TOKEN, not a CSS class in a `class="..."`
@@ -190,7 +190,7 @@ trap 'rm -f "$inventory"' EXIT
 # fixtures must contain the literal tokens), and the same vendored/generated
 # asset classes lint-bs2-grid-classes.sh excludes: public/css, public/js
 # (vendored DataTables/Bootstrap ship no dom string of their own to flag --
-# 152-jquery.datatables.bootstrap5.js's own default uses col-md-*, not
+# 152-datatables.bootstrap5.js's own default uses col-md-*, not
 # span6, so excluding it costs nothing but keeps this gate's scope aligned
 # with its sibling) and any min.bundle-v* generated artifact.
 if ! find . -type d -name .git -prune \

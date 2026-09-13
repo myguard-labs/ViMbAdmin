@@ -67,7 +67,7 @@
                         </a>
 
                         {if $identity.user->getId() != $admin->getId() }
-                            <a class="btn btn-sm have-tooltip {if $admin->isSuper()}hide{/if}" id="admin_domains_{$admin->getId()}" title="List Domains" href="{genUrl controller='admin' action='domains' aid=$admin->getId()}">
+                            <a class="btn btn-sm have-tooltip {if $admin->isSuper()}d-none{/if}" id="admin_domains_{$admin->getId()}" title="List Domains" href="{genUrl controller='admin' action='domains' aid=$admin->getId()}">
                                 <i class="bi-display"></i>
                             </a>
                             <form method="post" action="{genUrl controller='admin' action='purge'}" class="purge-admin-form" style="display: inline;">

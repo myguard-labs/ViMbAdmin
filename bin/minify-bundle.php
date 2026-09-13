@@ -24,8 +24,8 @@
  * bin/minify-options.php is still the single source of truth for everything
  * else -- the compiler command lines, the clean-css presence check, the
  * destination directories, the {genUrl} prefixes and the hand-written
- * $mini_*_conditional_* header fragments (the dev-only jQuery Migrate <script>
- * row and the unconditional $skinCss block). It is required here, unmodified,
+ * $mini_*_conditional_* header fragments (including the $skinCss block).
+ * It is required here, unmodified,
  * rather than duplicated; only its $js_files / $css_files globs are ignored.
  *
  * Usage:
@@ -51,7 +51,7 @@
  *     printf '%s  %s\n' \
  *       230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f \
  *       bin/compiler.jar | sha256sum -c -
- *     npm install --prefix bin clean-css-cli@5.6.3
+ *     npm ci --prefix bin
  */
 
 declare(strict_types=1);
@@ -495,6 +495,7 @@ if ($version === null || preg_match('/^[0-9]+$/', $version) !== 1) {
 // not re-implemented. It defines APPLICATION_PATH and SCRIPTDIR itself when
 // they are not already defined.
 try {
+    define('VIMBADMIN_MINIFY_LANE', $whatToCompress);
     $options = vimbadminLoadMinifyOptions(__DIR__ . '/minify-options.php');
 } catch (RuntimeException $error) {
     fwrite(STDERR, 'FATAL: ' . $error->getMessage() . "\n");

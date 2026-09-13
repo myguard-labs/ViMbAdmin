@@ -25,10 +25,10 @@ for (const [search, allowed] of [
   let requested = null;
   let answered = null;
   const factory = vm.runInNewContext(`(${transportMatch[0]})`, {
-    $: { fn: { dataTable: { Api: function() {} } }, ajax: options => { requested = options.data; } }
+    DataTable: { Api: function() {} }, ossAjax: options => { requested = options.data; }
   });
   factory('/unused', 3)({ draw: 11, search: { value: search } }, result => { answered = result; }, {
-    oLanguage: { sZeroRecords: 'None', sEmptyTable: 'Empty' }
+    language: { zeroRecords: 'None', emptyTable: 'Empty' }
   });
   assert.equal(requested !== null, allowed, `PHP trim boundary ${JSON.stringify(search)}: request admission`);
   if (allowed) {
@@ -53,7 +53,6 @@ for (const view of ['domain', 'alias', 'mailbox']) {
     const format = (...args) => args.join(':');
     const callback = vm.runInNewContext(`(function(data) {${body}\n})`, {
       oDataTable: table,
-      $: { each: (rows, visit) => rows.forEach((row, index) => visit(index, row)) },
       vmDataTableApi: selected => {
         assert.equal(selected, table);
         const wrapper = ++wrappers;

@@ -78,9 +78,9 @@ document.getElementById('malicious-destination').innerHTML =
 document.getElementById('long-destination').innerHTML =
     formatGoto(response.data[1].id, response.data[1].goto);
 
-$(function () {
-    $('#alias-goto-43').trigger('mouseenter');
-    $('#delete-alias-41').trigger('click');
+vmReady(function () {
+    document.getElementById('alias-goto-43').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    document.getElementById('delete-alias-41').click();
 
     setTimeout(function () {
         const failures = [];

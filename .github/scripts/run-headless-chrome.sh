@@ -32,16 +32,16 @@ for arg in "$@"; do
 done
 
 if [[ -z "$profile" || "${profile##*/}" != profile ]]; then
-  echo 'FAIL: Chrome container requires a test-owned --user-data-dir' >&2
+  echo 'FAIL: browser fixture runner requires a test-owned --user-data-dir' >&2
   exit 64
 fi
 
 readonly fixture_dir=${profile%/profile}
-if [[ ! $fixture_dir =~ ^/tmp/vimbadmin-(alias-destination|residual-stored-xss|confirm-guard|jquery-migrate|control-behaviour|source-defect-sweep|validate-group|browser-adapter)\.[[:alnum:]]+$ ]] ||
+if [[ ! $fixture_dir =~ ^/tmp/vimbadmin-(alias-destination|residual-stored-xss|confirm-guard|datatables-dependency-free|control-behaviour|source-defect-sweep|validate-group|browser-adapter)\.[[:alnum:]]+$ ]] ||
   [[ -L $fixture_dir ]] ||
   [[ ! -d $fixture_dir || ! -w $fixture_dir ]] ||
   [[ $(stat -c '%u:%a' "$fixture_dir") != "$(id -u):700" ]]; then
-  echo 'FAIL: Chrome container requires a private test fixture directory' >&2
+  echo 'FAIL: browser fixture runner requires a private test fixture directory' >&2
   exit 64
 fi
 
@@ -53,7 +53,7 @@ if [[ $browser != chrome ]]; then
     vimbadmin-browser:1.63.0 "$browser" "$fixture_dir" "$@"
 fi
 
-if [[ ( $fixture_dir == /tmp/vimbadmin-jquery-migrate.* || $fixture_dir == /tmp/vimbadmin-validate-group.* ) && -n $fixture_url ]]; then
+if [[ ($fixture_dir == /tmp/vimbadmin-datatables-dependency-free.* || $fixture_dir == /tmp/vimbadmin-validate-group.*) && -n $fixture_url ]]; then
   exec docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
     --user "$(id -u):$(id -g)" \
     --env "HOME=$fixture_dir" \

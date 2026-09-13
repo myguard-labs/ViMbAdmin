@@ -87,7 +87,7 @@ awk '
   }
   END {
     finish_job()
-    if (jobs != 9) failed = 1
+    if (jobs != 10) failed = 1
     exit failed ? 1 : 0
   }
 ' "${workflows[@]}" || {

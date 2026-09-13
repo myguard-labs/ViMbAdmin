@@ -21,7 +21,7 @@ if [[ -z $browser ]]; then
   exit 2
 fi
 
-tmp=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-datatables-dependency-free.XXXXXX")
+tmp=$(mktemp -d /tmp/vimbadmin-datatables-dependency-free.XXXXXX)
 cleanup() {
   rm -rf "$tmp"
 }
@@ -1017,7 +1017,7 @@ case "$mutation" in
     expect_fail "server-side wire endpoint ($scope scope)" \
       run_mode development "#wire-route-disabled-$scope"
   done
-  if VIMBADMIN_MUTATION=sixth-wire-scope bash "$0" >"$tmp/sixth-wire-scope.log" 2>&1; then
+  if VIMBADMIN_MUTATION=sixth-wire-scope bash tests/test-datatables-dependency-free-compat.sh >"$tmp/sixth-wire-scope.log" 2>&1; then
     echo 'FAIL: sixth-scope route control passed; the browser did not exercise the added scope' >&2
     exit 1
   fi

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require __DIR__ . '/../vendor/autoload.php';
+
 $failures = 0;
 $check = static function (string $label, bool $condition) use (&$failures): void {
     echo ($condition ? '  ok   ' : '  FAIL ') . $label . "\n";
@@ -35,21 +37,58 @@ $check('mailbox size dialog escapes every dynamic table value',
         && str_contains($mailboxList, 'htmlEntity( prc.toFixed(0) )')
         && str_contains($mailboxList, 'htmlEntity( data[4] )'));
 
-$emailSettings = file_get_contents(__DIR__ . '/../application/views/mailbox/native-email-settings.phtml');
-$classAttributes = [];
-$classAttributeMatchCount = is_string($emailSettings)
-    ? preg_match_all('/(?:^|\\s)class\\s*=\\s*(["\'])(.*?)\\1/is', $emailSettings, $classAttributes)
-    : false;
-$emailSettingsHasLegacyRequiredClass = $classAttributeMatchCount === false;
-if ($classAttributeMatchCount !== false) {
-    foreach ($classAttributes[2] as $classAttribute) {
-        $classTokens = preg_split('/\\s+/', trim($classAttribute));
-        if ($classTokens !== false && in_array('required', $classTokens, true)) {
-            $emailSettingsHasLegacyRequiredClass = true;
-            break;
+$emailSettingsPath = __DIR__ . '/../application/views/mailbox/native-email-settings.phtml';
+$emailSettings = file_get_contents($emailSettingsPath);
+$renderEmailSettings = static function (string $path, string $selectedType): ?string {
+    try {
+        $smarty = new Smarty\Smarty();
+        $smarty->setTemplateDir(dirname($path));
+        $smarty->setCompileDir(__DIR__ . '/../var/templates_c');
+        $smarty->setForceCompile(true);
+        // Constant-output test stub: rendering only needs the URL tag to compile.
+        $smarty->registerPlugin('function', 'genUrl', static fn(array $params): string => '/fixture');
+        $smarty->assign([
+            'mailbox' => new class {
+                public function requiredUsername(): string { return 'fixture@example.test'; }
+                public function getId(): int { return 1; }
+            },
+            'esError' => false,
+            'typeOptions' => ['other' => 'Other'],
+            'selectedType' => $selectedType,
+            'csrfToken' => 'fixture-token',
+            'emailValue' => '',
+        ]);
+        return $smarty->fetch(basename($path));
+    } catch (Throwable) {
+        return null;
+    }
+};
+$renderFailedOrHasRequiredClass = static function (?string $html): bool {
+    if ($html === null) {
+        return true;
+    }
+    $document = new DOMDocument();
+    $previous = libxml_use_internal_errors(true);
+    $loaded = $document->loadHTML($html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+    $parseErrors = libxml_get_errors();
+    libxml_clear_errors();
+    libxml_use_internal_errors($previous);
+    if (!$loaded || $parseErrors !== []) {
+        return true;
+    }
+    foreach ((new DOMXPath($document))->query('//*[@class]') ?: [] as $element) {
+        if (!$element instanceof DOMElement) {
+            continue;
+        }
+        $tokens = preg_split('/\\s+/', trim($element->getAttribute('class')));
+        if (is_array($tokens) && in_array('required', $tokens, true)) {
+            return true;
         }
     }
-}
+    return false;
+};
+$emailSettingsHasLegacyRequiredClass = $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'other'))
+    || $renderFailedOrHasRequiredClass($renderEmailSettings($emailSettingsPath, 'local'));
 $check('email-settings modal emits native required constraints',
     is_string($emailSettings)
         && str_contains($emailSettings, '<select name="type" id="type" class="form-select" required')

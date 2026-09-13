@@ -1019,11 +1019,13 @@ case "$mutation" in
   done
   if VIMBADMIN_MUTATION=sixth-wire-scope bash tests/test-datatables-dependency-free-compat.sh >"$tmp/sixth-wire-scope.log" 2>&1; then
     echo 'FAIL: sixth-scope route control passed; the browser did not exercise the added scope' >&2
+    cat "$tmp/sixth-wire-scope.log" >&2
     exit 1
   fi
   if ! grep -qFx 'OK: sixth fixture scope completed all four draws' "$tmp/sixth-wire-scope.log" ||
     ! grep -qF 'server-side wire: sixth: initial page' "$tmp/sixth-wire-scope.log"; then
     echo 'FAIL: sixth-scope control did not reach its initial-page assertion' >&2
+    cat "$tmp/sixth-wire-scope.log" >&2
     exit 1
   fi
   expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'

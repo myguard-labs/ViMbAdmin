@@ -39,11 +39,43 @@ $check('mailbox size dialog escapes every dynamic table value',
 
 $emailSettingsPath = __DIR__ . '/../application/views/mailbox/native-email-settings.phtml';
 $emailSettings = file_get_contents($emailSettingsPath);
-$renderEmailSettings = static function (string $selectedType) use ($emailSettingsPath): ?string {
+$checkoutCompileDir = __DIR__ . '/../var/templates_c';
+$snapshotCompileDir = static function (string $directory): array {
+    $snapshot = [];
+    foreach (glob($directory . '/*') ?: [] as $path) {
+        $isFile = is_file($path);
+        $snapshot[basename($path)] = [
+            $isFile,
+            filemtime($path),
+            $isFile ? filesize($path) : null,
+            $isFile ? hash_file('sha256', $path) : null,
+        ];
+    }
+    return $snapshot;
+};
+$checkoutCompileSnapshot = $snapshotCompileDir($checkoutCompileDir);
+$emailSettingsCompileDir = sys_get_temp_dir() . '/vimbadmin-email-settings-' . bin2hex(random_bytes(16));
+if (!mkdir($emailSettingsCompileDir, 0700)) {
+    throw new RuntimeException("Unable to create temporary compile directory: {$emailSettingsCompileDir}");
+}
+$removeEmailSettingsCompileDir = static function () use ($emailSettingsCompileDir): void {
+    if (!is_dir($emailSettingsCompileDir)) {
+        return;
+    }
+    $smarty = new Smarty\Smarty();
+    $smarty->setCompileDir($emailSettingsCompileDir);
+    $smarty->clearCompiledTemplate();
+    rmdir($emailSettingsCompileDir);
+};
+register_shutdown_function($removeEmailSettingsCompileDir);
+$renderEmailSettings = static function (string $selectedType) use (
+    $emailSettingsPath,
+    $emailSettingsCompileDir
+): ?string {
     try {
         $smarty = new Smarty\Smarty();
         $smarty->setTemplateDir(dirname($emailSettingsPath));
-        $smarty->setCompileDir(__DIR__ . '/../var/templates_c');
+        $smarty->setCompileDir($emailSettingsCompileDir);
         $smarty->setForceCompile(true);
         // Constant-output test stub: rendering only needs the URL tag to compile.
         $smarty->registerPlugin('function', 'genUrl', static fn(array $params): string => '/fixture');
@@ -120,6 +152,12 @@ foreach (['username', 'alt_email', 'other'] as $selectedType) {
     $check("email-settings {$selectedType} render omits legacy required class",
         !$renderFailedOrHasRequiredClass($renderEmailSettings($selectedType), $selectedType));
 }
+$removeEmailSettingsCompileDir();
+clearstatcache();
+$check('email-settings rendering leaves checkout compile output unchanged',
+    $snapshotCompileDir($checkoutCompileDir) === $checkoutCompileSnapshot);
+$check('email-settings rendering removes temporary compile output',
+    !file_exists($emailSettingsCompileDir));
 $emailSettingsSaveHandler = '';
 if (is_string($mailboxList)
     && preg_match(

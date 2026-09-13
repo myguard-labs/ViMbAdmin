@@ -21,7 +21,7 @@ if [[ -z $browser ]]; then
   exit 2
 fi
 
-tmp=$(mktemp -d /tmp/vimbadmin-datatables-dependency-free.XXXXXX)
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-datatables-dependency-free.XXXXXX")
 cleanup() {
   rm -rf "$tmp"
 }
@@ -63,6 +63,22 @@ fi
 mkdir -p "$tmp/src/Kernel/DataTable" "$tmp/tests/support"
 cp src/Kernel/DataTable/{DataTableQuery,DataTableResult}.php "$tmp/src/Kernel/DataTable/"
 cp tests/support/datatable-wire-endpoint.php "$tmp/tests/support/"
+cp tests/support/datatable-wire-scopes.json "$tmp/tests/support/"
+# One manifest drives PHP validation, rendered responses, browser routes and
+# controls. The extra scope proves that none of those consumers pins the five.
+# shellcheck disable=SC2016
+php -r '
+  $scopes = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+  if ($argv[2] === "sixth-wire-scope") $scopes[] = "sixth";
+  file_put_contents($argv[1], json_encode($scopes, JSON_THROW_ON_ERROR));
+  echo implode("\n", $scopes), "\n";
+' "$tmp/tests/support/datatable-wire-scopes.json" "$mutation" >"$tmp/wire-scopes.txt"
+mapfile -t wire_scopes <"$tmp/wire-scopes.txt"
+{
+  printf 'var wireScopes = '
+  cat "$tmp/tests/support/datatable-wire-scopes.json"
+  printf ';\n'
+} >"$tmp/wire-scopes.js"
 cp tests/support/datatables-review-regressions.js tests/support/datatables-language-pollution.json tests/support/datatables-event-ownership.js "$tmp/"
 mkdir -p "$tmp/tests/support/datatable-wire"
 render_wire_response() {
@@ -71,7 +87,7 @@ render_wire_response() {
     "scope=$scope&draw=$draw&start=$start&length=2&search%5Bvalue%5D=$search&order%5B0%5D%5Bcolumn%5D=0&order%5B0%5D%5Bdir%5D=$direction" \
     >"$tmp/tests/support/datatable-wire/$scope-$draw.json"
 }
-for scope in domain mailbox alias archive log; do
+for scope in "${wire_scopes[@]}"; do
   render_wire_response "$scope" 1 0 '' asc
   render_wire_response "$scope" 2 2 '' asc
   render_wire_response "$scope" 3 0 '' desc
@@ -174,7 +190,7 @@ if (location.hash === '#missing-dependency') {
     scripts = scripts.filter(function(file) { return file !== '150-datatables.js'; });
 }
 scripts.forEach(function(file) { document.write('<script src="' + file + '"><\/script>'); });
-document.write('<script src="view-length-callbacks.js"><\/script><script src="datatables-event-ownership.js"><\/script><script src="datatables-review-regressions.js"><\/script>');
+document.write('<script src="wire-scopes.js"><\/script><script src="view-length-callbacks.js"><\/script><script src="datatables-event-ownership.js"><\/script><script src="datatables-review-regressions.js"><\/script>');
 </script></head><body>
 <form id="validation"><input id="required" name="required" required></form>
 <table id="table"><thead><tr><th>Name</th></tr></thead><tbody><tr><td>Beta</td></tr><tr><td>Alpha</td></tr></tbody></table>
@@ -211,7 +227,7 @@ function check(name, test) {
 
 vmReady(function() {
     var wireEndpoint = '/tests/support/datatable-wire-endpoint.php';
-    var wireRouteMutation = /^#wire-route-disabled-(domain|mailbox|alias|archive|log)$/.exec(location.hash);
+    var wireRouteMutation = location.hash.slice('#wire-route-disabled-'.length);
     // A missing route leaves Chromium's dump-dom process waiting on the 404
     // request even after the transport reports it. Point the negative control at a
     // served sentinel response that cannot satisfy any scope instead: it keeps
@@ -227,8 +243,8 @@ vmReady(function() {
         return wireAjax(options);
     };
     function routeWire(options, originalOptions) {
-        var match = /^\/tests\/support\/datatable-wire-endpoint\.php\?scope=(domain|mailbox|alias|archive|log)$/.exec(options.url);
-        if (!match) return;
+        var match = /^\/tests\/support\/datatable-wire-endpoint\.php\?scope=([^&]+)$/.exec(options.url);
+        if (!match || wireScopes.indexOf(match[1]) === -1) return;
         var data = originalOptions.data;
         if (!data || data.draw < 1 || data.draw > 4) return;
         if (location.hash === '#legacy-wire-key' && data.draw === 1) data.sEcho = data.draw;
@@ -253,7 +269,7 @@ vmReady(function() {
         options.url = '/tests/support/datatable-wire/' + match[1] + '-' + data.draw + '.json';
     }
     // Each list uses the shared transport, with its own scoped fixture rows.
-    var wireChecks = ['domain', 'mailbox', 'alias', 'archive', 'log'].map(function(scope) {
+    var wireChecks = wireScopes.map(function(scope) {
         return new Promise(function(resolve, reject) {
             var element = DataTable.Dom.create('table').html('<thead><tr><th>Name</th></tr></thead>').appendTo('body');
             var step = 0;
@@ -286,7 +302,7 @@ vmReady(function() {
             new DataTable(element.get(0), {
                 serverSide: true, pageLength: 2, order: [[0, 'asc']],
                 columns: [{ data: 'name' }],
-                ajax: vmDataTableServerData(wireRouteMutation && wireRouteMutation[1] === scope
+                ajax: vmDataTableServerData(location.hash.indexOf('#wire-route-disabled-') === 0 && wireRouteMutation === scope
                     ? '/tests/support/datatable-wire/route-sentinel.json'
                     : wireEndpoint + '?scope=' + scope, 3)
             });
@@ -997,10 +1013,19 @@ case "$mutation" in
   expect_fail 'missing DataTables dependency' run_mode development '#missing-dependency'
   expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
   expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
-  for scope in domain mailbox alias archive log; do
+  for scope in "${wire_scopes[@]}"; do
     expect_fail "server-side wire endpoint ($scope scope)" \
       run_mode development "#wire-route-disabled-$scope"
   done
+  if VIMBADMIN_MUTATION=sixth-wire-scope bash "$0" >"$tmp/sixth-wire-scope.log" 2>&1; then
+    echo 'FAIL: sixth-scope route control passed; the browser did not exercise the added scope' >&2
+    exit 1
+  fi
+  if ! grep -qFx 'OK: sixth fixture scope completed all four draws' "$tmp/sixth-wire-scope.log" ||
+    ! grep -qF 'server-side wire: sixth: initial page' "$tmp/sixth-wire-scope.log"; then
+    echo 'FAIL: sixth-scope control did not reach its initial-page assertion' >&2
+    exit 1
+  fi
   expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
   expect_fail 'DataTables transition completion callbacks' run_mode development '#transition-completion-disabled'
   ;;
@@ -1018,11 +1043,23 @@ alert-dismiss-disabled)
   ;;
 wire-route-disabled)
   scope=${VIMBADMIN_WIRE_SCOPE:-domain}
-  if [[ ! $scope =~ ^(domain|mailbox|alias|archive|log)$ ]]; then
+  known_scope=false
+  for fixture_scope in "${wire_scopes[@]}"; do
+    if [[ $scope == "$fixture_scope" ]]; then
+      known_scope=true
+      break
+    fi
+  done
+  if [[ $known_scope != true ]]; then
     echo "FAIL: unknown VIMBADMIN_WIRE_SCOPE: $scope" >&2
     exit 2
   fi
   run_mode development "#wire-route-disabled-$scope"
+  ;;
+sixth-wire-scope)
+  run_mode development
+  echo 'OK: sixth fixture scope completed all four draws'
+  run_mode development '#wire-route-disabled-sixth'
   ;;
 legacy-wire-key)
   run_mode development '#legacy-wire-key'

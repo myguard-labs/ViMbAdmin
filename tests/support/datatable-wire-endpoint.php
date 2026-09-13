@@ -17,7 +17,15 @@ if (PHP_SAPI === 'cli' && isset($argv[1])) {
 }
 
 $scope = $_GET['scope'] ?? '';
-if (!is_string($scope) || !in_array($scope, ['domain', 'mailbox', 'alias', 'archive', 'log'], true)) {
+$manifest = file_get_contents(__DIR__ . '/datatable-wire-scopes.json');
+if ($manifest === false) {
+    throw new \RuntimeException('Cannot read fixture scopes');
+}
+$scopes = json_decode($manifest, true, 512, JSON_THROW_ON_ERROR);
+if (!is_array($scopes)) {
+    throw new \UnexpectedValueException('Fixture scopes must be an array');
+}
+if (!is_string($scope) || !in_array($scope, $scopes, true)) {
     http_response_code(400);
     exit('Invalid fixture scope');
 }

@@ -1,6 +1,6 @@
 # Browser fixture runner
 
-`regression.yml` runs the seven existing browser lanes on Chromium, Firefox
+`regression.yml` runs the eight existing browser lanes on Chromium, Firefox
 and WebKit. Build the runner from the repository root:
 
 ```sh

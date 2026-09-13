@@ -166,6 +166,25 @@ final class ControllerAliasIdentityAliasRepository extends \Repositories\Alias
     }
 }
 
+final class ControllerAliasIdentityPagedAliasRepository extends \Repositories\Alias
+{
+    public int $pagedCalls = 0;
+    public bool $fail = false;
+
+    public function __construct() {}
+
+    /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
+    #[\Override]
+    public function pagedForAliasList($admin, $domain, bool $ima, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length)
+    {
+        $this->pagedCalls++;
+        if ($this->fail) {
+            throw new LogicException('Repository failure sentinel');
+        }
+        return ['rows' => [], 'total' => 0, 'filtered' => 0];
+    }
+}
+
 final class ControllerAliasIdentityMailboxRepository extends \Repositories\Mailbox
 {
     public bool $purged = false;
@@ -608,6 +627,79 @@ controllerAliasIdentityCheck('DataTables container input returns 400 before repo
         && $listDataResponse->body === 'Invalid DataTables request'
         && $wrongMailboxRepository->listLookups === $listLookupsBefore
         && $wrongEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []);
+
+$aliasListRepository = new ControllerAliasIdentityPagedAliasRepository();
+$aliasListEntityManager = controllerAliasIdentityEntityManager([
+    'Entities\\Alias' => $aliasListRepository,
+]);
+$aliasListController = static function () use ($aliasListEntityManager): AliasController {
+    return new AliasController(
+        controllerAliasIdentityContainer(
+            $aliasListEntityManager,
+            new ControllerAliasIdentitySession(['identity' => ['id' => 1]]),
+            new ControllerAliasIdentityView(),
+            [],
+        ),
+        new RouteMatch('alias', 'list-data', AliasController::class, 'listDataAction', []),
+    );
+};
+foreach (['did' => ['1'], 'ima' => ['1'], 'unexpected' => ['x']] as $key => $value) {
+    $_GET = [$key => $value];
+    $response = null;
+    $failure = null;
+    try {
+        $response = $aliasListController()->listDataAction();
+    } catch (Throwable $e) {
+        $failure = $e;
+    }
+    controllerAliasIdentityCheck("alias list-data rejects {$key} containers before repository access",
+        $failure === null
+            && $response?->status === 400
+            && $response->body === 'Invalid DataTables request'
+            && $aliasListRepository->pagedCalls === 0);
+}
+
+$_GET = ['draw' => '7', 'start' => '0', 'length' => '10'];
+$validAliasListResponse = $aliasListController()->listDataAction();
+controllerAliasIdentityCheck('alias list-data preserves valid request behaviour',
+    $validAliasListResponse->status === 200
+        && json_decode($validAliasListResponse->body, true) === [
+            'draw' => 7,
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+        ]
+        && $aliasListRepository->pagedCalls === 1);
+
+$configurationFailure = null;
+try {
+    (new AliasController(
+        controllerAliasIdentityContainer(
+            $aliasListEntityManager,
+            new ControllerAliasIdentitySession(['identity' => ['id' => 1]]),
+            new ControllerAliasIdentityView(),
+            ['defaults' => ['server_side' => ['pagination' => ['min_search_str' => ['3']]]]],
+        ),
+        new RouteMatch('alias', 'list-data', AliasController::class, 'listDataAction', []),
+    ))->listDataAction();
+} catch (TypeError $e) {
+    $configurationFailure = $e->getMessage();
+}
+controllerAliasIdentityCheck('alias list-data does not recast configuration failures as request errors',
+    $configurationFailure === 'min_search_str must be a non-negative integer'
+        && $aliasListRepository->pagedCalls === 1);
+
+$aliasListRepository->fail = true;
+$repositoryFailure = null;
+try {
+    $aliasListController()->listDataAction();
+} catch (LogicException $e) {
+    $repositoryFailure = $e->getMessage();
+}
+controllerAliasIdentityCheck('alias list-data does not recast repository failures as request errors',
+    $repositoryFailure === 'Repository failure sentinel'
+        && $aliasListRepository->pagedCalls === 2);
+$aliasListRepository->fail = false;
 
 $_GET = ['search' => ['value' => 'abc']];
 $searchFloorOptions = ['defaults' => ['server_side' => ['pagination' => ['min_search_str' => 4]]]];

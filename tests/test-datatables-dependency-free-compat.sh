@@ -77,6 +77,8 @@ for scope in domain mailbox alias archive log; do
   render_wire_response "$scope" 3 0 '' desc
   render_wire_response "$scope" 4 0 "${scope}-Beta" desc
 done
+printf '%s\n' '{"draw":1,"recordsTotal":1,"recordsFiltered":1,"data":[{"name":"wire-route-sentinel"}]}' \
+  >"$tmp/tests/support/datatable-wire/route-sentinel.json"
 # The search text contains a literal Smarty variable, not a shell variable.
 # shellcheck disable=SC2016
 sed 's/{if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{\/if}/10/' \
@@ -209,14 +211,12 @@ function check(name, test) {
 
 vmReady(function() {
     var wireEndpoint = '/tests/support/datatable-wire-endpoint.php';
-    var wireDisabled = location.hash === '#wire-route-disabled';
+    var wireRouteMutation = /^#wire-route-disabled-(domain|mailbox|alias|archive|log)$/.exec(location.hash);
     // A missing route leaves Chromium's dump-dom process waiting on the 404
     // request even after the transport reports it. Point the negative control at a
-    // served response for the wrong scope instead: it keeps the route mutation
-    // observable while settling promptly under both fixture servers.
-    var wireRequestEndpoint = wireDisabled
-        ? '/tests/support/datatable-wire/domain-1.json'
-        : wireEndpoint;
+    // served sentinel response that cannot satisfy any scope instead: it keeps
+    // each route mutation observable while settling promptly under both fixture
+    // servers.
     // The network-isolated multi-engine runner is a static server. Its finite
     // response set was rendered through the real PHP parser above; route each
     // fully formed modern request to the matching result while retaining real
@@ -286,7 +286,9 @@ vmReady(function() {
             new DataTable(element.get(0), {
                 serverSide: true, pageLength: 2, order: [[0, 'asc']],
                 columns: [{ data: 'name' }],
-                ajax: vmDataTableServerData(wireRequestEndpoint + '?scope=' + scope, 3)
+                ajax: vmDataTableServerData(wireRouteMutation && wireRouteMutation[1] === scope
+                    ? '/tests/support/datatable-wire/route-sentinel.json'
+                    : wireEndpoint + '?scope=' + scope, 3)
             });
         });
     });
@@ -995,7 +997,10 @@ case "$mutation" in
   expect_fail 'missing DataTables dependency' run_mode development '#missing-dependency'
   expect_fail 'button left disabled after reset' run_mode development '#button-disabled'
   expect_fail 'native modal alert dismissal and callback' run_mode development '#alert-dismiss-disabled'
-  expect_fail 'server-side wire endpoint' run_mode development '#wire-route-disabled'
+  for scope in domain mailbox alias archive log; do
+    expect_fail "server-side wire endpoint ($scope scope)" \
+      run_mode development "#wire-route-disabled-$scope"
+  done
   expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
   expect_fail 'DataTables transition completion callbacks' run_mode development '#transition-completion-disabled'
   ;;
@@ -1012,7 +1017,12 @@ alert-dismiss-disabled)
   run_mode development '#alert-dismiss-disabled'
   ;;
 wire-route-disabled)
-  run_mode development '#wire-route-disabled'
+  scope=${VIMBADMIN_WIRE_SCOPE:-domain}
+  if [[ ! $scope =~ ^(domain|mailbox|alias|archive|log)$ ]]; then
+    echo "FAIL: unknown VIMBADMIN_WIRE_SCOPE: $scope" >&2
+    exit 2
+  fi
+  run_mode development "#wire-route-disabled-$scope"
   ;;
 legacy-wire-key)
   run_mode development '#legacy-wire-key'

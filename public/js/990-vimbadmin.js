@@ -671,7 +671,12 @@ function vmDataTableServerData( source, minimum )
             language.zeroRecords = hint;
             language.emptyTable = hint;
             try {
-                callback({ draw: data.draw, recordsTotal: 0, recordsFiltered: 0, data: [] });
+                callback({
+                    draw: data.draw,
+                    recordsTotal: 0,
+                    recordsFiltered: 0,
+                    data: []
+                });
             }
             finally {
                 language.zeroRecords = originalZeroRecords;

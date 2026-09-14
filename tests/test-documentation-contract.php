@@ -76,14 +76,14 @@ $positiveByCategory = [
         'src/Kernel/Session/MagicPropertyStorage.php' => '/Adapts the native \{@see SessionNamespace\}/',
         'src/Kernel/Session/NativeSessionStorage.php' => '/kernel\'s session data does not collide/',
         'src/Kernel/Session/SessionNamespace.php' => '/new MagicPropertyStorage\(new SessionNamespace\(\'ViMbAdmin_Auth\'\)\)/',
-        'src/Kernel/Session/SessionStorage.php' => '/Current native backings/',
+        'src/Kernel/Session/SessionStorage.php' => '/Current implementations/',
+        'src/Kernel/Bootstrap.php' => '/(?=.*new SessionNamespace\(\'Application\'\))(?=.*new SessionNamespace\(\$authNs\))(?=.*migrateAuthNamespace\(\$_SESSION, true\))(?=.*OSS_Runtime::configure\()/s',
         'tests/test-kernel-session-adapter.php' => '/shape exposed by the native SessionNamespace/',
         'tests/test-kernel-session-namespace.php' => '/new SessionNamespace\(\'ViMbAdmin_Auth\'\)/',
     ],
     'orm mapping and loading' => [
         'README.md' => '/attribute entity mappings/',
         'docs/ORM3-UPGRADE.md' => '/Doctrine\'s `AttributeDriver`/',
-        'src/Kernel/Bootstrap.php' => '/(?=.*new SessionNamespace\(\'Application\'\))(?=.*new SessionNamespace\(\$authNs\))(?=.*OSS_Runtime::configure\()(?=.*\$legacyAuthNamespace\s*=\s*\'Zend\'\s*\.\s*\'_Auth\')(?=.*isset\(\$_SESSION\[\$legacyAuthNamespace\]\).*?!isset\(\$_SESSION\[\'ViMbAdmin_Auth\'\]\))(?=.*\$_SESSION\[\'ViMbAdmin_Auth\'\]\s*=\s*\$_SESSION\[\$legacyAuthNamespace\])(?=.*unset\(\$_SESSION\[\$legacyAuthNamespace\]\))/s',
         'public/index.php' => '/Bootstrap::boot\(APPLICATION_PATH/',
         'src/Kernel/Doctrine/EntityManagerFactory.php' => '/(?=.*entity manager owned by the native Container)(?=.*Build the direct PSR-6 pool)/s',
         'bin/generate-proxies.php' => '/proxy classes from attribute mappings/',
@@ -108,9 +108,9 @@ $legacyDelegationPattern = '/(?:'
     . '\b' . $legacyOwners . '\b[^.\n]{0,100}\b' . $inboundDelegation . '\b'
     . '|\b' . $outboundDelegation . '\b[^,;.\n]{0,50}\b(?:to|through|into)\s+(?:the\s+)?' . $legacyOwners . '\b'
     . ')/i';
-$historicalOrNegatedPattern = '/\b(?:never|no longer|formerly|historical)\b/i';
+$historicalOrNegatedPattern = '/\b(?:never|does not|no longer|formerly|historical)\b/i';
 $detectDelegation = static function (string $text) use ($legacyDelegationPattern, $historicalOrNegatedPattern): ?string {
-    foreach (preg_split('/[.;]|\R|\s+(?:but|and|or)\s+/i', $text) ?: [] as $clause) {
+    foreach (preg_split('/[.;]|\R|\s+(?:but|and)\s+/i', $text) ?: [] as $clause) {
         if (preg_match($legacyDelegationPattern, $clause, $match) === 1
             && preg_match($historicalOrNegatedPattern, $clause) !== 1) {
             return trim($match[0]);
@@ -134,6 +134,8 @@ $delegationCases = [
     'The native router mirrors ZF1 behavior and forwards unknown routes to ZF1.' => true,
     'Unknown controllers route requests to ZF1 and native routes never delegate to ZF1.' => true,
     'The native router routes requests through the legacy-layout native controller namespace.' => false,
+    'The router does not route requests to Zend.' => false,
+    'The router never routes requests to Zend or delegates to ZF1.' => false,
 ];
 foreach ($delegationCases as $phrase => $expected) {
     $detected = $detectDelegation($phrase) !== null;

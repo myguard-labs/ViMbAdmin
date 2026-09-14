@@ -174,6 +174,31 @@ try {
 }
 kernelBootstrapCheck('malformed skin configuration fails closed before filesystem lookup', $malformedSkinRejected);
 
+// --- Authentication namespace migration is conditional and non-destructive. -
+$migrateAuthNamespace = new ReflectionMethod(Bootstrap::class, 'migrateAuthNamespace');
+$legacyAuth = 'Zend' . '_Auth';
+$legacyIdentity = ['storage' => ['id' => 1]];
+$currentIdentity = ['storage' => ['id' => 2]];
+$migrated = $migrateAuthNamespace->invoke(null, [$legacyAuth => $legacyIdentity], true);
+kernelBootstrapCheck('legacy-only auth namespace migrates',
+    $migrated === ['ViMbAdmin_Auth' => $legacyIdentity]);
+$currentOnly = $migrateAuthNamespace->invoke(null, ['ViMbAdmin_Auth' => $currentIdentity], true);
+kernelBootstrapCheck('current-only auth namespace is retained',
+    $currentOnly === ['ViMbAdmin_Auth' => $currentIdentity]);
+$both = $migrateAuthNamespace->invoke(null, [
+    $legacyAuth => $legacyIdentity,
+    'ViMbAdmin_Auth' => $currentIdentity,
+], true);
+kernelBootstrapCheck('current auth namespace wins when both exist', $both === [
+    $legacyAuth => $legacyIdentity,
+    'ViMbAdmin_Auth' => $currentIdentity,
+]);
+kernelBootstrapCheck('empty auth namespaces remain empty',
+    $migrateAuthNamespace->invoke(null, [], true) === []);
+kernelBootstrapCheck('inactive web session does not migrate auth namespace',
+    $migrateAuthNamespace->invoke(null, [$legacyAuth => $legacyIdentity], false)
+        === [$legacyAuth => $legacyIdentity]);
+
 // --- Sparse session configuration retains application-level hard defaults. --
 $sessionStartRejected = false;
 session_set_save_handler(new FailingSessionHandler(), true);

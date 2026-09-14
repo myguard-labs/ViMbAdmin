@@ -6,9 +6,17 @@
 // pin each list view to its native transport factory and list-data endpoint.
 // No browser, network or application state is required.
 const assert = require('node:assert/strict');
+const childProcess = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+
+// The shell gate owns the semantic legacy-token matcher and its mutations.
+// Running it here keeps this independently invoked workflow gate fail-closed.
+childProcess.execFileSync('bash', [path.join(__dirname, 'lint-datatables-clear-redraws.sh')], {
+  cwd: path.join(__dirname, '..'),
+  stdio: 'pipe'
+});
 
 // Isolate the actual transport factory; keep the accepted wire value observable.
 const transportSource = fs.readFileSync(path.join(__dirname, '../public/js/990-vimbadmin.js'), 'utf8');
@@ -40,21 +48,6 @@ for (const [search, allowed] of [
 }
 console.log('OK: transport PHP trim boundaries and raw search preservation');
 
-const legacyToken = /(?:^|[^A-Za-z0-9_$])getEntries(?:[^A-Za-z0-9_$]|$)|(?:^|[^A-Za-z0-9_-])list-search(?:[^A-Za-z0-9_-]|$)/;
-for (const mutant of [
-  'const getEntries = function () {};',
-  'const getEntries = () => {};',
-  'const config = { endpoint: "/domain/list-search" };'
-]) {
-  assert.match(mutant, legacyToken, `negative control must detect ${mutant}`);
-}
-for (const nearMiss of [
-  'const getEntriesNew = () => {};',
-  'const config = { endpoint: "/domain/list-search-v2" };'
-]) {
-  assert.doesNotMatch(nearMiss, legacyToken, `token boundary must allow ${nearMiss}`);
-}
-
 for (const [view, factoryName] of [
   ['domain', 'vmDomainServerData'],
   ['alias', 'vmAliasServerData'],
@@ -63,6 +56,5 @@ for (const [view, factoryName] of [
   const source = fs.readFileSync(path.join(__dirname, `../application/views/${view}/js/list.js`), 'utf8');
   const active = new RegExp(`'ajax':\\s*${factoryName}\\([^\\n]*controller='${view}' action='list-data'`);
   assert.match(source, active, `${view}: active transport must use ${factoryName} and list-data`);
-  assert.doesNotMatch(source, legacyToken, `${view}: legacy manual search must stay absent`);
   console.log(`OK: ${view} uses ${factoryName} with native list-data transport`);
 }

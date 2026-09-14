@@ -27,8 +27,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * `preDispatch` super-admin gate (`authorise(true)`) and renders all admins
  * through `admin/list.phtml`. The template's state-changing links (purge, …)
  * carry the per-session CSRF token, which {@see AbstractController::view()} now
- * seeds over the same session key the ZF1 `_assertCsrf()` reads — so those links
- * keep validating against the legacy actions that still serve them.
+ * seeds over the shared session key read by the native action handlers.
  *
  * Migrated: list, add, the ajax toggles, purge, password, domains,
  * remove-domain, assign-domain and two-factor management.

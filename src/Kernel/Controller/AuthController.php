@@ -305,8 +305,8 @@ final class AuthController extends AbstractController
      * created super + active, the Doctrine migration row is seeded, and the user is
      * sent to the login page. There is no logged-in actor on a first run, so —
      * unlike the authenticated add path — this writes no Log row and does not go
-     * through `Service_Admin::create`. The welcome email is dropped (no mailer in
-     * the native kernel, consistent with the native login).
+     * through `Service_Admin::create`. The first-admin welcome email remains
+     * intentionally omitted from this bootstrap-only path.
      */
     public function setupAction(): Response
     {

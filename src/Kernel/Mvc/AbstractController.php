@@ -312,11 +312,11 @@ abstract class AbstractController
      * Render a Smarty page template into an HTML {@see Response} (the native
      * equivalent of ZF1's viewRenderer auto-rendering `{controller}/{action}`).
      *
-     * Reuses the SAME `smarty` view resource the ZF1 controllers render through,
+     * Reuses the native container's shared `smarty` view resource,
      * so the page templates (and the `header.phtml` / `footer.phtml` chrome they
      * `{tmplinclude}`) resolve and render identically — `{genUrl}` and
      * `{OSS_Message}` keep working because they read the front-controller base
-     * URL and the session, both live after the shared bootstrap.
+     * URL and session supplied by the native runtime.
      *
      * It seeds exactly the chrome variables those templates consume, mirroring
      * the ZF1 `OSS_Controller_Action_Trait_Smarty` setup plus the ViMbAdmin base
@@ -344,9 +344,8 @@ abstract class AbstractController
         $this->assignView($view, 'session', $this->container->session());
 
         // The per-session CSRF token guarding state-changing GET links — set only
-        // for an authed page, exactly as the ZF1 base controller did, over the
-        // same session key (`csrfToken`) so links minted here validate against
-        // the ZF1 _assertCsrf() that still serves those actions.
+        // for an authenticated page, over the shared `csrfToken` session key so
+        // links minted here validate in the native action handlers.
         if ($admin !== null) {
             $this->assignView(
                 $view,

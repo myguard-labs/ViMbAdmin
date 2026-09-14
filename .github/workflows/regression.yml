@@ -115,7 +115,7 @@ jobs:
       - name: DataTables clear() must chain its redraw (VIM-A15.56a)
         run: bash tests/lint-datatables-clear-redraws.sh
 
-      - name: Search responses reuse one DataTables Api wrapper
+      - name: DataTables search uses native active transports
         run: node tests/test-datatable-search-row-api.cjs
 
       - name: Containerized Chrome runner hardening

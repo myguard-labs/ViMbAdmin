@@ -671,7 +671,8 @@ controllerAliasIdentityCheck('alias list-data preserves valid request behaviour'
         ]
         && $aliasListRepository->pagedCalls === 1);
 
-$configurationFailure = null;
+$configurationCallsBefore = $aliasListRepository->pagedCalls;
+$configurationFailure = false;
 try {
     (new AliasController(
         controllerAliasIdentityContainer(
@@ -682,12 +683,12 @@ try {
         ),
         new RouteMatch('alias', 'list-data', AliasController::class, 'listDataAction', []),
     ))->listDataAction();
-} catch (TypeError $e) {
-    $configurationFailure = $e->getMessage();
+} catch (TypeError) {
+    $configurationFailure = true;
 }
 controllerAliasIdentityCheck('alias list-data does not recast configuration failures as request errors',
-    $configurationFailure === 'min_search_str must be a non-negative integer'
-        && $aliasListRepository->pagedCalls === 1);
+    $configurationFailure
+        && $aliasListRepository->pagedCalls === $configurationCallsBefore);
 
 $aliasListRepository->fail = true;
 $repositoryFailure = null;

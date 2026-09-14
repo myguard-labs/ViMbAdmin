@@ -46,6 +46,9 @@ foreach ($versionPatterns as $surface => $pattern) {
 
 $configuredLevel = preg_match('/^\s*level:\s*([0-9]+)\s*$/m', $phpstan, $levelMatch) === 1
     ? $levelMatch[1] : '<missing>';
+if ($configuredLevel === '<missing>') {
+    failContract('phpstan.neon', 'numeric PHPStan level', '<missing>');
+}
 foreach (['docs/ORM3-UPGRADE.md' => $guide, 'CHANGELOG' => $changelog] as $surface => $contents) {
     if (preg_match('/PHPStan(?: is enforced at)?\s+level\s+' . preg_quote($configuredLevel, '/') . '\b/', $contents) !== 1) {
         failContract($surface, "PHPStan level {$configuredLevel}", 'matching level absent');
@@ -74,10 +77,6 @@ foreach ($ownershipFiles as $file) {
     if (preg_match('/(?:\b(?:ZF1|Zend|legacy)\b.{0,100}\b(?:fall\w*\s+back|delegat\w*|still\s+serv\w*|stays?\s+on)\b|\b(?:fall\w*\s+back|delegat\w*)\b.{0,100}\b(?:ZF1|Zend|legacy)\b)/is', $contents, $match) === 1) {
         failContract($file, 'no live delegation to removed ZF1 ownership', trim(preg_replace('/\s+/', ' ', $match[0]) ?? $match[0]));
     }
-}
-
-if ($configuredLevel === '<missing>') {
-    failContract('phpstan.neon', 'numeric PHPStan level', '<missing>');
 }
 
 echo "OK: documentation matches shipped ownership and configuration.\n";

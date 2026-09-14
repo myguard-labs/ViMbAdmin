@@ -40,6 +40,21 @@ for (const [search, allowed] of [
 }
 console.log('OK: transport PHP trim boundaries and raw search preservation');
 
+const legacyToken = /(?:^|[^A-Za-z0-9_$])getEntries(?:[^A-Za-z0-9_$]|$)|(?:^|[^A-Za-z0-9_-])list-search(?:[^A-Za-z0-9_-]|$)/;
+for (const mutant of [
+  'const getEntries = function () {};',
+  'const getEntries = () => {};',
+  'const config = { endpoint: "/domain/list-search" };'
+]) {
+  assert.match(mutant, legacyToken, `negative control must detect ${mutant}`);
+}
+for (const nearMiss of [
+  'const getEntriesNew = () => {};',
+  'const config = { endpoint: "/domain/list-search-v2" };'
+]) {
+  assert.doesNotMatch(nearMiss, legacyToken, `token boundary must allow ${nearMiss}`);
+}
+
 for (const [view, factoryName] of [
   ['domain', 'vmDomainServerData'],
   ['alias', 'vmAliasServerData'],
@@ -48,6 +63,6 @@ for (const [view, factoryName] of [
   const source = fs.readFileSync(path.join(__dirname, `../application/views/${view}/js/list.js`), 'utf8');
   const active = new RegExp(`'ajax':\\s*${factoryName}\\([^\\n]*controller='${view}' action='list-data'`);
   assert.match(source, active, `${view}: active transport must use ${factoryName} and list-data`);
-  assert.doesNotMatch(source, /function\s+getEntries|action=['"]list-search['"]/, `${view}: legacy manual search must stay absent`);
+  assert.doesNotMatch(source, legacyToken, `${view}: legacy manual search must stay absent`);
   console.log(`OK: ${view} uses ${factoryName} with native list-data transport`);
 }

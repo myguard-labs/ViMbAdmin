@@ -101,14 +101,35 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 
-# The removed manual-search path must not return under a different redraw
-# spelling. These functions were unbound and called deleted list-search routes.
+# The removed manual-search path must not return under a different declaration
+# or configuration spelling. Match the semantic identifier and route tokens;
+# adjacent identifier/route characters keep harmless longer names out.
+legacy_token_re='(^|[^A-Za-z0-9_$])getEntries([^A-Za-z0-9_$]|$)|(^|[^A-Za-z0-9_-])list-search([^A-Za-z0-9_-]|$)'
+
+# Executable negative controls cover declaration-independent handler syntax and
+# an alternate endpoint configuration shape. Near-misses prove the boundaries.
+for mutant in \
+  'const getEntries = function () {};' \
+  'const getEntries = () => {};' \
+  'const config = { endpoint: "/domain/list-search" };'; do
+  if ! grep -qE "$legacy_token_re" <<<"$mutant"; then
+    echo "FAIL: legacy-token matcher missed negative control: $mutant" >&2
+    exit 1
+  fi
+done
+for near_miss in 'const getEntriesNew = () => {};' 'endpoint: "/domain/list-search-v2"'; do
+  if grep -qE "$legacy_token_re" <<<"$near_miss"; then
+    echo "FAIL: legacy-token matcher crossed a token boundary: $near_miss" >&2
+    exit 1
+  fi
+done
+
 legacy_hits=()
 for file in \
   application/views/domain/js/list.js \
   application/views/alias/js/list.js \
   application/views/mailbox/js/list.js; do
-  if grep -qE "function[[:space:]]+getEntries|action=['\"]list-search['\"]" "$file"; then
+  if grep -qE "$legacy_token_re" "$file"; then
     legacy_hits+=("$file")
   fi
 done

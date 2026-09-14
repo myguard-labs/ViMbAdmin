@@ -83,7 +83,7 @@ $positiveByCategory = [
     'orm mapping and loading' => [
         'README.md' => '/attribute entity mappings/',
         'docs/ORM3-UPGRADE.md' => '/Doctrine\'s `AttributeDriver`/',
-        'src/Kernel/Bootstrap.php' => '/(?=.*new SessionNamespace\(\'Application\'\))(?=.*new SessionNamespace\(\$authNs\))(?=.*OSS_Runtime::configure\()/s',
+        'src/Kernel/Bootstrap.php' => '/(?=.*new SessionNamespace\(\'Application\'\))(?=.*new SessionNamespace\(\$authNs\))(?=.*OSS_Runtime::configure\()(?=.*\$legacyAuthNamespace\s*=\s*\'Zend\'\s*\.\s*\'_Auth\')(?=.*isset\(\$_SESSION\[\$legacyAuthNamespace\]\).*?!isset\(\$_SESSION\[\'ViMbAdmin_Auth\'\]\))(?=.*\$_SESSION\[\'ViMbAdmin_Auth\'\]\s*=\s*\$_SESSION\[\$legacyAuthNamespace\])(?=.*unset\(\$_SESSION\[\$legacyAuthNamespace\]\))/s',
         'public/index.php' => '/Bootstrap::boot\(APPLICATION_PATH/',
         'src/Kernel/Doctrine/EntityManagerFactory.php' => '/(?=.*entity manager owned by the native Container)(?=.*Build the direct PSR-6 pool)/s',
         'bin/generate-proxies.php' => '/proxy classes from attribute mappings/',
@@ -101,16 +101,16 @@ foreach ($positiveByCategory as $category => $invariants) {
     }
 }
 
-$legacyOwners = '(?:ZF1|Zend|legacy)';
+$legacyOwners = '(?:ZF1|Zend|legacy)(?![-A-Za-z0-9_])';
 $outboundDelegation = '(?:fall(?:s|ing)?\s+(?:back|through)|delegat(?:e[sd]?|ing)|forward(?:s|ed|ing)?|rout(?:e[sd]?|ing))';
 $inboundDelegation = '(?:fall(?:s|ing)?\s+(?:back|through)|delegates?|forwards?|routes?\s+(?:unmatched|unknown|requests|them|it))';
 $legacyDelegationPattern = '/(?:'
     . '\b' . $legacyOwners . '\b[^.\n]{0,100}\b' . $inboundDelegation . '\b'
     . '|\b' . $outboundDelegation . '\b[^,;.\n]{0,50}\b(?:to|through|into)\s+(?:the\s+)?' . $legacyOwners . '\b'
     . ')/i';
-$historicalOrNegatedPattern = '/\b(?:never|no longer|formerly|historical|mirrors?)\b/i';
+$historicalOrNegatedPattern = '/\b(?:never|no longer|formerly|historical)\b/i';
 $detectDelegation = static function (string $text) use ($legacyDelegationPattern, $historicalOrNegatedPattern): ?string {
-    foreach (preg_split('/[.;]|\R|,\s*(?:but|and|or)\s+/i', $text) ?: [] as $clause) {
+    foreach (preg_split('/[.;]|\R|\s+(?:but|and|or)\s+/i', $text) ?: [] as $clause) {
         if (preg_match($legacyDelegationPattern, $clause, $match) === 1
             && preg_match($historicalOrNegatedPattern, $clause) !== 1) {
             return trim($match[0]);
@@ -131,6 +131,9 @@ $delegationCases = [
     'Router routes native requests and rejects legacy routes.' => false,
     'The health route never falls through to ZF1, but unknown controllers route requests to ZF1.' => true,
     'The router routes requests to native controllers, not legacy ZF1.' => false,
+    'The native router mirrors ZF1 behavior and forwards unknown routes to ZF1.' => true,
+    'Unknown controllers route requests to ZF1 and native routes never delegate to ZF1.' => true,
+    'The native router routes requests through the legacy-layout native controller namespace.' => false,
 ];
 foreach ($delegationCases as $phrase => $expected) {
     $detected = $detectDelegation($phrase) !== null;

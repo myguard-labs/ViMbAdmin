@@ -13,6 +13,15 @@ fail() {
   exit 1
 }
 
+fail_exact_once() {
+  trap - ERR
+  if [[ -e $exact_error_marker ]]; then
+    exit 1
+  fi
+  : >"$exact_error_marker"
+  fail "exact bundle resolution failed under inherited errexit"
+}
+
 assert_status() {
   local actual=$1 expected=$2 label=$3
   [[ $actual -eq $expected ]] ||
@@ -43,7 +52,7 @@ make_fixture() {
 }
 
 run_case() {
-  local outcome=$1 initial_state=$2 fixture output_file output status
+  local outcome=$1 initial_state=$2 fixture output_file output status exact_error_marker
   fixture=$(make_fixture "$outcome-$initial_state")
   output_file="$fixture/output"
 
@@ -62,6 +71,8 @@ run_case() {
     ;;
   esac
 
+  # Each case sources its generated fixture copy.
+  # shellcheck disable=SC1091
   source "$fixture/tests/support/resolve-bundle-v.sh"
   if [[ $initial_state == on ]]; then
     shopt -s nullglob
@@ -70,7 +81,8 @@ run_case() {
   fi
 
   if [[ $outcome == exact ]]; then
-    trap 'fail "exact bundle resolution failed under inherited errexit"' ERR
+    exact_error_marker="$fixture/exact-error"
+    trap fail_exact_once ERR
     resolve_bundle_v >"$output_file"
     trap - ERR
     status=0

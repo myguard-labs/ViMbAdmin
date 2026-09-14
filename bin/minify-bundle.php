@@ -16,9 +16,9 @@
  * rebuilt from the same glob. See bin/minify-bundle-files.php for the concrete
  * regression that caused (Chosen and Colorbox, PR #180).
  *
- * This repository-owned driver reproduces minify.php's behaviour step for step
- * while substituting an explicit input list for the glob; it has no Composer
- * dependency on the retired vendor tool.
+ * This repository-owned driver preserves minify.php's build sequence while
+ * substituting an explicit input list for the glob and supporting single JS or
+ * CSS output lanes; it has no Composer dependency on the retired vendor tool.
  *
  * bin/minify-options.php is still the single source of truth for the compiler
  * command lines, the clean-css presence check, the

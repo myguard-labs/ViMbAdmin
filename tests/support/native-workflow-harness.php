@@ -123,7 +123,8 @@ final class WorkflowAlias extends \Entities\Alias
     public function _getPreferences(): array { return array_values($this->getPreferences()->toArray()); }
 }
 
-// Only the persistence boundary is replaced. Real controller, service, form,
+// Persistence, session storage, view rendering, and transport use test doubles.
+// Real controller, service, form,
 // password, mailer, and plugin code execute; an unexpected DB call fails.
 final class WorkflowPersistence extends \Doctrine\ORM\UnitOfWork
 {

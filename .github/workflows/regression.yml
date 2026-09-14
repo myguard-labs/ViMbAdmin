@@ -301,7 +301,7 @@ jobs:
 
   # ------------------------------------------------------------------ #
   # Schema drift — loads the shipped SQL into a real MariaDB and proves #
-  # the XML mappings produce NO pending changes (phantom-ALTER guard).  #
+  # the attribute mappings produce NO pending changes (phantom-ALTER guard). #
   # ------------------------------------------------------------------ #
   schema-drift:
     name: Schema has no phantom pending changes
@@ -358,7 +358,7 @@ jobs:
             sleep 2
           done
 
-      # Step 1: build schema from the XML mappings and assert the mappings are
+      # Step 1: build schema from the attribute mappings and assert they are
       # self-consistent (schema-tool --force leaves nothing pending).
       - name: Build schema from mappings — assert no pending diff
         env:

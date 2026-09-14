@@ -55,7 +55,7 @@ final class Router
 
     /**
      * Decode a request path into a RouteMatch IF its controller is served
-     * natively, otherwise null (→ ZF1 fallback).
+     * natively, otherwise null so the native entry point can reject it.
      *
      * The path must already have any mount base path (e.g. "/vimbadmin")
      * stripped by the caller — the same point at which ZF1 stripped its baseUrl.

@@ -297,10 +297,8 @@ final class AuthController extends AbstractController
      * Faithful port of the ZF1 `setupAction` for the common case (a configured
      * 64-char `securitysalt`). Guards: it only runs when there are zero admins and
      * nobody is logged in (else it flashes and bounces, as ZF1 did). The
-     * security-salt-not-yet-configured screen (`saltSet=false`, which presents
-     * generated salts to paste into `application.ini`) is a rare brand-new-install
-     * path with a bespoke view — this returns null for it so the ZF1 action still
-     * renders it (the dispatcher fallback).
+     * security-salt-not-yet-configured path renders the native setup-salt view
+     * with generated values to paste into `application.ini`.
      *
      * With the salt configured, the submitted `salt` must match the configured
      * `securitysalt` (the first-run gate, exactly as ZF1) before the first admin is

@@ -7,7 +7,6 @@ require __DIR__ . '/../application/Entities/Admin.php';
 require __DIR__ . '/../application/Entities/Domain.php';
 
 use ViMbAdmin\Kernel\Container;
-use ViMbAdmin\Kernel\Http\Response;
 use ViMbAdmin\Kernel\RouteMatch;
 use ViMbAdmin\Kernel\Security\Auth;
 use ViMbAdmin\Kernel\Session\SessionStorage;
@@ -61,8 +60,7 @@ foreach (['Alias', 'Archive', 'Domain', 'Log', 'Mailbox'] as $name) {
     $response = $controller->listDataAction();
 
     $check($name . ': anonymous list-data returns the shared JSON expiry contract',
-        $response instanceof Response
-        && $response->status === 401
+        $response->status === 401
         && $response->contentType === 'application/json; charset=utf-8'
         && $response->body === $expectedBody
         && $resources->doctrineReads === 0);

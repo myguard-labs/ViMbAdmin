@@ -310,8 +310,7 @@ final class EntityManagerFactory
     }
 
     /**
-     * Build the Doctrine cache (a PSR-6 pool wrapped by `DoctrineProvider`),
-     * mirroring `OSS_Resource_Doctrine2cache`. APCu/Redis are attempted inside a
+     * Build the direct PSR-6 pool used by Doctrine's cache setters. APCu/Redis are attempted inside a
      * try/catch and degrade to the per-request Array pool when the extension is
      * missing or the server is unreachable, exactly as the ZF1 resource did
      * (minus its registry/logger writes).

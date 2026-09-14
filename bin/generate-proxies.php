@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 /**
- * Generate the Doctrine ORM proxy classes from the XML mappings.
+ * Generate the Doctrine ORM proxy classes from attribute mappings.
  *
  * Production runs with autogen_proxies = 0 on a read-only rootfs, so the proxy
  * classes must exist on disk before the app serves a request. Rather than
@@ -20,7 +20,7 @@ $root = dirname(__DIR__);
 require $root . '/vendor/autoload.php';
 
 // Entities\ / Repositories\ live under application/ and are not in Composer's
-// PSR map (the app registers them via the Zend/Doctrine loader at runtime).
+// PSR map (the native app registers equivalent bounded SPL autoloaders).
 spl_autoload_register(static function (string $class) use ($root): void {
     foreach (['Entities\\' => 'Entities', 'Repositories\\' => 'Repositories'] as $prefix => $dir) {
         if (str_starts_with($class, $prefix)) {

@@ -650,12 +650,9 @@ final class MailboxController extends AbstractController
      * native edit action for compatibility with the former forwarded route.
      *
      * The form is the framework-free {@see Form}: the base mailbox fields plus
-     * any native plugin sections appended by the {@see FormPluginHost} (today the
-     * AccessPermissions access-restriction checkboxes; AdditionalInfo /
-     * DirectoryEntry are not yet adapted to the native contract, so their ZF1
-     * subforms are dropped here — a known, documented gap). The `welcome_email` /
-     * `cc_welcome_email` fields are dropped because the native kernel has no
-     * mailer (consistent with the native login dropping remember-me).
+     * native plugin sections appended by the {@see FormPluginHost}, including
+     * AccessPermissions, AdditionalInfo, and DirectoryEntry. Welcome and settings
+     * email delivery is owned by the native mailer.
      *
      * On POST it validates the base form, then the plugin sections
      * ({@see FormPluginHost::validate}), resolves + authorises the chosen domain,

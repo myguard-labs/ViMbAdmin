@@ -15,17 +15,19 @@ namespace ViMbAdmin\Kernel\Session;
  * namespace in a {@see MagicPropertyStorage}. Both relied on the namespace's
  * magic-property access (`$ns->key`) over a slice of `$_SESSION`.
  *
- * This class provides that exact shape natively: a magic-property view of
+ * This class provides that shape natively: a magic-property view of
  * `$_SESSION[$namespace]`, so `$ns->domain` reads/writes
- * `$_SESSION['Application']['domain']`. It drops straight into both call sites
- * once the ZF1 bootstrap is gone:
+ * `$_SESSION['Application']['domain']`. {@see \ViMbAdmin\Kernel\Bootstrap}
+ * constructs it for both current call sites:
  *
  *   - `Container::session()` returns `new SessionNamespace('Application')`
  *     (templates keep reading `$session->domain`, FlashMessages keeps writing
  *     `$session->flashMessages` — same `$_SESSION['Application'][...]` keys);
- *   - the Auth bridge becomes
- *     `new MagicPropertyStorage(new SessionNamespace($authNs))` over the same
- *     legacy auth namespace name (its `storage` identity slot).
+ *   - the Auth bridge uses
+ *     `new MagicPropertyStorage(new SessionNamespace('ViMbAdmin_Auth'))` for
+ *     its `storage` identity slot. When starting an inactive web session,
+ *     Bootstrap first migrates the former authentication slot if the current
+ *     namespace is absent.
  *
  * Like {@see NativeSessionStorage}, starting the PHP session is the caller's
  * responsibility (the native bootstrap does it once); this class only reads and

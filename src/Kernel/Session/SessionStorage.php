@@ -9,9 +9,9 @@ namespace ViMbAdmin\Kernel\Session;
  *
  * Phase 5 (session/auth foundation) of the ZF1 removal roadmap
  * (docs/ZF1-REMOVAL.md). The kernel's security/auth services depend on this
- * narrow interface rather than on the legacy ZF1 session or a superglobal directly, so
- * they are unit-testable with an in-memory fake and can later be backed by
- * native PHP sessions or PSR-15 session middleware without changing callers.
+ * narrow interface rather than a superglobal directly. Current implementations
+ * are {@see MagicPropertyStorage} and {@see NativeSessionStorage}; the former
+ * adapts {@see SessionNamespace}. Tests can substitute an in-memory fake.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

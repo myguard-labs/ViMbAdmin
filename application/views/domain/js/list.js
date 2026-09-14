@@ -84,64 +84,6 @@ function purgeDomain( id, domain )
 };
 
 {if !isset($options.defaults.server_side.pagination.domain.enable) || $options.defaults.server_side.pagination.domain.enable }
-var timeOut = null;
-var ignore_keys = [ 13, 38, 40, 37, 39 ,27, 32, 17, 18, 9, 16, 20, 36, 35, 33, 34, 144 ];
-{if isset( $options.defaults.server_side.pagination.min_search_str ) }
-    var str_len = {$options.defaults.server_side.pagination.min_search_str};
-{else}
-    var str_len = 3;
-{/if}
-
-function getEntries( event ){
-    event.preventDefault();
-    if( ignore_keys.indexOf( event.which ) != -1 )
-        return;
-
-    clearTimeout( timeOut );
-    if( String( DataTable.Dom.select( event.target ).val() ).trim().length >= str_len ){
-        timeOut = setTimeout( function(){
-            DataTable.Dom.select('body').css('cursor', 'wait');
-            setTimeout( function(){
-                vmDataTableApi( oDataTable ).clear().draw();
-                ossAjax({
-                  async: false,
-                  url: "{genUrl controller='domain' action='list-search'}/search/" + String( DataTable.Dom.select( event.target ).val() ).trim(),
-                  success: function(data){
-                    if( data !== "ko" && data.substr( 0, 1 ) == "[" )
-                    {
-                        data = JSON.parse( data );
-                        var tableApi = vmDataTableApi( oDataTable );
-                        data.forEach( function( row ){
-                               tableApi.row.add([
-                                    row.name,
-                                    formatMailboxes( row.id, row.mailboxes, row.maxmailboxes ),
-                                    formatAliases( row.id, row.aliases, row.maxaliases ),
-                                    {if !isset($options.defaults.list_size.disabled) || !$options.defaults.list_size.disabled}
-                                    ( row.mailboxes_size == null ? 0 : (row.mailboxes_size / {$multiplier}).toFixed(1) ) + ' / ' + formatQuotaLimit( row.maxquota ),
-                                    {/if}
-                                    formatQuotaLimit( row.quota ),
-                                    formatActive( row.id, row.active ),
-                                    row.transport,
-                                    row.backupmx ? "Yes": "No",
-                                    row.created.date.substr( 0, 10 ),
-                                    formatControlls( row.id, row.name )
-                         ]);
-                        });
-                        tableApi.draw();
-                    }
-                  }
-                });
-                DataTable.Dom.select('body').css('cursor', 'default');
-            }, 300);
-        }, 500 );
-
-    }
-    else
-    {
-        vmDataTableApi( oDataTable ).clear().draw();
-    }
-}
-
 function formatQuotaLimit( q )
 {
     // 0 / null = unlimited. Otherwise a byte count -> human-readable size.

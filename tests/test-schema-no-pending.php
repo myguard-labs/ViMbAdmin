@@ -7,19 +7,19 @@
  * Maintenance-tab schema-sync feature):
  *
  *   The Maintenance tab runs Doctrine's schema diff and offers to apply it.
- *   Twice the XML mappings drifted from the shipped SQL so the diff was never
+ *   Twice the entity mappings drifted from the shipped SQL so the diff was never
  *   empty on a fresh, fully-migrated database — the tab showed a permanent
  *   "pending changes" state and, worse, wanted to ALTER tables that Dovecot
  *   owns (dovecot_quota, dovecot_last_login) and that ViMbAdmin must not touch.
  *
  * This test reproduces the real install path against the CI MariaDB:
- *   1. SchemaTool::createSchema() from the XML mappings  (= orm:schema-tool
+ *   1. SchemaTool::createSchema() from attribute mappings (= orm:schema-tool
  *      --force, which builds every Doctrine-managed table incl. the
  *      dovecot_last_login dict table that the base SQL dump does NOT contain)
  *   2. apply the shipped fork SQL extras (FKs / collations / non-mappable bits)
  *   3. assert SchemaTool::getUpdateSchemaSql() returns NOTHING.
  *
- * Any non-empty diff = the XML mappings and the shipped migration SQL have
+ * Any non-empty diff = the attribute mappings and shipped migration SQL have
  * drifted = the phantom-pending / phantom-ALTER regression is back.
  *
  * Env:
@@ -32,8 +32,8 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 // The Entities\ and Repositories\ classes live under application/ and are not
-// in Composer's PSR map (the app registers them via the Zend/Doctrine class
-// loader at runtime). Register a minimal loader so the mappings resolve.
+// in Composer's PSR map. Register the same bounded SPL namespace shape used by
+// the native entity-manager factory so the mappings resolve.
 spl_autoload_register(static function (string $class): void {
     foreach (['Entities\\' => 'Entities', 'Repositories\\' => 'Repositories'] as $prefix => $dir) {
         if (str_starts_with($class, $prefix)) {
@@ -139,5 +139,5 @@ echo "FAIL: schema-tool wants to apply " . count($pending) . " change(s) on a fu
 foreach ($pending as $stmt) {
     echo "  $stmt;\n";
 }
-echo "-> the XML mappings and contrib/migrations SQL have drifted again.\n";
+echo "-> the attribute mappings and contrib/migrations SQL have drifted again.\n";
 exit(1);

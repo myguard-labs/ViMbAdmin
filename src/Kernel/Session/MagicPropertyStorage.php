@@ -8,15 +8,10 @@ namespace ViMbAdmin\Kernel\Session;
  * SessionStorage backed by any object that exposes data through magic property
  * access (`__get` / `__set` / `__isset` / `__unset`).
  *
- * Phase 5 of the ZF1 removal roadmap (docs/ZF1-REMOVAL.md). Its purpose during
- * the migration is to bridge the kernel's session services onto the legacy ZF1
- * session namespace object the controllers still use (`getSessionNamespace()`),
- * WITHOUT this class referencing the framework: it takes a plain `object` and
- * uses property syntax, which the ZF1 namespace implements via its magic
- * accessors. That keeps it inside the zero-framework `src/` tree and makes it
- * unit-testable with a tiny anonymous magic-property fake. Once the ZF1 session
- * is gone (end of Phase 5) callers swap this for {@see NativeSessionStorage} or
- * a PSR-15 session and nothing else changes.
+ * Adapts the native {@see SessionNamespace} and other magic-property objects to
+ * the framework-free {@see SessionStorage} contract used by auth, CSRF, and
+ * flash-message services. The adapter depends only on a plain object and its
+ * magic accessors, so it is independently unit-testable.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

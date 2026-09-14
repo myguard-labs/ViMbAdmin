@@ -10,13 +10,9 @@ use InvalidArgumentException;
  * Framework-free factory for the Doctrine entity manager (WALL #2,
  * docs/ZF1-REMOVAL.md).
  *
- * The native Container has, until now, reused the EM the ZF1 `doctrine2`
- * resource built. To stand the kernel up without the ZF1 application, the
- * native side must build the same EM itself, from the same options array (now
- * produced framework-free by {@see \ViMbAdmin\Kernel\Config\IniConfig}). This
- * class is a verbatim, framework-free port of the two ZF1 resource plugins —
- * `OSS_Resource_Doctrine2` and `OSS_Resource_Doctrine2cache` — minus the
- * registry/logger side effects that only made sense inside the framework:
+ * Builds the entity manager owned by the native Container from options produced
+ * by {@see \ViMbAdmin\Kernel\Config\IniConfig}. It retains the established
+ * storage layout without framework resource plugins:
  *
  *   - {@see self::create()} mirrors `OSS_Resource_Doctrine2::getDoctrine2()`:
  *     a `Configuration` wired with the cache, the attribute metadata driver over
@@ -34,9 +30,8 @@ use InvalidArgumentException;
  *     `Doctrine\ORM\Proxy\Autoloader` was removed in ORM 2.20).
  *
  * The EM is connection-lazy: `create()` does not touch the database until the
- * first query, so this is unit-testable host-side without a server. Full
- * runtime validation (a real query against the dev MariaDB) happens when the
- * native bootstrap wires it in a later slice.
+ * first query, so this is unit-testable host-side without a server. Runtime
+ * validation exercises real MariaDB queries through the native bootstrap.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -310,10 +305,10 @@ final class EntityManagerFactory
     }
 
     /**
-     * Build the Doctrine cache (a PSR-6 pool wrapped by `DoctrineProvider`),
-     * mirroring `OSS_Resource_Doctrine2cache`. APCu/Redis are attempted inside a
-     * try/catch and degrade to the per-request Array pool when the extension is
-     * missing or the server is unreachable, exactly as the ZF1 resource did
+     * Build the direct PSR-6 pool used by Doctrine's cache setters.
+     * APCu/Redis are attempted inside a try/catch and degrade to the per-request
+     * Array pool when the extension is missing or the server is unreachable,
+     * exactly as the ZF1 resource did
      * (minus its registry/logger writes).
      *
      * @param array<string,mixed> $cfg the `doctrine2cache` options

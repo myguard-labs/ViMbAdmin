@@ -7,8 +7,8 @@
  *
  * Covers the path-decode scheme (controller/action defaults, /key/value tail,
  * dangling key, empty-segment filtering, urldecode, case normalisation), the
- * ZF1-compatible class/method inflection, and the opt-in native allowlist that
- * gates match() (empty allowlist => everything falls back to ZF1 => null).
+ * established class/method inflection, and the explicit native allowlist that
+ * gates match() (an empty allowlist produces no match).
  *
  * Exit 0 = all passed, 1 = a failure.
  */
@@ -63,7 +63,7 @@ check('actionMethod cli-reset-totp',     Router::actionMethod('cli-reset-totp') 
 
 echo "== match() + native allowlist ==\n";
 $empty = new Router([]);
-check('empty allowlist -> null (fallback)', $empty->match('/domain/list') === null);
+check('empty allowlist -> no match',         $empty->match('/domain/list') === null);
 check('empty allowlist isNative false',     $empty->isNative('domain') === false);
 
 $r = new Router(['domain', 'two-factor']);

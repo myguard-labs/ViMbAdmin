@@ -79,6 +79,9 @@ jobs:
       - name: ZF1 surface must not grow (Phase 0 guard, docs/ZF1-REMOVAL.md)
         run: bash tests/lint-no-new-zend.sh
 
+      - name: Documentation matches shipped ownership and configuration
+        run: php tests/test-documentation-contract.php
+
       - name: 2FA session-hygiene invariants (audit 2026-07-10 MAJOR)
         run: bash tests/lint-2fa-session-hygiene.sh
 
@@ -112,7 +115,7 @@ jobs:
       - name: DataTables clear() must chain its redraw (VIM-A15.56a)
         run: bash tests/lint-datatables-clear-redraws.sh
 
-      - name: Search responses reuse one DataTables Api wrapper
+      - name: DataTables search uses native active transports
         run: node tests/test-datatable-search-row-api.cjs
 
       - name: Containerized Chrome runner hardening
@@ -298,7 +301,7 @@ jobs:
 
   # ------------------------------------------------------------------ #
   # Schema drift — loads the shipped SQL into a real MariaDB and proves #
-  # the XML mappings produce NO pending changes (phantom-ALTER guard).  #
+  # Attribute mappings have no pending changes (phantom-ALTER guard). #
   # ------------------------------------------------------------------ #
   schema-drift:
     name: Schema has no phantom pending changes
@@ -355,7 +358,7 @@ jobs:
             sleep 2
           done
 
-      # Step 1: build schema from the XML mappings and assert the mappings are
+      # Step 1: build schema from the attribute mappings and assert they are
       # self-consistent (schema-tool --force leaves nothing pending).
       - name: Build schema from mappings — assert no pending diff
         env:

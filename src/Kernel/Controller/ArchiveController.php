@@ -28,9 +28,9 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * `toggleAutoprune` flips an archive's autoprune flag through the framework-free
  * `ViMbAdmin_Service_Archive` (no plugin hooks, so no callback threading).
  * `delete` removes the backup files via the doveadm HTTP API
- * ({@see \ViMbAdmin_Doveadm}) and then the archive row. `restore` stays on ZF1 —
- * it recreates the mailbox + doveadm-syncs the backup + enqueues a repair, which
- * the native kernel does not yet wrap.
+ * ({@see \ViMbAdmin_Doveadm}) and then the archive row. `restore` recreates a
+ * missing mailbox from its snapshot, syncs the backup, and attempts to enqueue
+ * repair as a best-effort follow-up.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -382,7 +382,8 @@ final class ArchiveController extends AbstractController
      * (`ViMbAdmin_Doveadm::restoreFrom`); a sync failure leaves the recreated
      * mailbox but aborts with an error (the archive is kept). (3) The backup files
      * are removed (`fsDelete`; a leftover is non-fatal). (4) The archive row is
-     * dropped and a background REPAIR is enqueued so indexes/quota are rebuilt.
+     * dropped, then a background REPAIR enqueue is attempted as a best-effort
+     * follow-up so indexes/quota can be rebuilt.
      * The doveadm client + the queue helper are framework-free, so src/ stays
      * free of any ZF1 reference.
      */

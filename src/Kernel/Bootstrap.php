@@ -17,24 +17,14 @@ use ViMbAdmin\Kernel\View\SmartyView;
  * Framework-free application bootstrap — the keystone of WALL #2
  * (docs/ZF1-REMOVAL.md).
  *
- * The whole interactive admin UI is already served natively (#51–#73), but the
- * {@see Container} still drew its four resources from the live ZF1 bootstrap
- * (`doctrine2` EM, `namespace` session, `smarty` view, `getOptions()` config)
- * plus the identity bridge. The inert builder slices replaced each of those with
- * a native equivalent ({@see IniConfig} #74, {@see EntityManagerFactory} #75,
- * {@see SessionNamespace} #76, {@see SmartyView} #77). This class assembles them
- * into a ready Container WITHOUT ever constructing the ZF1 application — the
- * first time the kernel can run with the framework absent.
+ * Builds every resource used by the native {@see Container}: {@see IniConfig},
+ * {@see EntityManagerFactory}, {@see SessionNamespace}, {@see SmartyView}, and
+ * the native identity bridge. The public entry point calls {@see self::boot()}
+ * directly and never constructs a ZF1 application.
  *
- * It stays purely framework-free (the guard's rule): the residual ZF1 glue the
- * template helpers still need — the options registry and the front-controller
- * base URL inside `OSS_Utils::genUrl`, plus the `d2em` registry the
- * 2FA/preferences helpers read — is set in the ENTRY POINT (a ZF1-aware zone,
- * `public/`), which calls {@see self::boot()} then wires those shims around the
- * returned Container. The base URL the entry point feeds the front controller is
- * the same value {@see self::baseUrl()} computes here, so URLs stay consistent.
- * (De-Zending those helpers, and dropping the shims entirely, is the final
- * cleanup slice.)
+ * Compatibility registries used by older library helpers are configured inside
+ * the native bootstrap. The base URL comes from {@see self::baseUrl()}, keeping
+ * generated URLs consistent with native routing.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -104,9 +94,8 @@ final class Bootstrap
      * @param string $appPath the application directory (`APPLICATION_PATH`),
      *               holding `configs/application.ini`
      * @param string $env     the application environment / config section
-     * @param string $authNs  the session namespace the legacy auth layer stored
-     *               the identity under (passed from the entry point so this
-     *               framework-free class never names it)
+     * @param string $authNs  the current session namespace holding the auth
+     *               identity
      */
     public static function boot(string $appPath, string $env, string $authNs): Container
     {
@@ -122,11 +111,7 @@ final class Bootstrap
         if (session_status() !== PHP_SESSION_ACTIVE && PHP_SAPI !== 'cli') {
             self::configureSession($options);
             self::startSession();
-            $legacyAuthNamespace = 'Zend' . '_Auth';
-            if (isset($_SESSION[$legacyAuthNamespace]) && !isset($_SESSION['ViMbAdmin_Auth'])) {
-                $_SESSION['ViMbAdmin_Auth'] = $_SESSION[$legacyAuthNamespace];
-                unset($_SESSION[$legacyAuthNamespace]);
-            }
+            $_SESSION = self::migrateAuthNamespace($_SESSION, true);
         }
 
         $em = EntityManagerFactory::create($options);
@@ -148,6 +133,25 @@ final class Bootstrap
         \OSS_Runtime::configure($options, self::baseUrl($options), $em);
 
         return new Container($resources, $auth, ['skinCss' => self::skinCss($appPath, $options)]);
+    }
+
+    /**
+     * @param array<array-key,mixed> $session
+     * @return array<array-key,mixed>
+     */
+    private static function migrateAuthNamespace(array $session, bool $activeWebSession): array
+    {
+        if (!$activeWebSession) {
+            return $session;
+        }
+
+        $legacyAuthNamespace = 'Zend' . '_Auth';
+        if (isset($session[$legacyAuthNamespace]) && !isset($session['ViMbAdmin_Auth'])) {
+            $session['ViMbAdmin_Auth'] = $session[$legacyAuthNamespace];
+            unset($session[$legacyAuthNamespace]);
+        }
+
+        return $session;
     }
 
     private static function startSession(): void

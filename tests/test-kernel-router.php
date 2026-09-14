@@ -63,7 +63,7 @@ check('actionMethod cli-reset-totp',     Router::actionMethod('cli-reset-totp') 
 
 echo "== match() + native allowlist ==\n";
 $empty = new Router([]);
-check('empty allowlist -> null (fallback)', $empty->match('/domain/list') === null);
+check('empty allowlist -> no match',         $empty->match('/domain/list') === null);
 check('empty allowlist isNative false',     $empty->isNative('domain') === false);
 
 $r = new Router(['domain', 'two-factor']);

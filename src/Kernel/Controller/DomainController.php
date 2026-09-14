@@ -351,7 +351,7 @@ final class DomainController extends AbstractController
     {
         $admin = $this->admin();
         if ($admin === null) {
-            return new Response('ko');
+            return $this->dataTableAuthenticationRequired();
         }
 
         $minimum = $this->dataTableMinimumSearchLength('domain');

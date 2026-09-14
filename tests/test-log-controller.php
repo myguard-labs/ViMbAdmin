@@ -276,7 +276,11 @@ $anonymous = logController(
 );
 $check('anonymous list redirects to login without touching Doctrine',
     redirectEndsWith($anonymous->listAction(), '/auth/login'));
-$check('anonymous list-data returns ko without touching Doctrine', $anonymous->listDataAction()->body === 'ko');
+$anonymousDataResponse = $anonymous->listDataAction();
+$check('anonymous list-data returns the JSON expiry contract without touching Doctrine',
+    $anonymousDataResponse->status === 401
+    && $anonymousDataResponse->contentType === 'application/json; charset=utf-8'
+    && $anonymousDataResponse->body === '{"error":"Authentication required"}');
 
 $self = new LogControllerTestAdmin(7, false);
 $selfLog = new LogControllerTestLogRepository([['action' => 'login']]);
@@ -322,6 +326,11 @@ $deniedController = logController(
 );
 $check('non-super admin cannot select another admin scope',
     redirectEndsWith($deniedController->listAction(), '/auth/login'));
+$deniedDataResponse = $deniedController->listDataAction();
+$check('non-super list-data authorization denial is not session expiry',
+    $deniedDataResponse->status === 200
+    && $deniedDataResponse->contentType === 'text/html; charset=utf-8'
+    && $deniedDataResponse->body === 'ko');
 
 $missingAdminController = logController(
     logEntityManager(['Entities\\Admin' => new LogControllerTestAdminRepository(null)]),

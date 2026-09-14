@@ -56,6 +56,10 @@ native-get-304)
   perl -pi -e 's/xhr\.status < 300 \|\| xhr\.status === 304/xhr.status < 300/' "$tmp/990-vimbadmin.js"
   grep -qF "finish(xhr.status >= 200 && xhr.status < 300 ? 'success' : 'error')" "$tmp/990-vimbadmin.js"
   ;;
+auth-login-relative)
+  perl -pi -e "s/return endpoint\.href;/return new URL('..\/auth\/login', new URL(source, document.baseURI)).href;/" "$tmp/990-vimbadmin.js"
+  grep -qF "return new URL('../auth/login', new URL(source, document.baseURI)).href;" "$tmp/990-vimbadmin.js"
+  ;;
 esac
 if [[ -n ${VIMBADMIN_MUTATION_ARTIFACT:-} ]]; then
   cp "$tmp/990-vimbadmin.js" "$VIMBADMIN_MUTATION_ARTIFACT"
@@ -403,6 +407,49 @@ vmReady(function() {
         if (sent.search.value !== 'example') return false;
         if (sent.order[0].column !== 2 || sent.order[0].dir !== 'desc') return false;
         return sent === request;
+    });
+    check('idle-session DataTables redraw redirects only for the JSON expiry contract', function() {
+        var table = new DataTable('#table');
+        var originalAjax = ossAjax;
+        var originalRedirect = vmDataTableRedirectToLogin;
+        var originalErrorMode = DataTable.ext.errMode;
+        var transport, redirects = 0, diagnostics = 0;
+        try {
+            ossAjax = function(options) { transport = options; return {}; };
+            vmDataTableRedirectToLogin = function() { redirects++; };
+            DataTable.ext.errMode = function() { diagnostics++; };
+            vmDataTableServerData('/expired', 3)(
+                { draw: 1, search: { value: '' } }, function() {}, table.settings()[0]);
+            transport.error({
+                status: 401, readyState: 4,
+                responseText: location.hash === '#auth-expiry-html'
+                    ? '<html><body>Login</body></html>'
+                    : '{"error":"Authentication required"}',
+                getResponseHeader: function() {
+                    return location.hash === '#auth-expiry-html'
+                        ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8';
+                }
+            }, 'error');
+            if (redirects !== 1 || diagnostics !== 0) return false;
+
+            transport.error({
+                status: 401, readyState: 4, responseText: '<html><body>Login</body></html>',
+                getResponseHeader: function() { return 'text/html; charset=utf-8'; }
+            }, 'parsererror');
+            return redirects === 1 && diagnostics === 1;
+        }
+        finally {
+            ossAjax = originalAjax;
+            vmDataTableRedirectToLogin = originalRedirect;
+            DataTable.ext.errMode = originalErrorMode;
+            table.destroy();
+        }
+    });
+    check('DataTables expiry login keeps nested application roots and ignores Alias path parameters', function() {
+        return vmDataTableLoginUrl('/vimbadmin/alias/list-data/ima/0?draw=7')
+                === location.origin + '/vimbadmin/auth/login'
+            && vmDataTableLoginUrl('/domain/list-data?draw=8')
+                === location.origin + '/auth/login';
     });
     check('DataTables 3 errors preserve diagnostics and native cancellation', function() {
         var tableNode = document.createElement('table');
@@ -1030,6 +1077,13 @@ case "$mutation" in
   fi
   expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
   expect_fail 'DataTables transition completion callbacks' run_mode development '#transition-completion-disabled'
+  expect_fail 'malformed HTML authentication-expiry response' run_mode development '#auth-expiry-html'
+  if VIMBADMIN_MUTATION=auth-login-relative bash tests/test-datatables-dependency-free-compat.sh >"$tmp/auth-login-relative.log" 2>&1; then
+    echo 'FAIL: relative-login control passed; Alias path parameters were not exercised' >&2
+    exit 1
+  fi
+  grep -qF 'DataTables expiry login keeps nested application roots and ignores Alias path parameters' \
+    "$tmp/auth-login-relative.log"
   ;;
 warning)
   run_mode development '#warning-trigger'
@@ -1069,7 +1123,10 @@ legacy-wire-key)
 transition-completion-disabled)
   run_mode development '#transition-completion-disabled'
   ;;
-native-get-serialize|native-get-cache-buster|native-get-304)
+auth-expiry-html)
+  run_mode development '#auth-expiry-html'
+  ;;
+native-get-serialize | native-get-cache-buster | native-get-304 | auth-login-relative)
   run_mode development
   ;;
 *)

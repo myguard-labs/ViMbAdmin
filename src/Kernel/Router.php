@@ -7,12 +7,10 @@ namespace ViMbAdmin\Kernel;
 /**
  * Framework-free router for ViMbAdmin's URL scheme.
  *
- * Phase 2 of the ZF1 removal roadmap (docs/ZF1-REMOVAL.md). This is the first
- * landed kernel piece. It decodes a request path exactly the way the ZF1 default
- * router did — `/{controller}/{action}/{k1}/{v1}/{k2}/{v2}...`, controller and
- * action both defaulting to "index" — and inflects the controller/action names
- * to the same PHP class/method ZF1 produced, so URLs are byte-for-byte preserved
- * when a route is later served natively.
+ * It decodes the established request-path format —
+ * `/{controller}/{action}/{k1}/{v1}/{k2}/{v2}...`, with controller and action
+ * defaulting to "index" — and inflects controller/action names to their native
+ * PHP class and method names.
  *
  * It is deliberately dependency-free (no nikic/fast-route): ViMbAdmin has a
  * single generic pattern with a variable-length key/value tail, which fast-route
@@ -20,11 +18,9 @@ namespace ViMbAdmin\Kernel;
  * testable without a framework. fast-route is reserved for any explicit literal
  * routes a later phase may register.
  *
- * Migration is opt-in and starts empty. {@see self::match()} returns a RouteMatch
- * only for controllers on the "native" allowlist; for every other controller it
- * returns null and the caller falls back to the ZF1 front controller. With an
- * empty allowlist (the Phase 2 default) it therefore changes nothing: every
- * request still goes to ZF1.
+ * {@see self::match()} returns a RouteMatch only for controllers on the native
+ * allowlist. Unknown controllers return null and the HTTP entry point rejects
+ * them without booting application resources.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

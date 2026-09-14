@@ -74,13 +74,11 @@ final class CliKernel
     /**
      * Build the native resources (config + Doctrine EM; no session under CLI).
      *
-     * Exposed separately from {@see run()} so the entry point can wire the
-     * residual legacy glue some library classes still read (e.g. the entity
-     * preference layer `OSS_Doctrine2_WithPreferences` fetches the EM from the
-     * `d2em` registry) around the booted container — the same split the web entry
-     * point uses. The identity-namespace argument is irrelevant under CLI (no
-     * command authenticates and boot() starts no session for the CLI SAPI), so a
-     * neutral placeholder is passed.
+     * Bootstrap owns the OSS_Runtime compatibility setup. The vimbtool entry
+     * point only boots this kernel and runs the selected command. The identity
+     * namespace argument is irrelevant under CLI (no command authenticates and
+     * boot() starts no session for the CLI SAPI), so a neutral placeholder is
+     * passed.
      */
     public function boot(): Container
     {

@@ -796,9 +796,10 @@ final class MailboxController extends AbstractController
      * Native port of the edit path of the ZF1 `MailboxController::addAction`
      * (`editAction` is a `forward('add')`). Only the editable fields are shown —
      * name, quota, alt_email, plus the AccessPermissions, AdditionalInfo, and
-     * DirectoryEntry sections from {@see FormPluginHost}, prefilled from the entity. The former edit form drops
-     * local_part / domain / password, so the native form does too (the address,
-     * its domain and the password are not editable here).
+     * DirectoryEntry sections from {@see FormPluginHost}. They are prefilled
+     * from the entity. The former edit form drops local_part / domain / password,
+     * so the native form does too (the address, its domain and the password are
+     * not editable here).
      *
      * GET prepopulates from the entity. POST validates the base form + the plugin
      * sections, writes the editable fields back, clamps the quota to the domain

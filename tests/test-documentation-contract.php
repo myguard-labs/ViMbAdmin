@@ -57,9 +57,10 @@ foreach (['docs/ORM3-UPGRADE.md' => $guide, 'CHANGELOG' => $changelog] as $surfa
 
 $positiveByCategory = [
     'native routing and actions' => [
-        'src/Kernel/Cli/CliKernel.php' => '/rejects unregistered names/',
+        'src/Kernel/Cli/CliKernel.php' => '/return Bootstrap::boot\(/',
+        'bin/vimbtool.php' => '/(?=.*\$kernel->boot\(\))(?=.*\$kernel->run\()/s',
         'src/Kernel/Router.php' => '/native entry point can reject it/',
-        'src/Kernel/Mvc/AbstractController.php' => '/native view\/session\/mailer\s+\* resources/',
+        'src/Kernel/Mvc/AbstractController.php' => '/(?=.*native view\/session\/mailer\s+\* resources)(?=.*new Csrf\(new MagicPropertyStorage\(\$this->container->session\(\)\)\))/s',
         'src/Kernel/Controller/AdminController.php' => '/(?=.*shared session key read by the native action handlers)(?=.*side-feature remains removed)/s',
         'src/Kernel/Controller/MaintenanceController.php' => '/CLI schema-update command is native/',
         'src/Kernel/Controller/ArchiveController.php' => '/(?=.*attempts to enqueue\s+\* repair as a best-effort follow-up)(?=.*REPAIR enqueue is attempted as a best-effort)/s',
@@ -74,15 +75,15 @@ $positiveByCategory = [
     'native session ownership' => [
         'src/Kernel/Session/MagicPropertyStorage.php' => '/Adapts the native \{@see SessionNamespace\}/',
         'src/Kernel/Session/NativeSessionStorage.php' => '/kernel\'s session data does not collide/',
-        'src/Kernel/Session/SessionNamespace.php' => '/Bootstrap\}\s+\* constructs it for both current call sites/',
+        'src/Kernel/Session/SessionNamespace.php' => '/new MagicPropertyStorage\(new SessionNamespace\(\'ViMbAdmin_Auth\'\)\)/',
         'src/Kernel/Session/SessionStorage.php' => '/Current native backings/',
         'tests/test-kernel-session-adapter.php' => '/shape exposed by the native SessionNamespace/',
-        'tests/test-kernel-session-namespace.php' => '/native Auth storage adapts its compatible namespace slot/',
+        'tests/test-kernel-session-namespace.php' => '/new SessionNamespace\(\'ViMbAdmin_Auth\'\)/',
     ],
     'orm mapping and loading' => [
         'README.md' => '/attribute entity mappings/',
         'docs/ORM3-UPGRADE.md' => '/Doctrine\'s `AttributeDriver`/',
-        'src/Kernel/Bootstrap.php' => '/(?=.*Builds every resource used by the native)(?=.*Compatibility registries used by older library helpers are configured inside\s+\* the native bootstrap)/s',
+        'src/Kernel/Bootstrap.php' => '/(?=.*new SessionNamespace\(\'Application\'\))(?=.*new SessionNamespace\(\$authNs\))(?=.*OSS_Runtime::configure\()/s',
         'public/index.php' => '/Bootstrap::boot\(APPLICATION_PATH/',
         'src/Kernel/Doctrine/EntityManagerFactory.php' => '/(?=.*entity manager owned by the native Container)(?=.*Build the direct PSR-6 pool)/s',
         'bin/generate-proxies.php' => '/proxy classes from attribute mappings/',
@@ -105,11 +106,11 @@ $outboundDelegation = '(?:fall(?:s|ing)?\s+(?:back|through)|delegat(?:e[sd]?|ing
 $inboundDelegation = '(?:fall(?:s|ing)?\s+(?:back|through)|delegates?|forwards?|routes?\s+(?:unmatched|unknown|requests|them|it))';
 $legacyDelegationPattern = '/(?:'
     . '\b' . $legacyOwners . '\b[^.\n]{0,100}\b' . $inboundDelegation . '\b'
-    . '|\b' . $outboundDelegation . '\b[^.;\n]{0,50}\b(?:to|through|into)\b[^.;\n]{0,50}\b' . $legacyOwners . '\b'
+    . '|\b' . $outboundDelegation . '\b[^,;.\n]{0,50}\b(?:to|through|into)\s+(?:the\s+)?' . $legacyOwners . '\b'
     . ')/i';
 $historicalOrNegatedPattern = '/\b(?:never|no longer|formerly|historical|mirrors?)\b/i';
 $detectDelegation = static function (string $text) use ($legacyDelegationPattern, $historicalOrNegatedPattern): ?string {
-    foreach (preg_split('/[.;]|\R/', $text) ?: [] as $clause) {
+    foreach (preg_split('/[.;]|\R|,\s*(?:but|and|or)\s+/i', $text) ?: [] as $clause) {
         if (preg_match($legacyDelegationPattern, $clause, $match) === 1
             && preg_match($historicalOrNegatedPattern, $clause) !== 1) {
             return trim($match[0]);
@@ -128,6 +129,8 @@ $delegationCases = [
     'The action never falls through to ZF1.' => false,
     'Unknown controllers route requests to ZF1; they no longer boot native resources.' => true,
     'Router routes native requests and rejects legacy routes.' => false,
+    'The health route never falls through to ZF1, but unknown controllers route requests to ZF1.' => true,
+    'The router routes requests to native controllers, not legacy ZF1.' => false,
 ];
 foreach ($delegationCases as $phrase => $expected) {
     $detected = $detectDelegation($phrase) !== null;

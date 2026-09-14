@@ -310,9 +310,10 @@ final class EntityManagerFactory
     }
 
     /**
-     * Build the direct PSR-6 pool used by Doctrine's cache setters. APCu/Redis are attempted inside a
-     * try/catch and degrade to the per-request Array pool when the extension is
-     * missing or the server is unreachable, exactly as the ZF1 resource did
+     * Build the direct PSR-6 pool used by Doctrine's cache setters.
+     * APCu/Redis are attempted inside a try/catch and degrade to the per-request
+     * Array pool when the extension is missing or the server is unreachable,
+     * exactly as the ZF1 resource did
      * (minus its registry/logger writes).
      *
      * @param array<string,mixed> $cfg the `doctrine2cache` options

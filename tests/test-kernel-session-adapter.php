@@ -3,8 +3,8 @@
 /**
  * Unit test: ViMbAdmin\Kernel\Session\MagicPropertyStorage (Phase 5,
  * docs/ZF1-REMOVAL.md). Proves the adapter round-trips through any object with
- * magic property access — the shape of the ZF1 session namespace it bridges in
- * the app — and that the Csrf service works on top of it. No framework, no DB.
+ * magic property access — the shape exposed by the native SessionNamespace —
+ * and that the Csrf service works on top of it. No framework, no DB.
  *
  * Exit 0 = all passed, 1 = a failure.
  */
@@ -16,7 +16,7 @@ require __DIR__ . '/../src/Kernel/Security/Csrf.php';
 use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 use ViMbAdmin\Kernel\Security\Csrf;
 
-/** Stand-in for Zend_Session_Namespace: data via magic property access. */
+/** Stand-in for SessionNamespace: data via magic property access. */
 final class MagicNamespaceFake
 {
     /** @var array<string,mixed> */

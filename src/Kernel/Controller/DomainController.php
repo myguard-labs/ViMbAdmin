@@ -39,7 +39,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * symmetric counterpart of the AdminController domain-assignment trio (#40/#41),
  * over the same already-extracted `ViMbAdmin_Service_Domain` (assignAdmin/
  * removeAdmin), and `purge` (over `Service_Domain::purge`). Index redirects to
- * the native list action and list-search is served by the native data endpoint.
+ * the native list action and search uses the native list-data endpoint.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

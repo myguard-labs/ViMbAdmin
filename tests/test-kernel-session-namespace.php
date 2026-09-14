@@ -77,8 +77,7 @@ check('Zend_Auth namespace stored separately',
         && !sessionHasKey('Application', 'storage'));
 
 // --- the integration that matters: wrap in MagicPropertyStorage ------------
-// This is exactly how the Auth bridge will be built once the ZF1 namespace is
-// gone: MagicPropertyStorage(new SessionNamespace('Zend_Auth')).
+// This is how the native Auth storage adapts its compatible namespace slot.
 $store = new MagicPropertyStorage(new SessionNamespace('Zend_Auth'));
 $stored = $store->get('storage');
 check('storage->get sees the magic-property value',

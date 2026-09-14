@@ -63,14 +63,20 @@ $positiveByCategory = [
         'src/Kernel/Controller/AdminController.php' => '/shared session key read by the native action handlers/',
         'src/Kernel/Controller/MaintenanceController.php' => '/CLI schema-update command is native/',
         'src/Kernel/Controller/ArchiveController.php' => '/attempts to enqueue\s+\* repair as a best-effort follow-up/',
-        'src/Kernel/Controller/DomainController.php' => '/Index redirects to\s+\* the native list action and list-search is served by the native data endpoint/',
-        'src/Kernel/Controller/AuthController.php' => '/security-salt-not-yet-configured path renders the native setup-salt view/',
+        'src/Kernel/Controller/DomainController.php' => '/Index redirects to\s+\* the native list action and search uses the native list-data endpoint/',
+        'src/Kernel/Controller/AuthController.php' => '/(?=.*security-salt-not-yet-configured path renders the native setup-salt view)(?=.*SessionNamespace\s+\W*retains the compatible identity slot)/s',
+        'tests/test-kernel-router.php' => '/empty allowlist produces no match/',
+        'tests/test-kernel-http.php' => '/obsolete list-search\s+-> false/',
+        'application/views/domain/js/list.js' => "/action='list-data'/",
     ],
     'native mailbox capabilities' => [
         'src/Kernel/Controller/MailboxController.php' => '/Settings-email\s+\* delivery is native; create-time welcome email remains intentionally removed/',
     ],
     'native session ownership' => [
         'src/Kernel/Session/MagicPropertyStorage.php' => '/Adapts the native \{@see SessionNamespace\}/',
+        'src/Kernel/Session/NativeSessionStorage.php' => '/kernel\'s session data does not collide/',
+        'tests/test-kernel-session-adapter.php' => '/shape exposed by the native SessionNamespace/',
+        'tests/test-kernel-session-namespace.php' => '/native Auth storage adapts its compatible namespace slot/',
     ],
     'orm mapping and loading' => [
         'src/Kernel/Doctrine/EntityManagerFactory.php' => '/Build the direct PSR-6 pool/',
@@ -89,9 +95,21 @@ foreach ($positiveByCategory as $category => $invariants) {
     }
 }
 
+$forbiddenCurrent = [
+    'application/views/domain/js/list.js' => "/action='list-search'/",
+];
+foreach ($forbiddenCurrent as $file => $pattern) {
+    if (preg_match($pattern, (string) file_get_contents($root . '/' . $file), $match) === 1) {
+        failContract($file, "obsolete route absent ({$pattern})", $match[0]);
+    }
+}
+
+$legacyOwners = '(?:ZF1|Zend|legacy)';
+$delegationVerbs = '(?:fall(?:s|ing)?\s+(?:back|through)|delegat(?:e[sd]?|ing)|forward(?:s|ed|ing)?|rout(?:ed|ing|es))';
+$effectiveDelegation = '(?<!never\s)' . $delegationVerbs;
 $legacyDelegationPattern = '/(?:'
-    . '\b(?:ZF1|Zend|legacy)\b[^.\n]{0,100}\b(?:falls?\s+back|delegates?|forwards?|routes?\s+(?:unmatched|unknown|requests|them|it)|still\s+serv\w*|stays?\s+on)\b'
-    . '|\b(?:falls?\s+back|delegated|forwarded|routed)\b[^.\n]{0,50}\b(?:to|through)\b[^.\n]{0,50}\b(?:ZF1|Zend|legacy)\b'
+    . '\b' . $legacyOwners . '\b[^.\n]{0,100}\b' . $effectiveDelegation . '\b'
+    . '|\b' . $effectiveDelegation . '\b[^.\n]{0,50}(?:\bto\b[^.\n]{0,50})?\b' . $legacyOwners . '\b'
     . ')/i';
 $ownershipFiles = array_keys($positive);
 foreach ($ownershipFiles as $file) {

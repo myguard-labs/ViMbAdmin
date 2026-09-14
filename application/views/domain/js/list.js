@@ -105,7 +105,7 @@ function getEntries( event ){
                 vmDataTableApi( oDataTable ).clear().draw();
                 ossAjax({
                   async: false,
-                  url: "{genUrl controller='domain' action='list-search'}/search/" + String( DataTable.Dom.select( event.target ).val() ).trim(),
+                  url: "{genUrl controller='domain' action='list-data'}/search/" + String( DataTable.Dom.select( event.target ).val() ).trim(),
                   success: function(data){
                     if( data !== "ko" && data.substr( 0, 1 ) == "[" )
                     {

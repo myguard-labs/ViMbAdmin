@@ -1004,9 +1004,8 @@ final class AuthController extends AbstractController
             session_regenerate_id(true);
         }
 
-        // Grant the identity. The Auth service writes it to the same legacy
-        // identity slot the framework auth layer used, so any remaining ZF1 page
-        // and the native kernel both read it.
+        // Grant the identity through the native Auth service. SessionNamespace
+        // retains the compatible identity slot used across native requests.
         $this->container->auth()->establish($admin);
 
         $session->set('logged_in_via', 'auth');

@@ -2,12 +2,31 @@
 /**
  * Unit test: ViMbAdmin\Kernel\Http\Kernel (Phase 2b, docs/ZF1-REMOVAL.md).
  *
- * Pure dispatch logic — no framework, no DB, no Composer install, no output.
+ * Pure dispatch logic — no framework, no DB, and no output. Composer autoloading
+ * supplies controller signature dependencies for the canHandle checks.
  * Proves the native health route is served and unknown paths remain unhandled
  * so the entry point can return a native 404.
  *
  * Exit 0 = all passed, 1 = a failure.
  */
+
+require __DIR__ . '/../vendor/autoload.php';
+
+spl_autoload_register(static function (string $class): void {
+    $prefix = 'ViMbAdmin\\Kernel\\';
+    if (str_starts_with($class, $prefix)) {
+        $relative = str_replace('\\', '/', substr($class, strlen($prefix)));
+        require __DIR__ . '/../src/Kernel/' . $relative . '.php';
+        return;
+    }
+    foreach (['Entities\\' => 'Entities', 'Repositories\\' => 'Repositories'] as $prefix => $dir) {
+        if (str_starts_with($class, $prefix)) {
+            $relative = str_replace('\\', '/', substr($class, strlen($prefix)));
+            require __DIR__ . '/../application/' . $dir . '/' . $relative . '.php';
+            return;
+        }
+    }
+});
 
 require __DIR__ . '/../src/Kernel/RouteMatch.php';
 require __DIR__ . '/../src/Kernel/Router.php';
@@ -69,6 +88,8 @@ check('only kernel-health handled',       $kernel2->handle('/kernel-health') ins
 check('canHandle: built-in kernel-health -> true',  $kernel->canHandle('/kernel-health') === true);
 check('canHandle: kernel-health/index    -> true',  $kernel->canHandle('/kernel-health/index') === true);
 check('canHandle: non-allowlisted path   -> false', $kernel->canHandle('/totally/unknown') === false);
+check('canHandle: domain/list-data       -> true',  $kernel->canHandle('/domain/list-data') === true);
+check('canHandle: obsolete list-search  -> false', $kernel->canHandle('/domain/list-search') === false);
 
 echo "\n";
 if ($failures === 0) {

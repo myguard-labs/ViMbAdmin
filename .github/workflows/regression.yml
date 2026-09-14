@@ -301,7 +301,7 @@ jobs:
 
   # ------------------------------------------------------------------ #
   # Schema drift — loads the shipped SQL into a real MariaDB and proves #
-  # the attribute mappings produce NO pending changes (phantom-ALTER guard). #
+  # attribute mappings produce no pending changes (phantom-ALTER guard).     #
   # ------------------------------------------------------------------ #
   schema-drift:
     name: Schema has no phantom pending changes

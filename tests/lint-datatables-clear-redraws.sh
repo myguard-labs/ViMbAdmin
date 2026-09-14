@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
 # VIM-A15.56a. DataTables 1.x `fnClearTable()` redrew by default; the 2.x
-# `clear()` does not -- it only empties internal data. The migration missed
-# this in three list views: the search handler cleared the table, fired
-# `$.ajax`, and called `.draw()` only inside the `success` callback:
+# `clear()` does not -- it only empties internal data. The obsolete manual
+# search handlers that needed clear/redraw were removed; native server-side
+# DataTables transport now owns searching and redraws.
 #
 #     vmDataTableApi( t ).clear();
 #     $.ajax({ success: function(){ vmDataTableApi( t ).draw(); } });
@@ -54,10 +54,9 @@
 # three prior redesigns tried exactly that and each one closed the shape a
 # review had just named while reopening the defect class in a new shape.
 #
-# All six real call sites in the tree are the identical exact spelling:
-#
-#     vmDataTableApi( oDataTable ).clear().draw();
-#
+# There are no approved call sites in the view tree. Discovery still rejects
+# any new `.clear()` unless it uses the exact normal form, and the zero-count
+# tripwire then requires deliberate review before even that form can return.
 # The normal form is tolerant of indentation and of the spacing inside the
 # `vmDataTableApi( ... )` argument parentheses, and of trailing space; every
 # other byte -- including any space around `.clear()` or `.draw()` itself --
@@ -84,8 +83,8 @@ export LC_ALL=C
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 views_root='application/views'
-# Six approved sites: two each in the domain, mailbox and alias list views.
-expected_count=6
+# Native server-side DataTables owns redraws; no manual clear site is approved.
+expected_count=0
 
 if [ ! -d "$views_root" ]; then
   echo "FAIL: view root '$views_root' not found; cannot judge." >&2
@@ -99,6 +98,23 @@ done < <(find "$views_root" -type f -name '*.js' -print0 | sort -z)
 
 if [ "${#files[@]}" -eq 0 ]; then
   echo "FAIL: no view JS found under '$views_root'; cannot judge." >&2
+  exit 1
+fi
+
+# The removed manual-search path must not return under a different redraw
+# spelling. These functions were unbound and called deleted list-search routes.
+legacy_hits=()
+for file in \
+  application/views/domain/js/list.js \
+  application/views/alias/js/list.js \
+  application/views/mailbox/js/list.js; do
+  if grep -qE "function[[:space:]]+getEntries|action=['\"]list-search['\"]" "$file"; then
+    legacy_hits+=("$file")
+  fi
+done
+if [ "${#legacy_hits[@]}" -gt 0 ]; then
+  echo "FAIL: obsolete getEntries/list-search path found:" >&2
+  printf '      %s\n' "${legacy_hits[@]}" >&2
   exit 1
 fi
 

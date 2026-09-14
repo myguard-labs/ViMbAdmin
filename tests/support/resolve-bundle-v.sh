@@ -13,8 +13,7 @@
 _resolve_bundle_v_repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 resolve_bundle_v() {
-  local -a matches_array
-  local saved_nullglob
+  local saved_nullglob=false
   local repo_root
   local -a full_matches
 
@@ -22,7 +21,9 @@ resolve_bundle_v() {
   repo_root="$_resolve_bundle_v_repo_root"
 
   # Save the current nullglob state to restore it later
-  saved_nullglob=$(shopt -p nullglob)
+  if shopt -q nullglob; then
+    saved_nullglob=true
+  fi
 
   # Disable nullglob to detect no-match case explicitly
   shopt -u nullglob
@@ -32,7 +33,9 @@ resolve_bundle_v() {
   full_matches=("${repo_root}/public/js/min.bundle-v"*.js)
 
   # Restore the original nullglob state
-  eval "$saved_nullglob"
+  if [[ "$saved_nullglob" == true ]]; then
+    shopt -s nullglob
+  fi
 
   # Check if the glob matched anything (unmatched glob returns literal pattern)
   local pattern="${repo_root}/public/js/min.bundle-v"'*.js'

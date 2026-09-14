@@ -10,19 +10,14 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 /**
  * Framework-free authentication / authorisation service.
  *
- * Phase 5 of the ZF1 removal roadmap (docs/ZF1-REMOVAL.md). It is the
- * replacement for the controller `getAdmin()` / `authorise()` glue, which today
- * goes through the ZF1 auth resource: the identity is an array carrying the
- * admin's `id` (see OSS_Controller_Action_Trait_Doctrine2User::getUser(), which
- * loads `\Entities\Admin` by `getIdentity()['id']`), and "super" is a flag on
- * that admin.
+ * Owns authentication state for the native kernel. The identity is an array
+ * carrying the admin's `id`, and "super" is a flag on that admin.
  *
  * Dependencies are a {@see SessionStorage} (where the identity array lives) and
  * an admin-loader callable `fn(int $id): ?object` (so the service stays free of
  * Doctrine and is unit-testable). In production the loader is
  * `fn($id) => $em->getRepository('\Entities\Admin')->find($id)` and the session
- * is a storage keyed to wherever the ZF1 auth layer wrote the identity; both are
- * supplied at wiring time (Phase 3) and validated against a running instance.
+ * uses the kernel's native session storage; both are supplied at wiring time.
  *
  * The service answers the questions, never performs HTTP: the controller keeps
  * the redirect-to-login that `authorise()` did on a negative answer.

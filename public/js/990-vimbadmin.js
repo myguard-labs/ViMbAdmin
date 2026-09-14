@@ -521,40 +521,6 @@ function ossAddMessage( msg, type, handled )
 }
 
 /**
- * This function is for validating input field.
- *
- * Function checks if the input field has the value if not set error,
- * and sets valid to false. If value not empty and email flag sets to
- * true then function calls validate email, and if email validate function
- * removes class error, if email not valid function add set error and sets
- * valid to false. and if email flag is false, and value is not empty, we remove
- * error from input field.
- *
- * @param string fieldName The field id, we need only id because we have to build other id from it.
- * @param bool email The email flag, witch means that input field is email and we need to validate it as email.
- */
-function ossJscriptFieldValidator( fieldName, email )
-{
-    if( DataTable.Dom.select( '#' + fieldName ).val() != "" )
-    {
-        if( email )
-        {
-            if( ossValidateEmail( DataTable.Dom.select( '#' + fieldName ).val() ) )
-            {
-               DataTable.Dom.select( '#div-form-' + fieldName ).removeClass( 'error' );
-               DataTable.Dom.select( '#help-' + fieldName ).html( "" );
-            }
-        }
-        else
-        {
-            DataTable.Dom.select( '#div-form-' + fieldName ).removeClass( 'error' );
-            DataTable.Dom.select( '#help-' + fieldName ).html( "" );
-        }
-    }
-}
-
-
-/**
  * Add tab for plugin tabs.
  * 
  * If there was no plugins it will not show tabas menu at all, until first tab will be added.
@@ -574,38 +540,6 @@ function addPluginTab( title, id )
 	    
 	    tab += " href=\"#" + id + "\">" + title + "</a></li>\n";
 	    DataTable.Dom.select( "#plugin_tabs" ).show().append( tab );
-}
-
-
-/**
- * This function is simply checks regular expression of given string, and return if it is email address, otherwise return false.
- *
- * @param string email The string witch is validating as email address.
- * @return bool
- */
-function ossValidateEmail( email)
-{
-    var emailReg = /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/;
-    if( emailReg.test( email ) )
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-
-/**
- * This function generates random password and set to field by given id.
- *
- * @param int len The wanted password length.
- * @param string email The field id to set the password.
- */
-function randPasword( len, id )
-{
-    DataTable.Dom.select( '#' + id ).val( randomPassword( len ) );
-    DataTable.Dom.select( '#' + id ).trigger( 'blur' );
 }
 
 

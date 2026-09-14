@@ -23,8 +23,8 @@ use ViMbAdmin\Kernel\Security\Csrf;
 use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 
 /**
- * Native port of `MailboxController::list` + `ajaxToggleActive`
- * (docs/ZF1-REMOVAL.md).
+ * Native controller for mailbox list, lifecycle, password, maintenance, and
+ * settings-email operations.
  *
  * Reproduces the legacy `preDispatch` (for the list actions) + `listAction`: it
  * resolves the remembered/`did` domain scope into the session (so the mailbox
@@ -44,9 +44,6 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * `purge` reproduces the ZF1 CSRF-guarded confirm-then-purge flow natively,
  * running the mutation through the extracted `ViMbAdmin_Service_Mailbox::purge`
  * with the same plugin hooks over the PluginHost.
- *
- * The remaining form actions (add/edit) stay on ZF1 via the dispatcher
- * fallback. The legacy controller is untouched.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -649,10 +646,8 @@ final class MailboxController extends AbstractController
     /**
      * GET|POST /mailbox/add[/did/<id>] — create a mailbox (the heaviest form).
      *
-     * Native port of the create path of the ZF1 `MailboxController::addAction`.
-     * Edit (`/mailbox/edit/mid/<id>`) is a different action and stays on ZF1 via
-     * the dispatcher fallback (the `mid` guard keeps any `add` URL carrying a
-     * `mid` on ZF1 too).
+     * Native create action. An `add` URL carrying a `mid` redirects to the
+     * native edit action for compatibility with the former forwarded route.
      *
      * The form is the framework-free {@see Form}: the base mailbox fields plus
      * any native plugin sections appended by the {@see FormPluginHost} (today the

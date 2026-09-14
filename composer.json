@@ -39,9 +39,6 @@
         "symfony/cache": "^6.4 || ^7.0 || ^8.0",
         "symfony/mailer": "^8.0"
     },
-    "require-dev": {
-        "opensolutions/minify": "1.*"
-    },
     "scripts": {
         "audit": "@composer audit",
         "outdated": "@composer outdated --direct"

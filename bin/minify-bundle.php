@@ -16,10 +16,9 @@
  * rebuilt from the same glob. See bin/minify-bundle-files.php for the concrete
  * regression that caused (Chosen and Colorbox, PR #180).
  *
- * `vendor/` is untracked and Composer-pinned (`opensolutions/minify: 1.*`), so
- * it cannot be patched. This driver lives in the repository instead and needs
- * no vendor change: it reproduces minify.php's behaviour step for step and only
- * substitutes an explicit input list for the glob.
+ * This repository-owned driver reproduces minify.php's behaviour step for step
+ * while substituting an explicit input list for the glob; it has no Composer
+ * dependency on the retired vendor tool.
  *
  * bin/minify-options.php is still the single source of truth for everything
  * else -- the compiler command lines, the clean-css presence check, the

@@ -98,9 +98,8 @@ defined( 'SCRIPTDIR' ) || define( 'SCRIPTDIR', __DIR__ );
 // compiler fail to parse `public/js/800-bootstrap.js` even in WHITESPACE_ONLY
 // mode. This also accepts the ES6 target of DataTables 3 and the first-party
 // browser APIs. The output is tested in Chromium, Firefox and WebKit.
-// NB: SCRIPTDIR is the vendor script's OWN directory
-// (vendor/opensolutions/minify), not this config file's. The per-machine build
-// prerequisites live next to this file in bin/, so they are anchored on __DIR__.
+// The per-machine build prerequisites live next to this file in bin/, so they
+// are anchored on __DIR__ rather than SCRIPTDIR.
 // --charset UTF-8: Closure Compiler's own default is "accept UTF-8 as input,
 // emit US-ASCII (with \uXXXX escapes) as output". That silently mangles any
 // non-ASCII byte a vendored source legitimately carries -- e.g. the "©" in

@@ -410,8 +410,7 @@ final class AdminController extends AbstractController
      * through the framework-free ViMbAdmin_Service_Admin::changePassword.
      *
      * Differences from ZF1, both deliberate: the optional "email the new password"
-     * side-feature is dropped (the native kernel has no mailer, as with the
-     * native login's remember-me), and the insufficient-privilege attempt is not
+     * side-feature remains removed, and the insufficient-privilege attempt is not
      * written to the logger (the security behaviour — refuse + redirect — is
      * preserved). An invalid/missing aid is handled natively here (flash +
      * redirect), so the action never falls through to ZF1.

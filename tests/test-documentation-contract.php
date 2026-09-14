@@ -59,18 +59,20 @@ $positiveByCategory = [
     'native routing and actions' => [
         'src/Kernel/Cli/CliKernel.php' => '/rejects unregistered names/',
         'src/Kernel/Router.php' => '/native entry point can reject it/',
-        'src/Kernel/Mvc/AbstractController.php' => '/links minted here validate in the native action handlers/',
-        'src/Kernel/Controller/AdminController.php' => '/shared session key read by the native action handlers/',
+        'src/Kernel/Mvc/AbstractController.php' => '/native view\/session\/mailer\s+\* resources/',
+        'src/Kernel/Controller/AdminController.php' => '/(?=.*shared session key read by the native action handlers)(?=.*side-feature remains removed)/s',
         'src/Kernel/Controller/MaintenanceController.php' => '/CLI schema-update command is native/',
-        'src/Kernel/Controller/ArchiveController.php' => '/attempts to enqueue\s+\* repair as a best-effort follow-up/',
+        'src/Kernel/Controller/ArchiveController.php' => '/(?=.*attempts to enqueue\s+\* repair as a best-effort follow-up)(?=.*REPAIR enqueue is attempted as a best-effort)/s',
         'src/Kernel/Controller/DomainController.php' => '/Index redirects to\s+\* the native list action and search uses the native list-data endpoint/',
         'src/Kernel/Controller/AuthController.php' => '/(?=.*security-salt-not-yet-configured path renders the native setup-salt view)(?=.*SessionNamespace\s+\W*retains the compatible identity slot)/s',
         'tests/test-kernel-router.php' => '/empty allowlist produces no match/',
         'tests/test-kernel-http.php' => '/obsolete list-search\s+-> false/',
-        'application/views/domain/js/list.js' => "/action='list-data'/",
+        'application/views/domain/js/list.js' => "/'ajax': vmDomainServerData.*controller='domain' action='list-data'/",
+        'application/views/alias/js/list.js' => "/'ajax': vmAliasServerData.*controller='alias' action='list-data'/",
+        'application/views/mailbox/js/list.js' => "/'ajax': vmMailboxServerData.*controller='mailbox' action='list-data'/",
     ],
     'native mailbox capabilities' => [
-        'src/Kernel/Controller/MailboxController.php' => '/Settings-email\s+\* delivery is native; create-time welcome email remains intentionally removed/',
+        'src/Kernel/Controller/MailboxController.php' => '/Settings-email\s+\* delivery is native\. Create-time welcome email remains intentionally\s+\* removed/',
     ],
     'native session ownership' => [
         'src/Kernel/Session/MagicPropertyStorage.php' => '/Adapts the native \{@see SessionNamespace\}/',
@@ -79,7 +81,10 @@ $positiveByCategory = [
         'tests/test-kernel-session-namespace.php' => '/native Auth storage adapts its compatible namespace slot/',
     ],
     'orm mapping and loading' => [
-        'src/Kernel/Doctrine/EntityManagerFactory.php' => '/Build the direct PSR-6 pool/',
+        'README.md' => '/attribute entity mappings/',
+        'docs/ORM3-UPGRADE.md' => '/Doctrine\'s `AttributeDriver`/',
+        'src/Kernel/Bootstrap.php' => '/EntityManagerFactory::create\(\$options\)/',
+        'src/Kernel/Doctrine/EntityManagerFactory.php' => '/(?=.*entity manager owned by the native Container)(?=.*Build the direct PSR-6 pool)/s',
         'bin/generate-proxies.php' => '/proxy classes from attribute mappings/',
         'tests/test-schema-no-pending.php' => '/SchemaTool::createSchema\(\) from attribute mappings/',
     ],
@@ -96,7 +101,9 @@ foreach ($positiveByCategory as $category => $invariants) {
 }
 
 $forbiddenCurrent = [
-    'application/views/domain/js/list.js' => "/action='list-search'/",
+    'application/views/domain/js/list.js' => "/function\s+getEntries|action='list-search'/",
+    'application/views/alias/js/list.js' => "/function\s+getEntries|action='list-search'/",
+    'application/views/mailbox/js/list.js' => "/function\s+getEntries|action='list-search'/",
 ];
 foreach ($forbiddenCurrent as $file => $pattern) {
     if (preg_match($pattern, (string) file_get_contents($root . '/' . $file), $match) === 1) {
@@ -105,17 +112,38 @@ foreach ($forbiddenCurrent as $file => $pattern) {
 }
 
 $legacyOwners = '(?:ZF1|Zend|legacy)';
-$delegationVerbs = '(?:fall(?:s|ing)?\s+(?:back|through)|delegat(?:e[sd]?|ing)|forward(?:s|ed|ing)?|rout(?:ed|ing|es))';
-$effectiveDelegation = '(?<!never\s)' . $delegationVerbs;
+$outboundDelegation = '(?:fall(?:s|ing)?\s+(?:back|through)|delegat(?:e[sd]?|ing)|forward(?:s|ed|ing)?|rout(?:e[sd]?|ing))';
+$inboundDelegation = '(?:fall(?:s|ing)?\s+(?:back|through)|delegates?|forwards?|routes?\s+(?:unmatched|unknown|requests|them|it))';
 $legacyDelegationPattern = '/(?:'
-    . '\b' . $legacyOwners . '\b[^.\n]{0,100}\b' . $effectiveDelegation . '\b'
-    . '|\b' . $effectiveDelegation . '\b[^.\n]{0,50}(?:\bto\b[^.\n]{0,50})?\b' . $legacyOwners . '\b'
+    . '\b' . $legacyOwners . '\b[^.\n]{0,100}\b' . $inboundDelegation . '\b'
+    . '|\b' . $outboundDelegation . '\b[^.\n]{0,50}(?:\bto\b[^.\n]{0,50})?\b' . $legacyOwners . '\b'
     . ')/i';
+$historicalOrNegatedPattern = '/\b(?:never|no longer|formerly|historical|mirrors?)\b/i';
+$delegationCases = [
+    'Unmatched routes route to Zend.' => true,
+    'Unmatched routes are routed to the Zend front controller.' => true,
+    'Unmatched routes are forwarded to ZF1.' => true,
+    'Unmatched routes delegate to legacy dispatch.' => true,
+    'Unmatched routes fall back to Zend.' => true,
+    'Unmatched routes fall through to Zend.' => true,
+    'The historical router formerly routed to Zend.' => false,
+    'The action never falls through to ZF1.' => false,
+];
+foreach ($delegationCases as $phrase => $expected) {
+    $detected = preg_match($legacyDelegationPattern, $phrase) === 1
+        && preg_match($historicalOrNegatedPattern, $phrase) !== 1;
+    if ($detected !== $expected) {
+        failContract('legacy-delegation matcher', $expected ? 'reject' : 'allow', $phrase);
+    }
+}
 $ownershipFiles = array_keys($positive);
 foreach ($ownershipFiles as $file) {
     $contents = (string) file_get_contents($root . '/' . $file);
-    if (preg_match($legacyDelegationPattern, $contents, $match) === 1) {
-        failContract($file, 'no live delegation to removed ZF1 ownership', trim(preg_replace('/\s+/', ' ', $match[0]) ?? $match[0]));
+    foreach (preg_split('/\R/', $contents) ?: [] as $line) {
+        if (preg_match($legacyDelegationPattern, $line, $match) === 1
+            && preg_match($historicalOrNegatedPattern, $line) !== 1) {
+            failContract($file, 'no live delegation to removed ZF1 ownership', trim($match[0]));
+        }
     }
 }
 

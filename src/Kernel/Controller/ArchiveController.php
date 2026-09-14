@@ -382,7 +382,8 @@ final class ArchiveController extends AbstractController
      * (`ViMbAdmin_Doveadm::restoreFrom`); a sync failure leaves the recreated
      * mailbox but aborts with an error (the archive is kept). (3) The backup files
      * are removed (`fsDelete`; a leftover is non-fatal). (4) The archive row is
-     * dropped and a background REPAIR is enqueued so indexes/quota are rebuilt.
+     * dropped, then a background REPAIR enqueue is attempted as a best-effort
+     * follow-up so indexes/quota can be rebuilt.
      * The doveadm client + the queue helper are framework-free, so src/ stays
      * free of any ZF1 reference.
      */

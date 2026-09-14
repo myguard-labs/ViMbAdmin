@@ -83,57 +83,6 @@ function deleteAlias( event ){
 };
 
 {if !isset($options.defaults.server_side.pagination.enable) || $options.defaults.server_side.pagination.enable }
-var timeOut = null;
-var ignore_keys = [ 13, 38, 40, 37, 39 ,27, 32, 17, 18, 9, 16, 20, 36, 35, 33, 34, 144 ];
-{if isset( $options.defaults.server_side.pagination.min_search_str ) }
-    var str_len = {$options.defaults.server_side.pagination.min_search_str};
-{else}
-    var str_len = 3;
-{/if}
-
-function getEntries( event ){
-    event.preventDefault();
-    if( ignore_keys.indexOf( event.which ) != -1 )
-        return;
-
-    clearTimeout( timeOut );
-    if( String( DataTable.Dom.select( event.target ).val() ).trim().length >= str_len ){
-        timeOut = setTimeout( function(){
-            DataTable.Dom.select('body').css('cursor', 'wait');
-            setTimeout( function(){
-                vmDataTableApi( oDataTable ).clear().draw();
-                ossAjax({
-                  async: false,
-                  url: "{genUrl controller='alias' action='list-search' ima=$ima}/search/" + String( DataTable.Dom.select( event.target ).val() ).trim(),
-                  success: function(data){
-                    if( data !== "ko" && data.substr( 0, 1 ) == "[" )
-                    {
-                        data = JSON.parse( data );
-                        var tableApi = vmDataTableApi( oDataTable );
-                        data.forEach( function( row ){
-                               tableApi.row.add([
-                                    row.address,
-                                    row.domain,
-                                    formatActive( row.id, row.active ),
-                                    formatGoto( row.id, row.goto ),
-                                    formatControlls( row.id )
-                         ]);
-                        });
-                        tableApi.draw();
-                    }
-                  }
-                });
-                DataTable.Dom.select('body').css('cursor', 'default');
-            }, 300);
-        }, 500 );
-
-    }
-    else
-    {
-        vmDataTableApi( oDataTable ).clear().draw();
-    }
-}
-
 function formatActive( id, active )
 {
     var active_class = active ? 'success': 'danger';

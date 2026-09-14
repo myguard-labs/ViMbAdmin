@@ -398,8 +398,8 @@ final class DomainController extends AbstractController
      * GET|POST /domain/add — create a new domain (super admins only).
      *
      * An edit via the `/domain/add/did/N` compatibility URL redirects to the
-     * native {@see editAction}. The former
-     * domain add fires no plugin hooks (no `domain_add_*` listeners exist), so
+     * native {@see editAction}. The former domain-add implementation fired no
+     * plugin hooks (no `domain_add_*` listeners exist), so
      * nothing is lost by serving it natively. Quota fields are converted to bytes
      * with the SAME OSS_Filter_FileSize the ZF1 form used.
      */

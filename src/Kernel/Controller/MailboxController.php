@@ -650,9 +650,10 @@ final class MailboxController extends AbstractController
      * native edit action for compatibility with the former forwarded route.
      *
      * The form is the framework-free {@see Form}: the base mailbox fields plus
-     * native plugin sections appended by the {@see FormPluginHost}, including
+     * native plugin sections appended by the {@see FormPluginHost}. These include
      * AccessPermissions, AdditionalInfo, and DirectoryEntry. Settings-email
-     * delivery is native; create-time welcome email remains intentionally removed.
+     * delivery is native. Create-time welcome email remains intentionally
+     * removed.
      *
      * On POST it validates the base form, then the plugin sections
      * ({@see FormPluginHost::validate}), resolves + authorises the chosen domain,

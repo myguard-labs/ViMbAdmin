@@ -19,17 +19,14 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * The framework-free counterpart to `ViMbAdmin_Controller_Action`. A migrated
  * controller extends this, lives in the framework-free `src/` tree, and exposes
  * `{$action}Action(): Response` methods that the {@see Dispatcher} invokes. It
- * is handed the {@see Container} (Doctrine EM, named ZF1 resources, the
- * framework-free auth service) and the decoded {@see RouteMatch}, and returns a
+ * is handed the {@see Container} (Doctrine EM, native view/session/mailer
+ * resources, and auth service) and the decoded {@see RouteMatch}, and returns a
  * {@see Response} value object instead of echoing — so dispatch stays pure and
  * unit-testable, and the entry point is the only place that emits.
  *
- * It deliberately ships only the few helpers the first migrated controllers
- * need — `param()`, `em()`, `admin()`, and response builders. The view-script
- * render helper is added when the first Smarty-rendering controller is migrated;
- * the first native controller (additionalinfo/typeahead) emits JSON and needs no
- * view. Each helper is a thin, intention-revealing wrapper so a migrated
- * action body reads almost exactly like its ZF1 original.
+ * It supplies the shared parameter, persistence, authentication, response,
+ * Smarty rendering, session, and mail helpers used by native controllers. Each
+ * helper is a thin, intention-revealing wrapper around a container resource.
  *
  * These controllers are the sole HTTP implementation; the legacy controller
  * layer has been removed.
@@ -236,9 +233,9 @@ abstract class AbstractController
      *
      * Writes to the framework-free {@see FlashMessages} queue over the session
      * namespace; the `{OSS_Message}` Smarty renderer drains it and emits the same
-     * alert markup as a legacy OSS_Message, so a native action can flash a notice
-     * that shows on the next page whether that page is rendered natively or by
-     * ZF1. Levels match the OSS_Message classes (success/error/info/warning).
+     * alert markup as OSS_Message, so a native action can flash a notice that
+     * shows on the next natively rendered page. Levels match the OSS_Message
+     * classes (success/error/info/warning).
      */
     protected function flash(string $text, string $level = FlashMessages::SUCCESS): void
     {

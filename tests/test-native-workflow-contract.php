@@ -26,8 +26,8 @@ $contracts = [
     'setup' => ['auth', 'setup', [], [], ['salt' => str_repeat('s', 64), 'username' => 'new@example.test', 'password' => WorkflowHarness::PASSWORD], []],
     'admin-add' => ['admin', 'add', [], ['welcome_email'], ['username' => 'new@example.test', 'password' => WorkflowHarness::PASSWORD, 'super' => '0'], ['welcome_email' => '1']],
     'admin-password' => ['admin', 'password', ['aid' => '2'], ['email'], ['password' => 'replacement workflow password'], ['email' => '1']],
-    'mailbox-add' => ['mailbox', 'add', [], ['welcome_email', 'cc_welcome_email'], ['local_part' => 'new', 'domain' => '1', 'name' => 'New', 'password' => WorkflowHarness::PASSWORD, 'quota' => '0', 'alt_email' => '', 'plugin_additionalInfo_department' => 'new-mailbox-value'], ['welcome_email' => '1', 'cc_welcome_email' => 'copy@example.test']],
-    'mailbox-edit' => ['mailbox', 'edit', ['mid' => '1'], ['welcome_email', 'cc_welcome_email'], ['name' => 'Edited', 'quota' => '0', 'alt_email' => '', 'plugin_additionalInfo_department' => 'new-mailbox-value'], ['welcome_email' => '1', 'cc_welcome_email' => 'copy@example.test']],
+    'mailbox-add' => ['mailbox', 'add', [], ['welcome_email', 'cc_welcome_email'], ['local_part' => 'new', 'domain' => '1', 'name' => 'New', 'password' => WorkflowHarness::PASSWORD, 'quota' => '1', 'alt_email' => 'alternate@example.test', 'plugin_additionalInfo_department' => 'new-mailbox-value'], ['welcome_email' => '1', 'cc_welcome_email' => 'copy@example.test']],
+    'mailbox-edit' => ['mailbox', 'edit', ['mid' => '1'], ['welcome_email', 'cc_welcome_email'], ['name' => 'Edited', 'quota' => '2', 'alt_email' => 'edited@example.test', 'plugin_additionalInfo_department' => 'new-mailbox-value'], ['welcome_email' => '1', 'cc_welcome_email' => 'copy@example.test']],
     'mailbox-password' => ['mailbox', 'password', ['mid' => '1'], ['email'], ['password' => 'replacement workflow password'], ['email' => '1']],
     'alias-add' => ['alias', 'add', [], ['plugin_additionalInfo_department'], ['local_part' => 'new', 'domain' => '1', 'goto' => 'new@example.test'], ['plugin_additionalInfo_department' => 'new-alias-value', 'pluginsf_AdditionalInfo' => ['plugin_additionalInfo_department' => 'nested-alias-value']]],
     'alias-edit' => ['alias', 'edit', ['alid' => '1'], ['plugin_additionalInfo_department'], ['goto' => 'new@example.test'], ['plugin_additionalInfo_department' => 'new-alias-value', 'pluginsf_AdditionalInfo' => ['plugin_additionalInfo_department' => 'nested-alias-value']]],
@@ -47,7 +47,9 @@ foreach ($contracts as $name => [$controller, $action, $params, $removedFields, 
     $check($name . ': removal and replacement instructions are documented', str_contains($doc, '`' . $name . '`'));
     // Run all native actions, including successful state changes. Absence of
     // mail/plugin writes alone would be vacuous if the form never validated.
-    $modes = ['off', 'on', 'malformed', 'csrf-error', 'field-error'];
+    // Setup's legacy welcome was automatic: there is no opt-in input to vary.
+    $modes = $name === 'setup' ? ['success', 'csrf-error', 'field-error']
+        : ['off', 'on', 'malformed', 'csrf-error', 'field-error'];
     if (str_starts_with($name, 'mailbox-') && $action !== 'password') {
         $modes = [...$modes, 'welcome-only', 'cc-only'];
     }
@@ -83,6 +85,43 @@ foreach ($contracts as $name => [$controller, $action, $params, $removedFields, 
             $success ? $response->status === 302 && $h->persistence->flushes === 1
                 : $response->status === 200 && $h->persistence->flushes === 0);
         $check($name . '/' . $mode . ': removed workflow sends no mail', count($h->transport->messages) === 0);
+        if ($name === 'setup' || $name === 'admin-add') {
+            $created = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\Admin));
+            $admin = $created[0] ?? null;
+            $check($name . '/' . $mode . ': accepted request persists the expected administrator',
+                $success ? count($created) === 1 && $admin instanceof \Entities\Admin
+                    && $admin->getUsername() === 'new@example.test' && $admin->getActive() === true
+                    && $admin->isSuper() === ($name === 'setup')
+                    && \OSS_Auth_Password::verify(WorkflowHarness::PASSWORD, $admin->requiredPassword(), ['pwhash' => 'crypt:sha512'])
+                    : $created === []);
+        }
+        if ($name === 'setup') {
+            $versions = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\DatabaseVersion));
+            $version = $versions[0] ?? null;
+            $check($name . '/' . $mode . ': accepted setup persists the database version',
+                $success ? count($versions) === 1 && $version instanceof \Entities\DatabaseVersion
+                    && $version->getVersion() === \ViMbAdmin_Version::DBVERSION
+                    && $version->getName() === \ViMbAdmin_Version::DBVERSION_NAME
+                    : $versions === []);
+        }
+        if ($name === 'mailbox-add') {
+            $created = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\Mailbox));
+            $mailbox = $created[0] ?? null;
+            $check($name . '/' . $mode . ': accepted request persists the expected mailbox',
+                $success ? count($created) === 1 && $mailbox instanceof \Entities\Mailbox
+                    && $mailbox->getUsername() === 'new@example.test' && $mailbox->getLocalPart() === 'new'
+                    && $mailbox->getDomain() === $h->domain && $mailbox->getName() === 'New'
+                    && $mailbox->getQuota() === 1024 && $mailbox->getAltEmail() === 'alternate@example.test'
+                    && $mailbox->getActive() === true && $mailbox->getDeletePending() === false
+                    && \OSS_Auth_Password::verify(WorkflowHarness::PASSWORD, $mailbox->requiredPassword(), ['pwhash' => 'crypt:sha512'])
+                    : $created === []);
+        }
+        if ($name === 'mailbox-edit') {
+            $check($name . '/' . $mode . ': mailbox fields follow the accepted request',
+                $h->mailbox->getName() === ($success ? 'Edited' : null)
+                && $h->mailbox->getQuota() === ($success ? 2048 : 0)
+                && $h->mailbox->getAltEmail() === ($success ? 'edited@example.test' : null));
+        }
         if ($action === 'password') {
             $target = $controller === 'admin' ? $h->target : $h->mailbox;
             $check($name . '/' . $mode . ': password mutation matches the accepted request',
@@ -97,9 +136,14 @@ foreach ($contracts as $name => [$controller, $action, $params, $removedFields, 
             $alias = $h->alias;
             if ($action === 'add' && $success) {
                 $created = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\Alias));
-                $check($name . '/' . $mode . ': alias created', count($created) === 1);
-                $alias = $created[0];
+                $candidate = $created[0] ?? null;
+                $check($name . '/' . $mode . ': expected alias created', count($created) === 1
+                    && $candidate instanceof \Entities\Alias && $candidate->getAddress() === 'new@example.test'
+                    && $candidate->getDomain() === $h->domain);
+                $alias = $candidate instanceof \Entities\Alias ? $candidate : $h->alias;
             }
+            $check($name . '/' . $mode . ': alias destination follows the accepted request',
+                $alias->getGoto() === ($success ? 'new@example.test' : 'old@example.test'));
             $check($name . '/' . $mode . ': alias AdditionalInfo never writes preferences',
                 $action === 'add' && $success ? $alias->getPreferences()->isEmpty()
                     : $alias->getPreference('xpiInfo.department') === 'existing-alias-value');

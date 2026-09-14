@@ -276,7 +276,11 @@ $anonymous = logController(
 );
 $check('anonymous list redirects to login without touching Doctrine',
     redirectEndsWith($anonymous->listAction(), '/auth/login'));
-$check('anonymous list-data returns ko without touching Doctrine', $anonymous->listDataAction()->body === 'ko');
+$anonymousDataResponse = $anonymous->listDataAction();
+$check('anonymous list-data returns the JSON expiry contract without touching Doctrine',
+    $anonymousDataResponse->status === 401
+    && $anonymousDataResponse->contentType === 'application/json; charset=utf-8'
+    && $anonymousDataResponse->body === '{"error":"Authentication required"}');
 
 $self = new LogControllerTestAdmin(7, false);
 $selfLog = new LogControllerTestLogRepository([['action' => 'login']]);

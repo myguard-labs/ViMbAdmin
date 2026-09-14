@@ -622,6 +622,10 @@ function vmDataTableServerData( source, minimum )
             url: source, type: settings.serverMethod || 'GET',
             dataType: 'json', cache: false, data: data, success: callback,
             error: function(xhr, error) {
+                if (vmDataTableAuthenticationExpired(xhr)) {
+                    vmDataTableRedirectToLogin(source);
+                    return;
+                }
                 var event = DataTable.Dom.select(api.table().node()).trigger(
                     'xhr.dt', true, [settings, null, xhr], { dt: settings.api }, true)[0];
                 try {
@@ -638,6 +642,27 @@ function vmDataTableServerData( source, minimum )
             }
         });
     };
+}
+
+/** Accept only the server's explicit JSON authentication-expiry contract. */
+function vmDataTableAuthenticationExpired( xhr )
+{
+    if (xhr.status !== 401 || !/\bapplication\/json\b/i.test(xhr.getResponseHeader('Content-Type') || '')) {
+        return false;
+    }
+    try {
+        var body = JSON.parse(xhr.responseText);
+        return body !== null && typeof body === 'object' && !Array.isArray(body)
+            && body.error === 'Authentication required';
+    }
+    catch (error) {
+        return false;
+    }
+}
+
+function vmDataTableRedirectToLogin( source )
+{
+    window.location.assign(new URL('../auth/login', new URL(source, document.baseURI)).href);
 }
 
 /** Restore only usable lengths; older cookies may contain null or bad JSON values. */

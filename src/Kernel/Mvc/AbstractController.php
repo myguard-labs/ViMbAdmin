@@ -208,6 +208,12 @@ abstract class AbstractController
         );
     }
 
+    /** Consistent response for an expired DataTables session. */
+    protected function dataTableAuthenticationRequired(): Response
+    {
+        return $this->json(['error' => 'Authentication required'], 401);
+    }
+
     /**
      * A 302 redirect to an application path (the native equivalent of the ZF1
      * `_redirect()` / `redirectAndEnsureDie()`). The path is application-relative

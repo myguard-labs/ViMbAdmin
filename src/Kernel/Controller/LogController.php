@@ -92,7 +92,9 @@ final class LogController extends AbstractController
     {
         $scope = $this->resolveScope();
         if ($scope instanceof Response) {
-            return new Response('ko');
+            return str_ends_with($scope->headers['Location'] ?? '', '/auth/login')
+                ? $this->dataTableAuthenticationRequired()
+                : new Response('ko');
         }
         [$targetAdmin, $domain] = $scope;
 

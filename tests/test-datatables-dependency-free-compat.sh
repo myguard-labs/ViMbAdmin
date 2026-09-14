@@ -404,6 +404,42 @@ vmReady(function() {
         if (sent.order[0].column !== 2 || sent.order[0].dir !== 'desc') return false;
         return sent === request;
     });
+    check('idle-session DataTables redraw redirects only for the JSON expiry contract', function() {
+        var table = new DataTable('#table');
+        var originalAjax = ossAjax;
+        var originalRedirect = vmDataTableRedirectToLogin;
+        var transport, redirects = 0, diagnostics = 0;
+        try {
+            ossAjax = function(options) { transport = options; return {}; };
+            vmDataTableRedirectToLogin = function() { redirects++; };
+            DataTable.ext.errMode = function() { diagnostics++; };
+            vmDataTableServerData('/expired', 3)(
+                { draw: 1, search: { value: '' } }, function() {}, table.settings()[0]);
+            transport.error({
+                status: 401, readyState: 4,
+                responseText: location.hash === '#auth-expiry-html'
+                    ? '<html><body>Login</body></html>'
+                    : '{"error":"Authentication required"}',
+                getResponseHeader: function() {
+                    return location.hash === '#auth-expiry-html'
+                        ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8';
+                }
+            }, 'error');
+            if (redirects !== 1 || diagnostics !== 0) return false;
+
+            transport.error({
+                status: 401, readyState: 4, responseText: '<html><body>Login</body></html>',
+                getResponseHeader: function() { return 'text/html; charset=utf-8'; }
+            }, 'parsererror');
+            return redirects === 1 && diagnostics === 1;
+        }
+        finally {
+            ossAjax = originalAjax;
+            vmDataTableRedirectToLogin = originalRedirect;
+            DataTable.ext.errMode = 'alert';
+            table.destroy();
+        }
+    });
     check('DataTables 3 errors preserve diagnostics and native cancellation', function() {
         var tableNode = document.createElement('table');
         tableNode.innerHTML = '<thead><tr><th>Name</th></tr></thead>';
@@ -1030,6 +1066,7 @@ case "$mutation" in
   fi
   expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
   expect_fail 'DataTables transition completion callbacks' run_mode development '#transition-completion-disabled'
+  expect_fail 'malformed HTML authentication-expiry response' run_mode development '#auth-expiry-html'
   ;;
 warning)
   run_mode development '#warning-trigger'
@@ -1068,6 +1105,9 @@ legacy-wire-key)
   ;;
 transition-completion-disabled)
   run_mode development '#transition-completion-disabled'
+  ;;
+auth-expiry-html)
+  run_mode development '#auth-expiry-html'
   ;;
 native-get-serialize|native-get-cache-buster|native-get-304)
   run_mode development

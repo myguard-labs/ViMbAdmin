@@ -361,7 +361,7 @@ final class MailboxController extends AbstractController
     {
         $admin = $this->admin();
         if ($admin === null) {
-            return new Response('ko');
+            return $this->dataTableAuthenticationRequired();
         }
 
         $domain = $this->session()->domain ?? null;

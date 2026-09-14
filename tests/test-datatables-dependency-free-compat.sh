@@ -1126,7 +1126,7 @@ transition-completion-disabled)
 auth-expiry-html)
   run_mode development '#auth-expiry-html'
   ;;
-native-get-serialize|native-get-cache-buster|native-get-304|auth-login-relative)
+native-get-serialize | native-get-cache-buster | native-get-304 | auth-login-relative)
   run_mode development
   ;;
 *)

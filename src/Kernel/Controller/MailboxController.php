@@ -651,8 +651,8 @@ final class MailboxController extends AbstractController
      *
      * The form is the framework-free {@see Form}: the base mailbox fields plus
      * native plugin sections appended by the {@see FormPluginHost}, including
-     * AccessPermissions, AdditionalInfo, and DirectoryEntry. Welcome and settings
-     * email delivery is owned by the native mailer.
+     * AccessPermissions, AdditionalInfo, and DirectoryEntry. Settings-email
+     * delivery is native; create-time welcome email remains intentionally removed.
      *
      * On POST it validates the base form, then the plugin sections
      * ({@see FormPluginHost::validate}), resolves + authorises the chosen domain,

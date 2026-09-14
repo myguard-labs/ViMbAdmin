@@ -66,11 +66,10 @@ optional cron left is the panel's own queue-runner.
 - **Doctrine ORM 2.8 → 3.x** (orm 3.6 / dbal 4) + persistence 4. CLI and query
   API rewritten; the ORM 3 jump needed native lazy-loading proxies
   (`enableNativeLazyObjects`), PSR-6 caches and an `object`-type shim.
-- **Cache layer rebuilt on Symfony Cache.** `doctrine/cache` 2.x dropped the old
-  concrete `*Cache` providers, so the metadata/query cache wraps a Symfony PSR-6
-  pool (`ArrayAdapter` / `ApcuAdapter` / `RedisAdapter`) in `DoctrineProvider` —
-  backend picked in `application.ini`. The Docker image ships **APCu** + tuned
-  **OPcache**.
+- **Cache layer rebuilt on Symfony Cache.** ORM metadata, query, and result
+  caches use Symfony PSR-6 pools (`ArrayAdapter` / `ApcuAdapter` /
+  `RedisAdapter`) directly — backend picked in `application.ini`. The Docker
+  image ships **APCu** + tuned **OPcache**.
 
 ---
 

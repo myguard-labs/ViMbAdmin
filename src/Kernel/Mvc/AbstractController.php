@@ -288,8 +288,8 @@ abstract class AbstractController
      * `mailbox/email/`, the native equivalent of
      * `OSS_Controller_Trait_Auth::resolveTemplate()`) and ajax-loaded partials
      * (e.g. the mailbox email-settings modal). It only assigns the caller's
-     * variables; `{genUrl}` still works (it reads the front-controller base URL
-     * set up at the entry point).
+     * variables; `{genUrl}` still works because Bootstrap configures the OSS
+     * base URL.
      *
      * @param string              $script template path, e.g. "auth/email/html/lost-password.phtml"
      * @param array<string,mixed> $vars   template variables

@@ -94,9 +94,8 @@ final class Bootstrap
      * @param string $appPath the application directory (`APPLICATION_PATH`),
      *               holding `configs/application.ini`
      * @param string $env     the application environment / config section
-     * @param string $authNs  the session namespace the legacy auth layer stored
-     *               the identity under (passed from the entry point so this
-     *               framework-free class never names it)
+     * @param string $authNs  the current session namespace holding the auth
+     *               identity
      */
     public static function boot(string $appPath, string $env, string $authNs): Container
     {
@@ -112,11 +111,7 @@ final class Bootstrap
         if (session_status() !== PHP_SESSION_ACTIVE && PHP_SAPI !== 'cli') {
             self::configureSession($options);
             self::startSession();
-            $legacyAuthNamespace = 'Zend' . '_Auth';
-            if (isset($_SESSION[$legacyAuthNamespace]) && !isset($_SESSION['ViMbAdmin_Auth'])) {
-                $_SESSION['ViMbAdmin_Auth'] = $_SESSION[$legacyAuthNamespace];
-                unset($_SESSION[$legacyAuthNamespace]);
-            }
+            $_SESSION = self::migrateAuthNamespace($_SESSION, true);
         }
 
         $em = EntityManagerFactory::create($options);
@@ -138,6 +133,25 @@ final class Bootstrap
         \OSS_Runtime::configure($options, self::baseUrl($options), $em);
 
         return new Container($resources, $auth, ['skinCss' => self::skinCss($appPath, $options)]);
+    }
+
+    /**
+     * @param array<array-key,mixed> $session
+     * @return array<array-key,mixed>
+     */
+    private static function migrateAuthNamespace(array $session, bool $activeWebSession): array
+    {
+        if (!$activeWebSession) {
+            return $session;
+        }
+
+        $legacyAuthNamespace = 'Zend' . '_Auth';
+        if (isset($session[$legacyAuthNamespace]) && !isset($session['ViMbAdmin_Auth'])) {
+            $session['ViMbAdmin_Auth'] = $session[$legacyAuthNamespace];
+            unset($session[$legacyAuthNamespace]);
+        }
+
+        return $session;
     }
 
     private static function startSession(): void

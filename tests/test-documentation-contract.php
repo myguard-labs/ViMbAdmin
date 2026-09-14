@@ -3,11 +3,17 @@
 declare(strict_types=1);
 
 $root = dirname(__DIR__);
-$lock = json_decode((string) file_get_contents($root . '/composer.lock'), true, 512, JSON_THROW_ON_ERROR);
+$decoded = json_decode((string) file_get_contents($root . '/composer.lock'), true, 512, JSON_THROW_ON_ERROR);
+if (!is_array($decoded)) {
+    throw new RuntimeException('composer.lock must decode to an object.');
+}
+/** @var array{packages?: list<array{name?: mixed, version?: mixed}>} $lock */
+$lock = $decoded;
+/** @var array<string,string> $versions */
 $versions = [];
 foreach ($lock['packages'] ?? [] as $package) {
-    if (isset($package['name'], $package['version'])) {
-        $versions[$package['name']] = ltrim((string) $package['version'], 'v');
+    if (is_string($package['name'] ?? null) && is_string($package['version'] ?? null)) {
+        $versions[$package['name']] = ltrim($package['version'], 'v');
     }
 }
 
@@ -46,3 +52,4 @@ foreach ($stale as $file => $claim) {
 }
 
 echo "OK: documentation matches shipped ownership and configuration.\n";
+echo "ALL PASSED\n";

@@ -662,7 +662,22 @@ function vmDataTableAuthenticationExpired( xhr )
 
 function vmDataTableRedirectToLogin( source )
 {
-    window.location.assign(new URL('../auth/login', new URL(source, document.baseURI)).href);
+    window.location.assign(vmDataTableLoginUrl(source));
+}
+
+/** Derive the application root from a generated controller/list-data URL. */
+function vmDataTableLoginUrl( source )
+{
+    var endpoint = new URL(source, document.baseURI);
+    var loginPath = endpoint.pathname.replace(
+        /\/[^/]+\/list-data(?:\/.*)?$/,
+        '/auth/login'
+    );
+    if (loginPath === endpoint.pathname) loginPath = '/auth/login';
+    endpoint.pathname = loginPath;
+    endpoint.search = '';
+    endpoint.hash = '';
+    return endpoint.href;
 }
 
 /** Restore only usable lengths; older cookies may contain null or bad JSON values. */

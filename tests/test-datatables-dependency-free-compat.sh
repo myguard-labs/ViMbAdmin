@@ -56,6 +56,10 @@ native-get-304)
   perl -pi -e 's/xhr\.status < 300 \|\| xhr\.status === 304/xhr.status < 300/' "$tmp/990-vimbadmin.js"
   grep -qF "finish(xhr.status >= 200 && xhr.status < 300 ? 'success' : 'error')" "$tmp/990-vimbadmin.js"
   ;;
+auth-login-relative)
+  perl -pi -e "s/return endpoint\.href;/return new URL('..\/auth\/login', new URL(source, document.baseURI)).href;/" "$tmp/990-vimbadmin.js"
+  grep -qF "return new URL('../auth/login', new URL(source, document.baseURI)).href;" "$tmp/990-vimbadmin.js"
+  ;;
 esac
 if [[ -n ${VIMBADMIN_MUTATION_ARTIFACT:-} ]]; then
   cp "$tmp/990-vimbadmin.js" "$VIMBADMIN_MUTATION_ARTIFACT"
@@ -440,6 +444,12 @@ vmReady(function() {
             DataTable.ext.errMode = originalErrorMode;
             table.destroy();
         }
+    });
+    check('DataTables expiry login keeps nested application roots and ignores Alias path parameters', function() {
+        return vmDataTableLoginUrl('/vimbadmin/alias/list-data/ima/0?draw=7')
+                === location.origin + '/vimbadmin/auth/login'
+            && vmDataTableLoginUrl('/domain/list-data?draw=8')
+                === location.origin + '/auth/login';
     });
     check('DataTables 3 errors preserve diagnostics and native cancellation', function() {
         var tableNode = document.createElement('table');
@@ -1068,6 +1078,12 @@ case "$mutation" in
   expect_fail 'legacy server-side wire key' run_mode development '#legacy-wire-key'
   expect_fail 'DataTables transition completion callbacks' run_mode development '#transition-completion-disabled'
   expect_fail 'malformed HTML authentication-expiry response' run_mode development '#auth-expiry-html'
+  if VIMBADMIN_MUTATION=auth-login-relative bash tests/test-datatables-dependency-free-compat.sh >"$tmp/auth-login-relative.log" 2>&1; then
+    echo 'FAIL: relative-login control passed; Alias path parameters were not exercised' >&2
+    exit 1
+  fi
+  grep -qF 'DataTables expiry login keeps nested application roots and ignores Alias path parameters' \
+    "$tmp/auth-login-relative.log"
   ;;
 warning)
   run_mode development '#warning-trigger'
@@ -1110,7 +1126,7 @@ transition-completion-disabled)
 auth-expiry-html)
   run_mode development '#auth-expiry-html'
   ;;
-native-get-serialize|native-get-cache-buster|native-get-304)
+native-get-serialize|native-get-cache-buster|native-get-304|auth-login-relative)
   run_mode development
   ;;
 *)

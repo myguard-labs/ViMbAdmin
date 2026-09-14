@@ -440,7 +440,7 @@ isn't cold:
   class …` notices for Doctrine console/annotation classes are expected and
   harmless.)
 - **Doctrine metadata/query cache.** Without a persistent cache Doctrine
-  re-parses the XML entity mappings on **every request**.
+  re-reads the attribute entity mappings on **every request**.
 
   Docker defaults to **`ApcuCache`**. For a single container APCu beats Redis
   (in-process, no socket); reach for Redis only across multiple replicas that

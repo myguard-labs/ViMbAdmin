@@ -29,7 +29,8 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * `ViMbAdmin_Service_Archive` (no plugin hooks, so no callback threading).
  * `delete` removes the backup files via the doveadm HTTP API
  * ({@see \ViMbAdmin_Doveadm}) and then the archive row. `restore` recreates a
- * missing mailbox from its snapshot, syncs the backup, and enqueues repair.
+ * missing mailbox from its snapshot, syncs the backup, and attempts to enqueue
+ * repair as a best-effort follow-up.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

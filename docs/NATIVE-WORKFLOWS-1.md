@@ -34,7 +34,8 @@ token-based login.
 
 Legacy `/auth/setup` automatically emailed the initial administrator's username
 and plaintext password after creation; its form had no welcome-email checkbox.
-Native v1 creates the account and initializes the schema without that message.
+Native v1 creates the account and seeds the database-version record without
+that message.
 Record the credentials during setup and retain them securely; do not wait for a
 confirmation email.
 

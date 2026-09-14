@@ -25,8 +25,8 @@ namespace ViMbAdmin\Kernel\Session;
  *     `$session->flashMessages` — same `$_SESSION['Application'][...]` keys);
  *   - the Auth bridge uses
  *     `new MagicPropertyStorage(new SessionNamespace('ViMbAdmin_Auth'))` for
- *     its `storage` identity slot. Bootstrap first migrates a pre-existing
- *     `Zend_Auth` slot when the current namespace is absent.
+ *     its `storage` identity slot. Bootstrap first migrates the former
+ *     authentication slot when the current namespace is absent.
  *
  * Like {@see NativeSessionStorage}, starting the PHP session is the caller's
  * responsibility (the native bootstrap does it once); this class only reads and

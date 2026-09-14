@@ -60,34 +60,16 @@
 //
 //   php bin/minify-bundle.php --version 18
 //
-// bin/minify-bundle.php is the repo-owned driver and the ONLY supported entry
-// point. Do NOT invoke vendor/opensolutions/minify/minify.php directly: it
-// expands the $js_files / $css_files globs below only after require_once()ing
-// this file, so there is no post-glob hook and every NNN-prefixed file on disk
-// is bundled AND written into the header .phtml files -- which re-ships the
-// dead Chosen and Colorbox assets and silently reverts PR #180. The driver
-// substitutes the explicit list in bin/minify-bundle-files.php for the glob and
-// reproduces everything else this file configures.
-//
-// One trap survives: --version takes the bare number ('18'), because the 'v'
-// prefix is added for you. The driver does honour --js-only and --css-only
-// (this file resets $whatToCompress below, which is why they never worked
-// through the vendor entry point; the driver re-applies the command line after
-// loading it).
-
-// By default, compress both JS and CSS - can be over ridden by the command line
-$whatToCompress = 'all';
+// bin/minify-bundle.php is the only supported entry point. It reads the
+// explicit input lists from bin/minify-bundle-files.php and rejects assets that
+// are neither bundled nor excluded. --version takes the bare number ('18'),
+// and --js-only / --css-only select a single output lane.
 
 // by default, be quiet
 $verbose = true;
 
 // We use APPLICATION_PATH as per the Zend framework. Feel free to remove as it's only used for the paths defined below here
 defined( 'APPLICATION_PATH' ) || define( 'APPLICATION_PATH', realpath( __DIR__ . '/../application' ) );
-// bin/minify-bundle.php defines this for normal use; keep the config loadable on
-// its own as well (for validation and custom runners).
-defined( 'SCRIPTDIR' ) || define( 'SCRIPTDIR', __DIR__ );
-
-
 /////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////
 //
@@ -99,7 +81,7 @@ defined( 'SCRIPTDIR' ) || define( 'SCRIPTDIR', __DIR__ );
 // mode. This also accepts the ES6 target of DataTables 3 and the first-party
 // browser APIs. The output is tested in Chromium, Firefox and WebKit.
 // The per-machine build prerequisites live next to this file in bin/, so they
-// are anchored on __DIR__ rather than SCRIPTDIR.
+// are anchored on __DIR__.
 // --charset UTF-8: Closure Compiler's own default is "accept UTF-8 as input,
 // emit US-ASCII (with \uXXXX escapes) as output". That silently mangles any
 // non-ASCII byte a vendored source legitimately carries -- e.g. the "©" in
@@ -122,15 +104,6 @@ if( ( !defined( 'VIMBADMIN_MINIFY_LANE' ) || VIMBADMIN_MINIFY_LANE !== 'css' )
     exit( 1 );
 }
 
-
-// JavaScript files to compress.
-//
-// NOTE: this glob no longer selects the bundle. bin/minify-bundle.php takes its
-// inputs from the explicit list in bin/minify-bundle-files.php and uses a glob
-// only to reconcile that list against the tree, so an asset that is in neither
-// the bundled nor the excluded list is rejected instead of shipped. The
-// variable is retained because the vendor entry point requires it to exist.
-$js_files = APPLICATION_PATH . '/../public/js/[0-9][0-9][0-9]-*.js';
 
 // stick the files here
 $js_dest = APPLICATION_PATH . '/../public/js';
@@ -272,11 +245,6 @@ if( ( !defined( 'VIMBADMIN_MINIFY_LANE' ) || VIMBADMIN_MINIFY_LANE !== 'js' ) &&
 // one rule per line so the shipped bundle stays diffable and reviewable.
 $cleancss_command = is_string( $cleancss_real ) ? $cleancss_real : $cleancss_bin;
 $css_compiler = escapeshellarg( $cleancss_command ) . ' -O2 --format keep-breaks';
-
-// CSS files to compress. As with $js_files above, this glob no longer selects
-// the bundle: bin/minify-bundle-files.php does, and the glob is only the
-// reconciliation set.
-$css_files = APPLICATION_PATH . '/../public/css/[0-9][0-9][0-9]-*.css';
 
 // stick the files here
 $css_dest = APPLICATION_PATH . '/../public/css';

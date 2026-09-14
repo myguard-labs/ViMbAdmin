@@ -70,6 +70,9 @@ jobs:
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
 
+      - name: Bundle resolver preserves inherited shell options
+        run: bash tests/test-resolve-bundle-v.sh
+
       - name: Smarty 5 JS-template escaping (alias [+] button regression)
         run: bash tests/lint-template-escaping.sh
 

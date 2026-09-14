@@ -408,6 +408,7 @@ vmReady(function() {
         var table = new DataTable('#table');
         var originalAjax = ossAjax;
         var originalRedirect = vmDataTableRedirectToLogin;
+        var originalErrorMode = DataTable.ext.errMode;
         var transport, redirects = 0, diagnostics = 0;
         try {
             ossAjax = function(options) { transport = options; return {}; };
@@ -436,7 +437,7 @@ vmReady(function() {
         finally {
             ossAjax = originalAjax;
             vmDataTableRedirectToLogin = originalRedirect;
-            DataTable.ext.errMode = 'alert';
+            DataTable.ext.errMode = originalErrorMode;
             table.destroy();
         }
     });

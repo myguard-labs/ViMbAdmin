@@ -326,6 +326,11 @@ $deniedController = logController(
 );
 $check('non-super admin cannot select another admin scope',
     redirectEndsWith($deniedController->listAction(), '/auth/login'));
+$deniedDataResponse = $deniedController->listDataAction();
+$check('non-super list-data authorization denial is not session expiry',
+    $deniedDataResponse->status === 200
+    && $deniedDataResponse->contentType === 'text/html; charset=utf-8'
+    && $deniedDataResponse->body === 'ko');
 
 $missingAdminController = logController(
     logEntityManager(['Entities\\Admin' => new LogControllerTestAdminRepository(null)]),

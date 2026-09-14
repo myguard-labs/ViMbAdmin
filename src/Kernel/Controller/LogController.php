@@ -57,7 +57,7 @@ final class LogController extends AbstractController
      */
     public function listAction(): Response
     {
-        $scope = $this->resolveScope();
+        $scope = $this->resolveScope($this->admin());
         if ($scope instanceof Response) {
             return $scope;
         }
@@ -90,11 +90,14 @@ final class LogController extends AbstractController
      */
     public function listDataAction(): Response
     {
-        $scope = $this->resolveScope();
+        $admin = $this->admin();
+        if ($admin === null) {
+            return $this->dataTableAuthenticationRequired();
+        }
+
+        $scope = $this->resolveScope($admin);
         if ($scope instanceof Response) {
-            return str_ends_with($scope->headers['Location'] ?? '', '/auth/login')
-                ? $this->dataTableAuthenticationRequired()
-                : new Response('ko');
+            return new Response('ko');
         }
         [$targetAdmin, $domain] = $scope;
 
@@ -140,9 +143,8 @@ final class LogController extends AbstractController
      *
      * @return array{0: \Entities\Admin|null, 1: \Entities\Domain|null}|Response
      */
-    private function resolveScope(): array|Response
+    private function resolveScope(?Admin $admin): array|Response
     {
-        $admin = $this->admin();
         if ($admin === null) {
             return $this->redirect('auth/login');
         }

@@ -21,6 +21,12 @@ Read the whole plan before starting. The three phases are ordered: **back up and
 migrate the database first**, then **swap the config**, then **retire the legacy
 scripts and point Dovecot at the new integration**.
 
+For upgrades from the 4.0.0 tag or an earlier framework-based build, also read
+[native workflow contract v1](NATIVE-WORKFLOWS-1.md). Remember-me login,
+welcome/password emails, and alias AdditionalInfo editing were removed during
+the native migration. Application version `4.0.0` alone does not distinguish
+these builds; that contract lists the affected forms and operator replacements.
+
 ---
 
 ## Minimum requirements

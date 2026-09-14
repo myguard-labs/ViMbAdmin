@@ -8,6 +8,9 @@
 
 *Virtual Mailbox Administration that runs on a PHP version released this decade.*
 
+Upgrading from the 4.0.0 tag? Read [native workflow contract v1](docs/NATIVE-WORKFLOWS-1.md)
+for removed login, email, and alias-metadata workflows and their replacements.
+
 [![CI](https://github.com/myguard-labs/ViMbAdmin/actions/workflows/ci.yml/badge.svg)](https://github.com/myguard-labs/ViMbAdmin/actions/workflows/ci.yml)
 [![Regression](https://github.com/myguard-labs/ViMbAdmin/actions/workflows/regression.yml/badge.svg)](https://github.com/myguard-labs/ViMbAdmin/actions/workflows/regression.yml)
 [![Static analysis](https://github.com/myguard-labs/ViMbAdmin/actions/workflows/static-analysis.yml/badge.svg)](https://github.com/myguard-labs/ViMbAdmin/actions/workflows/static-analysis.yml)

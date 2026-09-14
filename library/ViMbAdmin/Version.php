@@ -57,6 +57,9 @@ final class ViMbAdmin_Version
      */
     const VERSION = '4.0.0';
 
+    /** Native UI workflow compatibility; see docs/NATIVE-WORKFLOWS-1.md. */
+    const NATIVE_WORKFLOW_CONTRACT = 'native-workflows/1';
+
     /**
      * Upstream GitHub repository (owner/repo) for the Maintenance update checks.
      */

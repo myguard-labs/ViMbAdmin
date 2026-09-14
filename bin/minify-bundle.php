@@ -16,17 +16,15 @@
  * rebuilt from the same glob. See bin/minify-bundle-files.php for the concrete
  * regression that caused (Chosen and Colorbox, PR #180).
  *
- * `vendor/` is untracked and Composer-pinned (`opensolutions/minify: 1.*`), so
- * it cannot be patched. This driver lives in the repository instead and needs
- * no vendor change: it reproduces minify.php's behaviour step for step and only
- * substitutes an explicit input list for the glob.
+ * This repository-owned driver preserves minify.php's build sequence while
+ * substituting an explicit input list for the glob and supporting single JS or
+ * CSS output lanes; it has no Composer dependency on the retired vendor tool.
  *
- * bin/minify-options.php is still the single source of truth for everything
- * else -- the compiler command lines, the clean-css presence check, the
+ * bin/minify-options.php is still the single source of truth for the compiler
+ * command lines, the clean-css presence check, the
  * destination directories, the {genUrl} prefixes and the hand-written
  * $mini_*_conditional_* header fragments (including the $skinCss block).
- * It is required here, unmodified,
- * rather than duplicated; only its $js_files / $css_files globs are ignored.
+ * It is required here rather than duplicated.
  *
  * Usage:
  *
@@ -36,9 +34,7 @@
  *     php bin/minify-bundle.php --print-inputs
  *
  * --version takes the BARE number ('18'); the 'v' prefix is added for you, as
- * it was by minify.php. Unlike minify.php, --js-only and --css-only are honoured
- * (the old config reset $whatToCompress after argument parsing, so --js-only
- * silently regenerated CSS too).
+ * it was by minify.php. --js-only and --css-only select one output lane.
  *
  * --print-inputs resolves and prints the input lists and exits without
  * minifying anything, so the list can be asserted without Java or clean-css
@@ -224,8 +220,8 @@ function vimbadminLoadBundleFileLists(string $path): array
 /**
  * Load bin/minify-options.php and return the settings this driver consumes.
  *
- * The config file assigns loose local variables (it predates this driver and is
- * shared with the vendor entry point), so it is loaded inside this function --
+ * The config file assigns loose local variables, so it is loaded inside this
+ * function --
  * both to keep those variables out of the driver's scope and to convert them
  * into one validated, typed structure. Its loud clean-css exit(1) fires here,
  * unchanged.
@@ -492,8 +488,8 @@ if ($version === null || preg_match('/^[0-9]+$/', $version) !== 1) {
 // bin/minify-options.php supplies the compilers, destinations, URL prefixes and
 // the hand-written header fragments. It also performs the loud clean-css check
 // and exit(1)s when it is absent -- that behaviour is deliberately inherited,
-// not re-implemented. It defines APPLICATION_PATH and SCRIPTDIR itself when
-// they are not already defined.
+// not re-implemented. It defines APPLICATION_PATH when it is not already
+// defined.
 try {
     define('VIMBADMIN_MINIFY_LANE', $whatToCompress);
     $options = vimbadminLoadMinifyOptions(__DIR__ . '/minify-options.php');
@@ -512,9 +508,6 @@ $say = static function (string $message) use ($verbose): void {
 $jsRow = "    <script type=\"text/javascript\" src=\"%s/%s\"></script>\n";
 $cssRow = "    <link rel=\"stylesheet\" type=\"text/css\" href=\"%s/%s\" />\n";
 
-// minify-options.php resets $whatToCompress unconditionally, which is why the
-// vendor entry point's --js-only never worked: it parsed the command line
-// BEFORE loading the config. Here the command line is applied after.
 if ($whatToCompress === 'all' || $whatToCompress === 'js') {
     vimbadminBuildBundle('js', $jsInputs, '--js_output_file', $jsRow, $options['js'], $version, $say);
 }

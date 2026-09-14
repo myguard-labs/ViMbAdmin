@@ -239,6 +239,11 @@ workflow_has_unconditional_owner_step "$regression_workflow" command \
   printf 'Regression workflow does not invoke the unit test runner.\n' >&2
   exit 1
 }
+workflow_has_unconditional_owner_step "$regression_workflow" command \
+  'bash tests/test-resolve-bundle-v.sh' || {
+  printf 'Regression workflow does not invoke the bundle resolver test.\n' >&2
+  exit 1
+}
 workflow_has_unconditional_owner_step "$static_workflow" command \
   'bash tests/run-phpstan-tests.sh' || {
   printf 'Static-analysis workflow does not invoke the PHPStan test runner.\n' >&2

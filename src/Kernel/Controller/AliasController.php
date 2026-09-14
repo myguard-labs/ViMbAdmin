@@ -20,8 +20,8 @@ use ViMbAdmin\Kernel\Security\Csrf;
 use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
 
 /**
- * Native port of `AliasController::list` + `ajaxToggleActive`
- * (docs/ZF1-REMOVAL.md).
+ * Native controller for alias list, create, edit, delete, and active-state
+ * operations.
  *
  * Reproduces the legacy `preDispatch` (for the list actions) + `listAction`: the
  * remembered/`did` domain scope is resolved into the session (`unset` clears
@@ -42,8 +42,6 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * (create/update/delete, #50) with their plugin hooks threaded over the native
  * PluginHost. (ZF1 `editAction` is a `forward('add')`; the native edit is its own
  * action.)
- *
- * The legacy controller is untouched.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -297,10 +295,8 @@ final class AliasController extends AbstractController
     /**
      * GET|POST /alias/add[/did/<id>] — create an alias.
      *
-     * Native port of the create path of the ZF1 `AliasController::addAction`. Edit
-     * (`/alias/edit/alid/<id>`, a `forward('add')`) and any `add` URL carrying an
-     * `alid` stay on ZF1 via the dispatcher fallback (the `alid` guard returns
-     * null).
+     * Native create action. An `add` URL carrying an `alid` redirects to the
+     * native edit action for compatibility with the former forwarded route.
      *
      * The form is the framework-free {@see Form}: an optional `local_part` (blank
      * makes a catch-all `@domain` alias), a `domain` select scoped to the domains

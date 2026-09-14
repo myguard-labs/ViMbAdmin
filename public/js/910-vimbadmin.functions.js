@@ -129,29 +129,6 @@
 
 
     /**
-     * Generates a random password of the given length from [a-zA-Z0-9].
-     * It makes sure that the generated password contains digits, lowercase and uppercase characters.
-     *
-     * @author Roland Huszti <roland _at_ opensolutions.ie>
-     */
-    function randomPassword( pwdLength )
-    {
-        var charSet = "0123456789abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        var password = '';
-
-        while( true )
-        {
-            for( var x = 0; x < pwdLength; x++ )
-                password += charSet.charAt( Math.floor( Math.random() * charSet.length ) );
-
-            // not the same as search('[a-zA-z0-9]') !!!!
-            if ( (password.search('[a-z]') != -1) && (password.search('[A-Z]') != -1) && (password.search('[0-9]') != -1) )
-                return password;
-        }
-    }
-
-
-    /**
      * Checks if the value is a valid email address or not.
      *
      * @param string str

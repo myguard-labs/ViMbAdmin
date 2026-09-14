@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: bash tests/run-unit-tests.sh
+      - run: bash tests/test-resolve-bundle-v.sh
   cache:
     runs-on: ubuntu-latest
     steps:
@@ -323,6 +324,20 @@ run_guard
   exit 1
 }
 grep -qF 'Regression workflow does not invoke the unit test runner.' \
+  "$test_root/output" || {
+  cat "$test_root/output" >&2
+  exit 1
+}
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i 's|bash tests/test-resolve-bundle-v.sh|echo disabled # tests/test-resolve-bundle-v.sh|' \
+  "$test_root/.github/workflows/regression.yml"
+run_guard
+[[ $guard_status -ne 0 ]] || {
+  printf 'Coverage guard accepted a disabled bundle resolver test.\n' >&2
+  exit 1
+}
+grep -qF 'Regression workflow does not invoke the bundle resolver test.' \
   "$test_root/output" || {
   cat "$test_root/output" >&2
   exit 1

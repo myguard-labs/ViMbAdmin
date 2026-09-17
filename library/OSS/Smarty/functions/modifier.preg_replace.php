@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -57,7 +58,7 @@
  * @param string $replace Replacement string
  * @return string
  */
-function smarty_modifier_preg_replace( $string, $search, $replace )
+function smarty_modifier_preg_replace($string, $search, $replace)
 {
-    return preg_replace( $search, $replace, $string ) ?? '';
+    return preg_replace($search, $replace, $string) ?? '';
 }

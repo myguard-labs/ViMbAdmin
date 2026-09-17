@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -56,8 +57,8 @@
  * @param string $string Strint to modify
  * @return string
  */
-function smarty_modifier_intlmobile( $string )
+function smarty_modifier_intlmobile($string)
 {
-    $digits = preg_replace( "/\D/", '', $string ) ?? '';
-    return preg_replace( "/(353)(\d{2})(\d{3})(\d{4})/", "+$1 $2 $3 $4", $digits ) ?? '';
+    $digits = preg_replace("/\D/", '', $string) ?? '';
+    return preg_replace("/(353)(\d{2})(\d{3})(\d{4})/", "+$1 $2 $3 $4", $digits) ?? '';
 }

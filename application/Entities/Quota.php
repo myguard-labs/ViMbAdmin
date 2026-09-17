@@ -66,7 +66,7 @@ class Quota
      * @param string $username
      * @return Quota
      */
-    public function setUsername( $username )
+    public function setUsername($username)
     {
         $this->username = $username;
 
@@ -89,7 +89,7 @@ class Quota
      * @param integer $bytes
      * @return Quota
      */
-    public function setBytes( $bytes )
+    public function setBytes($bytes)
     {
         $this->bytes = $bytes;
 
@@ -112,7 +112,7 @@ class Quota
      * @param integer $messages
      * @return Quota
      */
-    public function setMessages( $messages )
+    public function setMessages($messages)
     {
         $this->messages = $messages;
 

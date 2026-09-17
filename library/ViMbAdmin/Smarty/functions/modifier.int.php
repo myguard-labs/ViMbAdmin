@@ -41,10 +41,11 @@
  * @package ViMbAdmin
  * @subpackage Smarty_Functions
  */
-function smarty_modifier_int( mixed $input ): int
+function smarty_modifier_int(mixed $input): int
 {
-    if( !is_scalar( $input ) && $input !== null )
-        throw new TypeError( 'Integer modifier requires a scalar or null value.' );
+    if (!is_scalar($input) && $input !== null) {
+        throw new TypeError('Integer modifier requires a scalar or null value.');
+    }
 
     return (int) $input;
 }

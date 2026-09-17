@@ -237,7 +237,7 @@ final class MailboxController extends AbstractController
             $domainColumn ? 'domain' : null,   // Domain
             '',                                // Active (not sortable)
             '',                                // controls (not sortable)
-        ], static fn(?string $c): bool => $c !== null));
+        ], static fn (?string $c): bool => $c !== null));
 
         return ($columns[$index] ?? '') ?: 'username';
     }
@@ -536,7 +536,7 @@ final class MailboxController extends AbstractController
         $result = (new \ViMbAdmin_Service_Mailbox($this->em()))->toggleActive(
             $mailbox,
             $admin,
-            fn() => $host->notify('mailbox', 'toggleActive', 'preToggle', $context, ['active' => $mailbox->getActive()]) === true,
+            fn () => $host->notify('mailbox', 'toggleActive', 'preToggle', $context, ['active' => $mailbox->getActive()]) === true,
             function () use ($host, $context, $mailbox): void {
                 $host->notify('mailbox', 'toggleActive', 'preflush', $context, ['active' => $mailbox->getActive()]);
             },
@@ -620,7 +620,7 @@ final class MailboxController extends AbstractController
                 $mailbox,
                 $admin,
                 $deleteFiles,
-                fn() => $host->notify('mailbox', 'purge', 'preRemove', $context) !== false,
+                fn () => $host->notify('mailbox', 'purge', 'preRemove', $context) !== false,
                 function () use ($host, $context): void {
                     $host->notify('mailbox', 'purge', 'preFlush', $context);
                 },

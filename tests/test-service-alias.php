@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin_Service_Alias (docs/ZF1-REMOVAL.md, Phase 4). Pure
  * logic over a fake ObjectManager + real entities — no framework, no DB. Proves
@@ -31,19 +32,54 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     /** @var object[] */ public array $removed = [];
     public int $flushes = 0;
 
-    public function persist(object $object): void { $this->persisted[] = $object; }
-    public function remove(object $object): void { $this->removed[] = $object; }
-    public function flush(): void { $this->flushes++; }
-    public function find(string $className, mixed $id): ?object { return null; }
-    public function clear(): void {}
-    public function detach(object $object): void {}
-    public function refresh(object $object): void {}
-    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository { throw new \RuntimeException('not used'); }
-    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata { throw new \RuntimeException('not used'); }
-    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory { throw new \RuntimeException('not used'); }
-    public function initializeObject(object $obj): void {}
-    public function isUninitializedObject(mixed $value): bool { return false; }
-    public function contains(object $object): bool { return false; }
+    public function persist(object $object): void
+    {
+        $this->persisted[] = $object;
+    }
+    public function remove(object $object): void
+    {
+        $this->removed[] = $object;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
+    public function find(string $className, mixed $id): ?object
+    {
+        return null;
+    }
+    public function clear(): void
+    {
+    }
+    public function detach(object $object): void
+    {
+    }
+    public function refresh(object $object): void
+    {
+    }
+    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function initializeObject(object $obj): void
+    {
+    }
+    public function isUninitializedObject(mixed $value): bool
+    {
+        return false;
+    }
+    public function contains(object $object): bool
+    {
+        return false;
+    }
 
     public function lastLog(): ?\Entities\Log
     {
@@ -57,7 +93,7 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
 
     public function countPersisted(string $class): int
     {
-        return count(array_filter($this->persisted, static fn($o) => $o instanceof $class));
+        return count(array_filter($this->persisted, static fn ($o) => $o instanceof $class));
     }
 }
 
@@ -76,9 +112,18 @@ final class InvalidAliasHookState
 {
     private static bool $ran = false;
 
-    public static function reset(): void { self::$ran = false; }
-    public static function markRan(): void { self::$ran = true; }
-    public static function ran(): bool { return self::$ran; }
+    public static function reset(): void
+    {
+        self::$ran = false;
+    }
+    public static function markRan(): void
+    {
+        self::$ran = true;
+    }
+    public static function ran(): bool
+    {
+        return self::$ran;
+    }
 }
 
 final class TestServiceAliasHarnessState
@@ -86,13 +131,17 @@ final class TestServiceAliasHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestServiceAliasHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestServiceAliasHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestServiceAliasHarnessState::$count++; }
+    if (!$ok) {
+        TestServiceAliasHarnessState::$count++;
+    }
 }
 
-function aliasOperationThrows(string $message, \Closure $operation): bool {
+function aliasOperationThrows(string $message, \Closure $operation): bool
+{
     try {
         $operation();
     } catch (\LogicException $exception) {
@@ -124,28 +173,35 @@ $order = [];
 $result = $svc->toggleActive(
     $al,
     $actor,
-    function () use (&$order, $al): bool { $order[] = 'preToggle:' . (int) (bool) $al->getActive(); return true; },
-    function () use (&$order, $al): void { $order[] = 'preFlush:' . (int) (bool) $al->getActive(); },
-    function () use (&$order, $al): void { $order[] = 'postFlush:' . (int) (bool) $al->getActive(); },
+    function () use (&$order, $al): bool {
+        $order[] = 'preToggle:' . (int) (bool) $al->getActive();
+        return true;
+    },
+    function () use (&$order, $al): void {
+        $order[] = 'preFlush:' . (int) (bool) $al->getActive();
+    },
+    function () use (&$order, $al): void {
+        $order[] = 'postFlush:' . (int) (bool) $al->getActive();
+    },
 );
 
-check('returns the new active state (true)',  $result === true);
-check('alias is now active',                (bool) $al->getActive() === true);
-check('exactly one flush',                    $em->flushes === 1);
-check('a Log row was persisted',              $em->lastLog() instanceof \Entities\Log);
-check('log action is ACTIVATE',               $em->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_ACTIVATE);
-check('preToggle saw pre-toggle state (0)',   implode('|', $order) === 'preToggle:0|preFlush:1|postFlush:1');
-check('preFlush saw post-toggle state (1)',   implode('|', $order) === 'preToggle:0|preFlush:1|postFlush:1');
-check('postFlush saw post-toggle state (1)',  implode('|', $order) === 'preToggle:0|preFlush:1|postFlush:1');
+check('returns the new active state (true)', $result === true);
+check('alias is now active', (bool) $al->getActive() === true);
+check('exactly one flush', $em->flushes === 1);
+check('a Log row was persisted', $em->lastLog() instanceof \Entities\Log);
+check('log action is ACTIVATE', $em->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_ACTIVATE);
+check('preToggle saw pre-toggle state (0)', implode('|', $order) === 'preToggle:0|preFlush:1|postFlush:1');
+check('preFlush saw post-toggle state (1)', implode('|', $order) === 'preToggle:0|preFlush:1|postFlush:1');
+check('postFlush saw post-toggle state (1)', implode('|', $order) === 'preToggle:0|preFlush:1|postFlush:1');
 check('hook order preToggle<preFlush<postFlush', $order === ['preToggle:0', 'preFlush:1', 'postFlush:1']);
 
 // --- deactivate path -------------------------------------------------- //
 $em2 = new FakeObjectManager();
 $al2 = $mkAlias(true);
 $r2  = (new ViMbAdmin_Service_Alias($em2))->toggleActive($al2, $actor);
-check('toggle without hooks works',           $r2 === false && (bool) $al2->getActive() === false);
-check('log action is DEACTIVATE',             $em2->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_DEACTIVATE);
-check('still one flush',                      $em2->flushes === 1);
+check('toggle without hooks works', $r2 === false && (bool) $al2->getActive() === false);
+check('log action is DEACTIVATE', $em2->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_DEACTIVATE);
+check('still one flush', $em2->flushes === 1);
 
 // --- preToggle veto --------------------------------------------------- //
 $em3 = new FakeObjectManager();
@@ -153,13 +209,15 @@ $al3 = $mkAlias(true);
 $vetoed = (new ViMbAdmin_Service_Alias($em3))->toggleActive(
     $al3,
     $actor,
-    static fn(): bool => false, // a plugin vetoes
-    static function (): void { throw new \RuntimeException('preFlush must not run on veto'); },
+    static fn (): bool => false, // a plugin vetoes
+    static function (): void {
+        throw new \RuntimeException('preFlush must not run on veto');
+    },
 );
-check('veto returns null',                    $vetoed === null);
-check('veto leaves alias unchanged',        (bool) $al3->getActive() === true);
-check('veto does NOT flush',                  $em3->flushes === 0);
-check('veto writes no log',                   $em3->lastLog() === null);
+check('veto returns null', $vetoed === null);
+check('veto leaves alias unchanged', (bool) $al3->getActive() === true);
+check('veto does NOT flush', $em3->flushes === 0);
+check('veto writes no log', $em3->lastLog() === null);
 
 // --- required identity fails before hooks or mutations --------------- //
 $emInvalidToggle = new FakeObjectManager();
@@ -227,20 +285,26 @@ $alC->setAddress('info@example.com');
 $alC->setGoto('boss@example.com');
 $orderC = [];
 $created = (new ViMbAdmin_Service_Alias($emC))->create(
-    $alC, $domC, $actor,
-    function () use (&$orderC, $emC): void { $orderC[] = 'preFlush:' . $emC->flushes; },
-    function () use (&$orderC, $emC): void { $orderC[] = 'postFlush:' . $emC->flushes; },
+    $alC,
+    $domC,
+    $actor,
+    function () use (&$orderC, $emC): void {
+        $orderC[] = 'preFlush:' . $emC->flushes;
+    },
+    function () use (&$orderC, $emC): void {
+        $orderC[] = 'postFlush:' . $emC->flushes;
+    },
 );
-check('create returns the alias',             $created === $alC);
-check('create set the domain',                $alC->getDomain() === $domC);
+check('create returns the alias', $created === $alC);
+check('create set the domain', $alC->getDomain() === $domC);
 check('create passes a boolean active value', $alC->lastActiveArgument === true);
-check('create set active',                    $alC->getActive() === true);
-check('create stamped created',               $alC->getCreated() instanceof \DateTime);
-check('create persisted the alias',           in_array($alC, $emC->persisted, true));
+check('create set active', $alC->getActive() === true);
+check('create stamped created', $alC->getCreated() instanceof \DateTime);
+check('create persisted the alias', in_array($alC, $emC->persisted, true));
 check('create bumped aliasCount (addr!=goto)', (int) $domC->getAliasCount() === 5);
-check('create logged ACTION_ALIAS_ADD',       $emC->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_ADD);
-check('create flushed once',                  $emC->flushes === 1);
-check('create hook order around flush',       $orderC === ['preFlush:0', 'postFlush:1']);
+check('create logged ACTION_ALIAS_ADD', $emC->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_ADD);
+check('create flushed once', $emC->flushes === 1);
+check('create hook order around flush', $orderC === ['preFlush:0', 'postFlush:1']);
 
 // A quoted local part can legally contain markup-looking bytes. Persistence
 // must retain that valid address verbatim; HTML safety belongs to the list view.
@@ -276,8 +340,12 @@ try {
         $alE,
         $domE,
         $actor,
-        static function (): void { throw new \RuntimeException('preFlush failure'); },
-        static function () use (&$postFlushRan): void { $postFlushRan = true; },
+        static function (): void {
+            throw new \RuntimeException('preFlush failure');
+        },
+        static function () use (&$postFlushRan): void {
+            $postFlushRan = true;
+        },
     );
     check('create propagates preFlush failure', false);
 } catch (\RuntimeException $e) {
@@ -294,8 +362,8 @@ $alS  = new \Entities\Alias();
 $alS->setAddress('box@example.com');
 $alS->setGoto('box@example.com');
 (new ViMbAdmin_Service_Alias($emS))->create($alS, $domS, $actor);
-check('self-alias does NOT bump count',       (int) $domS->getAliasCount() === 7);
-check('self-alias still persisted + logged',  in_array($alS, $emS->persisted, true) && $emS->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_ADD);
+check('self-alias does NOT bump count', (int) $domS->getAliasCount() === 7);
+check('self-alias still persisted + logged', in_array($alS, $emS->persisted, true) && $emS->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_ADD);
 
 // --- update (edit): stamps modified, logs EDIT, one flush, no count ---- //
 $emU = new FakeObjectManager();
@@ -306,17 +374,22 @@ $alU->setGoto('new@example.com');
 $alU->setDomain($domU);
 $orderU = [];
 $updated = (new ViMbAdmin_Service_Alias($emU))->update(
-    $alU, $actor,
-    function () use (&$orderU, $emU): void { $orderU[] = 'preFlush:' . $emU->flushes; },
-    function () use (&$orderU, $emU): void { $orderU[] = 'postFlush:' . $emU->flushes; },
+    $alU,
+    $actor,
+    function () use (&$orderU, $emU): void {
+        $orderU[] = 'preFlush:' . $emU->flushes;
+    },
+    function () use (&$orderU, $emU): void {
+        $orderU[] = 'postFlush:' . $emU->flushes;
+    },
 );
-check('update returns the alias',             $updated === $alU);
-check('update stamped modified',              $alU->getModified() instanceof \DateTime);
-check('update logged ACTION_ALIAS_EDIT',      $emU->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_EDIT);
-check('update flushed once',                  $emU->flushes === 1);
-check('update did NOT touch aliasCount',      (int) $domU->getAliasCount() === 9);
-check('update did NOT persist (edit only)',   $emU->countPersisted(\Entities\Alias::class) === 0);
-check('update hook order around flush',       $orderU === ['preFlush:0', 'postFlush:1']);
+check('update returns the alias', $updated === $alU);
+check('update stamped modified', $alU->getModified() instanceof \DateTime);
+check('update logged ACTION_ALIAS_EDIT', $emU->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_EDIT);
+check('update flushed once', $emU->flushes === 1);
+check('update did NOT touch aliasCount', (int) $domU->getAliasCount() === 9);
+check('update did NOT persist (edit only)', $emU->countPersisted(\Entities\Alias::class) === 0);
+check('update hook order around flush', $orderU === ['preFlush:0', 'postFlush:1']);
 
 $emInvalidUpdate = new FakeObjectManager();
 $invalidUpdate = (new \Entities\Alias())->setGoto('target@example.com');
@@ -346,17 +419,25 @@ $alD->setGoto('boss@example.com');
 $alD->setDomain($domD);
 $orderD = [];
 $rd = (new ViMbAdmin_Service_Alias($emD))->delete(
-    $alD, $actor,
-    function () use (&$orderD): bool { $orderD[] = 'preRemove'; return true; },
-    function () use (&$orderD): void { $orderD[] = 'preFlush'; },
-    function () use (&$orderD): void { $orderD[] = 'postFlush'; },
+    $alD,
+    $actor,
+    function () use (&$orderD): bool {
+        $orderD[] = 'preRemove';
+        return true;
+    },
+    function () use (&$orderD): void {
+        $orderD[] = 'preFlush';
+    },
+    function () use (&$orderD): void {
+        $orderD[] = 'postFlush';
+    },
 );
-check('delete returns true',                  $rd === true);
-check('delete removed the alias',             in_array($alD, $emD->removed, true));
-check('delete decremented aliasCount',        (int) $domD->getAliasCount() === 4);
-check('delete logged ACTION_ALIAS_DELETE',    $emD->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_DELETE);
-check('delete flushed once',                  $emD->flushes === 1);
-check('delete hook order',                    $orderD === ['preRemove', 'preFlush', 'postFlush']);
+check('delete returns true', $rd === true);
+check('delete removed the alias', in_array($alD, $emD->removed, true));
+check('delete decremented aliasCount', (int) $domD->getAliasCount() === 4);
+check('delete logged ACTION_ALIAS_DELETE', $emD->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_DELETE);
+check('delete flushed once', $emD->flushes === 1);
+check('delete hook order', $orderD === ['preRemove', 'preFlush', 'postFlush']);
 
 $emInvalidDelete = new FakeObjectManager();
 $invalidDeleteDomain = $mkDomain(8);
@@ -409,8 +490,8 @@ $alDS->setAddress('box@example.com');
 $alDS->setGoto('box@example.com');
 $alDS->setDomain($domDS);
 (new ViMbAdmin_Service_Alias($emDS))->delete($alDS, $actor);
-check('delete self-alias keeps count',        (int) $domDS->getAliasCount() === 3);
-check('delete self-alias removed + logged',   in_array($alDS, $emDS->removed, true) && $emDS->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_DELETE);
+check('delete self-alias keeps count', (int) $domDS->getAliasCount() === 3);
+check('delete self-alias removed + logged', in_array($alDS, $emDS->removed, true) && $emDS->lastLog()?->getAction() === \Entities\Log::ACTION_ALIAS_DELETE);
 
 // --- delete veto: nothing removed, no flush, no log ------------------- //
 $emV = new FakeObjectManager();
@@ -420,15 +501,18 @@ $alV->setAddress('info@example.com');
 $alV->setGoto('boss@example.com');
 $alV->setDomain($domV);
 $rv = (new ViMbAdmin_Service_Alias($emV))->delete(
-    $alV, $actor,
-    static fn(): bool => false,
-    static function (): void { throw new \RuntimeException('preFlush must not run on veto'); },
+    $alV,
+    $actor,
+    static fn (): bool => false,
+    static function (): void {
+        throw new \RuntimeException('preFlush must not run on veto');
+    },
 );
-check('delete veto returns false',            $rv === false);
+check('delete veto returns false', $rv === false);
 check('delete veto did NOT remove the alias', !in_array($alV, $emV->removed, true));
-check('delete veto did NOT flush',            $emV->flushes === 0);
-check('delete veto wrote no log',             $emV->lastLog() === null);
-check('delete veto left aliasCount',          (int) $domV->getAliasCount() === 5);
+check('delete veto did NOT flush', $emV->flushes === 0);
+check('delete veto wrote no log', $emV->lastLog() === null);
+check('delete veto left aliasCount', (int) $domV->getAliasCount() === 5);
 
 // --- repository list query contracts --------------------------------- //
 $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([
@@ -507,8 +591,10 @@ foreach ([null, false, 1, 1.5, [], new \stdClass()] as $invalidFilter) {
     } catch (\Throwable $exception) {
         $message = $exception->getMessage();
     }
-    check('filtered list rejects non-string input: ' . get_debug_type($invalidFilter),
-        $message === 'Alias filter must be a string.');
+    check(
+        'filtered list rejects non-string input: ' . get_debug_type($invalidFilter),
+        $message === 'Alias filter must be a string.'
+    );
 }
 
 echo "\n";

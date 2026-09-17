@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ViMbAdmin two-factor authentication (TOTP).
  *
@@ -16,10 +17,10 @@
  */
 class ViMbAdmin_TwoFactor
 {
-    const PREF_SECRET = 'auth.totp.secret';
-    const PREF_BACKUP = 'auth.totp.backup';
-    const PREF_LASTTS = 'auth.totp.lastts';   // last accepted TOTP timeslice (replay guard)
-    const PREF_FORCE  = 'auth.totp.force';    // admin must enrol 2FA at next login
+    public const PREF_SECRET = 'auth.totp.secret';
+    public const PREF_BACKUP = 'auth.totp.backup';
+    public const PREF_LASTTS = 'auth.totp.lastts';   // last accepted TOTP timeslice (replay guard)
+    public const PREF_FORCE  = 'auth.totp.force';    // admin must enrol 2FA at next login
 
     /** @var \RobThree\Auth\TwoFactorAuth */
     private $_tfa;
@@ -27,40 +28,41 @@ class ViMbAdmin_TwoFactor
     /** @var string 32-byte key for sodium secretbox */
     private $_key;
 
-    private static function _normalizedCode( mixed $code, string $pattern ): ?string
+    private static function _normalizedCode(mixed $code, string $pattern): ?string
     {
-        if( !is_string( $code ) )
+        if (!is_string($code)) {
             return null;
-        $normalized = preg_replace( '/\s+/', '', $code );
-        return is_string( $normalized ) && preg_match( $pattern, $normalized ) === 1
+        }
+        $normalized = preg_replace('/\s+/', '', $code);
+        return is_string($normalized) && preg_match($pattern, $normalized) === 1
             ? $normalized
             : null;
     }
 
-    private static function _nonNegativeIntegerOrNull( mixed $value ): ?int
+    private static function _nonNegativeIntegerOrNull(mixed $value): ?int
     {
-        if( is_int( $value ) && $value >= 0 )
+        if (is_int($value) && $value >= 0) {
             return $value;
-        if( is_string( $value ) && preg_match( '/^(0|[1-9][0-9]*)$/D', $value ) === 1 )
-        {
-            $integer = filter_var( $value, FILTER_VALIDATE_INT );
-            return is_int( $integer ) ? $integer : null;
+        }
+        if (is_string($value) && preg_match('/^(0|[1-9][0-9]*)$/D', $value) === 1) {
+            $integer = filter_var($value, FILTER_VALIDATE_INT);
+            return is_int($integer) ? $integer : null;
         }
         return null;
     }
 
-    private static function _storedReplaySlice( mixed $value ): ?int
+    private static function _storedReplaySlice(mixed $value): ?int
     {
         return $value === false || $value === null
             ? 0
-            : self::_nonNegativeIntegerOrNull( $value );
+            : self::_nonNegativeIntegerOrNull($value);
     }
 
     /**
      * @param string $issuer       Label shown in the authenticator app.
      * @param string $securitysalt The app securitysalt (key material).
      */
-    public function __construct( $issuer = 'ViMbAdmin', $securitysalt = '' )
+    public function __construct($issuer = 'ViMbAdmin', $securitysalt = '')
     {
         // Use Bacon's SVG backend: pure PHP, no imagick/gd dependency. The
         // resulting data: URI embeds an inline SVG QR code.
@@ -71,12 +73,12 @@ class ViMbAdmin_TwoFactor
             'svg'         // format
         );
 
-        $this->_tfa = new \RobThree\Auth\TwoFactorAuth( $qr, $issuer );
+        $this->_tfa = new \RobThree\Auth\TwoFactorAuth($qr, $issuer);
 
         // Derive a stable 32-byte key from the securitysalt. If the salt is
         // empty (misconfigured), fall back to a fixed-but-app-local digest so
         // we never key with an empty string.
-        $this->_key = hash( 'sha256', 'vimbadmin-totp|' . $securitysalt, true );
+        $this->_key = hash('sha256', 'vimbadmin-totp|' . $securitysalt, true);
     }
 
     // ---- enrolment -----------------------------------------------------
@@ -92,9 +94,9 @@ class ViMbAdmin_TwoFactor
      * @param string $secret
      * @return string otpauth:// provisioning URI for the label and secret.
      */
-    public function getProvisioningUri( $label, $secret )
+    public function getProvisioningUri($label, $secret)
     {
-        return $this->_tfa->getQRText( $label, $secret );
+        return $this->_tfa->getQRText($label, $secret);
     }
 
     /**
@@ -102,9 +104,9 @@ class ViMbAdmin_TwoFactor
      * @param string $secret
      * @return string Inline data URI of the QR code.
      */
-    public function getQrDataUri( $label, $secret )
+    public function getQrDataUri($label, $secret)
     {
-        return $this->_tfa->getQRCodeImageAsDataUri( $label, $secret );
+        return $this->_tfa->getQRCodeImageAsDataUri($label, $secret);
     }
 
     // ---- verification --------------------------------------------------
@@ -116,15 +118,17 @@ class ViMbAdmin_TwoFactor
      * @param string $code
      * @return bool
      */
-    public function verifyCode( $secret, $code )
+    public function verifyCode($secret, $code)
     {
-        if( !is_string( $secret ) || $secret === '' )
+        if (!is_string($secret) || $secret === '') {
             return false;
-        $code = self::_normalizedCode( $code, '/^\d{6}$/' );
-        if( $code === null )
+        }
+        $code = self::_normalizedCode($code, '/^\d{6}$/');
+        if ($code === null) {
             return false;
+        }
 
-        return $this->_tfa->verifyCode( $secret, $code, 1 );
+        return $this->_tfa->verifyCode($secret, $code, 1);
     }
 
     // ---- per-admin state (encrypted at rest) ---------------------------
@@ -133,10 +137,10 @@ class ViMbAdmin_TwoFactor
      * @param \Entities\Admin $admin
      * @return bool
      */
-    public function isEnabled( $admin )
+    public function isEnabled($admin)
     {
-        $secret = $admin->getPreference( self::PREF_SECRET );
-        return is_string( $secret ) && $secret !== '';
+        $secret = $admin->getPreference(self::PREF_SECRET);
+        return is_string($secret) && $secret !== '';
     }
 
     /**
@@ -148,10 +152,10 @@ class ViMbAdmin_TwoFactor
      * @param string $secret
      * @return string[] plaintext backup codes
      */
-    public function enable( $admin, $secret )
+    public function enable($admin, $secret)
     {
-        $admin->setPreference( self::PREF_SECRET, $this->_encrypt( $secret ) );
-        return $this->regenerateBackupCodes( $admin );
+        $admin->setPreference(self::PREF_SECRET, $this->_encrypt($secret));
+        return $this->regenerateBackupCodes($admin);
     }
 
     /**
@@ -162,11 +166,11 @@ class ViMbAdmin_TwoFactor
      * @param \Entities\Admin $admin
      * @return array{secret:string,backup:string[]}
      */
-    public function provision( $admin )
+    public function provision($admin)
     {
         $secret = $this->createSecret();
-        $backup = $this->enable( $admin, $secret );
-        $this->clearForce( $admin );   // provisioned now, no need to force
+        $backup = $this->enable($admin, $secret);
+        $this->clearForce($admin);   // provisioned now, no need to force
         return [ 'secret' => $secret, 'backup' => $backup ];
     }
 
@@ -174,11 +178,11 @@ class ViMbAdmin_TwoFactor
      * @param \Entities\Admin $admin
      * @return void
      */
-    public function disable( $admin )
+    public function disable($admin)
     {
-        $admin->deletePreference( self::PREF_SECRET );
-        $admin->deletePreference( self::PREF_BACKUP );
-        $admin->deletePreference( self::PREF_LASTTS );
+        $admin->deletePreference(self::PREF_SECRET);
+        $admin->deletePreference(self::PREF_BACKUP);
+        $admin->deletePreference(self::PREF_LASTTS);
     }
 
     // ---- force-at-next-login -------------------------------------------
@@ -187,9 +191,9 @@ class ViMbAdmin_TwoFactor
      * @param \Entities\Admin $admin
      * @return bool
      */
-    public function isForced( $admin )
+    public function isForced($admin)
     {
-        return (bool) $admin->getPreference( self::PREF_FORCE );
+        return (bool) $admin->getPreference(self::PREF_FORCE);
     }
 
     /**
@@ -197,31 +201,32 @@ class ViMbAdmin_TwoFactor
      * @param bool $on
      * @return void
      */
-    public function setForce( $admin, $on = true )
+    public function setForce($admin, $on = true)
     {
-        if( $on )
-            $admin->setPreference( self::PREF_FORCE, '1' );
-        else
-            $this->clearForce( $admin );
+        if ($on) {
+            $admin->setPreference(self::PREF_FORCE, '1');
+        } else {
+            $this->clearForce($admin);
+        }
     }
 
     /**
      * @param \Entities\Admin $admin
      * @return void
      */
-    public function clearForce( $admin )
+    public function clearForce($admin)
     {
-        $admin->deletePreference( self::PREF_FORCE );
+        $admin->deletePreference(self::PREF_FORCE);
     }
 
     /**
      * @param \Entities\Admin $admin
      * @return string|null
      */
-    public function getSecret( $admin )
+    public function getSecret($admin)
     {
-        $enc = $admin->getPreference( self::PREF_SECRET );
-        return is_string( $enc ) && $enc !== '' ? $this->_decrypt( $enc ) : null;
+        $enc = $admin->getPreference(self::PREF_SECRET);
+        return is_string($enc) && $enc !== '' ? $this->_decrypt($enc) : null;
     }
 
     /**
@@ -233,29 +238,34 @@ class ViMbAdmin_TwoFactor
      * @param string $code
      * @return bool
      */
-    public function verifyForAdmin( $admin, $code )
+    public function verifyForAdmin($admin, $code)
     {
-        $secret = $this->getSecret( $admin );
-        if( $secret === null )
+        $secret = $this->getSecret($admin);
+        if ($secret === null) {
             return false;
+        }
 
-        $code = self::_normalizedCode( $code, '/^\d{6}$/' );
-        if( $code === null )
+        $code = self::_normalizedCode($code, '/^\d{6}$/');
+        if ($code === null) {
             return false;
+        }
 
         $timeslice = 0;
-        if( !$this->_tfa->verifyCode( $secret, $code, 1, null, $timeslice ) )
+        if (!$this->_tfa->verifyCode($secret, $code, 1, null, $timeslice)) {
             return false;
+        }
 
         // Reject replay: the matched slice must be newer than the last one we
         // accepted for this admin.
-        $last = self::_storedReplaySlice( $admin->getPreference( self::PREF_LASTTS ) );
-        if( $last === null )
+        $last = self::_storedReplaySlice($admin->getPreference(self::PREF_LASTTS));
+        if ($last === null) {
             return false;
-        if( $timeslice <= $last )
+        }
+        if ($timeslice <= $last) {
             return false;
+        }
 
-        $admin->setPreference( self::PREF_LASTTS, (string) $timeslice );
+        $admin->setPreference(self::PREF_LASTTS, (string) $timeslice);
         return true;
     }
 
@@ -270,17 +280,16 @@ class ViMbAdmin_TwoFactor
      * @return string[] plaintext codes
      * @phpstan-impure
      */
-    public function regenerateBackupCodes( $admin, $count = 8 )
+    public function regenerateBackupCodes($admin, $count = 8)
     {
         $plain  = [];
         $hashed = [];
-        for( $i = 0; $i < $count; $i++ )
-        {
-            $code     = OSS_String::randomFromSet( '23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 10 );
+        for ($i = 0; $i < $count; $i++) {
+            $code     = OSS_String::randomFromSet('23456789ABCDEFGHJKLMNPQRSTUVWXYZ', 10);
             $plain[]  = $code;
-            $hashed[] = password_hash( $code, PASSWORD_BCRYPT );
+            $hashed[] = password_hash($code, PASSWORD_BCRYPT);
         }
-        $admin->setPreference( self::PREF_BACKUP, json_encode( $hashed, JSON_THROW_ON_ERROR ) );
+        $admin->setPreference(self::PREF_BACKUP, json_encode($hashed, JSON_THROW_ON_ERROR));
         return $plain;
     }
 
@@ -293,28 +302,30 @@ class ViMbAdmin_TwoFactor
      * @return bool
      * @phpstan-impure
      */
-    public function consumeBackupCode( $admin, $code )
+    public function consumeBackupCode($admin, $code)
     {
-        $code = self::_normalizedCode( $code, '/^[23456789A-HJ-NP-Z]{10}$/i' );
-        if( $code === null )
+        $code = self::_normalizedCode($code, '/^[23456789A-HJ-NP-Z]{10}$/i');
+        if ($code === null) {
             return false;
-        $code = strtoupper( $code );
-        $raw  = $admin->getPreference( self::PREF_BACKUP );
-        if( !is_string( $raw ) || $raw === '' )
+        }
+        $code = strtoupper($code);
+        $raw  = $admin->getPreference(self::PREF_BACKUP);
+        if (!is_string($raw) || $raw === '') {
             return false;
+        }
 
-        $hashes = json_decode( $raw, true );
-        if( !is_array( $hashes ) || !array_is_list( $hashes ) )
+        $hashes = json_decode($raw, true);
+        if (!is_array($hashes) || !array_is_list($hashes)) {
             return false;
+        }
 
-        foreach( $hashes as $idx => $hash )
-        {
-            if( !is_string( $hash ) )
+        foreach ($hashes as $idx => $hash) {
+            if (!is_string($hash)) {
                 return false;
-            if( password_verify( $code, $hash ) )
-            {
-                unset( $hashes[ $idx ] );
-                $admin->setPreference( self::PREF_BACKUP, json_encode( array_values( $hashes ), JSON_THROW_ON_ERROR ) );
+            }
+            if (password_verify($code, $hash)) {
+                unset($hashes[ $idx ]);
+                $admin->setPreference(self::PREF_BACKUP, json_encode(array_values($hashes), JSON_THROW_ON_ERROR));
                 return true;
             }
         }
@@ -325,18 +336,22 @@ class ViMbAdmin_TwoFactor
      * @param \Entities\Admin $admin
      * @return int
      */
-    public function backupCodesRemaining( $admin )
+    public function backupCodesRemaining($admin)
     {
-        $raw = $admin->getPreference( self::PREF_BACKUP );
-        if( !is_string( $raw ) || $raw === '' )
+        $raw = $admin->getPreference(self::PREF_BACKUP);
+        if (!is_string($raw) || $raw === '') {
             return 0;
-        $h = json_decode( $raw, true );
-        if( !is_array( $h ) || !array_is_list( $h ) )
+        }
+        $h = json_decode($raw, true);
+        if (!is_array($h) || !array_is_list($h)) {
             return 0;
-        foreach( $h as $hash )
-            if( !is_string( $hash ) )
+        }
+        foreach ($h as $hash) {
+            if (!is_string($hash)) {
                 return 0;
-        return count( $h );
+            }
+        }
+        return count($h);
     }
 
     // ---- crypto --------------------------------------------------------
@@ -345,25 +360,26 @@ class ViMbAdmin_TwoFactor
      * @param string $plaintext
      * @return string
      */
-    private function _encrypt( $plaintext )
+    private function _encrypt($plaintext)
     {
-        $nonce = random_bytes( SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
-        $ct    = sodium_crypto_secretbox( $plaintext, $nonce, $this->_key );
-        return base64_encode( $nonce . $ct );
+        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $ct    = sodium_crypto_secretbox($plaintext, $nonce, $this->_key);
+        return base64_encode($nonce . $ct);
     }
 
     /**
      * @param string $encoded
      * @return string|null
      */
-    private function _decrypt( $encoded )
+    private function _decrypt($encoded)
     {
-        $raw = base64_decode( $encoded, true );
-        if( $raw === false || strlen( $raw ) < SODIUM_CRYPTO_SECRETBOX_NONCEBYTES )
+        $raw = base64_decode($encoded, true);
+        if ($raw === false || strlen($raw) < SODIUM_CRYPTO_SECRETBOX_NONCEBYTES) {
             return null;
-        $nonce = substr( $raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
-        $ct    = substr( $raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES );
-        $pt    = sodium_crypto_secretbox_open( $ct, $nonce, $this->_key );
+        }
+        $nonce = substr($raw, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $ct    = substr($raw, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        $pt    = sodium_crypto_secretbox_open($ct, $nonce, $this->_key);
         return $pt === false ? null : $pt;
     }
 }

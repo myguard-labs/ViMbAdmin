@@ -20,14 +20,15 @@ class OSS_Captcha_Image
     private int $wordLen;
     private int $timeout;
 
-    private static function boundedInt( mixed $value, string $name, int $minimum, int $maximum ): int
+    private static function boundedInt(mixed $value, string $name, int $minimum, int $maximum): int
     {
-        if( is_string( $value ) && preg_match( '/^[0-9]+$/D', $value ) ) {
-            $normalized = ltrim( $value, '0' );
-            $value = filter_var( $normalized === '' ? '0' : $normalized, FILTER_VALIDATE_INT );
+        if (is_string($value) && preg_match('/^[0-9]+$/D', $value)) {
+            $normalized = ltrim($value, '0');
+            $value = filter_var($normalized === '' ? '0' : $normalized, FILTER_VALIDATE_INT);
         }
-        if( !is_int( $value ) || $value < $minimum || $value > $maximum )
-            throw new ValueError( $name . ' is outside its permitted range' );
+        if (!is_int($value) || $value < $minimum || $value > $maximum) {
+            throw new ValueError($name . ' is outside its permitted range');
+        }
         return $value;
     }
 
@@ -36,12 +37,11 @@ class OSS_Captcha_Image
         mixed $lineNoise = 5,
         mixed $wordLen = 6,
         mixed $timeout = 1800
-    )
-    {
-        $this->dotNoise = self::boundedInt( $dotNoise, 'Captcha dot noise', 0, 10000 );
-        $this->lineNoise = self::boundedInt( $lineNoise, 'Captcha line noise', 0, 1000 );
-        $this->wordLen = self::boundedInt( $wordLen, 'Captcha word length', 1, 64 );
-        $this->timeout = self::boundedInt( $timeout, 'Captcha timeout', 1, 86400 );
+    ) {
+        $this->dotNoise = self::boundedInt($dotNoise, 'Captcha dot noise', 0, 10000);
+        $this->lineNoise = self::boundedInt($lineNoise, 'Captcha line noise', 0, 1000);
+        $this->wordLen = self::boundedInt($wordLen, 'Captcha word length', 1, 64);
+        $this->timeout = self::boundedInt($timeout, 'Captcha timeout', 1, 86400);
     }
 
     public function generate(): string
@@ -127,8 +127,9 @@ class OSS_Captcha_Image
 
     public static function _isValid(mixed $id, mixed $value): bool
     {
-        if( !is_string( $id ) )
+        if (!is_string($id)) {
             return false;
+        }
         $key = self::SESSION_PREFIX . $id;
         $captcha = $_SESSION[$key] ?? null;
         unset($_SESSION[$key]);
@@ -137,8 +138,9 @@ class OSS_Captcha_Image
             @unlink($path);
         }
 
-        if( !is_string( $value ) )
+        if (!is_string($value)) {
             return false;
+        }
 
         return is_array($captcha)
             && is_int($captcha['expires'] ?? null)
@@ -281,7 +283,7 @@ class OSS_Captcha_Image
             }
         }
 
-        usort($files, static fn(string $a, string $b): int => $mtimes[$a] <=> $mtimes[$b]);
+        usort($files, static fn (string $a, string $b): int => $mtimes[$a] <=> $mtimes[$b]);
 
         foreach (array_slice($files, 0, count($files) - self::MAX_FILES + 1) as $file) {
             @unlink($file);

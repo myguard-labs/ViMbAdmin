@@ -36,8 +36,10 @@ $check('quota values preserve integers and oversized bigint strings', $quota->in
 $check('empty quota username remains visible', $quota->invoke(null, [
     ['username' => '', 'bytes' => '1', 'messages' => 2],
 ]) === ['' => ['bytes' => '1', 'messages' => 2]]);
-$check('scalar quota result is rejected',
-    $failure($quota, 'invalid') === 'Mailbox quota query result must be an array.');
+$check(
+    'scalar quota result is rejected',
+    $failure($quota, 'invalid') === 'Mailbox quota query result must be an array.'
+);
 $check('case-folded duplicate quota username is rejected', $failure($quota, [
     ['username' => 'user@example.test', 'bytes' => 1, 'messages' => 2],
     ['username' => 'User@Example.Test', 'bytes' => 3, 'messages' => 4],
@@ -52,19 +54,25 @@ foreach ([
     'extra field' => [['username' => 'user@example.test', 'bytes' => 1, 'messages' => 2, 'extra' => true]],
     'non-string username' => [['username' => null, 'bytes' => 1, 'messages' => 2]],
 ] as $label => $rows) {
-    $check('quota ' . $label . ' is rejected',
-        $failure($quota, $rows) === 'Mailbox quota query row has an invalid shape.');
+    $check(
+        'quota ' . $label . ' is rejected',
+        $failure($quota, $rows) === 'Mailbox quota query row has an invalid shape.'
+    );
 }
 
 foreach ([null, false, 1.0, -1, '-1', '+1', '01', '1.5', '1e2', ' 1', 'abc'] as $value) {
-    $check('invalid quota bytes are rejected: ' . get_debug_type($value) . ':' . var_export($value, true),
+    $check(
+        'invalid quota bytes are rejected: ' . get_debug_type($value) . ':' . var_export($value, true),
         $failure($quota, [['username' => 'user@example.test', 'bytes' => $value, 'messages' => 1]])
-            === 'Mailbox quota bytes has an invalid value.');
+            === 'Mailbox quota bytes has an invalid value.'
+    );
 }
 foreach ([null, -1, '01'] as $value) {
-    $check('invalid quota messages are rejected: ' . get_debug_type($value) . ':' . var_export($value, true),
+    $check(
+        'invalid quota messages are rejected: ' . get_debug_type($value) . ':' . var_export($value, true),
         $failure($quota, [['username' => 'user@example.test', 'bytes' => 1, 'messages' => $value]])
-            === 'Mailbox quota messages has an invalid value.');
+            === 'Mailbox quota messages has an invalid value.'
+    );
 }
 
 $check('empty login rows produce empty timestamps', $login->invoke(null, []) === []);
@@ -74,8 +82,10 @@ $check('login username is normalized and canonical decimal timestamp stays lossl
 $check('oversized bigint login timestamp remains representable', $login->invoke(null, [
     ['username' => 'user@example.test', 'last_login' => '9223372036854775808'],
 ]) === ['user@example.test' => '9223372036854775808']);
-$check('scalar login result is rejected',
-    $failure($login, 'invalid') === 'Mailbox last-login query result must be an array.');
+$check(
+    'scalar login result is rejected',
+    $failure($login, 'invalid') === 'Mailbox last-login query result must be an array.'
+);
 $check('case-folded duplicate login username is rejected', $failure($login, [
     ['username' => 'user@example.test', 'last_login' => 1],
     ['username' => 'User@Example.Test', 'last_login' => 2],
@@ -89,14 +99,18 @@ foreach ([
     'extra field' => [['username' => 'user@example.test', 'last_login' => 1, 'extra' => true]],
     'non-string username' => [['username' => null, 'last_login' => 1]],
 ] as $label => $rows) {
-    $check('login ' . $label . ' is rejected',
-        $failure($login, $rows) === 'Mailbox last-login query row has an invalid shape.');
+    $check(
+        'login ' . $label . ' is rejected',
+        $failure($login, $rows) === 'Mailbox last-login query row has an invalid shape.'
+    );
 }
 
 foreach ([null, false, 1.0, -1, '-1', '+1', '01', '1.5', '1e2', ' 1', 'abc'] as $value) {
-    $check('invalid login timestamp is rejected: ' . get_debug_type($value) . ':' . var_export($value, true),
+    $check(
+        'invalid login timestamp is rejected: ' . get_debug_type($value) . ':' . var_export($value, true),
         $failure($login, [['username' => 'user@example.test', 'last_login' => $value]])
-            === 'Mailbox last-login timestamp has an invalid value.');
+            === 'Mailbox last-login timestamp has an invalid value.'
+    );
 }
 $mailboxRows = [
     3 => ['id' => 7, 'username' => 'First@Example.Test', 'name' => null, 'active' => true,
@@ -108,7 +122,8 @@ $mailboxRows = [
     14 => ['id' => 11, 'username' => 'never-string@example.test', 'name' => '', 'active' => true,
         'quota' => 1, 'domain' => 'example.test', 'delete_pending' => true],
 ];
-$check('merge preserves mailbox rows, sparse keys, case-folded matches and null fallbacks', $merge->invoke(null,
+$check('merge preserves mailbox rows, sparse keys, case-folded matches and null fallbacks', $merge->invoke(
+    null,
     $mailboxRows,
     ['first@example.test' => ['bytes' => '9223372036854775808', 'messages' => 4]],
     ['first@example.test' => '9223372036854775808', 'never@example.test' => 0,

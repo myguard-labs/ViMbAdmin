@@ -12,7 +12,9 @@ function harnessCodemodCheck(string $name, bool $ok): void
 {
     PhpstanHarnessCodemodTestState::$checks++;
     echo ($ok ? 'ok ' : 'FAIL ') . $name . "\n";
-    if (!$ok) { PhpstanHarnessCodemodTestState::$failures++; }
+    if (!$ok) {
+        PhpstanHarnessCodemodTestState::$failures++;
+    }
 }
 
 /**
@@ -23,7 +25,9 @@ function harnessProcess(array $command): array
 {
     $pipes = [];
     $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($process)) { throw new RuntimeException('cannot start process'); }
+    if (!is_resource($process)) {
+        throw new RuntimeException('cannot start process');
+    }
     $output = (string) stream_get_contents($pipes[1]);
     stream_get_contents($pipes[2]);
     fclose($pipes[1]);
@@ -90,7 +94,9 @@ function harnessBaseline(array $rows): string
 }
 
 $tool = realpath(__DIR__ . '/../tools/phpstan-codemod.php');
-if ($tool === false) { throw new RuntimeException('tool missing'); }
+if ($tool === false) {
+    throw new RuntimeException('tool missing');
+}
 $repo = sys_get_temp_dir() . '/vimbadmin-harness-codemod-' . bin2hex(random_bytes(6));
 mkdir($repo . '/tests', 0777, true);
 $positivePath = 'tests/harness-positive.php';
@@ -165,7 +171,7 @@ $head = harnessProcess(['git', '-C', $repo, 'rev-parse', 'HEAD'])['out'];
 $positiveSha = (string) hash_file('sha256', $repo . '/' . $positivePath);
 $negativeSha = (string) hash_file('sha256', $repo . '/' . $negativePath);
 $common = ['--expect-head=' . $head];
-$allow = static fn(string $path, string $variable, string $sha): string =>
+$allow = static fn (string $path, string $variable, string $sha): string =>
     '--allow=' . $path . ':' . $variable . '@' . $sha;
 
 $dry = harnessCodemod($tool, $repo, [...$common, $allow($positivePath, 'failures', $positiveSha)]);
@@ -220,11 +226,15 @@ harnessCodemodCheck('apply performs exact token-aware rewrite', $apply['code'] =
     && substr_count($transformed, 'HarnessPositiveHarnessState::$count++') === 2
     && !str_contains($transformed, 'global $failures;')
     && preg_match('/^[ \t]+$/m', $transformed) !== 1);
-harnessCodemodCheck('callable and terminal assertions remain unchanged',
+harnessCodemodCheck(
+    'callable and terminal assertions remain unchanged',
     str_contains($transformed, 'sameHarness($failures, 0)')
-    && str_contains($transformed, '$failures === 0'));
-harnessCodemodCheck('transformed positive arm remains green',
-    harnessProcess([PHP_BINARY, $repo . '/' . $positivePath])['code'] === 0);
+    && str_contains($transformed, '$failures === 0')
+);
+harnessCodemodCheck(
+    'transformed positive arm remains green',
+    harnessProcess([PHP_BINARY, $repo . '/' . $positivePath])['code'] === 0
+);
 
 $mutant = str_replace('checkHarness(true);', 'checkHarness(false);', $transformed, $replacements);
 file_put_contents($repo . '/' . $positivePath, $mutant);

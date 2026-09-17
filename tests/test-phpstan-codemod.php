@@ -17,7 +17,9 @@ function codemodCheck(string $name, bool $ok): void
 {
     PhpstanCodemodTestState::$checks++;
     echo ($ok ? 'ok ' : 'FAIL ') . $name . "\n";
-    if (!$ok) { PhpstanCodemodTestState::$failures++; }
+    if (!$ok) {
+        PhpstanCodemodTestState::$failures++;
+    }
 }
 
 /**
@@ -28,7 +30,9 @@ function runProcess(array $command): array
 {
     $pipes = [];
     $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($process)) { throw new RuntimeException('cannot start process'); }
+    if (!is_resource($process)) {
+        throw new RuntimeException('cannot start process');
+    }
     $output = (string) stream_get_contents($pipes[1]);
     stream_get_contents($pipes[2]);
     fclose($pipes[1]);
@@ -88,7 +92,9 @@ function fixtureBaseline(array $rows): string
 }
 
 $tool = realpath(__DIR__ . '/../tools/phpstan-codemod.php');
-if ($tool === false) { throw new RuntimeException('tool missing'); }
+if ($tool === false) {
+    throw new RuntimeException('tool missing');
+}
 $repo = sys_get_temp_dir() . '/vimbadmin-codemod-test-' . bin2hex(random_bytes(6));
 mkdir($repo . '/application/Entities', 0777, true);
 $source = <<<'PHP'
@@ -150,7 +156,7 @@ runProcess(['git', '-C', $repo, 'commit', '-qm', 'fixture']);
 $head = runProcess(['git', '-C', $repo, 'rev-parse', 'HEAD'])['out'];
 $sha = hash_file('sha256', $repo . '/' . $path);
 $common = ['--expect-head=' . $head];
-$allow = static fn(string $method, ?string $hash = null): string => '--allow=' . $path . ':' . $method . '@' . ($hash ?? $sha);
+$allow = static fn (string $method, ?string $hash = null): string => '--allow=' . $path . ':' . $method . '@' . ($hash ?? $sha);
 
 $expected = [
     'getGood' => ['', 'eligible'],
@@ -165,14 +171,18 @@ $expected = [
     'getWrong' => ['doc_atom_diagnostic_mismatch', 'rejected'],
 ];
 $schemaRun = runCodemod($tool, $repo, [...$common, $allow('getGood')]);
-codemodCheck('JSON output has exact full schema',
-    array_keys($schemaRun['json']['records'][0] ?? []) === CODEMOD_FIELDS);
+codemodCheck(
+    'JSON output has exact full schema',
+    array_keys($schemaRun['json']['records'][0] ?? []) === CODEMOD_FIELDS
+);
 foreach ($expected as $method => [$reason, $status]) {
     $run = runCodemod($tool, $repo, [...$common, $allow($method)]);
     $record = $run['json']['records'][0] ?? [];
     $ok = $run['code'] === 0 && ($record['status'] ?? '') === $status
         && ($record['reject_reason'] ?? '') === $reason;
-    if (!$ok) { echo '  observed: ' . json_encode($record) . "\n"; }
+    if (!$ok) {
+        echo '  observed: ' . json_encode($record) . "\n";
+    }
     codemodCheck($method . ' matcher arm', $ok);
 }
 

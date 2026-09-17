@@ -38,15 +38,41 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class CsrfMutationSession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->get($key); }
-    public function __set(string $key, mixed $value): void { $this->set($key, $value); }
-    public function __isset(string $key): bool { return $this->has($key); }
-    public function __unset(string $key): void { $this->remove($key); }
+    public function __construct(private array $data)
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->get($key);
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->set($key, $value);
+    }
+    public function __isset(string $key): bool
+    {
+        return $this->has($key);
+    }
+    public function __unset(string $key): void
+    {
+        $this->remove($key);
+    }
 }
 
 final class CsrfMutationAdmin extends Entities\Admin
@@ -57,7 +83,10 @@ final class CsrfMutationAdmin extends Entities\Admin
         $this->setUsername("admin{$testId}@example.test")->setActive(true)->setSuper(true);
     }
 
-    public function getId(): int { return $this->testId; }
+    public function getId(): int
+    {
+        return $this->testId;
+    }
 }
 
 final class CsrfMutationDomain extends Entities\Domain
@@ -93,7 +122,9 @@ final class CsrfMutationMailbox extends Entities\Mailbox
 final class CsrfMutationAdminRepository extends Repositories\Admin
 {
     public int $lookups = 0;
-    public function __construct(private readonly ?Entities\Admin $result) {}
+    public function __construct(private readonly ?Entities\Admin $result)
+    {
+    }
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
     {
@@ -107,7 +138,9 @@ final class CsrfMutationDomainRepository extends Repositories\Domain
     public int $lookups = 0;
     /** @var list<Entities\Domain> */
     public array $purged = [];
-    public function __construct(private readonly ?Entities\Domain $result) {}
+    public function __construct(private readonly ?Entities\Domain $result)
+    {
+    }
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
     {
@@ -134,7 +167,9 @@ final class CsrfMutationDomainRepository extends Repositories\Domain
 final class CsrfMutationAliasRepository extends Repositories\Alias
 {
     public int $lookups = 0;
-    public function __construct(private readonly ?Entities\Alias $result) {}
+    public function __construct(private readonly ?Entities\Alias $result)
+    {
+    }
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
     {
@@ -146,7 +181,9 @@ final class CsrfMutationAliasRepository extends Repositories\Alias
 final class CsrfMutationMailboxRepository extends Repositories\Mailbox
 {
     public int $lookups = 0;
-    public function __construct(private readonly ?Entities\Mailbox $result) {}
+    public function __construct(private readonly ?Entities\Mailbox $result)
+    {
+    }
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
     {
@@ -185,7 +222,9 @@ final class CsrfMutationArchive extends Entities\Archive
 final class CsrfMutationArchiveRepository extends Repositories\Archive
 {
     public int $lookups = 0;
-    public function __construct(private readonly ?Entities\Archive $result) {}
+    public function __construct(private readonly ?Entities\Archive $result)
+    {
+    }
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
     {
@@ -200,7 +239,10 @@ final class CsrfMutationRepositoryFactory implements RepositoryFactory
     private array $repositories;
 
     /** @param array<string,EntityRepository<covariant object>> $repositories */
-    public function __construct(array $repositories) { $this->repositories = $repositories; }
+    public function __construct(array $repositories)
+    {
+        $this->repositories = $repositories;
+    }
 
     /**
      * @template T of object
@@ -245,15 +287,26 @@ final class CsrfMutationEntityManager extends EntityManagerDecorator
         parent::__construct(new EntityManager($connection, $configuration));
     }
 
-    public function persist(object $object): void { $this->persisted[] = $object; }
-    public function remove(object $object): void { $this->removed[] = $object; }
-    public function flush(): void { $this->flushes++; }
+    public function persist(object $object): void
+    {
+        $this->persisted[] = $object;
+    }
+    public function remove(object $object): void
+    {
+        $this->removed[] = $object;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
 }
 
 final class CsrfMutationBootstrap
 {
     public int $doctrineReads = 0;
-    public function __construct(private readonly CsrfMutationEntityManager $em, private readonly CsrfMutationSession $session) {}
+    public function __construct(private readonly CsrfMutationEntityManager $em, private readonly CsrfMutationSession $session)
+    {
+    }
     public function getResource(string $name): mixed
     {
         return match ($name) {
@@ -263,8 +316,15 @@ final class CsrfMutationBootstrap
         };
     }
     /** @return array<string,mixed> */
-    public function getOptions(): array { return []; }
-    private function doctrine(): CsrfMutationEntityManager { $this->doctrineReads++; return $this->em; }
+    public function getOptions(): array
+    {
+        return [];
+    }
+    private function doctrine(): CsrfMutationEntityManager
+    {
+        $this->doctrineReads++;
+        return $this->em;
+    }
 }
 
 /**
@@ -279,7 +339,7 @@ function csrfMutationController(string $controller, string $action, array $repos
     $em = new CsrfMutationEntityManager($repositories);
     $bootstrap = new CsrfMutationBootstrap($em, $session);
     $actor = new CsrfMutationAdmin(1);
-    $container = new Container($bootstrap, new Auth($session, static fn(int $id): object => $actor));
+    $container = new Container($bootstrap, new Auth($session, static fn (int $id): object => $actor));
     $method = lcfirst(str_replace(' ', '', ucwords(str_replace('-', ' ', $action)))) . 'Action';
     return [new $controller($container, new RouteMatch('test', $action, $controller, $method, $params)), $bootstrap, $em];
 }
@@ -346,7 +406,9 @@ $failures = 0;
 $check = static function (string $label, bool $condition) use (&$checks, &$failures): void {
     $checks++;
     echo ($condition ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$condition) { $failures++; }
+    if (!$condition) {
+        $failures++;
+    }
 };
 
 echo "== POST CSRF mutation contract ==\n";
@@ -354,18 +416,18 @@ echo "== POST CSRF mutation contract ==\n";
 $surfaces = [
     'admin remove-domain' => [
         'class' => AdminController::class, 'action' => 'remove-domain', 'params' => ['aid' => '2', 'did' => '3'],
-        'repositories' => static fn(): array => [
+        'repositories' => static fn (): array => [
             'Entities\\Admin' => new CsrfMutationAdminRepository(new CsrfMutationAdmin(2)),
             'Entities\\Domain' => new CsrfMutationDomainRepository(new CsrfMutationDomain()),
         ], 'body' => '',
     ],
     'admin toggle-active' => [
         'class' => AdminController::class, 'action' => 'ajax-toggle-active', 'params' => ['aid' => '2'],
-        'repositories' => static fn(): array => ['Entities\\Admin' => new CsrfMutationAdminRepository(new CsrfMutationAdmin(2))], 'body' => 'ko',
+        'repositories' => static fn (): array => ['Entities\\Admin' => new CsrfMutationAdminRepository(new CsrfMutationAdmin(2))], 'body' => 'ko',
     ],
     'admin toggle-super' => [
         'class' => AdminController::class, 'action' => 'ajax-toggle-super', 'params' => ['aid' => '2'],
-        'repositories' => static fn(): array => ['Entities\\Admin' => new CsrfMutationAdminRepository(new CsrfMutationAdmin(2))], 'body' => 'ko',
+        'repositories' => static fn (): array => ['Entities\\Admin' => new CsrfMutationAdminRepository(new CsrfMutationAdmin(2))], 'body' => 'ko',
     ],
     'alias toggle-active' => [
         'class' => AliasController::class, 'action' => 'ajax-toggle-active', 'params' => ['alid' => '2'],
@@ -390,26 +452,26 @@ $surfaces = [
     ],
     'admin purge' => [
         'class' => AdminController::class, 'action' => 'purge', 'params' => ['aid' => '2'],
-        'repositories' => static fn(): array => [
+        'repositories' => static fn (): array => [
             'Entities\\Admin' => new CsrfMutationAdminRepository(new CsrfMutationAdmin(2)),
         ], 'body' => '',
     ],
     'domain purge' => [
         'class' => DomainController::class, 'action' => 'purge', 'params' => ['did' => '3'],
-        'repositories' => static fn(): array => [
+        'repositories' => static fn (): array => [
             'Entities\\Domain' => new CsrfMutationDomainRepository(new CsrfMutationDomain()),
         ], 'body' => '',
     ],
     'domain remove-admin' => [
         'class' => DomainController::class, 'action' => 'remove-admin', 'params' => ['aid' => '2', 'did' => '3'],
-        'repositories' => static fn(): array => [
+        'repositories' => static fn (): array => [
             'Entities\\Admin' => new CsrfMutationAdminRepository(new CsrfMutationAdmin(2)),
             'Entities\\Domain' => new CsrfMutationDomainRepository(new CsrfMutationDomain()),
         ], 'body' => '',
     ],
     'domain toggle-active' => [
         'class' => DomainController::class, 'action' => 'ajax-toggle-active', 'params' => ['did' => '3'],
-        'repositories' => static fn(): array => [
+        'repositories' => static fn (): array => [
             'Entities\\Domain' => new CsrfMutationDomainRepository(new CsrfMutationDomain()),
         ], 'body' => 'ko',
     ],
@@ -425,16 +487,16 @@ $surfaces = [
     ],
     'archive toggle-autoprune' => [
         'class' => ArchiveController::class, 'action' => 'toggle-autoprune', 'params' => ['arid' => '5'],
-        'repositories' => static fn(): array => ['Entities\\Archive' => new CsrfMutationArchiveRepository(new CsrfMutationArchive())], 'body' => '',
+        'repositories' => static fn (): array => ['Entities\\Archive' => new CsrfMutationArchiveRepository(new CsrfMutationArchive())], 'body' => '',
     ],
     'archive delete' => [
         'class' => ArchiveController::class, 'action' => 'delete', 'params' => ['arid' => '5'],
-        'repositories' => static fn(): array => ['Entities\\Archive' => new CsrfMutationArchiveRepository(new CsrfMutationArchive())], 'body' => '',
+        'repositories' => static fn (): array => ['Entities\\Archive' => new CsrfMutationArchiveRepository(new CsrfMutationArchive())], 'body' => '',
     ],
     'archive restore' => [
         'class' => ArchiveController::class, 'action' => 'restore', 'params' => ['arid' => '5'],
         // restoreAction() also resolves the live mailbox by username.
-        'repositories' => static fn(): array => [
+        'repositories' => static fn (): array => [
             'Entities\\Archive' => new CsrfMutationArchiveRepository(new CsrfMutationArchive()),
             'Entities\\Mailbox' => new CsrfMutationMailboxRepository(new CsrfMutationMailbox()),
         ], 'body' => '',
@@ -453,8 +515,10 @@ foreach ($surfaces as $label => $surface) {
         csrfMutationRequest($method, $post, $get);
         [$controller, $bootstrap, $em] = csrfMutationController($surface['class'], $surface['action'], ($surface['repositories'])(), array_merge($surface['params'], $routeParams));
         $response = csrfMutationResponse($controller, $surface['action']);
-        $check("{$label}: {$case} is inert before lookup, service, or flush",
-            $response->body === $surface['body'] && $bootstrap->doctrineReads === 0 && $em->flushes === 0);
+        $check(
+            "{$label}: {$case} is inert before lookup, service, or flush",
+            $response->body === $surface['body'] && $bootstrap->doctrineReads === 0 && $em->flushes === 0
+        );
     }
 }
 
@@ -463,16 +527,20 @@ $target = new CsrfMutationAdmin(2);
 $adminRepository = new CsrfMutationAdminRepository($target);
 [$controller, $bootstrap, $em] = csrfMutationController(AdminController::class, 'ajax-toggle-active', ['Entities\\Admin' => $adminRepository], []);
 $response = csrfMutationResponse($controller, 'ajax-toggle-active');
-$check('valid admin toggle POST performs exactly one authorized mutation',
-    $response->body === 'ok' && $target->getActive() === false && $adminRepository->lookups === 1 && $em->flushes === 1);
+$check(
+    'valid admin toggle POST performs exactly one authorized mutation',
+    $response->body === 'ok' && $target->getActive() === false && $adminRepository->lookups === 1 && $em->flushes === 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'aid' => '2']);
 $target = new CsrfMutationAdmin(2);
 $adminRepository = new CsrfMutationAdminRepository($target);
 [$controller, $bootstrap, $em] = csrfMutationController(AdminController::class, 'ajax-toggle-super', ['Entities\\Admin' => $adminRepository], []);
 $response = csrfMutationResponse($controller, 'ajax-toggle-super');
-$check('valid admin super-toggle POST performs exactly one authorized mutation',
-    $response->body === 'ok' && $target->getSuper() === false && $adminRepository->lookups === 1 && $em->flushes === 1);
+$check(
+    'valid admin super-toggle POST performs exactly one authorized mutation',
+    $response->body === 'ok' && $target->getSuper() === false && $adminRepository->lookups === 1 && $em->flushes === 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'alid' => '2']);
 $domain = new CsrfMutationDomain();
@@ -480,8 +548,10 @@ $alias = (new CsrfMutationAlias())->setDomain($domain);
 $aliasRepository = new CsrfMutationAliasRepository($alias);
 [$controller, $bootstrap, $em] = csrfMutationController(AliasController::class, 'ajax-toggle-active', ['Entities\\Alias' => $aliasRepository], []);
 $response = csrfMutationResponse($controller, 'ajax-toggle-active');
-$check('valid alias toggle POST performs exactly one authorized mutation',
-    $response->body === 'ok' && $alias->getActive() === false && $aliasRepository->lookups === 1 && $em->flushes === 1);
+$check(
+    'valid alias toggle POST performs exactly one authorized mutation',
+    $response->body === 'ok' && $alias->getActive() === false && $aliasRepository->lookups === 1 && $em->flushes === 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'mid' => '2']);
 $domain = new CsrfMutationDomain();
@@ -489,8 +559,10 @@ $mailbox = (new CsrfMutationMailbox())->setDomain($domain);
 $mailboxRepository = new CsrfMutationMailboxRepository($mailbox);
 [$controller, $bootstrap, $em] = csrfMutationController(MailboxController::class, 'ajax-toggle-active', ['Entities\\Mailbox' => $mailboxRepository], []);
 $response = csrfMutationResponse($controller, 'ajax-toggle-active');
-$check('valid mailbox toggle POST performs exactly one authorized mutation',
-    $response->body === 'ok' && $mailbox->getActive() === false && $mailboxRepository->lookups === 1 && $em->flushes === 1);
+$check(
+    'valid mailbox toggle POST performs exactly one authorized mutation',
+    $response->body === 'ok' && $mailbox->getActive() === false && $mailboxRepository->lookups === 1 && $em->flushes === 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'aid' => '2', 'did' => '3']);
 $target = new CsrfMutationAdmin(2);
@@ -502,9 +574,11 @@ $domainRepository = new CsrfMutationDomainRepository($domain);
     'Entities\\Admin' => $adminRepository, 'Entities\\Domain' => $domainRepository,
 ], []);
 $response = csrfMutationResponse($controller, 'remove-domain');
-$check('valid domain-removal POST performs exactly one authorized mutation',
+$check(
+    'valid domain-removal POST performs exactly one authorized mutation',
     $response->status === 302 && !$target->getDomains()->contains($domain)
-        && $adminRepository->lookups === 1 && $domainRepository->lookups === 1 && $em->flushes === 1);
+        && $adminRepository->lookups === 1 && $domainRepository->lookups === 1 && $em->flushes === 1
+);
 
 // --- positive controls: a valid body token DOES mutate -----------------------
 
@@ -514,9 +588,11 @@ $alias = (new CsrfMutationAlias())->setDomain($domain);
 $aliasRepository = new CsrfMutationAliasRepository($alias);
 [$controller, $bootstrap, $em] = csrfMutationController(AliasController::class, 'delete', ['Entities\\Alias' => $aliasRepository], []);
 $response = csrfMutationResponse($controller, 'delete');
-$check('valid alias-delete POST reaches the authorized mutation',
+$check(
+    'valid alias-delete POST reaches the authorized mutation',
     $response->status === 302 && $aliasRepository->lookups === 1
-        && in_array($alias, $em->removed, true) && $em->flushes >= 1);
+        && in_array($alias, $em->removed, true) && $em->flushes >= 1
+);
 
 // The nine remaining surfaces. Together with the five controls above, every one
 // of the 14 surfaces in the inert matrix now has a two-sided proof: the guard
@@ -527,18 +603,22 @@ $target = new CsrfMutationAdmin(2);
 $adminRepository = new CsrfMutationAdminRepository($target);
 [$controller, $bootstrap, $em] = csrfMutationController(AdminController::class, 'purge', ['Entities\\Admin' => $adminRepository], []);
 $response = csrfMutationResponse($controller, 'purge');
-$check('valid admin-purge POST reaches the authorized mutation',
+$check(
+    'valid admin-purge POST reaches the authorized mutation',
     $response->status === 302 && $adminRepository->lookups === 1
-        && in_array($target, $em->removed, true) && $em->flushes >= 1);
+        && in_array($target, $em->removed, true) && $em->flushes >= 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'did' => '3']);
 $domain = new CsrfMutationDomain();
 $domainRepository = new CsrfMutationDomainRepository($domain);
 [$controller, $bootstrap, $em] = csrfMutationController(DomainController::class, 'purge', ['Entities\\Domain' => $domainRepository], []);
 $response = csrfMutationResponse($controller, 'purge');
-$check('valid domain-purge POST reaches the authorized mutation',
+$check(
+    'valid domain-purge POST reaches the authorized mutation',
     $response->status === 302 && $domainRepository->lookups === 1
-        && in_array($domain, $domainRepository->purged, true));
+        && in_array($domain, $domainRepository->purged, true)
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'aid' => '2', 'did' => '3']);
 $target = new CsrfMutationAdmin(2);
@@ -550,9 +630,11 @@ $domainRepository = new CsrfMutationDomainRepository($domain);
     'Entities\\Admin' => $adminRepository, 'Entities\\Domain' => $domainRepository,
 ], []);
 $response = csrfMutationResponse($controller, 'remove-admin');
-$check('valid domain remove-admin POST reaches the authorized mutation',
+$check(
+    'valid domain remove-admin POST reaches the authorized mutation',
     $response->status === 302 && !$target->getDomains()->contains($domain)
-        && $adminRepository->lookups === 1 && $domainRepository->lookups === 1 && $em->flushes >= 1);
+        && $adminRepository->lookups === 1 && $domainRepository->lookups === 1 && $em->flushes >= 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'did' => '3']);
 $domain = new CsrfMutationDomain();
@@ -560,9 +642,11 @@ $domain->setActive(true);
 $domainRepository = new CsrfMutationDomainRepository($domain);
 [$controller, $bootstrap, $em] = csrfMutationController(DomainController::class, 'ajax-toggle-active', ['Entities\\Domain' => $domainRepository], []);
 $response = csrfMutationResponse($controller, 'ajax-toggle-active');
-$check('valid domain toggle POST reaches the authorized mutation',
+$check(
+    'valid domain toggle POST reaches the authorized mutation',
     $response->body === 'ok' && $domain->getActive() === false
-        && $domainRepository->lookups === 1 && $em->flushes >= 1);
+        && $domainRepository->lookups === 1 && $em->flushes >= 1
+);
 
 // delete-alias takes the "remove the whole alias" branch when the mailbox is the
 // alias's only destination ($user === goto).
@@ -577,27 +661,33 @@ $aliasRepository = new CsrfMutationAliasRepository($alias);
     'Entities\\Mailbox' => $mailboxRepository, 'Entities\\Alias' => $aliasRepository,
 ], []);
 $response = csrfMutationResponse($controller, 'delete-alias');
-$check('valid mailbox delete-alias POST reaches the authorized mutation',
+$check(
+    'valid mailbox delete-alias POST reaches the authorized mutation',
     $response->status === 302 && $mailboxRepository->lookups === 1 && $aliasRepository->lookups === 1
-        && in_array($alias, $em->removed, true) && $em->flushes >= 1);
+        && in_array($alias, $em->removed, true) && $em->flushes >= 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'arid' => '5']);
 $archive = new CsrfMutationArchive();
 $archiveRepository = new CsrfMutationArchiveRepository($archive);
 [$controller, $bootstrap, $em] = csrfMutationController(ArchiveController::class, 'toggle-autoprune', ['Entities\\Archive' => $archiveRepository], []);
 $response = csrfMutationResponse($controller, 'toggle-autoprune');
-$check('valid archive toggle-autoprune POST reaches the authorized mutation',
+$check(
+    'valid archive toggle-autoprune POST reaches the authorized mutation',
     $response->status === 302 && $archiveRepository->lookups === 1
-        && $archive->getAutoprune() === true && $em->flushes >= 1);
+        && $archive->getAutoprune() === true && $em->flushes >= 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'arid' => '5']);
 $archive = new CsrfMutationArchive();
 $archiveRepository = new CsrfMutationArchiveRepository($archive);
 [$controller, $bootstrap, $em] = csrfMutationController(ArchiveController::class, 'delete', ['Entities\\Archive' => $archiveRepository], []);
 $response = csrfMutationResponse($controller, 'delete');
-$check('valid archive-delete POST reaches the authorized mutation',
+$check(
+    'valid archive-delete POST reaches the authorized mutation',
     $response->status === 302 && $archiveRepository->lookups === 1
-        && in_array($archive, $em->removed, true) && $em->flushes >= 1);
+        && in_array($archive, $em->removed, true) && $em->flushes >= 1
+);
 
 // The archive fixture carries no maildir_file, so restore skips doveadm and
 // takes the "mailbox still exists" branch straight to the row removal.
@@ -609,9 +699,11 @@ $mailboxRepository = new CsrfMutationMailboxRepository(new CsrfMutationMailbox()
     'Entities\\Archive' => $archiveRepository, 'Entities\\Mailbox' => $mailboxRepository,
 ], []);
 $response = csrfMutationResponse($controller, 'restore');
-$check('valid archive-restore POST reaches the authorized mutation',
+$check(
+    'valid archive-restore POST reaches the authorized mutation',
     $response->status === 302 && $archiveRepository->lookups === 1
-        && in_array($archive, $em->removed, true) && $em->flushes >= 1);
+        && in_array($archive, $em->removed, true) && $em->flushes >= 1
+);
 
 csrfMutationRequest('POST', ['csrf' => 'csrf-token', 'aid' => '2', 'did' => '3']);
 $target = new CsrfMutationAdmin(2);
@@ -623,9 +715,11 @@ $domainRepository = new CsrfMutationDomainRepository($domain);
     'Entities\\Admin' => $adminRepository, 'Entities\\Domain' => $domainRepository,
 ], []);
 $response = csrfMutationResponse($controller, 'remove-domain');
-$check('valid admin remove-domain POST reaches the authorized mutation',
+$check(
+    'valid admin remove-domain POST reaches the authorized mutation',
     $response->status === 302 && !$target->getDomains()->contains($domain)
-        && $adminRepository->lookups === 1 && $em->flushes >= 1);
+        && $adminRepository->lookups === 1 && $em->flushes >= 1
+);
 
 // --- view layer: every converted control is a CSRF-bearing POST form ---------
 
@@ -634,17 +728,23 @@ $aliasJs = file_get_contents(__DIR__ . '/../application/views/alias/js/list.js')
 $mailboxJs = file_get_contents(__DIR__ . '/../application/views/mailbox/js/list.js');
 $domainsTemplate = file_get_contents(__DIR__ . '/../application/views/admin/domains.phtml');
 $domainsJs = file_get_contents(__DIR__ . '/../application/views/admin/js/domains.js');
-$check('administrator toggles submit the session token in their POST data',
-    is_string($adminJs) && substr_count($adminJs, '"csrf": "{$csrfToken}"') === 2);
-$check('alias and mailbox toggles submit the session token in their POST data',
+$check(
+    'administrator toggles submit the session token in their POST data',
+    is_string($adminJs) && substr_count($adminJs, '"csrf": "{$csrfToken}"') === 2
+);
+$check(
+    'alias and mailbox toggles submit the session token in their POST data',
     is_string($aliasJs) && is_string($mailboxJs)
         && str_contains($aliasJs, '"csrf": "{$csrfToken}"')
-        && str_contains($mailboxJs, '"csrf": "{$csrfToken}"'));
-$check('domain removal uses a CSRF-bearing POST form instead of a confirmation link',
+        && str_contains($mailboxJs, '"csrf": "{$csrfToken}"')
+);
+$check(
+    'domain removal uses a CSRF-bearing POST form instead of a confirmation link',
     is_string($domainsTemplate) && is_string($domainsJs)
         && str_contains($domainsTemplate, 'id="remove_domain_form" method="post"')
         && str_contains($domainsTemplate, 'name="csrf" value="{$csrfToken|escape}"')
-        && str_contains($domainsJs, "#remove_domain_form input[name=\"did\"]"));
+        && str_contains($domainsJs, "#remove_domain_form input[name=\"did\"]")
+);
 
 $aliasList     = file_get_contents(__DIR__ . '/../application/views/alias/list.phtml');
 $adminList     = file_get_contents(__DIR__ . '/../application/views/admin/list.phtml');
@@ -669,24 +769,30 @@ $convertedViews = [
     'archive list js'   => [$archiveJs, 'archive-action-form', 4],
 ];
 foreach ($convertedViews as $label => [$contents, $marker, $expected]) {
-    $check("{$label}: destructive controls are POST forms carrying the body token",
+    $check(
+        "{$label}: destructive controls are POST forms carrying the body token",
         is_string($contents)
             && substr_count($contents, $marker) === $expected
             && substr_count($contents, 'name="csrf"') >= $expected
             && !str_contains($contents, 'csrf=$csrfToken')
-            && !str_contains($contents, '/csrf/{$csrfToken}'));
+            && !str_contains($contents, '/csrf/{$csrfToken}')
+    );
 }
 
-$check('domain purge is a CSRF-bearing POST form driven by the confirm dialog',
+$check(
+    'domain purge is a CSRF-bearing POST form driven by the confirm dialog',
     is_string($domainList) && is_string($domainListJs)
         && str_contains($domainList, 'id="purge_domain_form" method="post"')
         && str_contains($domainList, 'name="csrf" value="{$csrfToken|escape}"')
         && str_contains($domainListJs, '#purge_domain_form input[name="did"]')
-        && !str_contains($domainListJs, "attr( 'href'"));
+        && !str_contains($domainListJs, "attr( 'href'")
+);
 
-$check('mailbox purge confirmation form submits the token in its body',
+$check(
+    'mailbox purge confirmation form submits the token in its body',
     is_string($mailboxPurge)
-        && str_contains($mailboxPurge, 'name="csrf" value="{$csrfToken|escape}"'));
+        && str_contains($mailboxPurge, 'name="csrf" value="{$csrfToken|escape}"')
+);
 
 // No controller may still accept a URL-borne token on a destructive action.
 foreach ([
@@ -702,14 +808,16 @@ foreach ([
         // whole file would happily find the next postBodyCsrfValid() in some
         // LATER method and report a guard this one does not have. Stop at the
         // next `    public|private function`, i.e. the following declaration.
-        $check("{$class}::{$method} guards on the POST body token",
+        $check(
+            "{$class}::{$method} guards on the POST body token",
             is_string($source)
                 && preg_match(
                     '/function ' . preg_quote($method, '/') . '\('
                     . '(?:(?!\n    (?:public|private|protected) function ).)*?'
                     . 'postBodyCsrfValid\(\)/s',
                     $source,
-                ) === 1);
+                ) === 1
+        );
     }
 }
 
@@ -722,14 +830,16 @@ foreach ([
     'queueArchiveAction' => 'TYPE_ARCHIVE',
     'queueDeleteAction'  => 'TYPE_DELETE',
 ] as $action => $taskType) {
-    $check("MailboxController::{$action} delegates to the guarded queueMailboxTask helper",
+    $check(
+        "MailboxController::{$action} delegates to the guarded queueMailboxTask helper",
         is_string($mailboxSource)
             && preg_match(
                 '/function ' . preg_quote($action, '/')
                     . '\\(\\)[^{]*\\{\\s*return \\$this->queueMailboxTask\\(\\s*\\\\Entities\\\\MailboxTask::'
                     . preg_quote($taskType, '/') . '\\b/s',
                 $mailboxSource,
-            ) === 1);
+            ) === 1
+    );
 }
 
 // The confirm dialogs must hand the form off, not an href.
@@ -737,11 +847,13 @@ foreach ([
     'alias/js/list.js', 'mailbox/js/aliases.js', 'domain/js/admins.js', 'admin/js/list.js',
 ] as $script) {
     $contents = file_get_contents(__DIR__ . '/../application/views/' . $script);
-    $check("{$script}: the confirm dialog submits the POST form rather than following a link",
+    $check(
+        "{$script}: the confirm dialog submits the POST form rather than following a link",
         is_string($contents)
             && str_contains($contents, "element.closest( 'form' )")
             && str_contains($contents, "targetForm.get( 0 ).submit()")
-            && !preg_match('/purge_dialog_delete.*attr\(\s*[\'"]href/', $contents));
+            && !preg_match('/purge_dialog_delete.*attr\(\s*[\'"]href/', $contents)
+    );
 }
 
 $check('fixed assertion count', $checks === 131);

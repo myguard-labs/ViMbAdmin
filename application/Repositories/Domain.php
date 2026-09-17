@@ -103,22 +103,26 @@ class Domain extends EntityRepository
      * @param \Entities\Admin $admin
      * @return \Entities\Domain[]
      */
-    public function loadForAdmin( $admin )
+    public function loadForAdmin($admin)
     {
         $dql = "SELECT d FROM \\Entities\\Domain d";
-        
-        if( !$admin->isSuper() )
+
+        if (!$admin->isSuper()) {
             $dql .= " LEFT JOIN d.Admins d2a WHERE d2a = ?1";
+        }
 
         $dql .= " ORDER BY d.domain ASC";
-                
-        $q = $this->getEntityManager()->createQuery( $dql );
-        
-        if( !$admin->isSuper() )
-            $q->setParameter( 1, $admin );
-        
+
+        $q = $this->getEntityManager()->createQuery($dql);
+
+        if (!$admin->isSuper()) {
+            $q->setParameter(1, $admin);
+        }
+
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $q->execute(), \Entities\Domain::class, 'Domain admin query'
+            $q->execute(),
+            \Entities\Domain::class,
+            'Domain admin query'
         );
     }
 
@@ -127,41 +131,40 @@ class Domain extends EntityRepository
      *
      * Its used to get domains names in mailbox add-edit drop down list.
      * It also can be used as loadForDomainList function.
-     * It calls loadForDomain iterates thought domains and it can return 
+     * It calls loadForDomain iterates thought domains and it can return
      * two types of arrays: id => name, or id => [ domain data ]
      *
      * @param \Entities\Admin $admin
      * @param bool $onlyNames Type of array if set to true only names will be returned, else all data.
      * @return ($onlyNames is true ? array<int,string> : array<int,array<string,mixed>>)
      */
-    public function loadForAdminAsArray( $admin, $onlyNames = false )
+    public function loadForAdminAsArray($admin, $onlyNames = false)
     {
         $array = [];
-        
-        if( $onlyNames )
-        {
+
+        if ($onlyNames) {
             $dql = 'SELECT d.id AS id, d.domain AS domain FROM \\Entities\\Domain d';
-            if( !$admin->isSuper() )
+            if (!$admin->isSuper()) {
                 $dql .= ' JOIN d.Admins d2a WHERE d2a = ?1';
+            }
             $dql .= ' ORDER BY d.domain ASC';
 
-            $query = $this->getEntityManager()->createQuery( $dql );
-            if( !$admin->isSuper() )
-                $query->setParameter( 1, $admin );
+            $query = $this->getEntityManager()->createQuery($dql);
+            if (!$admin->isSuper()) {
+                $query->setParameter(1, $admin);
+            }
 
             $rows = $query->getArrayResult();
-            foreach( $rows as $row ) {
-                if( !is_array( $row ) || !array_key_exists( 'id', $row )
-                    || !is_int( $row['id'] ) || !isset( $row['domain'] ) || !is_string( $row['domain'] ) )
-                    throw new \UnexpectedValueException( 'Domain choices query row has an invalid shape.' );
+            foreach ($rows as $row) {
+                if (!is_array($row) || !array_key_exists('id', $row)
+                    || !is_int($row['id']) || !isset($row['domain']) || !is_string($row['domain'])) {
+                    throw new \UnexpectedValueException('Domain choices query row has an invalid shape.');
+                }
                 $array[$row['id']] = $row['domain'];
             }
-            
-        }
-        else
-        {
-            foreach( $this->loadForAdmin( $admin ) as $domain )
-            {
+
+        } else {
+            foreach ($this->loadForAdmin($admin) as $domain) {
                 $array[ $domain->requiredId() ] = [
                     'domain'        => $domain->requiredDomainName(),
                     'description'   => $domain->getDescription(),
@@ -183,7 +186,7 @@ class Domain extends EntityRepository
         }
         return $array;
     }
-    
+
     /**
      * Load data for domains list
      *
@@ -192,25 +195,27 @@ class Domain extends EntityRepository
      * @param \Entities\Admin $admin
      * @return array<int,array<string,mixed>>
      */
-    public function loadForDomainList( $admin )
+    public function loadForDomainList($admin)
     {
         $dql = "SELECT d.id AS id, d.domain AS name, d.alias_count AS aliases, d.mailbox_count AS mailboxes,
                     d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes,
                     d.max_quota AS maxquota, d.quota AS quota, d.transport AS transport, d.backupmx AS backupmx,
                     d.active AS active, d.created AS created
                 FROM \\Entities\\Domain d LEFT JOIN d.Mailboxes m";
-        
+
         // FIXME a.address != a.goto
-        
-        if( !$admin->isSuper() )
+
+        if (!$admin->isSuper()) {
             $dql .= " LEFT JOIN d.Admins d2a WHERE d2a = ?1";
+        }
 
         $dql .= " GROUP BY d.id ORDER BY d.domain ASC";
-                
-        $q = $this->getEntityManager()->createQuery( $dql );
 
-        if( !$admin->isSuper() )
-            $q->setParameter( 1, $admin );
+        $q = $this->getEntityManager()->createQuery($dql);
+
+        if (!$admin->isSuper()) {
+            $q->setParameter(1, $admin);
+        }
 
         return $this->_mergeDomainUsage(self::requiredDomainListRows($q->getArrayResult()));
     }
@@ -226,32 +231,34 @@ class Domain extends EntityRepository
      * @param \Entities\Admin $admin
      * @return array{rows: array<int,array<string,mixed>>, total: int, filtered: int}
      */
-    public function pagedForDomainList( $admin, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length )
+    public function pagedForDomainList($admin, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length)
     {
-        $base = function() use ( $admin ): \Doctrine\ORM\QueryBuilder {
+        $base = function () use ($admin): \Doctrine\ORM\QueryBuilder {
             $qb = $this->getEntityManager()->createQueryBuilder()
-                ->from( '\\Entities\\Domain', 'd' );
+                ->from('\\Entities\\Domain', 'd');
 
-            if( !$admin->isSuper() )
-                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+            if (!$admin->isSuper()) {
+                $qb->join('d.Admins', 'd2a')->andWhere('d2a = :admin')->setParameter('admin', $admin);
+            }
 
             return $qb;
         };
 
-        $applySearch = function( \Doctrine\ORM\QueryBuilder $qb ) use ( $search, $contains ): \Doctrine\ORM\QueryBuilder {
-            if( $search !== '' )
-                $qb->andWhere( '( d.domain LIKE :s OR d.description LIKE :s OR d.transport LIKE :s )' )
-                   ->setParameter( 's', DataTableQuery::likePattern( $search, $contains ) );
+        $applySearch = function (\Doctrine\ORM\QueryBuilder $qb) use ($search, $contains): \Doctrine\ORM\QueryBuilder {
+            if ($search !== '') {
+                $qb->andWhere('( d.domain LIKE :s OR d.description LIKE :s OR d.transport LIKE :s )')
+                   ->setParameter('s', DataTableQuery::likePattern($search, $contains));
+            }
             return $qb;
         };
 
         // Unfiltered total stable per admin -> cache briefly.
         $scopeKey = 'vimb_total_dom_' . $admin->getId();
-        $total    = (int) $base()->select( 'COUNT(DISTINCT d.id)' )->getQuery()
-            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $total    = (int) $base()->select('COUNT(DISTINCT d.id)')->getQuery()
+            ->enableResultCache(30, $scopeKey)->getSingleScalarResult();
         $filtered = $search === ''
             ? $total
-            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT d.id)' )->getQuery()->getSingleScalarResult();
+            : (int) $applySearch($base())->select('COUNT(DISTINCT d.id)')->getQuery()->getSingleScalarResult();
 
         $sortMap = [
             'domain' => 'd.domain', 'mailboxes' => 'd.mailbox_count', 'aliases' => 'd.alias_count',
@@ -259,14 +266,14 @@ class Domain extends EntityRepository
         ];
         $orderBy = $sortMap[ $sortField ] ?? 'd.domain';
 
-        $rows = $applySearch( $base() )
-            ->select( 'd.id AS id, d.domain AS name, d.alias_count AS aliases, d.mailbox_count AS mailboxes,
+        $rows = $applySearch($base())
+            ->select('d.id AS id, d.domain AS name, d.alias_count AS aliases, d.mailbox_count AS mailboxes,
                     d.max_aliases AS maxaliases, d.max_mailboxes AS maxmailboxes,
                     d.max_quota AS maxquota, d.quota AS quota, d.transport AS transport, d.backupmx AS backupmx,
-                    d.active AS active, d.created AS created' )
-            ->orderBy( $orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC' )
-            ->setFirstResult( max( 0, $start ) )
-            ->setMaxResults( max( 1, $length ) )
+                    d.active AS active, d.created AS created')
+            ->orderBy($orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC')
+            ->setFirstResult(max(0, $start))
+            ->setMaxResults(max(1, $length))
             ->getQuery()->getArrayResult();
 
         return [ 'rows' => $this->_mergeDomainUsage(self::requiredDomainListRows($rows)), 'total' => $total, 'filtered' => $filtered ];
@@ -283,10 +290,11 @@ class Domain extends EntityRepository
      * @param array<int,array<string,mixed>> $rows Domain list rows from getArrayResult()
      * @return array<int,array<string,mixed>>
      */
-    private function _mergeDomainUsage( array $rows )
+    private function _mergeDomainUsage(array $rows)
     {
-        if( !$rows )
+        if (!$rows) {
             return $rows;
+        }
 
         // SUBSTRING_INDEX is MySQL/MariaDB-specific; username is always
         // local@domain, so take everything after the last '@'. The function in
@@ -295,8 +303,8 @@ class Domain extends EntityRepository
         // domain list is hit repeatedly while browsing. Native query because of
         // SUBSTRING_INDEX.
         $rsm = new \Doctrine\ORM\Query\ResultSetMapping();
-        $rsm->addScalarResult( 'domain', 'domain', 'string' );
-        $rsm->addScalarResult( 'bytes', 'bytes', 'bigint' );
+        $rsm->addScalarResult('domain', 'domain', 'string');
+        $rsm->addScalarResult('bytes', 'bytes', 'bigint');
 
         $sums = $this->getEntityManager()
             ->createNativeQuery(
@@ -304,7 +312,7 @@ class Domain extends EntityRepository
                    FROM dovecot_quota GROUP BY SUBSTRING_INDEX( username, '@', -1 )",
                 $rsm
             )
-            ->enableResultCache( 60, 'vimb_domain_quota_sums' )
+            ->enableResultCache(60, 'vimb_domain_quota_sums')
             ->getResult();
 
         $byDomain = self::requiredDomainUsageByDomain($sums);
@@ -318,62 +326,62 @@ class Domain extends EntityRepository
      * @param \Entities\Domain $domain The domain object
      * @return void
      */
-    public function purge( $domain )
+    public function purge($domain)
     {
-        $this->purgeMailboxes( $domain );
-        $this->purgeAliases( $domain );
-        $this->purgeLogs( $domain );
-        $this->purgeDomainAdmins( $domain );
-        
-        $this->getEntityManager()->remove( $domain );
+        $this->purgeMailboxes($domain);
+        $this->purgeAliases($domain);
+        $this->purgeLogs($domain);
+        $this->purgeDomainAdmins($domain);
+
+        $this->getEntityManager()->remove($domain);
         $this->getEntityManager()->flush();
     }
-    
+
     /**
      * Purge all mailboxes of a domain
      *
      * @param \Entities\Domain $domain The domain to purge the mailboxes of
      * @return int The number of records deleted
      */
-    public function purgeMailboxes( $domain )
+    public function purgeMailboxes($domain)
     {
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::affectedRows($this->getEntityManager()->createQuery(
-                "DELETE FROM \\Entities\\Mailbox m WHERE m.Domain = ?1"
-            )
-            ->setParameter( 1, $domain )
+            "DELETE FROM \\Entities\\Mailbox m WHERE m.Domain = ?1"
+        )
+            ->setParameter(1, $domain)
             ->execute(), 'Domain mailbox purge');
     }
-    
+
     /**
      * Purge all alaises of a domain
      *
      * @param \Entities\Domain $domain The domain to purge the aliases of
      * @return int The number of records deleted
      */
-    public function purgeAliases( $domain )
+    public function purgeAliases($domain)
     {
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::affectedRows($this->getEntityManager()->createQuery(
-                "DELETE FROM \\Entities\\Alias m WHERE m.Domain = ?1"
-            )
-            ->setParameter( 1, $domain )
+            "DELETE FROM \\Entities\\Alias m WHERE m.Domain = ?1"
+        )
+            ->setParameter(1, $domain)
             ->execute(), 'Domain alias purge');
     }
-    
+
     /**
      * Purge all logs of a domain
      *
      * @param \Entities\Domain $domain The domain to purge the logs of
      * @return int The number of logs deleted
      */
-    public function purgeLogs( $domain )
+    public function purgeLogs($domain)
     {
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::affectedRows($this->getEntityManager()->createQuery(
-                "DELETE FROM \\Entities\\Log m WHERE m.Domain = ?1"
-            )
-            ->setParameter( 1, $domain )
+            "DELETE FROM \\Entities\\Log m WHERE m.Domain = ?1"
+        )
+            ->setParameter(1, $domain)
             ->execute(), 'Domain log purge');
     }
-    
+
     /**
      * Purge all links to admins for a domain
      *
@@ -382,12 +390,11 @@ class Domain extends EntityRepository
      * @param \Entities\Domain $domain The domain to purge the admin links of
      * @return int The number of links deleted
      */
-    public function purgeDomainAdmins( $domain )
+    public function purgeDomainAdmins($domain)
     {
         $count = 0;
-        foreach( $domain->getAdmins() as $a )
-        {
-            $domain->removeAdmin( $a );
+        foreach ($domain->getAdmins() as $a) {
+            $domain->removeAdmin($a);
             $count++;
         }
 
@@ -396,7 +403,7 @@ class Domain extends EntityRepository
 
     /**
      * Finds all domains which are not assigned with admin.
-     * 
+     *
      * Finds all domains and iterate through then making an array of 'id' => 'domain'
      * If domain inactive domain name will be append by '(inactive)' then we iterate
      * through admin domains and removing all array elements which id is already in admin domains list.
@@ -404,19 +411,21 @@ class Domain extends EntityRepository
      * @param \Entities\Admin $admin Admin to look for not assign domains
      * @return array<int,string>
      */
-    public function getNotAssignedForAdmin( $admin )
+    public function getNotAssignedForAdmin($admin)
     {
         $domainNames = [];
-        foreach( $this->findAll() as $domain ) {
+        foreach ($this->findAll() as $domain) {
             $domainName = $domain->requiredDomainName();
             $domainNames[ $domain->requiredId() ] = $domain->getActive() ? $domainName : $domainName . " (inactive)";
         }
 
-        foreach( $admin->getDomains() as $domain )
-            if( isset( $domainNames[ $domain->requiredId() ] ) )
-                unset( $domainNames[ $domain->requiredId() ] );
-        
+        foreach ($admin->getDomains() as $domain) {
+            if (isset($domainNames[ $domain->requiredId() ])) {
+                unset($domainNames[ $domain->requiredId() ]);
+            }
+        }
+
         return $domainNames;
     }
-    
+
 }

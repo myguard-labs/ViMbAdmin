@@ -39,10 +39,16 @@ final class FormPluginHost
             private array $options;
 
             /** @param array<string,mixed> $options */
-            public function __construct(array $options) { $this->options = $options; }
+            public function __construct(array $options)
+            {
+                $this->options = $options;
+            }
 
             /** @return array<string,mixed> */
-            public function getOptions(): array { return $this->options; }
+            public function getOptions(): array
+            {
+                return $this->options;
+            }
         };
 
         foreach (glob(rtrim($pluginsDir, '/') . '/*.php') ?: [] as $file) {

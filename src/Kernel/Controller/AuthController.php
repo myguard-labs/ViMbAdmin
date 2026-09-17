@@ -940,7 +940,7 @@ final class AuthController extends AbstractController
              ->add(new Field('confirm_new_password', 'Confirm new password', 'password', [
                  Validators::string(),
                  Validators::required(),
-                 Validators::matches(static fn() => $_POST['new_password'] ?? null, 'The passwords do not match.'),
+                 Validators::matches(static fn () => $_POST['new_password'] ?? null, 'The passwords do not match.'),
              ]));
 
         return $form;
@@ -1219,7 +1219,7 @@ final class AuthController extends AbstractController
              ->add(new Field('password_confirm', 'Confirm new password', 'password', [
                  Validators::string(),
                  Validators::required(),
-                 Validators::matches(static fn() => $_POST['password'] ?? null, 'The passwords do not match.'),
+                 Validators::matches(static fn () => $_POST['password'] ?? null, 'The passwords do not match.'),
              ]));
 
         return $form;

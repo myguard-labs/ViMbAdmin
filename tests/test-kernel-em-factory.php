@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Regression smoke test: the native Doctrine EM factory (WALL #2,
  * docs/ZF1-REMOVAL.md).
@@ -76,8 +77,9 @@ final class TestKernelEmFactoryHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelEmFactoryHarnessState::$count;
-function emCheck(string $label, callable $fn): void {
+$failures = & TestKernelEmFactoryHarnessState::$count;
+function emCheck(string $label, callable $fn): void
+{
 
     try {
         $fn();
@@ -101,7 +103,8 @@ function requireEntityManager(mixed $value): EntityManagerInterface
 // below extend the real classes, and metadata loading reflects their entities.
 EntityManagerFactory::registerEntityAutoloaders($options);
 
-function checkDirectoryEntryRepositoryContract(mixed $entityManager): void {
+function checkDirectoryEntryRepositoryContract(mixed $entityManager): void
+{
 
 
     if (!$entityManager instanceof EntityManagerInterface) {
@@ -381,7 +384,9 @@ final class McpTokenLookupRepositoryProbe extends McpTokenRepository
     /** @var array<string,string>|null */
     public ?array $orderBy = null;
 
-    public function __construct(private ?McpTokenEntity $result) {}
+    public function __construct(private ?McpTokenEntity $result)
+    {
+    }
 
     /** @param array<string,mixed> $criteria */
     public function findOneBy(array $criteria, ?array $orderBy = null): ?object

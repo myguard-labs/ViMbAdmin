@@ -32,9 +32,9 @@ class ViMbAdmin_Demo
      * @param DemoOptions $options  merged application.ini options
      * @return string|null
      */
-    public static function account( array $options )
+    public static function account(array $options)
     {
-        $acct = trim( self::optionValue( $options, 'account' ) ?? '' );
+        $acct = trim(self::optionValue($options, 'account') ?? '');
         return $acct !== '' ? $acct : null;
     }
 
@@ -44,11 +44,12 @@ class ViMbAdmin_Demo
      * @param DemoOptions $options
      * @return string|null
      */
-    public static function password( array $options )
+    public static function password(array $options)
     {
-        if( self::account( $options ) === null )
+        if (self::account($options) === null) {
             return null;
-        $pw = self::optionValue( $options, 'password' ) ?? '';
+        }
+        $pw = self::optionValue($options, 'password') ?? '';
         return $pw !== '' ? $pw : null;
     }
 
@@ -58,9 +59,9 @@ class ViMbAdmin_Demo
      * @param DemoOptions $options
      * @return bool
      */
-    public static function enabled( array $options )
+    public static function enabled(array $options)
     {
-        return self::account( $options ) !== null;
+        return self::account($options) !== null;
     }
 
     /**
@@ -71,12 +72,13 @@ class ViMbAdmin_Demo
      * @param string|null $username
      * @return bool
      */
-    public static function isLocked( array $options, $username )
+    public static function isLocked(array $options, $username)
     {
-        $acct = self::account( $options );
-        if( $acct === null || $username === null || $username === '' )
+        $acct = self::account($options);
+        if ($acct === null || $username === null || $username === '') {
             return false;
-        return strcasecmp( $acct, (string) $username ) === 0;
+        }
+        return strcasecmp($acct, (string) $username) === 0;
     }
 
     /**
@@ -85,15 +87,17 @@ class ViMbAdmin_Demo
      *
      * @param DemoOptions $options
      */
-    private static function optionValue( array $options, string $key ): ?string
+    private static function optionValue(array $options, string $key): ?string
     {
         $demo = $options['demo'] ?? null;
-        if( !is_array( $demo ) )
+        if (!is_array($demo)) {
             return null;
+        }
 
         $value = $demo[$key] ?? null;
-        if( !is_scalar( $value ) && !$value instanceof Stringable )
+        if (!is_scalar($value) && !$value instanceof Stringable) {
             return null;
+        }
 
         return (string) $value;
     }

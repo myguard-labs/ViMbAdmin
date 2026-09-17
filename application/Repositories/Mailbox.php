@@ -197,20 +197,23 @@ class Mailbox extends EntityRepository
      * @param \Entities\Admin $admin Admin for filtering mailboxes.
      * @return \Entities\Mailbox[]
      */
-    public function loadForAdmin( $admin )
+    public function loadForAdmin($admin)
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'm' )
-            ->from( '\\Entities\\Mailbox', 'm' );
+            ->select('m')
+            ->from('\\Entities\\Mailbox', 'm');
 
-        if( !$admin->isSuper() )
-            $qb->join( 'm.Domain', 'd' )
-                ->join( 'd.Admins', 'd2a' )
-                ->where( 'd2a.Admin = ?1' )
-                ->setParameter( 1, $admin );
+        if (!$admin->isSuper()) {
+            $qb->join('m.Domain', 'd')
+                ->join('d.Admins', 'd2a')
+                ->where('d2a.Admin = ?1')
+                ->setParameter(1, $admin);
+        }
 
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $qb->getQuery()->getResult(), \Entities\Mailbox::class, 'Mailbox admin query'
+            $qb->getQuery()->getResult(),
+            \Entities\Mailbox::class,
+            'Mailbox admin query'
         );
     }
 
@@ -223,30 +226,32 @@ class Mailbox extends EntityRepository
      * @param \Entities\Domain|null $domain Domain for filtering mailboxes.
      * @return array<int,MailboxListRow>
      */
-    public function loadForMailboxList( $admin, $domain = null )
+    public function loadForMailboxList($admin, $domain = null)
     {
         return $this->_mergeQuotaUsage(self::requiredMailboxHydrationRows(
-            $this->mailboxListQuery( $admin, $domain )->getQuery()->getArrayResult()
+            $this->mailboxListQuery($admin, $domain)->getQuery()->getArrayResult()
         ));
     }
 
-    private function mailboxListQuery( \Entities\Admin $admin, ?\Entities\Domain $domain ): QueryBuilder
+    private function mailboxListQuery(\Entities\Admin $admin, ?\Entities\Domain $domain): QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active,
-                    m.quota as quota, d.domain as domain, m.delete_pending' )
-            ->from( '\\Entities\\Mailbox', 'm' )
-            ->where( 'm.delete_pending = FALSE' )
-            ->join( 'm.Domain', 'd' );
-        
-        if( !$admin->isSuper() )
-            $qb->join( 'd.Admins', 'd2a' )
-                ->andWhere( 'd2a = ?1' )
-                ->setParameter( 1, $admin );
+            ->select('m.id as id, m.username as username, m.name as name, m.active as active,
+                    m.quota as quota, d.domain as domain, m.delete_pending')
+            ->from('\\Entities\\Mailbox', 'm')
+            ->where('m.delete_pending = FALSE')
+            ->join('m.Domain', 'd');
 
-        if( $domain )
-            $qb->andWhere( 'm.Domain = ?2' )
-                ->setParameter( 2, $domain );
+        if (!$admin->isSuper()) {
+            $qb->join('d.Admins', 'd2a')
+                ->andWhere('d2a = ?1')
+                ->setParameter(1, $admin);
+        }
+
+        if ($domain) {
+            $qb->andWhere('m.Domain = ?2')
+                ->setParameter(2, $domain);
+        }
 
         return $qb;
     }
@@ -265,48 +270,51 @@ class Mailbox extends EntityRepository
      * @param \Entities\Domain|null $domain
      * @return array{rows: list<array<string,mixed>>, total: int, filtered: int}
      */
-    public function pagedForMailboxList( $admin, $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length )
+    public function pagedForMailboxList($admin, $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length)
     {
-        $base = function() use ( $admin, $domain ): \Doctrine\ORM\QueryBuilder {
+        $base = function () use ($admin, $domain): \Doctrine\ORM\QueryBuilder {
             $qb = $this->getEntityManager()->createQueryBuilder()
-                ->from( '\\Entities\\Mailbox', 'm' )
-                ->where( 'm.delete_pending = FALSE' )
-                ->join( 'm.Domain', 'd' );
+                ->from('\\Entities\\Mailbox', 'm')
+                ->where('m.delete_pending = FALSE')
+                ->join('m.Domain', 'd');
 
-            if( !$admin->isSuper() )
-                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+            if (!$admin->isSuper()) {
+                $qb->join('d.Admins', 'd2a')->andWhere('d2a = :admin')->setParameter('admin', $admin);
+            }
 
-            if( $domain )
-                $qb->andWhere( 'm.Domain = :domain' )->setParameter( 'domain', $domain );
+            if ($domain) {
+                $qb->andWhere('m.Domain = :domain')->setParameter('domain', $domain);
+            }
 
             return $qb;
         };
 
-        $applySearch = function( \Doctrine\ORM\QueryBuilder $qb ) use ( $search, $contains ): \Doctrine\ORM\QueryBuilder {
-            if( $search !== '' )
-                $qb->andWhere( '( m.username LIKE :s OR m.name LIKE :s OR d.domain LIKE :s )' )
-                   ->setParameter( 's', DataTableQuery::likePattern( $search, $contains ) );
+        $applySearch = function (\Doctrine\ORM\QueryBuilder $qb) use ($search, $contains): \Doctrine\ORM\QueryBuilder {
+            if ($search !== '') {
+                $qb->andWhere('( m.username LIKE :s OR m.name LIKE :s OR d.domain LIKE :s )')
+                   ->setParameter('s', DataTableQuery::likePattern($search, $contains));
+            }
             return $qb;
         };
 
         // Unfiltered total is stable per scope and hit on every paging draw -> cache it briefly.
-        $scopeKey = 'vimb_total_mb_' . $admin->getId() . '_' . ( $domain ? $domain->requiredId() : 0 );
-        $total    = (int) $base()->select( 'COUNT(DISTINCT m.id)' )->getQuery()
-            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $scopeKey = 'vimb_total_mb_' . $admin->getId() . '_' . ($domain ? $domain->requiredId() : 0);
+        $total    = (int) $base()->select('COUNT(DISTINCT m.id)')->getQuery()
+            ->enableResultCache(30, $scopeKey)->getSingleScalarResult();
         // No search -> filtered == total; skip the second COUNT entirely.
         $filtered = $search === ''
             ? $total
-            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT m.id)' )->getQuery()->getSingleScalarResult();
+            : (int) $applySearch($base())->select('COUNT(DISTINCT m.id)')->getQuery()->getSingleScalarResult();
 
         $sortMap = [ 'username' => 'm.username', 'name' => 'm.name', 'quota' => 'm.quota', 'domain' => 'd.domain', 'active' => 'm.active' ];
         $orderBy = $sortMap[ $sortField ] ?? 'm.username';
 
-        $rows = $applySearch( $base() )
-            ->select( 'm.id as id, m.username as username, m.name as name, m.active as active,
-                    m.quota as quota, d.domain as domain, m.delete_pending' )
-            ->orderBy( $orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC' )
-            ->setFirstResult( max( 0, $start ) )
-            ->setMaxResults( max( 1, $length ) )
+        $rows = $applySearch($base())
+            ->select('m.id as id, m.username as username, m.name as name, m.active as active,
+                    m.quota as quota, d.domain as domain, m.delete_pending')
+            ->orderBy($orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC')
+            ->setFirstResult(max(0, $start))
+            ->setMaxResults(max(1, $length))
             ->getQuery()->getArrayResult();
 
         return [ 'rows' => array_values($this->_mergeQuotaUsage(self::requiredMailboxHydrationRows($rows))), 'total' => $total, 'filtered' => $filtered ];
@@ -325,18 +333,19 @@ class Mailbox extends EntityRepository
      * @param array<int,MailboxHydrationRow> $rows Mailbox list rows from getArrayResult()
      * @return array<int,MailboxListRow>
      */
-    private function _mergeQuotaUsage( array $rows )
+    private function _mergeQuotaUsage(array $rows)
     {
-        if( !$rows )
+        if (!$rows) {
             return $rows;
+        }
 
-        $usernames = array_column( $rows, 'username' );
+        $usernames = array_column($rows, 'username');
 
         $quotas = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'q.username as username, q.bytes as bytes, q.messages as messages' )
-            ->from( '\\Entities\\Quota', 'q' )
-            ->where( 'q.username IN ( :usernames )' )
-            ->setParameter( 'usernames', $usernames )
+            ->select('q.username as username, q.bytes as bytes, q.messages as messages')
+            ->from('\\Entities\\Quota', 'q')
+            ->where('q.username IN ( :usernames )')
+            ->setParameter('usernames', $usernames)
             ->getQuery()->getArrayResult();
 
         $byUser = self::requiredQuotaUsageByUsername($quotas);
@@ -344,10 +353,10 @@ class Mailbox extends EntityRepository
         // Last-login (Dovecot last_login plugin -> dovecot_last_login table,
         // unix timestamp). Batch-load and graft alongside the quota usage.
         $logins = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'l.username as username, l.last_login as last_login' )
-            ->from( '\\Entities\\LastLogin', 'l' )
-            ->where( 'l.username IN ( :usernames )' )
-            ->setParameter( 'usernames', $usernames )
+            ->select('l.username as username, l.last_login as last_login')
+            ->from('\\Entities\\LastLogin', 'l')
+            ->where('l.username IN ( :usernames )')
+            ->setParameter('usernames', $usernames)
             ->getQuery()->getArrayResult();
 
         $loginByUser = self::requiredLastLoginByUsername($logins);
@@ -364,28 +373,30 @@ class Mailbox extends EntityRepository
      * @param \Entities\Domain|null $domain Domain for filtering mailboxes.
      * @return array<int|string,string>
      */
-    public function loadUsernameList( $admin, $domain = null )
+    public function loadUsernameList($admin, $domain = null)
     {
         return $this->indexUsernameRows(self::requiredUsernameRows(
-            $this->usernameListQuery( $admin, $domain )->getQuery()->getArrayResult()
+            $this->usernameListQuery($admin, $domain)->getQuery()->getArrayResult()
         ));
     }
 
-    private function usernameListQuery( \Entities\Admin $admin, ?\Entities\Domain $domain ): QueryBuilder
+    private function usernameListQuery(\Entities\Admin $admin, ?\Entities\Domain $domain): QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'm.id as id , m.username as username' )
-            ->from( '\\Entities\\Mailbox', 'm' )
-            ->join( 'm.Domain', 'd' );
+            ->select('m.id as id , m.username as username')
+            ->from('\\Entities\\Mailbox', 'm')
+            ->join('m.Domain', 'd');
 
-        if( !$admin->isSuper() )
-            $qb->join( 'd.Admins', 'd2a' )
-                ->where( 'd2a.Admin = ?1' )
-                ->setParameter( 1, $admin );
+        if (!$admin->isSuper()) {
+            $qb->join('d.Admins', 'd2a')
+                ->where('d2a.Admin = ?1')
+                ->setParameter(1, $admin);
+        }
 
-        if( $domain )
-            $qb->andWhere( 'm.Domain = ?2' )
-                ->setParameter( 2, $domain );
+        if ($domain) {
+            $qb->andWhere('m.Domain = ?2')
+                ->setParameter(2, $domain);
+        }
 
         return $qb;
     }
@@ -394,11 +405,12 @@ class Mailbox extends EntityRepository
      * @param array<int,array{id:int|string,username:string}> $data
      * @return array<int|string,string>
      */
-    private function indexUsernameRows( array $data ): array
+    private function indexUsernameRows(array $data): array
     {
         $result = [];
-        foreach( $data as $row )
+        foreach ($data as $row) {
             $result[ $row['id'] ] = $row['username'];
+        }
         return $result;
     }
 
@@ -412,20 +424,20 @@ class Mailbox extends EntityRepository
      * @param string $email Email to check
      * @return bool
      */
-    public function isUnique( $email )
+    public function isUnique($email)
     {
-        list( $lpart, $domain ) = explode( '@', $email );
+        list($lpart, $domain) = explode('@', $email);
 
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'count( m.id )' )
-            ->from( '\\Entities\\Mailbox', 'm' )
-            ->join( 'm.Domain', 'd' )
-            ->where( 'm.local_part = ?1' )
-            ->andWhere( 'd.domain = ?2' )
-            ->setParameter( 1, $lpart )
-            ->setParameter( 2, $domain );
+            ->select('count( m.id )')
+            ->from('\\Entities\\Mailbox', 'm')
+            ->join('m.Domain', 'd')
+            ->where('m.local_part = ?1')
+            ->andWhere('d.domain = ?2')
+            ->setParameter(1, $lpart)
+            ->setParameter(2, $domain);
 
-        return $qb->getQuery()->getSingleScalarResult() > 0 ? false : true;  
+        return $qb->getQuery()->getSingleScalarResult() > 0 ? false : true;
     }
 
     /**
@@ -443,7 +455,7 @@ class Mailbox extends EntityRepository
      * @param bool $removeMailbox If true, also remove the Mailbox entity. If false, purge everything but this entity.
      * @return bool
      */
-    public function purgeMailbox( $mailbox, $admin, $removeMailbox = true )
+    public function purgeMailbox($mailbox, $admin, $removeMailbox = true)
     {
         $domain = $mailbox->getDomain();
         if ($domain === null) {
@@ -453,55 +465,60 @@ class Mailbox extends EntityRepository
         // A null admin == trusted system context (CLI/queue runner): skip the
         // per-admin ownership check. A non-null admin must own the domain (or
         // be super) to purge.
-        if( $admin !== null && !$admin->isSuper() && !$domain->getAdmins()->contains( $admin ) )
+        if ($admin !== null && !$admin->isSuper() && !$domain->getAdmins()->contains($admin)) {
             return false;
+        }
 
         $username = $mailbox->requiredUsername();
 
-        $aliasRepository = $this->getEntityManager()->getRepository( "\\Entities\\Alias" );
-        if( !$aliasRepository instanceof \Repositories\Alias )
-            throw new \LogicException( 'Alias entity must use Repositories\\Alias.' );
-        $aliases = $aliasRepository->loadForMailbox( $mailbox, $admin, true );
-        $inAliases = $aliasRepository->loadWithMailbox( $mailbox, $admin );
+        $aliasRepository = $this->getEntityManager()->getRepository("\\Entities\\Alias");
+        if (!$aliasRepository instanceof \Repositories\Alias) {
+            throw new \LogicException('Alias entity must use Repositories\\Alias.');
+        }
+        $aliases = $aliasRepository->loadForMailbox($mailbox, $admin, true);
+        $inAliases = $aliasRepository->loadWithMailbox($mailbox, $admin);
 
         /** @var array<int,array{address:string,goto:string,domain:\Entities\Domain}> $aliasIdentities */
         $aliasIdentities = [];
-        foreach( $aliases as $alias )
-            $aliasIdentities[ spl_object_id( $alias ) ] = $this->requiredAliasIdentity( $alias );
-        foreach( $inAliases as $alias )
-            $aliasIdentities[ spl_object_id( $alias ) ] = $this->requiredAliasIdentity( $alias );
+        foreach ($aliases as $alias) {
+            $aliasIdentities[ spl_object_id($alias) ] = $this->requiredAliasIdentity($alias);
+        }
+        foreach ($inAliases as $alias) {
+            $aliasIdentities[ spl_object_id($alias) ] = $this->requiredAliasIdentity($alias);
+        }
 
-        foreach( $mailbox->getPreferences() as $pref )
-            $this->getEntityManager()->remove( $pref );
+        foreach ($mailbox->getPreferences() as $pref) {
+            $this->getEntityManager()->remove($pref);
+        }
 
         //this won't delete the alias entry where address == goto
-        foreach( $aliases as $alias )
-        {
-            $this->_removeAlias( $alias, $aliasIdentities[ spl_object_id( $alias ) ] );
+        foreach ($aliases as $alias) {
+            $this->_removeAlias($alias, $aliasIdentities[ spl_object_id($alias) ]);
         }
 
-        foreach( $inAliases as $alias )
-        {
-            $identity = $aliasIdentities[ spl_object_id( $alias ) ];
-            $gotos = explode( ',', $identity['goto'] );
+        foreach ($inAliases as $alias) {
+            $identity = $aliasIdentities[ spl_object_id($alias) ];
+            $gotos = explode(',', $identity['goto']);
 
-            foreach( $gotos as $key => $goto )
-            {
-                $gotos[ $key ] = $goto = trim( $goto );
+            foreach ($gotos as $key => $goto) {
+                $gotos[ $key ] = $goto = trim($goto);
 
-                if( ( $goto == $username ) || ( $goto == '' ) )
-                    unset( $gotos[ $key ] );
+                if (($goto == $username) || ($goto == '')) {
+                    unset($gotos[ $key ]);
+                }
             }
 
-            if( sizeof( $gotos ) == 0 )
-                $this->_removeAlias( $alias, $identity );
-            else
-                $alias->setGoto( implode( ',', $gotos ) );
+            if (sizeof($gotos) == 0) {
+                $this->_removeAlias($alias, $identity);
+            } else {
+                $alias->setGoto(implode(',', $gotos));
+            }
         }
-        
-        if( $removeMailbox )
-            $this->getEntityManager()->remove( $mailbox );
-        
+
+        if ($removeMailbox) {
+            $this->getEntityManager()->remove($mailbox);
+        }
+
         $domain->decreaseMailboxCount();
 
         return true;
@@ -517,15 +534,17 @@ class Mailbox extends EntityRepository
      * @param array{address:string,goto:string,domain:\Entities\Domain} $identity Validated alias identity.
      * @return bool
      */
-    private function _removeAlias( $alias, array $identity )
+    private function _removeAlias($alias, array $identity)
     {
-        foreach( $alias->getPreferences() as $pref )
-            $this->getEntityManager()->remove( $pref );
+        foreach ($alias->getPreferences() as $pref) {
+            $this->getEntityManager()->remove($pref);
+        }
 
-        $this->getEntityManager()->remove( $alias );
+        $this->getEntityManager()->remove($alias);
 
-        if( $identity['goto'] != $identity['address'] )
+        if ($identity['goto'] != $identity['address']) {
             $identity['domain']->decreaseAliasCount();
+        }
 
         return true;
     }
@@ -538,14 +557,16 @@ class Mailbox extends EntityRepository
     public function pendingDelete()
     {
         $result = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'm' )
-            ->from( '\\Entities\\Mailbox', 'm' )
-            ->where( 'm.delete_pending = TRUE' )
+            ->select('m')
+            ->from('\\Entities\\Mailbox', 'm')
+            ->where('m.delete_pending = TRUE')
             ->getQuery()
             ->getResult();
 
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $result, \Entities\Mailbox::class, 'Pending mailbox deletion query'
+            $result,
+            \Entities\Mailbox::class,
+            'Pending mailbox deletion query'
         );
     }
 

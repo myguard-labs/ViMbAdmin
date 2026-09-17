@@ -14,7 +14,9 @@ final class MailboxPasswordState
 function mailboxPasswordCheck(string $label, bool $ok): void
 {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { MailboxPasswordState::$failures++; }
+    if (!$ok) {
+        MailboxPasswordState::$failures++;
+    }
 }
 
 /** @return string|null */
@@ -30,7 +32,9 @@ function mailboxPasswordFailure(callable $operation): ?string
 
 final class MailboxPasswordQueueRepository
 {
-    public function __construct(private \Entities\Mailbox $mailbox) {}
+    public function __construct(private \Entities\Mailbox $mailbox)
+    {
+    }
 
     /** @param array<string, mixed> $criteria */
     public function findOneBy(array $criteria): \Entities\Mailbox
@@ -44,7 +48,9 @@ final class MailboxPasswordQueueEntityManager
     /** @var list<string> */
     public array $calls = [];
 
-    public function __construct(private MailboxPasswordQueueRepository $repository) {}
+    public function __construct(private MailboxPasswordQueueRepository $repository)
+    {
+    }
 
     public function getRepository(string $className): MailboxPasswordQueueRepository
     {
@@ -69,22 +75,32 @@ echo "== required mailbox password ==\n";
 
 $newMailbox = new \Entities\Mailbox();
 mailboxPasswordCheck('pre-hydration getter preserves null', $newMailbox->getPassword() === null);
-mailboxPasswordCheck('required password rejects pre-hydration null',
-    mailboxPasswordFailure($newMailbox->requiredPassword(...)) === 'Mailbox password cannot be null.');
+mailboxPasswordCheck(
+    'required password rejects pre-hydration null',
+    mailboxPasswordFailure($newMailbox->requiredPassword(...)) === 'Mailbox password cannot be null.'
+);
 
 $initialized = (new \Entities\Mailbox())->setPassword('{PLAIN}stored-secret');
-mailboxPasswordCheck('required password preserves the initialized credential',
-    $initialized->requiredPassword() === '{PLAIN}stored-secret');
+mailboxPasswordCheck(
+    'required password preserves the initialized credential',
+    $initialized->requiredPassword() === '{PLAIN}stored-secret'
+);
 
 $matcher = new ReflectionMethod(\ViMbAdmin\Kernel\Controller\AuthController::class, 'mailboxPasswordMatches');
 $options = ['pwhash' => 'crypt:sha512'];
 $hashed = (new \Entities\Mailbox())->setPassword(\OSS_Auth_Password::hash('correct horse', $options));
-mailboxPasswordCheck('authentication accepts a matching initialized credential',
-    $matcher->invoke(null, $hashed, 'correct horse', $options) === true);
-mailboxPasswordCheck('authentication rejects an incorrect credential',
-    $matcher->invoke(null, $hashed, 'wrong horse', $options) === false);
-mailboxPasswordCheck('authentication rejects an uninitialized credential without an exception',
-    $matcher->invoke(null, $newMailbox, 'correct horse', $options) === false);
+mailboxPasswordCheck(
+    'authentication accepts a matching initialized credential',
+    $matcher->invoke(null, $hashed, 'correct horse', $options) === true
+);
+mailboxPasswordCheck(
+    'authentication rejects an incorrect credential',
+    $matcher->invoke(null, $hashed, 'wrong horse', $options) === false
+);
+mailboxPasswordCheck(
+    'authentication rejects an uninitialized credential without an exception',
+    $matcher->invoke(null, $newMailbox, 'correct horse', $options) === false
+);
 
 $queueMailbox = (new \Entities\Mailbox())->setUsername('user@example.test');
 $queueEm = new MailboxPasswordQueueEntityManager(new MailboxPasswordQueueRepository($queueMailbox));
@@ -94,12 +110,16 @@ $runnerReflection->getProperty('em')->setValue($runner, $queueEm);
 $runnerReflection->getProperty('options')->setValue($runner, []);
 $recordArchive = $runnerReflection->getMethod('recordArchive');
 $task = (new \Entities\MailboxTask())->setUsername('user@example.test');
-mailboxPasswordCheck('archive snapshot rejects an uninitialized credential',
+mailboxPasswordCheck(
+    'archive snapshot rejects an uninitialized credential',
     mailboxPasswordFailure(
-        static fn(): mixed => $recordArchive->invoke($runner, $task, '/unused', false),
-    ) === 'Mailbox password cannot be null.');
-mailboxPasswordCheck('archive password failure precedes quota I/O and persistence',
-    $queueEm->calls === ['repository:\\Entities\\Mailbox']);
+        static fn (): mixed => $recordArchive->invoke($runner, $task, '/unused', false),
+    ) === 'Mailbox password cannot be null.'
+);
+mailboxPasswordCheck(
+    'archive password failure precedes quota I/O and persistence',
+    $queueEm->calls === ['repository:\\Entities\\Mailbox']
+);
 echo MailboxPasswordState::$failures === 0
     ? "\nALL PASSED\n"
     : "\n" . MailboxPasswordState::$failures . " FAILED\n";

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -44,7 +45,4 @@
  */
 class OSS_Crypt_Exception extends OSS_Exception
 {
-
 }
-
-

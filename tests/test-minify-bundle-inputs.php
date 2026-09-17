@@ -125,15 +125,21 @@ $runtimeJs = '';
 foreach ($expectedJs as $live) {
     $runtimeJs .= (string) file_get_contents($root . '/public/js/' . $live);
 }
-$check('runtime JS has no jQuery Validation API references',
+$check(
+    'runtime JS has no jQuery Validation API references',
     !str_contains($runtimeJs, 'jQuery.validator')
         && !str_contains($runtimeJs, '$.validator')
-        && preg_match('/\.validate\s*\(/', $runtimeJs) !== 1);
-$check('runtime JS has no Bootbox references',
-    stripos($runtimeJs, 'bootbox') === false);
-$check('jQuery is not shipped or loaded',
+        && preg_match('/\.validate\s*\(/', $runtimeJs) !== 1
+);
+$check(
+    'runtime JS has no Bootbox references',
+    stripos($runtimeJs, 'bootbox') === false
+);
+$check(
+    'jQuery is not shipped or loaded',
     !is_file($root . '/public/js/100-jquery.js')
-        && !str_contains((string) file_get_contents($root . '/application/views/header-js.phtml'), 'jquery'));
+        && !str_contains((string) file_get_contents($root . '/application/views/header-js.phtml'), 'jquery')
+);
 // Vendor files retain optional interoperability. First-party code must never
 // invoke it; scan source so a forgotten bundle rebuild cannot conceal a regression.
 $ownSources = array_merge(
@@ -142,8 +148,10 @@ $ownSources = array_merge(
     [$root . '/public/js/151-datatables.ext.js']
 );
 foreach ($ownSources as $source) {
-    $check('no first-party jQuery runtime reference: ' . basename($source),
-        preg_match('/\bjQuery\b|(?:^|[^A-Za-z0-9_$])\$\s*[.(]/m', (string) file_get_contents($source)) === 0);
+    $check(
+        'no first-party jQuery runtime reference: ' . basename($source),
+        preg_match('/\bjQuery\b|(?:^|[^A-Za-z0-9_$])\$\s*[.(]/m', (string) file_get_contents($source)) === 0
+    );
 }
 foreach ([
     // Core includes the local fixes documented with its upstream hash in docs/ASSETS.md.
@@ -154,9 +162,11 @@ foreach ([
     $check('DataTables 3.0.3 shipped asset integrity: ' . $asset, hash_file('sha256', $root . '/' . $asset) === $hash);
 }
 $modalJs = (string) file_get_contents($root . '/public/js/850-vimbadmin.modals.js');
-$check('native modal helper has no jQuery runtime dependency',
+$check(
+    'native modal helper has no jQuery runtime dependency',
     !str_contains($modalJs, 'jQuery')
-        && preg_match('/(^|[^A-Za-z0-9_$])\$\s*\(/', $modalJs) !== 1);
+        && preg_match('/(^|[^A-Za-z0-9_$])\$\s*\(/', $modalJs) !== 1
+);
 foreach ($expectedCss as $live) {
     $check("live CSS asset resolves to a real file: {$live}", is_file($root . '/public/css/' . $live));
 }
@@ -322,7 +332,7 @@ $cleanCssLock = isset($toolPackages['node_modules/clean-css'])
 $check(
     'Closure Compiler digest is enforced by the build configuration',
     str_contains($optionsSource, "230a9e05a8a7d9daa083b1f6e86edba6eb1ec6402a6a258432fe4245cdc4a95f")
-        && str_contains($optionsSource, "hash_file( 'sha256', \$compiler_jar )")
+        && str_contains($optionsSource, "hash_file('sha256', \$compiler_jar)")
 );
 $check(
     'clean-css CLI is an exact direct dependency',

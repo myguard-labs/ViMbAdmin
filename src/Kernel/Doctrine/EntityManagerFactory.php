@@ -376,7 +376,7 @@ final class EntityManagerFactory
                     $pool   = new \Symfony\Component\Cache\Adapter\RedisAdapter($client, $namespace);
                     break;
 
-                // 'ArrayCache' and anything unrecognised -> per-request cache.
+                    // 'ArrayCache' and anything unrecognised -> per-request cache.
             }
         } catch (\Throwable) {
             // Extension missing / server unreachable: degrade, don't die.

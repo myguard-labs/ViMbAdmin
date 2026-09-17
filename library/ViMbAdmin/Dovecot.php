@@ -38,13 +38,12 @@
  */
 class ViMbAdmin_Dovecot
 {
-
     // crypt() scheme identifiers, keyed by Dovecot scheme name. These produce
     // exactly the bare hash strings Dovecot stores after its {SCHEME} prefix:
     //   BLF-CRYPT    -> $2y$...   (bcrypt / Blowfish)
     //   SHA512-CRYPT -> $6$...
     //   SHA256-CRYPT -> $5$...
-    const SUPPORTED_SCHEMES = [ 'BLF-CRYPT', 'SHA512-CRYPT', 'SHA256-CRYPT' ];
+    public const SUPPORTED_SCHEMES = [ 'BLF-CRYPT', 'SHA512-CRYPT', 'SHA256-CRYPT' ];
 
     /**
      * Generate a Dovecot-compatible password hash natively in PHP (no external
@@ -63,34 +62,36 @@ class ViMbAdmin_Dovecot
      * @throws ViMbAdmin_Exception
      * @return string The bare crypt() hash (no {SCHEME} prefix)
      */
-    public static function password( $scheme, $pass, $user )
+    public static function password($scheme, $pass, $user)
     {
-        $scheme = strtoupper( $scheme );
+        $scheme = strtoupper($scheme);
 
-        switch( $scheme )
-        {
+        switch ($scheme) {
             case 'BLF-CRYPT':
                 // password_hash() emits the modern $2y$ bcrypt prefix Dovecot
                 // accepts under {BLF-CRYPT}.
-                $hash = password_hash( $pass, PASSWORD_BCRYPT );
+                $hash = password_hash($pass, PASSWORD_BCRYPT);
                 break;
 
             case 'SHA512-CRYPT':
-                $hash = crypt( $pass, '$6$' . self::_cryptSalt() . '$' );
+                $hash = crypt($pass, '$6$' . self::_cryptSalt() . '$');
                 break;
 
             case 'SHA256-CRYPT':
-                $hash = crypt( $pass, '$5$' . self::_cryptSalt() . '$' );
+                $hash = crypt($pass, '$5$' . self::_cryptSalt() . '$');
                 break;
 
             default:
-                throw new ViMbAdmin_Exception( sprintf(
-                    _( 'Unsupported password scheme "%s" — supported: %s' ),
-                    $scheme, implode( ', ', self::SUPPORTED_SCHEMES ) ) );
+                throw new ViMbAdmin_Exception(sprintf(
+                    _('Unsupported password scheme "%s" — supported: %s'),
+                    $scheme,
+                    implode(', ', self::SUPPORTED_SCHEMES)
+                ));
         }
 
-        if( strlen( $hash ) < 13 )
-            throw new ViMbAdmin_Exception( _( 'Password hashing failed' ) );
+        if (strlen($hash) < 13) {
+            throw new ViMbAdmin_Exception(_('Password hashing failed'));
+        }
 
         return $hash;
     }
@@ -111,56 +112,54 @@ class ViMbAdmin_Dovecot
      * @param string $user The username (unused for crypt schemes; kept for API)
      * @return bool True if the password matches
      */
-    public static function passwordVerify( $scheme, $pwhash, $pwplain, $user )
+    public static function passwordVerify($scheme, $pwhash, $pwplain, $user)
     {
-        if( !is_string( $pwhash ) || $pwhash === '' )
+        if (!is_string($pwhash) || $pwhash === '') {
             return false;
+        }
 
         // Dovecot stores hashes with a leading {SCHEME} prefix
         // (e.g. "{SHA512-CRYPT}$6$...", "{SHA512}<base64>"). Strip it and let
         // it drive dispatch when present — crypt() cannot parse "{SCHEME}..."
         // as a salt (it returns "*0"), so an un-stripped prefix makes EVERY
         // verify fail. The prefix wins over the advisory $scheme argument.
-        if( $pwhash[0] === '{' && ( $close = strpos( $pwhash, '}' ) ) !== false )
-        {
-            $scheme = strtoupper( substr( $pwhash, 1, $close - 1 ) );
-            $pwhash = substr( $pwhash, $close + 1 );
-        }
-        else
-        {
-            $scheme = strtoupper( (string) $scheme );
+        if ($pwhash[0] === '{' && ($close = strpos($pwhash, '}')) !== false) {
+            $scheme = strtoupper(substr($pwhash, 1, $close - 1));
+            $pwhash = substr($pwhash, $close + 1);
+        } else {
+            $scheme = strtoupper((string) $scheme);
         }
 
         // bcrypt: password_verify handles $2y$/$2a$/$2b$ (also {BLF-CRYPT}).
-        if( strncmp( $pwhash, '$2', 2 ) === 0 )
-            return password_verify( $pwplain, $pwhash );
+        if (strncmp($pwhash, '$2', 2) === 0) {
+            return password_verify($pwplain, $pwhash);
+        }
 
         // {SHA256}/{SHA512}: base64( digest ), optionally with a trailing salt
         // appended to the raw digest ({SSHA256}/{SSHA512}). Compare the raw
         // digest bytes; for the salted variants re-hash pw+salt.
-        if( $scheme === 'SHA256' || $scheme === 'SHA512'
-            || $scheme === 'SSHA256' || $scheme === 'SSHA512' )
-        {
-            $algo = ( strpos( $scheme, '256' ) !== false ) ? 'sha256' : 'sha512';
-            $raw  = base64_decode( $pwhash, true );
-            if( $raw === false )
+        if ($scheme === 'SHA256' || $scheme === 'SHA512'
+            || $scheme === 'SSHA256' || $scheme === 'SSHA512') {
+            $algo = (strpos($scheme, '256') !== false) ? 'sha256' : 'sha512';
+            $raw  = base64_decode($pwhash, true);
+            if ($raw === false) {
                 return false;
-
-            $dlen = ( $algo === 'sha256' ) ? 32 : 64;
-            if( strlen( $scheme ) > 6 ) // salted (SSHA*)
-            {
-                $salt   = substr( $raw, $dlen );
-                $digest = substr( $raw, 0, $dlen );
-                return hash_equals( $digest, hash( $algo, $pwplain . $salt, true ) );
             }
 
-            return hash_equals( $raw, hash( $algo, $pwplain, true ) );
+            $dlen = ($algo === 'sha256') ? 32 : 64;
+            if (strlen($scheme) > 6) { // salted (SSHA*)
+                $salt   = substr($raw, $dlen);
+                $digest = substr($raw, 0, $dlen);
+                return hash_equals($digest, hash($algo, $pwplain . $salt, true));
+            }
+
+            return hash_equals($raw, hash($algo, $pwplain, true));
         }
 
         // crypt families: {CRYPT}, {SHA256-CRYPT} ($5$), {SHA512-CRYPT} ($6$),
         // {MD5-CRYPT} ($1$) — re-crypt with the stored hash as the salt
         // template and compare in constant time.
-        return hash_equals( $pwhash, (string) crypt( $pwplain, $pwhash ) );
+        return hash_equals($pwhash, (string) crypt($pwplain, $pwhash));
     }
 
     /**
@@ -172,8 +171,9 @@ class ViMbAdmin_Dovecot
     {
         $alphabet = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
         $salt = '';
-        for( $i = 0; $i < 16; $i++ )
-            $salt .= $alphabet[ random_int( 0, strlen( $alphabet ) - 1 ) ];
+        for ($i = 0; $i < 16; $i++) {
+            $salt .= $alphabet[ random_int(0, strlen($alphabet) - 1) ];
+        }
         return $salt;
     }
 

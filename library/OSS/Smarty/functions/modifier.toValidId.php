@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -52,10 +53,10 @@
  * @package    OSS_Smarty
  * @subpackage Modifier
  *
- * @param string $string 
+ * @param string $string
  * @return string
  */
-function smarty_modifier_toValidId( $string )
+function smarty_modifier_toValidId($string)
 {
-    return preg_replace( "[^a-zA-Z-0-9\_]", '_', $string ) ?? '';
+    return preg_replace("[^a-zA-Z-0-9\_]", '_', $string) ?? '';
 }

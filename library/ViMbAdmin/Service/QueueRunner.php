@@ -33,10 +33,10 @@ class ViMbAdmin_Service_QueueRunner
     private const ORPHAN_SCAN_MAX = 500;
     private const ORPHAN_TEMP_PASSWORD_PREFIX = '{PLAIN}!vimbadmin-orphan-backup-temp-v1:';
     /** Refresh often enough that an active request cannot reach the 30m TTL. */
-    const LEASE_HEARTBEAT_INTERVAL = 60;
-    const RUN_ONE_BUSY = -1;
-    const RUN_ONE_NOT_CLAIMED = 0;
-    const RUN_ONE_COMPLETED = 1;
+    public const LEASE_HEARTBEAT_INTERVAL = 60;
+    public const RUN_ONE_BUSY = -1;
+    public const RUN_ONE_NOT_CLAIMED = 0;
+    public const RUN_ONE_COMPLETED = 1;
 
     private const DELETE_PROGRESS_KEY = '_queue_runner_delete';
     private const DELETE_PROGRESS_VERSION = 1;
@@ -131,8 +131,10 @@ class ViMbAdmin_Service_QueueRunner
     /** @return array{queue:array{runner:array{max_concurrent:int}}} */
     private function leaseOptions(): array
     {
-        return ['queue' => ['runner' => ['max_concurrent' => max(1,
-            $this->optionNonNegativeInteger(1, 'queue', 'runner', 'max_concurrent'))]]];
+        return ['queue' => ['runner' => ['max_concurrent' => max(
+            1,
+            $this->optionNonNegativeInteger(1, 'queue', 'runner', 'max_concurrent')
+        )]]];
     }
 
     /** @param array<string, mixed> $options */
@@ -187,7 +189,7 @@ class ViMbAdmin_Service_QueueRunner
     /** @return callable():void */
     private function leaseProgress(\Entities\QueueRunner $lease)
     {
-        return function() use ($lease): void {
+        return function () use ($lease): void {
             $heartbeat = $lease->getHeartbeatAt();
             $now = $this->now();
             if ($heartbeat === null
@@ -223,7 +225,7 @@ class ViMbAdmin_Service_QueueRunner
         }
 
         $processed = 0;
-        $acquired = $this->withLease(function(\Entities\QueueRunner $lease) use ($em, $repo, $max, $verbose, &$processed): void {
+        $acquired = $this->withLease(function (\Entities\QueueRunner $lease) use ($em, $repo, $max, $verbose, &$processed): void {
             $repo->reapStaleRunning();
             $this->sweepOrphanBackupTemps();
 
@@ -260,7 +262,7 @@ class ViMbAdmin_Service_QueueRunner
                 }
 
                 ($this->leaseProgress($lease))();
-                $published = $repo->publishIfOwned($task, $lease, function() use ($task): void {
+                $published = $repo->publishIfOwned($task, $lease, function () use ($task): void {
                     $task->setFinishedAt(new \DateTime());
                 });
                 if (!$published) {
@@ -302,7 +304,7 @@ class ViMbAdmin_Service_QueueRunner
         }
 
         $result = self::RUN_ONE_BUSY;
-        $acquired = $this->withLease(function(\Entities\QueueRunner $lease) use ($repo, $task, $complete, &$result): void {
+        $acquired = $this->withLease(function (\Entities\QueueRunner $lease) use ($repo, $task, $complete, &$result): void {
             if (!$repo->claim($task, $lease)) {
                 $result = self::RUN_ONE_NOT_CLAIMED;
                 return;
@@ -316,7 +318,7 @@ class ViMbAdmin_Service_QueueRunner
             }
             $this->ensureDatabaseConnection();
             ($this->leaseProgress($lease))();
-            if ($repo->publishIfOwned($task, $lease, function() use ($complete, $error): void {
+            if ($repo->publishIfOwned($task, $lease, function () use ($complete, $error): void {
                 $complete($error);
             })) {
                 $result = self::RUN_ONE_COMPLETED;
@@ -341,14 +343,19 @@ class ViMbAdmin_Service_QueueRunner
         switch ($task->getType()) {
             case \Entities\MailboxTask::TYPE_REPAIR:
             case \Entities\MailboxTask::TYPE_OPTIMIZE:
-                $task->appendLog('force-resync');  $doveadm->forceResync($user);
-                $task->appendLog('index');          $doveadm->index($user);
-                $task->appendLog('purge');          $doveadm->purge($user);
-                $task->appendLog('quota recalc');   $doveadm->quotaRecalc($user);
+                $task->appendLog('force-resync');
+                $doveadm->forceResync($user);
+                $task->appendLog('index');
+                $doveadm->index($user);
+                $task->appendLog('purge');
+                $doveadm->purge($user);
+                $task->appendLog('quota recalc');
+                $doveadm->quotaRecalc($user);
                 break;
 
             case \Entities\MailboxTask::TYPE_QUOTA_RECALC:
-                $task->appendLog('quota recalc');   $doveadm->quotaRecalc($user);
+                $task->appendLog('quota recalc');
+                $doveadm->quotaRecalc($user);
                 break;
 
             case \Entities\MailboxTask::TYPE_MEASURE_SIZE:
@@ -386,8 +393,11 @@ class ViMbAdmin_Service_QueueRunner
                 $this->em->remove($archive);
                 ViMbAdmin_Setting::stampNow($this->em, ViMbAdmin_Setting::LAST_PRUNE);
                 $task->appendLog('prune: archive removed');
-                $this->logAudit($task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
-                    "autopruned expired archive backup for {$user}");
+                $this->logAudit(
+                    $task,
+                    \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                    "autopruned expired archive backup for {$user}"
+                );
                 break;
 
             case \Entities\MailboxTask::TYPE_BACKUP_ORPHAN:
@@ -409,8 +419,11 @@ class ViMbAdmin_Service_QueueRunner
                 $this->recordArchive($task, $dest, false, $doveadm);
                 $task->appendLog('mailbox delete (empty store, keep account)');
                 $doveadm->mailboxDelete($user);
-                $this->logAudit($task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
-                    "archived {$user} (backup {$dest}, store emptied, account kept)");
+                $this->logAudit(
+                    $task,
+                    \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                    "archived {$user} (backup {$dest}, store emptied, account kept)"
+                );
                 break;
 
             case \Entities\MailboxTask::TYPE_DELETE:
@@ -439,11 +452,11 @@ class ViMbAdmin_Service_QueueRunner
             if ($dest === null) {
                 throw new \LogicException('Backup delete plan must contain a destination.');
             }
-            $this->deleteStep($task, 'backup', function() use ($task, $doveadm, $user, $dest): void {
+            $this->deleteStep($task, 'backup', function () use ($task, $doveadm, $user, $dest): void {
                 $task->appendLog("backup -> {$dest}");
                 $this->backupDelete($task, $doveadm, $user, $dest);
             });
-            $this->deleteStep($task, 'archive', function() use ($task, $doveadm, $dest): void {
+            $this->deleteStep($task, 'archive', function () use ($task, $doveadm, $dest): void {
                 $task->appendLog('recording archive row (autoprune on)');
                 $this->recordArchive($task, $dest, true, $doveadm);
             });
@@ -452,18 +465,18 @@ class ViMbAdmin_Service_QueueRunner
             $task->appendLog('autoprune.days=0 — instant delete, no backup');
         }
 
-        $this->deleteStep($task, 'mailbox-delete', function() use ($task, $doveadm, $user): void {
+        $this->deleteStep($task, 'mailbox-delete', function () use ($task, $doveadm, $user): void {
             $task->appendLog('mailbox delete (empty store)');
             $doveadm->mailboxDelete($user);
         });
-        $this->deleteStep($task, 'maildir-home', function() use ($task, $doveadm, $user): void {
+        $this->deleteStep($task, 'maildir-home', function () use ($task, $doveadm, $user): void {
             $this->removeMaildirHome($task, $doveadm, $user);
         });
-        $this->deleteStep($task, 'mailbox-row', function() use ($task, $user): void {
+        $this->deleteStep($task, 'mailbox-row', function () use ($task, $user): void {
             $task->appendLog('removing ViMbAdmin mailbox row');
             $this->removeMailboxRow($user);
         });
-        $this->deleteStep($task, 'audit', function() use ($task, $user, $dest, $mode): void {
+        $this->deleteStep($task, 'audit', function () use ($task, $user, $dest, $mode): void {
             $message = $mode === self::DELETE_MODE_INSTANT
                 ? "deleted {$user} (instant, autoprune.days=0 — no backup)"
                 : "deleted {$user} (backup {$dest}, autoprune on — prunes after queue.autoprune.days)";
@@ -708,8 +721,7 @@ class ViMbAdmin_Service_QueueRunner
         $dest,
         $autoprune,
         ?ViMbAdmin_Doveadm $doveadm = null
-    )
-    {
+    ) {
         $em   = $this->em;
         $user = $task->requiredUsername();
         $now  = new \DateTime();
@@ -768,7 +780,8 @@ class ViMbAdmin_Service_QueueRunner
 
         $open = $em->createQuery(
             'SELECT COUNT(t.id) FROM \Entities\MailboxTask t
-              WHERE t.username = :u AND t.type = :t AND t.status IN (:open)')
+              WHERE t.username = :u AND t.type = :t AND t.status IN (:open)'
+        )
             ->setParameter('u', $user)
             ->setParameter('t', \Entities\MailboxTask::TYPE_MEASURE_SIZE)
             ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
@@ -916,7 +929,9 @@ class ViMbAdmin_Service_QueueRunner
         $em = $this->em;
 
         $now = new \DateTimeImmutable();
-        if (!$this->claimAutopruneSweep($now)) return;
+        if (!$this->claimAutopruneSweep($now)) {
+            return;
+        }
 
         try {
             $days   = $this->autopruneDays();
@@ -929,7 +944,7 @@ class ViMbAdmin_Service_QueueRunner
 
             $candidates = iterator_to_array($this->initializedAutopruneArchives($expired), false);
             $users = array_values(array_unique(array_map(
-                static fn(string $username): string => ViMbAdmin_Identity::canonical($username),
+                static fn (string $username): string => ViMbAdmin_Identity::canonical($username),
                 array_column($candidates, 1)
             )));
             $alreadyQueued = $this->openPruneUsernames($users);
@@ -967,7 +982,8 @@ class ViMbAdmin_Service_QueueRunner
         foreach (array_chunk($users, 500) as $userChunk) {
             foreach ($this->em->createQuery(
                 'SELECT DISTINCT t.username AS username FROM \Entities\MailboxTask t
-                      WHERE LOWER(t.username) IN (:users) AND t.type = :t AND t.status IN (:open)')
+                      WHERE LOWER(t.username) IN (:users) AND t.type = :t AND t.status IN (:open)'
+            )
                 ->setParameter('users', $userChunk)
                 ->setParameter('t', \Entities\MailboxTask::TYPE_PRUNE)
                 ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
@@ -1032,7 +1048,7 @@ class ViMbAdmin_Service_QueueRunner
         }
 
         $candidateNames = array_map(
-            static fn(string $name): string => ViMbAdmin_Identity::canonical(self::safeMaildirName($name)),
+            static fn (string $name): string => ViMbAdmin_Identity::canonical(self::safeMaildirName($name)),
             $dirs
         );
         $known = [];
@@ -1144,10 +1160,13 @@ class ViMbAdmin_Service_QueueRunner
                     $task->appendLog("backup-orphan: temp user row #{$tempId} created");
                 } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException $e) {
                     $adopt = $conn->fetchAssociative(
-                        'SELECT id, password, active FROM mailbox WHERE username = ?', [$user]
+                        'SELECT id, password, active FROM mailbox WHERE username = ?',
+                        [$user]
                     );
                     if (!is_array($adopt) || ($adopt['password'] ?? null) !== $tempPassword
-                        || !in_array($adopt['active'] ?? null, [0, '0', false], true)) throw $e;
+                        || !in_array($adopt['active'] ?? null, [0, '0', false], true)) {
+                        throw $e;
+                    }
                     $tempId = self::positiveInteger($adopt['id'] ?? null, 'Orphan temp mailbox id');
                     $task->appendLog("backup-orphan: adopted temp user row #{$tempId}");
                 }
@@ -1188,14 +1207,20 @@ class ViMbAdmin_Service_QueueRunner
                 }
                 $this->removeMaildirHome($task, $doveadm, $user);
 
-                $this->logAudit($task, \Entities\Log::ACTION_ARCHIVE_REQUEST,
-                    "imported ORPHAN maildir for {$user}: backed up + removed (had mail)");
+                $this->logAudit(
+                    $task,
+                    \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                    "imported ORPHAN maildir for {$user}: backed up + removed (had mail)"
+                );
             } else {
                 $task->appendLog('orphan: empty skeleton — removing maildir home (no backup)');
                 $this->removeMaildirHome($task, $doveadm, $user);
 
-                $this->logAudit($task, \Entities\Log::ACTION_MAILBOX_PURGE,
-                    "removed empty ORPHAN maildir skeleton for {$user} (no mail)");
+                $this->logAudit(
+                    $task,
+                    \Entities\Log::ACTION_MAILBOX_PURGE,
+                    "removed empty ORPHAN maildir skeleton for {$user} (no mail)"
+                );
             }
         } finally {
             if ($tempId !== null) {
@@ -1221,7 +1246,10 @@ class ViMbAdmin_Service_QueueRunner
                     // task's later flush (-> FK error against the deleted row).
                     $task->setDomain(null);
                     if ($domain instanceof \Entities\Domain) {
-                        try { $em->detach($domain); } catch (\Throwable $e) {}
+                        try {
+                            $em->detach($domain);
+                        } catch (\Throwable $e) {
+                        }
                     }
                     try {
                         $conn->delete('domain', ['id' => $tempDomainId]);

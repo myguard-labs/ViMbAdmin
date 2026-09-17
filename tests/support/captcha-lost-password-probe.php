@@ -36,29 +36,66 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class CaptchaProbeSession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->get($key); }
-    public function __set(string $key, mixed $value): void { $this->set($key, $value); }
-    public function __isset(string $key): bool { return $this->has($key); }
-    public function __unset(string $key): void { $this->remove($key); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->get($key);
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->set($key, $value);
+    }
+    public function __isset(string $key): bool
+    {
+        return $this->has($key);
+    }
+    public function __unset(string $key): void
+    {
+        $this->remove($key);
+    }
 }
 
 #[AllowDynamicProperties]
 final class CaptchaProbeView
 {
-    public function __set(string $key, mixed $value): void {}
-    public function render(string $script): string { return $script; }
+    public function __set(string $key, mixed $value): void
+    {
+    }
+    public function render(string $script): string
+    {
+        return $script;
+    }
 }
 
 final class CaptchaProbeAdminRepository extends \Repositories\Admin
 {
     /** @param array<string,mixed> $criteria */
-    public function findOneBy(array $criteria, ?array $orderBy = null): ?object { return null; }
-    public function getCount(): int { return 1; }
+    public function findOneBy(array $criteria, ?array $orderBy = null): ?object
+    {
+        return null;
+    }
+    public function getCount(): int
+    {
+        return 1;
+    }
 }
 
 final class CaptchaProbeBootstrap
@@ -69,7 +106,8 @@ final class CaptchaProbeBootstrap
         private CaptchaProbeSession $session,
         private CaptchaProbeView $view,
         private array $options,
-    ) {}
+    ) {
+    }
 
     public function getResource(string $name): mixed
     {
@@ -82,7 +120,10 @@ final class CaptchaProbeBootstrap
     }
 
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
 }
 
 function captchaProbeEnv(string $name): string
@@ -140,7 +181,7 @@ $options = [
 
 $container = new Container(
     new CaptchaProbeBootstrap($entityManager, $session, new CaptchaProbeView(), $options),
-    new Auth($session, static fn(int $id): ?\Entities\Admin => null),
+    new Auth($session, static fn (int $id): ?\Entities\Admin => null),
 );
 $controller = new AuthController(
     $container,

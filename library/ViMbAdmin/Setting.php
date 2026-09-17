@@ -18,9 +18,9 @@
  */
 class ViMbAdmin_Setting
 {
-    const LAST_QUEUERUN   = 'last_queuerun_at';
-    const LAST_PRUNE      = 'last_prune_at';
-    const LAST_PRUNE_SWEEP = 'last_prune_sweep_at';   // when the runner last enqueued autoprune tasks
+    public const LAST_QUEUERUN   = 'last_queuerun_at';
+    public const LAST_PRUNE      = 'last_prune_at';
+    public const LAST_PRUNE_SWEEP = 'last_prune_sweep_at';   // when the runner last enqueued autoprune tasks
 
     /**
      * Read a setting value, or $default if absent / on any error.
@@ -30,19 +30,19 @@ class ViMbAdmin_Setting
      * @param mixed  $default
      * @return string|null
      */
-    public static function get( $em, $name, $default = null )
+    public static function get($em, $name, $default = null)
     {
-        if( $default !== null && !is_string( $default ) )
-            throw new \InvalidArgumentException( 'Setting default must be a string or null' );
-        $fallback = $default;
-        try
-        {
-            $val = $em->getConnection()->fetchOne(
-                'SELECT value FROM setting WHERE name = ?', [ $name ] );
-            return ( $val === false || $val === null ) ? $fallback : ( is_string( $val ) ? $val : $fallback );
+        if ($default !== null && !is_string($default)) {
+            throw new \InvalidArgumentException('Setting default must be a string or null');
         }
-        catch( \Throwable $e )
-        {
+        $fallback = $default;
+        try {
+            $val = $em->getConnection()->fetchOne(
+                'SELECT value FROM setting WHERE name = ?',
+                [ $name ]
+            );
+            return ($val === false || $val === null) ? $fallback : (is_string($val) ? $val : $fallback);
+        } catch (\Throwable $e) {
             return $fallback;
         }
     }
@@ -55,17 +55,15 @@ class ViMbAdmin_Setting
      * @param string $value
      * @return void
      */
-    public static function set( $em, $name, $value )
+    public static function set($em, $name, $value)
     {
-        try
-        {
+        try {
             $em->getConnection()->executeStatement(
                 'INSERT INTO setting (name, value, updated_at) VALUES (?, ?, NOW())'
                 . ' ON DUPLICATE KEY UPDATE value = VALUES(value), updated_at = NOW()',
-                [ $name, (string) $value ] );
-        }
-        catch( \Throwable $e )
-        {
+                [ $name, (string) $value ]
+            );
+        } catch (\Throwable $e) {
             // informational state only -- swallow.
         }
     }
@@ -76,7 +74,7 @@ class ViMbAdmin_Setting
      *
      * @param \Doctrine\ORM\EntityManager $em
      */
-    public static function claimTimestamp( $em, string $name, \DateTimeInterface $cutoff, \DateTimeInterface $now ): bool
+    public static function claimTimestamp($em, string $name, \DateTimeInterface $cutoff, \DateTimeInterface $now): bool
     {
         $connection = $em->getConnection();
         $affected = $connection->executeStatement(
@@ -84,17 +82,20 @@ class ViMbAdmin_Setting
             . ' WHERE name = ? AND CAST(value AS UNSIGNED) < ?',
             [ (string) $now->getTimestamp(), $name, $cutoff->getTimestamp() ]
         );
-        if( !is_int($affected) || $affected < 0 || $affected > 1 )
+        if (!is_int($affected) || $affected < 0 || $affected > 1) {
             throw new \UnexpectedValueException('Setting timestamp gate update returned an invalid affected-row count.');
-        if( $affected === 1 )
+        }
+        if ($affected === 1) {
             return true;
+        }
 
         $inserted = $connection->executeStatement(
             'INSERT IGNORE INTO setting (name, value, updated_at) VALUES (?, ?, NOW())',
             [ $name, (string) $now->getTimestamp() ]
         );
-        if( !is_int($inserted) || $inserted < 0 || $inserted > 1 )
+        if (!is_int($inserted) || $inserted < 0 || $inserted > 1) {
             throw new \UnexpectedValueException('Setting timestamp gate insert returned an invalid affected-row count.');
+        }
         return $inserted === 1;
     }
 
@@ -106,8 +107,8 @@ class ViMbAdmin_Setting
      * @param string $name
      * @return void
      */
-    public static function stampNow( $em, $name )
+    public static function stampNow($em, $name)
     {
-        self::set( $em, $name, ( new \DateTime() )->format( 'c' ) );
+        self::set($em, $name, (new \DateTime())->format('c'));
     }
 }

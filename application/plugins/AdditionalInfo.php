@@ -40,11 +40,10 @@
  */
 class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plugin_Observer, ViMbAdmin_Plugin_MailboxFormExtension
 {
-
-    public function __construct( object $controller )
+    public function __construct(object $controller)
     {
-        parent::__construct( $controller, get_class( $this ) );
-        
+        parent::__construct($controller, get_class($this));
+
         // no setup tasks are required
         //
         // typically you might load an config file for example, but as this is a system
@@ -62,29 +61,33 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
      *     validators: array<int|string,mixed>
      * }}>
      */
-    private function _elements( array $options ): array
+    private function _elements(array $options): array
     {
         $plugins = $options['vimbadmin_plugins'] ?? null;
-        if( !is_array( $plugins ) )
+        if (!is_array($plugins)) {
             return [];
+        }
 
         $plugin = $plugins['AdditionalInfo'] ?? null;
-        if( !is_array( $plugin ) )
+        if (!is_array($plugin)) {
             return [];
+        }
 
         $configured = $plugin['elements'] ?? null;
-        if( !is_array( $configured ) )
+        if (!is_array($configured)) {
             return [];
+        }
 
         $elements = [];
-        foreach( $configured as $name => $element )
-        {
-            if( !is_string( $name ) )
+        foreach ($configured as $name => $element) {
+            if (!is_string($name)) {
                 continue;
+            }
 
-            $elementOptions = $this->_elementOptions( $name, $element );
-            if( $elementOptions !== null )
+            $elementOptions = $this->_elementOptions($name, $element);
+            if ($elementOptions !== null) {
                 $elements[$name] = [ 'options' => $elementOptions ];
+            }
         }
 
         return $elements;
@@ -93,98 +96,108 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
     /**
      * @return array{label: string, required: bool, validators: array<int|string,mixed>}|null
      */
-    private function _elementOptions( string $name, mixed $element ): ?array
+    private function _elementOptions(string $name, mixed $element): ?array
     {
-        if( !is_array( $element ) )
+        if (!is_array($element)) {
             return null;
+        }
 
         $options = $element['options'] ?? null;
-        $options = is_array( $options ) ? $options : [];
+        $options = is_array($options) ? $options : [];
         $label = $options['label'] ?? $name;
-        if( !is_scalar( $label ) )
+        if (!is_scalar($label)) {
             $label = $name;
+        }
 
         $validators = $options['validators'] ?? null;
 
         return [
             'label' => (string) $label,
-            'required' => !empty( $options['required'] ),
-            'validators' => is_array( $validators ) ? $validators : [],
+            'required' => !empty($options['required']),
+            'validators' => is_array($validators) ? $validators : [],
         ];
     }
 
     /** @return callable(mixed):?string|null */
-    private function _validatorRule( mixed $validator ): ?callable
+    private function _validatorRule(mixed $validator): ?callable
     {
-        $name = $this->_validatorName( $validator );
-        if( $name === 'Digits' )
-            return \ViMbAdmin\Kernel\Form\Validators::regex( '/^\d+$/', _( 'Please enter digits only.' ) );
+        $name = $this->_validatorName($validator);
+        if ($name === 'Digits') {
+            return \ViMbAdmin\Kernel\Form\Validators::regex('/^\d+$/', _('Please enter digits only.'));
+        }
 
-        if( $name !== 'StringLength' )
+        if ($name !== 'StringLength') {
             return null;
+        }
 
-        $min = $this->_stringLengthMinimum( $validator );
-        return $min === null ? null : \ViMbAdmin\Kernel\Form\Validators::minLength( $min );
+        $min = $this->_stringLengthMinimum($validator);
+        return $min === null ? null : \ViMbAdmin\Kernel\Form\Validators::minLength($min);
     }
 
-    private function _validatorName( mixed $validator ): ?string
+    private function _validatorName(mixed $validator): ?string
     {
-        if( is_string( $validator ) )
+        if (is_string($validator)) {
             return $validator;
+        }
 
-        if( !is_array( $validator ) )
+        if (!is_array($validator)) {
             return null;
+        }
 
         $name = $validator[0] ?? null;
-        return is_string( $name ) ? $name : null;
+        return is_string($name) ? $name : null;
     }
 
-    private function _stringLengthMinimum( mixed $validator ): ?int
+    private function _stringLengthMinimum(mixed $validator): ?int
     {
-        if( !is_array( $validator ) )
+        if (!is_array($validator)) {
             return null;
+        }
 
         $range = $validator['range'] ?? null;
-        if( !is_array( $range ) )
+        if (!is_array($range)) {
             return null;
+        }
 
         $min = $range[0] ?? null;
-        if( is_int( $min ) )
+        if (is_int($min)) {
             return $min;
+        }
 
-        return is_string( $min ) && ctype_digit( $min ) ? (int) $min : null;
+        return is_string($min) && ctype_digit($min) ? (int) $min : null;
     }
 
     /**
      * @param array<string,mixed> $options
      * @return array<int,\ViMbAdmin\Kernel\Form\Field>
      */
-    public function nativeMailboxFields( ?\Entities\Mailbox $mailbox, array $options ): array
+    public function nativeMailboxFields(?\Entities\Mailbox $mailbox, array $options): array
     {
         $fields = [];
 
-        foreach( $this->_elements( $options ) as $name => $element )
-        {
+        foreach ($this->_elements($options) as $name => $element) {
             $opts = $element['options'];
 
             $rules = [];
-            if( $opts['required'] )
+            if ($opts['required']) {
                 $rules[] = \ViMbAdmin\Kernel\Form\Validators::required();
+            }
 
             // Map the handful of Zend validators these elements use in practice
             // (Digits, StringLength range) to framework-free field rules; unknown
             // validators are skipped (the value still saves — best-effort parity).
-            foreach( $opts['validators'] as $validator )
-            {
-                $rule = $this->_validatorRule( $validator );
-                if( $rule !== null )
+            foreach ($opts['validators'] as $validator) {
+                $rule = $this->_validatorRule($validator);
+                if ($rule !== null) {
                     $rules[] = $rule;
+                }
             }
 
-            $field = new \ViMbAdmin\Kernel\Form\Field( "plugin_additionalInfo_{$name}", _( $opts['label'] ), 'text', $rules );
+            $field = new \ViMbAdmin\Kernel\Form\Field("plugin_additionalInfo_{$name}", _($opts['label']), 'text', $rules);
 
-            if( $mailbox !== null && $mailbox->getPreference( 'xpiInfo.' . $name ) )
-                $field->setValue( (string) $mailbox->getPreference( 'xpiInfo.' . $name ) );
+            if ($mailbox !== null && $mailbox->getPreference('xpiInfo.' . $name)) {
+                $field->setValue((string) $mailbox->getPreference('xpiInfo.' . $name));
+            }
 
             $fields[] = $field;
         }
@@ -196,7 +209,7 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
-    public function nativeMailboxValidate( array $values, array $options ): ?string
+    public function nativeMailboxValidate(array $values, array $options): ?string
     {
         // All AdditionalInfo constraints are per-field (handled by the Field rules
         // returned above); there is no cross-field rule.
@@ -207,16 +220,16 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
-    public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null ): void
+    public function nativeMailboxApply(\Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null): void
     {
-        foreach( array_keys( $this->_elements( $options ) ) as $name )
-        {
+        foreach (array_keys($this->_elements($options)) as $name) {
             $key = "plugin_additionalInfo_{$name}";
-            if( array_key_exists( $key, $values ) ) {
-                if( !is_string( $values[ $key ] ) )
-                    throw new TypeError( 'Additional-info values must be strings.' );
+            if (array_key_exists($key, $values)) {
+                if (!is_string($values[ $key ])) {
+                    throw new TypeError('Additional-info values must be strings.');
+                }
 
-                $mailbox->setPreference( 'xpiInfo.' . $name, $values[ $key ] );
+                $mailbox->setPreference('xpiInfo.' . $name, $values[ $key ]);
             }
         }
     }

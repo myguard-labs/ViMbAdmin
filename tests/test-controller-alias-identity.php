@@ -32,24 +32,55 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class ControllerAliasIdentitySession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function __set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function __isset(string $key): bool { return isset($this->data[$key]); }
-    public function __unset(string $key): void { unset($this->data[$key]); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function __isset(string $key): bool
+    {
+        return isset($this->data[$key]);
+    }
+    public function __unset(string $key): void
+    {
+        unset($this->data[$key]);
+    }
 
     /** @return array<string,mixed> */
-    public function values(): array { return $this->data; }
+    public function values(): array
+    {
+        return $this->data;
+    }
 }
 
 final class ControllerAliasIdentityView
 {
     public int $renders = 0;
-    public function __set(string $key, mixed $value): void {}
+    public function __set(string $key, mixed $value): void
+    {
+    }
     public function render(string $script): string
     {
         $this->renders++;
@@ -65,10 +96,14 @@ final class ControllerAliasIdentityResources
         private readonly ControllerAliasIdentitySession $session,
         private readonly ControllerAliasIdentityView $view,
         private readonly array $options = [],
-    ) {}
+    ) {
+    }
 
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
     public function getResource(string $name): mixed
     {
         return match ($name) {
@@ -92,11 +127,26 @@ final class ControllerAliasIdentityAdmin extends \Entities\Admin
         $this->setUsername('admin@example.test');
     }
 
-    public function getId(): int { return 1; }
-    public function getUsername(): string { return 'admin@example.test'; }
-    public function getSuper(): bool { return true; }
-    public function getActive(): bool { return true; }
-    public function isSuper(): bool { return true; }
+    public function getId(): int
+    {
+        return 1;
+    }
+    public function getUsername(): string
+    {
+        return 'admin@example.test';
+    }
+    public function getSuper(): bool
+    {
+        return true;
+    }
+    public function getActive(): bool
+    {
+        return true;
+    }
+    public function isSuper(): bool
+    {
+        return true;
+    }
 }
 
 /**
@@ -112,11 +162,26 @@ final class ControllerAliasIdentityScopedAdmin extends \Entities\Admin
         $this->setUsername('domainadmin@example.test');
     }
 
-    public function getId(): int { return 2; }
-    public function getUsername(): string { return 'domainadmin@example.test'; }
-    public function getSuper(): bool { return false; }
-    public function getActive(): bool { return true; }
-    public function isSuper(): bool { return false; }
+    public function getId(): int
+    {
+        return 2;
+    }
+    public function getUsername(): string
+    {
+        return 'domainadmin@example.test';
+    }
+    public function getSuper(): bool
+    {
+        return false;
+    }
+    public function getActive(): bool
+    {
+        return true;
+    }
+    public function isSuper(): bool
+    {
+        return false;
+    }
 
     /** @param \Entities\Domain $domain */
     public function canManageDomain($domain): bool
@@ -136,7 +201,9 @@ final class ControllerAliasIdentityAliasRepository extends \Repositories\Alias
     public int $identityLookups = 0;
 
     /** @param list<\Entities\Alias> $aliases */
-    public function __construct(private readonly array $aliases) {}
+    public function __construct(private readonly array $aliases)
+    {
+    }
 
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
@@ -171,7 +238,9 @@ final class ControllerAliasIdentityPagedAliasRepository extends \Repositories\Al
     public int $pagedCalls = 0;
     public bool $fail = false;
 
-    public function __construct() {}
+    public function __construct()
+    {
+    }
 
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     #[\Override]
@@ -190,7 +259,9 @@ final class ControllerAliasIdentityMailboxRepository extends \Repositories\Mailb
     public bool $purged = false;
     public int $listLookups = 0;
 
-    public function __construct(private readonly ?\Entities\Mailbox $mailbox) {}
+    public function __construct(private readonly ?\Entities\Mailbox $mailbox)
+    {
+    }
 
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
@@ -237,7 +308,9 @@ final class ControllerAliasIdentityMailboxRepository extends \Repositories\Mailb
 final class ControllerAliasIdentityPagedMailboxRepository extends \Repositories\Mailbox
 {
     /** @param list<mixed> $mailboxes */
-    public function __construct(private readonly array $mailboxes) {}
+    public function __construct(private readonly array $mailboxes)
+    {
+    }
 
     /**
      * @param array<string,mixed> $criteria
@@ -251,8 +324,10 @@ final class ControllerAliasIdentityPagedMailboxRepository extends \Repositories\
             throw new LogicException('Expected mailbox username ascending order.');
         }
         $rows = $this->mailboxes;
-        usort($rows, static function(mixed $left, mixed $right): int {
-            if (!$left instanceof \Entities\Mailbox || !$right instanceof \Entities\Mailbox) { return 0; }
+        usort($rows, static function (mixed $left, mixed $right): int {
+            if (!$left instanceof \Entities\Mailbox || !$right instanceof \Entities\Mailbox) {
+                return 0;
+            }
             return strcmp($left->requiredUsername(), $right->requiredUsername());
         });
         return array_slice($rows, $offset ?? 0, $limit);
@@ -261,7 +336,9 @@ final class ControllerAliasIdentityPagedMailboxRepository extends \Repositories\
 
 final class ControllerAliasIdentityDomainRepository extends \Repositories\Domain
 {
-    public function __construct(private readonly ?\Entities\Domain $domain) {}
+    public function __construct(private readonly ?\Entities\Domain $domain)
+    {
+    }
 
     /**
      * @param array<string,mixed> $criteria
@@ -280,7 +357,10 @@ final class ControllerAliasIdentityRepositoryFactory implements RepositoryFactor
     private array $repositories;
 
     /** @param array<string,EntityRepository<covariant object>> $repositories */
-    public function __construct(array $repositories) { $this->repositories = $repositories; }
+    public function __construct(array $repositories)
+    {
+        $this->repositories = $repositories;
+    }
 
     /**
      * @template T of object
@@ -320,7 +400,7 @@ function controllerAliasIdentityContainer(
     $admin = new ControllerAliasIdentityAdmin();
     return new Container(
         new ControllerAliasIdentityResources($entityManager, $session, $view, $options),
-        new Auth($session, static fn(int $id): object => $admin),
+        new Auth($session, static fn (int $id): object => $admin),
     );
 }
 
@@ -342,9 +422,18 @@ final class ControllerAliasIdentityRecordingEntityManager extends EntityManagerD
         parent::__construct(controllerAliasIdentityEntityManager($repositories));
     }
 
-    public function persist(object $object): void { $this->persisted[] = $object; }
-    public function remove(object $object): void { $this->removed[] = $object; }
-    public function flush(): void { $this->flushes++; }
+    public function persist(object $object): void
+    {
+        $this->persisted[] = $object;
+    }
+    public function remove(object $object): void
+    {
+        $this->removed[] = $object;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
 }
 
 /** Container bound to an arbitrary admin identity (default: the super admin). */
@@ -356,7 +445,7 @@ function controllerAliasIdentityContainerFor(
 ): Container {
     return new Container(
         new ControllerAliasIdentityResources($entityManager, $session, $view, []),
-        new Auth($session, static fn(int $id): object => $admin),
+        new Auth($session, static fn (int $id): object => $admin),
     );
 }
 
@@ -437,7 +526,9 @@ final class ControllerAliasIdentityState
 function controllerAliasIdentityCheck(string $label, bool $ok): void
 {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { ControllerAliasIdentityState::$failures++; }
+    if (!$ok) {
+        ControllerAliasIdentityState::$failures++;
+    }
 }
 
 echo "== controller alias identity boundaries ==\n";
@@ -472,10 +563,14 @@ try {
 } catch (LogicException $e) {
     $aliasError = $e->getMessage();
 }
-controllerAliasIdentityCheck('alias edit rejects missing goto before rendering',
-    $aliasError === 'Alias goto cannot be null.' && $aliasView->renders === 0);
-controllerAliasIdentityCheck('alias edit identity failure leaves state and flash queue untouched',
-    $gotoMissing->getGoto() === null && $aliasSession->values() === ['identity' => ['id' => 1]]);
+controllerAliasIdentityCheck(
+    'alias edit rejects missing goto before rendering',
+    $aliasError === 'Alias goto cannot be null.' && $aliasView->renders === 0
+);
+controllerAliasIdentityCheck(
+    'alias edit identity failure leaves state and flash queue untouched',
+    $gotoMissing->getGoto() === null && $aliasSession->values() === ['identity' => ['id' => 1]]
+);
 
 // mailbox delete-alias is POST-only with a body CSRF token (VIM-D05).
 $_SERVER['REQUEST_METHOD'] = 'POST';
@@ -505,25 +600,29 @@ try {
 } catch (Throwable $e) {
     $mailboxError = $e->getMessage();
 }
-controllerAliasIdentityCheck('mailbox delete rejects missing address before mutation',
+controllerAliasIdentityCheck(
+    'mailbox delete rejects missing address before mutation',
     $mailboxError === 'Alias address cannot be null.'
         && $addressMissing->getGoto() === 'user@example.test'
         && $domain->getAliasCount() === 4
         && $mailboxEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
         && $mailboxEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
-        && $mailboxSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']);
+        && $mailboxSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']
+);
 
 $invalidMidController = new MailboxController(
     controllerAliasIdentityContainer($mailboxEntityManager, $mailboxSession, $mailboxView),
     new RouteMatch('mailbox', 'add', MailboxController::class, 'addAction', ['mid' => '7junk']),
 );
 $invalidMidResponse = $invalidMidController->addAction();
-controllerAliasIdentityCheck('malformed add-with-mid fails closed before auth, lookup, or mutation',
+controllerAliasIdentityCheck(
+    'malformed add-with-mid fails closed before auth, lookup, or mutation',
     $invalidMidResponse->status === 302
         && ($invalidMidResponse->headers['Location'] ?? null) === '/mailbox/list'
         && $mailboxEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
         && $mailboxEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
-        && $mailboxSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']);
+        && $mailboxSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']
+);
 
 $orphanAlias = (new \Entities\Alias())
     ->setAddress('orphan@example.test')
@@ -544,14 +643,16 @@ $orphanController = new MailboxController(
     ]),
 );
 $orphanResponse = $orphanController->deleteAliasAction();
-controllerAliasIdentityCheck('mailbox delete fails closed on a missing alias domain before mutation',
+controllerAliasIdentityCheck(
+    'mailbox delete fails closed on a missing alias domain before mutation',
     $orphanResponse->status === 302
         && ($orphanResponse->headers['Location'] ?? null) === '/mailbox/list'
         && $orphanAlias->getGoto() === 'user@example.test'
         && $domain->getAliasCount() === 4
         && $orphanEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
         && $orphanEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
-        && $orphanSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']);
+        && $orphanSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']
+);
 
 // A persisted mailbox without its required domain must never reach
 // authorisation context construction or mutation.
@@ -580,10 +681,12 @@ foreach ($wrongActions as $route => [$method, $extra, $expected]) {
     );
     $response = $controller->{$method}();
     $actual = $response->status === 302 ? ($response->headers['Location'] ?? null) : $response->body;
-    controllerAliasIdentityCheck("{$route} rejects an orphan mailbox without writes",
+    controllerAliasIdentityCheck(
+        "{$route} rejects an orphan mailbox without writes",
         $actual === $expected
             && $wrongEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-            && $wrongEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+            && $wrongEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+    );
 }
 
 $rememberedSession = new ControllerAliasIdentitySession([
@@ -596,10 +699,12 @@ $rememberedController = new MailboxController(
     new RouteMatch('mailbox', 'list', MailboxController::class, 'listAction', []),
 );
 $rememberedResponse = $rememberedController->listAction();
-controllerAliasIdentityCheck('list removes malformed remembered domain before fail-closed redirect',
+controllerAliasIdentityCheck(
+    'list removes malformed remembered domain before fail-closed redirect',
     $rememberedResponse->status === 302
         && ($rememberedResponse->headers['Location'] ?? null) === '/auth/login'
-        && !$rememberedSession->has('domain'));
+        && !$rememberedSession->has('domain')
+);
 
 $invalidDidSession = new ControllerAliasIdentitySession(['identity' => ['id' => 1]]);
 $invalidDidEntityManager = controllerAliasIdentityEntityManager([]);
@@ -608,10 +713,12 @@ $invalidDidController = new MailboxController(
     new RouteMatch('mailbox', 'list', MailboxController::class, 'listAction', ['did' => '7junk']),
 );
 $invalidDidResponse = $invalidDidController->listAction();
-controllerAliasIdentityCheck('present malformed list domain cannot widen into an unfiltered list',
+controllerAliasIdentityCheck(
+    'present malformed list domain cannot widen into an unfiltered list',
     $invalidDidResponse->status === 302
         && ($invalidDidResponse->headers['Location'] ?? null) === '/auth/login'
-        && $invalidDidEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []);
+        && $invalidDidEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
+);
 
 $oldGet = $_GET;
 $_GET = ['draw' => ['2']];
@@ -622,11 +729,13 @@ $listDataController = new MailboxController(
 $listLookupsBefore = $wrongMailboxRepository->listLookups;
 $listDataResponse = $listDataController->listDataAction();
 $_GET = $oldGet;
-controllerAliasIdentityCheck('DataTables container input returns 400 before repository access',
+controllerAliasIdentityCheck(
+    'DataTables container input returns 400 before repository access',
     $listDataResponse->status === 400
         && $listDataResponse->body === 'Invalid DataTables request'
         && $wrongMailboxRepository->listLookups === $listLookupsBefore
-        && $wrongEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []);
+        && $wrongEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
+);
 
 $aliasListRepository = new ControllerAliasIdentityPagedAliasRepository();
 $aliasListEntityManager = controllerAliasIdentityEntityManager([
@@ -652,16 +761,19 @@ foreach (['did' => ['1'], 'ima' => ['1'], 'unexpected' => ['x']] as $key => $val
     } catch (Throwable $e) {
         $failure = $e;
     }
-    controllerAliasIdentityCheck("alias list-data rejects {$key} containers before repository access",
+    controllerAliasIdentityCheck(
+        "alias list-data rejects {$key} containers before repository access",
         $failure === null
             && $response?->status === 400
             && $response->body === 'Invalid DataTables request'
-            && $aliasListRepository->pagedCalls === 0);
+            && $aliasListRepository->pagedCalls === 0
+    );
 }
 
 $_GET = ['draw' => '7', 'start' => '0', 'length' => '10'];
 $validAliasListResponse = $aliasListController()->listDataAction();
-controllerAliasIdentityCheck('alias list-data preserves valid request behaviour',
+controllerAliasIdentityCheck(
+    'alias list-data preserves valid request behaviour',
     $validAliasListResponse->status === 200
         && json_decode($validAliasListResponse->body, true) === [
             'draw' => 7,
@@ -669,7 +781,8 @@ controllerAliasIdentityCheck('alias list-data preserves valid request behaviour'
             'recordsFiltered' => 0,
             'data' => [],
         ]
-        && $aliasListRepository->pagedCalls === 1);
+        && $aliasListRepository->pagedCalls === 1
+);
 
 $configurationCallsBefore = $aliasListRepository->pagedCalls;
 $configurationFailure = false;
@@ -686,9 +799,11 @@ try {
 } catch (TypeError) {
     $configurationFailure = true;
 }
-controllerAliasIdentityCheck('alias list-data does not recast configuration failures as request errors',
+controllerAliasIdentityCheck(
+    'alias list-data does not recast configuration failures as request errors',
     $configurationFailure
-        && $aliasListRepository->pagedCalls === $configurationCallsBefore);
+        && $aliasListRepository->pagedCalls === $configurationCallsBefore
+);
 
 $aliasListRepository->fail = true;
 $repositoryFailure = null;
@@ -697,9 +812,11 @@ try {
 } catch (LogicException $e) {
     $repositoryFailure = $e->getMessage();
 }
-controllerAliasIdentityCheck('alias list-data does not recast repository failures as request errors',
+controllerAliasIdentityCheck(
+    'alias list-data does not recast repository failures as request errors',
     $repositoryFailure === 'Repository failure sentinel'
-        && $aliasListRepository->pagedCalls === 2);
+        && $aliasListRepository->pagedCalls === 2
+);
 $aliasListRepository->fail = false;
 
 $_GET = ['search' => ['value' => 'abc']];
@@ -715,9 +832,11 @@ foreach ([
     ),
 ] as $name => $searchFloorController) {
     $response = $searchFloorController->listDataAction();
-    controllerAliasIdentityCheck("{$name} list-data enforces the shared search minimum argument",
+    controllerAliasIdentityCheck(
+        "{$name} list-data enforces the shared search minimum argument",
         $response->status === 400
-            && $response->body === 'Search must be empty or at least 4 characters');
+            && $response->body === 'Search must be empty or at least 4 characters'
+    );
 }
 $_GET = $oldGet;
 
@@ -743,11 +862,13 @@ $formController = new MailboxController(
 $formResponse = $formController->emailSettingsAction();
 $_SERVER = $oldServer;
 $_POST = $oldPost;
-controllerAliasIdentityCheck('email settings container input safely re-renders without Array disclosure or writes',
+controllerAliasIdentityCheck(
+    'email settings container input safely re-renders without Array disclosure or writes',
     $formResponse->status === 200
         && !str_contains($formResponse->body, 'Array')
         && $formEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $formEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $formEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $badQueueSession = new ControllerAliasIdentitySession([
     'identity' => ['id' => 1],
@@ -769,11 +890,13 @@ $badQueueController = new MailboxController(
     ]),
 );
 $badQueueResponse = $badQueueController->queueRepairAction();
-controllerAliasIdentityCheck('malformed present queue key is rejected before enqueue or flush',
+controllerAliasIdentityCheck(
+    'malformed present queue key is rejected before enqueue or flush',
     $badQueueResponse->status === 302
         && ($badQueueResponse->headers['Location'] ?? null) === '/mailbox/list'
         && $badQueueEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $badQueueEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $badQueueEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $validAlias = (new \Entities\Alias())
     ->setAddress('sales@example.test')
@@ -789,12 +912,13 @@ $mcpEntityManager = controllerAliasIdentityEntityManager([
 $mcpController = new McpController(
     new Container(
         new ControllerAliasIdentityResources($mcpEntityManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
 $mcpResult = controllerAliasIdentityMcpAliases($mcpController, ['domain' => 'example.test']);
-controllerAliasIdentityCheck('MCP alias list emits required string identities',
+controllerAliasIdentityCheck(
+    'MCP alias list emits required string identities',
     $mcpResult === [
         'domain' => 'example.test',
         'aliases' => [[
@@ -802,7 +926,8 @@ controllerAliasIdentityCheck('MCP alias list emits required string identities',
             'goto' => 'user@example.test',
             'active' => true,
         ]],
-    ]);
+    ]
+);
 
 $pagedMailboxes = [];
 foreach (['z@example.test', 'a@example.test', 'm@example.test'] as $username) {
@@ -815,7 +940,7 @@ $pagedMcpEntityManager = controllerAliasIdentityEntityManager([
 $pagedMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($pagedMcpEntityManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -833,10 +958,12 @@ if (!is_array($pageOneRows) || !is_array($pageTwoRows)) {
     throw new RuntimeException('MCP mailbox page rows have an invalid shape');
 }
 $pagedUsernames = array_column(array_merge($pageOneRows, $pageTwoRows), 'username');
-controllerAliasIdentityCheck('MCP mailbox pages are bounded, complete and deterministically ordered',
+controllerAliasIdentityCheck(
+    'MCP mailbox pages are bounded, complete and deterministically ordered',
     count($pageOneRows) === 2
         && count($pageTwoRows) === 1
-        && $pagedUsernames === ['a@example.test', 'm@example.test', 'z@example.test']);
+        && $pagedUsernames === ['a@example.test', 'm@example.test', 'z@example.test']
+);
 
 foreach ([
     ['limit' => 0],
@@ -860,7 +987,7 @@ $malformedPageEntityManager = controllerAliasIdentityEntityManager([
 $malformedPageMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($malformedPageEntityManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -880,7 +1007,7 @@ $crossDomainAliasManager = controllerAliasIdentityEntityManager([
 $crossDomainAliasMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($crossDomainAliasManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -894,11 +1021,13 @@ try {
 } catch (ViMbAdmin_Mcp_Exception $e) {
     $crossDomainAliasError = $e->getMessage();
 }
-controllerAliasIdentityCheck('MCP alias create rejects a cross-domain address before lookup or mutation',
+controllerAliasIdentityCheck(
+    'MCP alias create rejects a cross-domain address before lookup or mutation',
     $crossDomainAliasError === 'address domain must match the authorized domain'
         && $crossDomainAliasRepository->identityLookups === 0
         && $crossDomainAliasManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $crossDomainAliasManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $crossDomainAliasManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $orphanAlias = (new \Entities\Alias())
     ->setAddress('orphan@other.test')
@@ -910,7 +1039,7 @@ $orphanAliasManager = controllerAliasIdentityEntityManager([
 $orphanAliasMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($orphanAliasManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -920,11 +1049,13 @@ try {
 } catch (ViMbAdmin_Mcp_Exception $e) {
     $orphanAliasError = $e->getMessage();
 }
-controllerAliasIdentityCheck('MCP alias delete fails closed on an orphan relation before mutation',
+controllerAliasIdentityCheck(
+    'MCP alias delete fails closed on an orphan relation before mutation',
     $orphanAliasError === 'unknown alias'
         && $orphanAliasRepository->identityLookups === 1
         && $orphanAliasManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $orphanAliasManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $orphanAliasManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $deleteDomain = (new \Entities\Domain())->setDomain('delete.example.test')->setMailboxCount(3);
 $deleteMailbox = (new \Entities\Mailbox())
@@ -937,15 +1068,17 @@ $deleteEntityManager = controllerAliasIdentityEntityManager([
 $deleteMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($deleteEntityManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
 $deleteResult = controllerAliasIdentityMcpDelete($deleteMcp, ['username' => 'user@delete.example.test']);
-controllerAliasIdentityCheck('MCP mailbox delete delegates the counter exactly once',
+controllerAliasIdentityCheck(
+    'MCP mailbox delete delegates the counter exactly once',
     $deleteResult === ['deleted' => true, 'username' => 'user@delete.example.test']
         && $deleteRepository->purged
-        && $deleteDomain->getMailboxCount() === 2);
+        && $deleteDomain->getMailboxCount() === 2
+);
 
 $orphanMailbox = (new \Entities\Mailbox())->setUsername('orphan@other.test');
 $orphanMailboxRepository = new ControllerAliasIdentityMailboxRepository($orphanMailbox);
@@ -955,7 +1088,7 @@ $orphanMailboxManager = controllerAliasIdentityEntityManager([
 $orphanMailboxMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($orphanMailboxManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -965,11 +1098,13 @@ try {
 } catch (ViMbAdmin_Mcp_Exception $e) {
     $orphanMailboxError = $e->getMessage();
 }
-controllerAliasIdentityCheck('MCP mailbox delete fails closed on an orphan relation before purge',
+controllerAliasIdentityCheck(
+    'MCP mailbox delete fails closed on an orphan relation before purge',
     $orphanMailboxError === 'unknown mailbox'
         && !$orphanMailboxRepository->purged
         && $orphanMailboxManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $orphanMailboxManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $orphanMailboxManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $malformedMcpAlias = (new \Entities\Alias())->setAddress('broken@example.test')->setDomain($domain);
 $malformedMcpEntityManager = controllerAliasIdentityEntityManager([
@@ -979,7 +1114,7 @@ $malformedMcpEntityManager = controllerAliasIdentityEntityManager([
 $malformedMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($malformedMcpEntityManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -991,8 +1126,10 @@ try {
     $mcpError = $e->getMessage();
 }
 $mcpOutput = ob_get_clean();
-controllerAliasIdentityCheck('MCP rejects missing goto without partial output',
-    $mcpError === 'Alias goto cannot be null.' && $mcpOutput === '');
+controllerAliasIdentityCheck(
+    'MCP rejects missing goto without partial output',
+    $mcpError === 'Alias goto cannot be null.' && $mcpOutput === ''
+);
 
 $unnamedDomain = new \Entities\Domain();
 $unnamedDomainEntityManager = controllerAliasIdentityEntityManager([
@@ -1002,7 +1139,7 @@ $unnamedDomainEntityManager = controllerAliasIdentityEntityManager([
 $unnamedDomainMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($unnamedDomainEntityManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -1014,11 +1151,13 @@ try {
     $unnamedDomainError = $e->getMessage();
 }
 $unnamedDomainOutput = ob_get_clean();
-controllerAliasIdentityCheck('MCP rejects a null domain name without output or mutation',
+controllerAliasIdentityCheck(
+    'MCP rejects a null domain name without output or mutation',
     $unnamedDomainError === 'Domain name cannot be null.'
         && $unnamedDomainOutput === ''
         && $unnamedDomainEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $unnamedDomainEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $unnamedDomainEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $unnamedMailbox = (new \Entities\Mailbox())->setDomain($domain);
 $unnamedMailboxEntityManager = controllerAliasIdentityEntityManager([
@@ -1028,7 +1167,7 @@ $unnamedMailboxEntityManager = controllerAliasIdentityEntityManager([
 $unnamedMailboxMcp = new McpController(
     new Container(
         new ControllerAliasIdentityResources($unnamedMailboxEntityManager, $mcpSession, $mcpView),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -1040,11 +1179,13 @@ try {
     $unnamedMailboxError = $e->getMessage();
 }
 $unnamedMailboxOutput = ob_get_clean();
-controllerAliasIdentityCheck('MCP rejects a null mailbox username without output or mutation',
+controllerAliasIdentityCheck(
+    'MCP rejects a null mailbox username without output or mutation',
     $unnamedMailboxError === 'Mailbox username cannot be null.'
         && $unnamedMailboxOutput === ''
         && $unnamedMailboxEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $unnamedMailboxEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $unnamedMailboxEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $emailSession = new ControllerAliasIdentitySession(['identity' => ['id' => 1]]);
 $emailView = new ControllerAliasIdentityView();
@@ -1061,16 +1202,18 @@ try {
 } catch (LogicException $e) {
     $emailError = $e->getMessage();
 }
-controllerAliasIdentityCheck('mail settings reject a null username before render or mutation',
+controllerAliasIdentityCheck(
+    'mail settings reject a null username before render or mutation',
     $emailError === 'Mailbox username cannot be null.'
         && $emailView->renders === 0
         && $emailEntityManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $emailEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $emailEntityManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 // VIM-D03: `deleteAliasAction` scope-checks BOTH ids. A domain admin passing a
 // `mid` for a mailbox outside their domains must be indistinguishable from
 // "no such mailbox" and must not mutate the alias or write an audit row.
-$scopeIdent = static function(\Entities\Domain $domain, int $id): \Entities\Domain {
+$scopeIdent = static function (\Entities\Domain $domain, int $id): \Entities\Domain {
     (new ReflectionProperty(\Entities\Domain::class, 'id'))->setValue($domain, $id);
     return $domain;
 };
@@ -1112,7 +1255,8 @@ $foreignResponse = (new MailboxController(
     controllerAliasIdentityContainerFor($foreignEm, $foreignSession, new ControllerAliasIdentityView(), $scopedAdmin),
     $scopeRoute,
 ))->deleteAliasAction();
-controllerAliasIdentityCheck('delete-alias refuses a mid outside the admin\'s domains without mutation or audit row',
+controllerAliasIdentityCheck(
+    'delete-alias refuses a mid outside the admin\'s domains without mutation or audit row',
     $foreignResponse->status === 302
         && ($foreignResponse->headers['Location'] ?? null) === '/mailbox/list'
         && $foreignAlias->getGoto() === 'victim@foreign.test,other@owned.test'
@@ -1120,7 +1264,8 @@ controllerAliasIdentityCheck('delete-alias refuses a mid outside the admin\'s do
         && $foreignEm->persisted === []
         && $foreignEm->removed === []
         && $foreignEm->flushes === 0
-        && $foreignSession->values() === $scopeBaseSession);
+        && $foreignSession->values() === $scopeBaseSession
+);
 
 // (b) The alias-side guard: the mailbox is in a domain the admin manages, but
 // the alias is not. This is what the alias authorisation defends — an admin
@@ -1139,14 +1284,16 @@ $crossResponse = (new MailboxController(
     controllerAliasIdentityContainerFor($crossEm, $crossSession, new ControllerAliasIdentityView(), $scopedAdmin),
     $scopeRoute,
 ))->deleteAliasAction();
-controllerAliasIdentityCheck('delete-alias refuses an alias whose domain the admin does not manage',
+controllerAliasIdentityCheck(
+    'delete-alias refuses an alias whose domain the admin does not manage',
     $crossResponse->status === 302
         && ($crossResponse->headers['Location'] ?? null) === '/mailbox/list'
         && $crossAlias->getGoto() === 'user@owned.test,other@foreign.test'
         && $crossEm->persisted === []
         && $crossEm->removed === []
         && $crossEm->flushes === 0
-        && $crossSession->values() === $scopeBaseSession);
+        && $crossSession->values() === $scopeBaseSession
+);
 
 // (b2) The supported cross-domain flow, and the regression this guard must not
 // break: an admin who manages BOTH domains detaches a mailbox in one from an
@@ -1174,14 +1321,16 @@ $crossOkResponse = (new MailboxController(
     ),
     $scopeRoute,
 ))->deleteAliasAction();
-controllerAliasIdentityCheck('delete-alias still detaches a mailbox from a cross-domain alias it manages',
+controllerAliasIdentityCheck(
+    'delete-alias still detaches a mailbox from a cross-domain alias it manages',
     $crossOkResponse->status === 302
         && str_starts_with((string) ($crossOkResponse->headers['Location'] ?? ''), '/mailbox/aliases/mid/')
         && $crossOkAlias->getGoto() === 'other@owned.test'
         && count($crossOkEm->persisted) === 1
         && $crossOkEm->persisted[0] instanceof \Entities\Log
         && $crossOkEm->removed === []
-        && $crossOkEm->flushes === 1);
+        && $crossOkEm->flushes === 1
+);
 
 // (b3) Whole-alias removal across domains: the alias's ONLY goto is this
 // mailbox, so it is deleted outright and a domain's alias counter is
@@ -1217,7 +1366,8 @@ $countResponse = (new MailboxController(
     ),
     $scopeRoute,
 ))->deleteAliasAction();
-controllerAliasIdentityCheck('delete-alias decrements the alias domain, not the mailbox domain',
+controllerAliasIdentityCheck(
+    'delete-alias decrements the alias domain, not the mailbox domain',
     $countResponse->status === 302
         && str_starts_with((string) ($countResponse->headers['Location'] ?? ''), '/mailbox/aliases/mid/')
         && $countEm->removed === [$countAlias]
@@ -1225,7 +1375,8 @@ controllerAliasIdentityCheck('delete-alias decrements the alias domain, not the 
         && $countForeign->getAliasCount() === $foreignCountBefore
         && count($countEm->persisted) === 1
         && $countEm->persisted[0] instanceof \Entities\Log
-        && $countEm->flushes === 1);
+        && $countEm->flushes === 1
+);
 
 // (c) The rejection for a foreign mid is byte-identical to the rejection for a
 // mailbox that does not exist at all: probing `mid` leaks nothing.
@@ -1238,11 +1389,13 @@ $missingResponse = (new MailboxController(
     controllerAliasIdentityContainerFor($missingEm, $missingSession, new ControllerAliasIdentityView(), $scopedAdmin),
     $scopeRoute,
 ))->deleteAliasAction();
-controllerAliasIdentityCheck('delete-alias rejection is indistinguishable from a non-existent mailbox',
+controllerAliasIdentityCheck(
+    'delete-alias rejection is indistinguishable from a non-existent mailbox',
     $missingResponse->status === $foreignResponse->status
         && $missingResponse->headers === $foreignResponse->headers
         && $missingResponse->body === $foreignResponse->body
-        && $missingSession->values() === $foreignSession->values());
+        && $missingSession->values() === $foreignSession->values()
+);
 
 // (d) In-scope deletion is unchanged: the destination is trimmed, an audit row
 // is written, and the redirect goes back to the mailbox's alias list.
@@ -1259,14 +1412,16 @@ $inScopeResponse = (new MailboxController(
     controllerAliasIdentityContainerFor($inScopeEm, $inScopeSession, new ControllerAliasIdentityView(), $scopedAdmin),
     $scopeRoute,
 ))->deleteAliasAction();
-controllerAliasIdentityCheck('delete-alias still trims a destination and audits it for an in-scope mailbox',
+controllerAliasIdentityCheck(
+    'delete-alias still trims a destination and audits it for an in-scope mailbox',
     $inScopeResponse->status === 302
         && str_starts_with((string) ($inScopeResponse->headers['Location'] ?? ''), '/mailbox/aliases/mid/')
         && $inScopeAlias->getGoto() === 'other@owned.test'
         && count($inScopeEm->persisted) === 1
         && $inScopeEm->persisted[0] instanceof \Entities\Log
         && $inScopeEm->removed === []
-        && $inScopeEm->flushes === 1);
+        && $inScopeEm->flushes === 1
+);
 
 echo ControllerAliasIdentityState::$failures === 0
     ? "\nALL PASSED\n"

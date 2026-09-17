@@ -42,10 +42,22 @@ final class FlashMessages
         $this->session->set($this->key, $queue);
     }
 
-    public function success(string $text, bool $isHtml = false): void { $this->add($text, self::SUCCESS, $isHtml); }
-    public function error(string $text, bool $isHtml = false): void   { $this->add($text, self::ERROR, $isHtml); }
-    public function info(string $text, bool $isHtml = false): void    { $this->add($text, self::INFO, $isHtml); }
-    public function warning(string $text, bool $isHtml = false): void { $this->add($text, self::WARNING, $isHtml); }
+    public function success(string $text, bool $isHtml = false): void
+    {
+        $this->add($text, self::SUCCESS, $isHtml);
+    }
+    public function error(string $text, bool $isHtml = false): void
+    {
+        $this->add($text, self::ERROR, $isHtml);
+    }
+    public function info(string $text, bool $isHtml = false): void
+    {
+        $this->add($text, self::INFO, $isHtml);
+    }
+    public function warning(string $text, bool $isHtml = false): void
+    {
+        $this->add($text, self::WARNING, $isHtml);
+    }
 
     public function isEmpty(): bool
     {
@@ -60,7 +72,7 @@ final class FlashMessages
     public function peek(): array
     {
         return array_map(
-            static fn(array $m): FlashMessage => FlashMessage::fromArray($m),
+            static fn (array $m): FlashMessage => FlashMessage::fromArray($m),
             $this->rawQueue(),
         );
     }
@@ -99,15 +111,21 @@ final class FlashMessages
             }
             $message = [];
             if (array_key_exists('text', $entry)) {
-                if (!is_string($entry['text'])) throw new \UnexpectedValueException('Flash message text is malformed');
+                if (!is_string($entry['text'])) {
+                    throw new \UnexpectedValueException('Flash message text is malformed');
+                }
                 $message['text'] = $entry['text'];
             }
             if (array_key_exists('level', $entry)) {
-                if (!is_string($entry['level'])) throw new \UnexpectedValueException('Flash message level is malformed');
+                if (!is_string($entry['level'])) {
+                    throw new \UnexpectedValueException('Flash message level is malformed');
+                }
                 $message['level'] = $entry['level'];
             }
             if (array_key_exists('isHtml', $entry)) {
-                if (!is_bool($entry['isHtml'])) throw new \UnexpectedValueException('Flash message HTML flag is malformed');
+                if (!is_bool($entry['isHtml'])) {
+                    throw new \UnexpectedValueException('Flash message HTML flag is malformed');
+                }
                 $message['isHtml'] = $entry['isHtml'];
             }
             $queue[] = $message;

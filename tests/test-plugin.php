@@ -5,7 +5,9 @@ require __DIR__ . '/../library/ViMbAdmin/Plugin.php';
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 $plugin = new ViMbAdmin_Plugin((object) [], 'ViMbAdminPlugin_Example');

@@ -54,35 +54,37 @@ class Archive extends EntityRepository
      * @param \Entities\Domain|null $domain Domain for filtering mailboxes.
      * @return array<int,array{id:mixed,username:mixed,status:mixed,archived_at:mixed,autoprune:mixed,maildir_size:mixed,domain:mixed,user_exists:mixed}>
      */
-    public function loadForArchiveList( $admin, $domain = null )
+    public function loadForArchiveList($admin, $domain = null)
     {
         return self::requiredArchiveListRows(
-            $this->archiveListQuery( $admin, $domain )->getQuery()->getArrayResult()
+            $this->archiveListQuery($admin, $domain)->getQuery()->getArrayResult()
         );
     }
 
-    private function archiveListQuery( \Entities\Admin $admin, ?\Entities\Domain $domain ): \Doctrine\ORM\QueryBuilder
+    private function archiveListQuery(\Entities\Admin $admin, ?\Entities\Domain $domain): \Doctrine\ORM\QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'a.id as id , a.username as username, a.status as status, '
+            ->select('a.id as id , a.username as username, a.status as status, '
                     . 'a.archived_at as archived_at, a.autoprune as autoprune, '
                     . 'a.maildir_size as maildir_size, '
                     . 'd.domain as domain, '
-                    . '(CASE WHEN m.id IS NULL THEN 0 ELSE 1 END) as user_exists' )
-            ->from( '\\Entities\\Archive', 'a' )
-            ->join( 'a.Domain', 'd' )
+                    . '(CASE WHEN m.id IS NULL THEN 0 ELSE 1 END) as user_exists')
+            ->from('\\Entities\\Archive', 'a')
+            ->join('a.Domain', 'd')
             // LEFT JOIN the live mailbox by username so the list can show whether
             // the account still exists (ARCHIVE keeps it, DELETE removes it).
-            ->leftJoin( '\\Entities\\Mailbox', 'm', \Doctrine\ORM\Query\Expr\Join::WITH, 'm.username = a.username' );
+            ->leftJoin('\\Entities\\Mailbox', 'm', \Doctrine\ORM\Query\Expr\Join::WITH, 'm.username = a.username');
 
-        if( !$admin->isSuper() )
-            $qb->join( 'd.Admins', 'd2a' )
-                ->where( 'd2a = :admin' )
-                ->setParameter( 'admin', $admin );
+        if (!$admin->isSuper()) {
+            $qb->join('d.Admins', 'd2a')
+                ->where('d2a = :admin')
+                ->setParameter('admin', $admin);
+        }
 
-        if( $domain )
-            $qb->andWhere( 'a.Domain = ?2' )
-                ->setParameter( 2, $domain );
+        if ($domain) {
+            $qb->andWhere('a.Domain = ?2')
+                ->setParameter(2, $domain);
+        }
 
         return $qb;
     }
@@ -99,49 +101,52 @@ class Archive extends EntityRepository
      * @param \Entities\Domain|null $domain
      * @return array{rows: array<int,array{id:mixed,username:mixed,status:mixed,archived_at:mixed,autoprune:mixed,maildir_size:mixed,domain:mixed,user_exists:mixed}>, total: int, filtered: int}
      */
-    public function pagedForArchiveList( $admin, $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length )
+    public function pagedForArchiveList($admin, $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length)
     {
-        $base = function() use ( $admin, $domain ): \Doctrine\ORM\QueryBuilder {
+        $base = function () use ($admin, $domain): \Doctrine\ORM\QueryBuilder {
             $qb = $this->getEntityManager()->createQueryBuilder()
-                ->from( '\\Entities\\Archive', 'a' )
-                ->join( 'a.Domain', 'd' )
-                ->leftJoin( '\\Entities\\Mailbox', 'm', \Doctrine\ORM\Query\Expr\Join::WITH, 'm.username = a.username' );
+                ->from('\\Entities\\Archive', 'a')
+                ->join('a.Domain', 'd')
+                ->leftJoin('\\Entities\\Mailbox', 'm', \Doctrine\ORM\Query\Expr\Join::WITH, 'm.username = a.username');
 
-            if( !$admin->isSuper() )
-                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+            if (!$admin->isSuper()) {
+                $qb->join('d.Admins', 'd2a')->andWhere('d2a = :admin')->setParameter('admin', $admin);
+            }
 
-            if( $domain )
-                $qb->andWhere( 'a.Domain = :domain' )->setParameter( 'domain', $domain );
+            if ($domain) {
+                $qb->andWhere('a.Domain = :domain')->setParameter('domain', $domain);
+            }
 
             return $qb;
         };
 
-        $applySearch = function( \Doctrine\ORM\QueryBuilder $qb ) use ( $search, $contains ): \Doctrine\ORM\QueryBuilder {
-            if( $search !== '' )
-                $qb->andWhere( '( a.username LIKE :s OR d.domain LIKE :s )' )
-                   ->setParameter( 's', DataTableQuery::likePattern( $search, $contains ) );
+        $applySearch = function (\Doctrine\ORM\QueryBuilder $qb) use ($search, $contains): \Doctrine\ORM\QueryBuilder {
+            if ($search !== '') {
+                $qb->andWhere('( a.username LIKE :s OR d.domain LIKE :s )')
+                   ->setParameter('s', DataTableQuery::likePattern($search, $contains));
+            }
             return $qb;
         };
 
         // Unfiltered total stable per scope -> cache briefly.
-        $scopeKey = 'vimb_total_arc_' . $admin->getId() . '_' . ( $domain ? $domain->requiredId() : 0 );
-        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()
-            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $scopeKey = 'vimb_total_arc_' . $admin->getId() . '_' . ($domain ? $domain->requiredId() : 0);
+        $total    = (int) $base()->select('COUNT(DISTINCT a.id)')->getQuery()
+            ->enableResultCache(30, $scopeKey)->getSingleScalarResult();
         $filtered = $search === ''
             ? $total
-            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+            : (int) $applySearch($base())->select('COUNT(DISTINCT a.id)')->getQuery()->getSingleScalarResult();
 
         $sortMap = [ 'username' => 'a.username', 'status' => 'a.status', 'domain' => 'd.domain', 'archived_at' => 'a.archived_at' ];
         $orderBy = $sortMap[ $sortField ] ?? 'a.archived_at';
 
-        $rows = self::requiredArchiveListRows($applySearch( $base() )
-            ->select( 'a.id as id, a.username as username, a.status as status, '
+        $rows = self::requiredArchiveListRows($applySearch($base())
+            ->select('a.id as id, a.username as username, a.status as status, '
                     . 'a.archived_at as archived_at, a.autoprune as autoprune, '
                     . 'a.maildir_size as maildir_size, d.domain as domain, '
-                    . '(CASE WHEN m.id IS NULL THEN 0 ELSE 1 END) as user_exists' )
-            ->orderBy( $orderBy, $sortDir === 'ASC' ? 'ASC' : 'DESC' )
-            ->setFirstResult( max( 0, $start ) )
-            ->setMaxResults( max( 1, $length ) )
+                    . '(CASE WHEN m.id IS NULL THEN 0 ELSE 1 END) as user_exists')
+            ->orderBy($orderBy, $sortDir === 'ASC' ? 'ASC' : 'DESC')
+            ->setFirstResult(max(0, $start))
+            ->setMaxResults(max(1, $length))
             ->getQuery()->getArrayResult());
 
         return [ 'rows' => $rows, 'total' => $total, 'filtered' => $filtered ];
@@ -155,19 +160,22 @@ class Archive extends EntityRepository
      * @param \DateTime|null $before  expiry cutoff (null = all autoprune rows)
      * @return \Entities\Archive[]
      */
-    public function findAutoprune( ?\DateTime $before = null )
+    public function findAutoprune(?\DateTime $before = null)
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'a' )
-            ->from( '\\Entities\\Archive', 'a' )
-            ->where( 'a.autoprune = true' );
+            ->select('a')
+            ->from('\\Entities\\Archive', 'a')
+            ->where('a.autoprune = true');
 
-        if( $before !== null )
-            $qb->andWhere( 'a.archived_at <= :before' )
-               ->setParameter( 'before', $before );
+        if ($before !== null) {
+            $qb->andWhere('a.archived_at <= :before')
+               ->setParameter('before', $before);
+        }
 
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $qb->getQuery()->getResult(), \Entities\Archive::class, 'Archive autoprune query'
+            $qb->getQuery()->getResult(),
+            \Entities\Archive::class,
+            'Archive autoprune query'
         );
     }
 }

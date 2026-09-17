@@ -51,45 +51,83 @@ class QueueRunner
     private ?\DateTime $heartbeat_at = null;
 
     /** @return int|null */
-    public function getId()              { return $this->id; }
+    public function getId()
+    {
+        return $this->id;
+    }
 
     /** @return int|null */
-    public function getSlot()            { return $this->slot; }
+    public function getSlot()
+    {
+        return $this->slot;
+    }
     /**
      * @param int $v
      * @return $this
      */
-    public function setSlot( $v )        { $this->slot = (int) $v; return $this; }
+    public function setSlot($v)
+    {
+        $this->slot = (int) $v;
+        return $this;
+    }
 
     /** @return string|null */
-    public function getHost()            { return $this->host; }
+    public function getHost()
+    {
+        return $this->host;
+    }
     /**
      * @param string $v
      * @return $this
      */
-    public function setHost( $v )        { $this->host = $v; return $this; }
+    public function setHost($v)
+    {
+        $this->host = $v;
+        return $this;
+    }
 
     /** @return int|null */
-    public function getPid()             { return $this->pid; }
+    public function getPid()
+    {
+        return $this->pid;
+    }
     /**
      * @param int $v
      * @return $this
      */
-    public function setPid( $v )         { $this->pid = (int) $v; return $this; }
+    public function setPid($v)
+    {
+        $this->pid = (int) $v;
+        return $this;
+    }
 
     /** @return \DateTime|null */
-    public function getStartedAt()       { return $this->started_at; }
+    public function getStartedAt()
+    {
+        return $this->started_at;
+    }
     /**
      * @param \DateTime $v
      * @return $this
      */
-    public function setStartedAt( $v )   { $this->started_at = $v; return $this; }
+    public function setStartedAt($v)
+    {
+        $this->started_at = $v;
+        return $this;
+    }
 
     /** @return \DateTime|null */
-    public function getHeartbeatAt()     { return $this->heartbeat_at; }
+    public function getHeartbeatAt()
+    {
+        return $this->heartbeat_at;
+    }
     /**
      * @param \DateTime $v
      * @return $this
      */
-    public function setHeartbeatAt( $v ) { $this->heartbeat_at = $v; return $this; }
+    public function setHeartbeatAt($v)
+    {
+        $this->heartbeat_at = $v;
+        return $this;
+    }
 }

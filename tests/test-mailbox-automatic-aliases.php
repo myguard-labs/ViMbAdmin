@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Focused behaviour test for the MailboxAutomaticAliases plugin. It uses the
  * native mutation-context contracts and a small Doctrine double: no database
@@ -28,7 +29,10 @@ require __DIR__ . '/../library/ViMbAdmin/Plugin/MailboxContext.php';
 require __DIR__ . '/../application/plugins/MailboxAutomaticAliases.php';
 
 if (!function_exists('_')) {
-    function _(string $message): string { return $message; }
+    function _(string $message): string
+    {
+        return $message;
+    }
 }
 
 final class AutomaticAliasRepository extends \Repositories\Alias
@@ -36,7 +40,9 @@ final class AutomaticAliasRepository extends \Repositories\Alias
     /** @var array<string, \Entities\Alias> */
     public array $aliases = [];
 
-    public function __construct() {}
+    public function __construct()
+    {
+    }
 
     public function findOneBy(array $criteria, array|null $orderBy = null): object|null
     {
@@ -107,9 +113,18 @@ final class AutomaticAliasEntityManager extends \Doctrine\ORM\Decorator\EntityMa
         return $repository;
     }
 
-    private function repositoryForAlias(): mixed { return $this->repository; }
-    public function persist(object $entity): void { $this->persisted[] = $entity; }
-    public function flush(): void { $this->flushes++; }
+    private function repositoryForAlias(): mixed
+    {
+        return $this->repository;
+    }
+    public function persist(object $entity): void
+    {
+        $this->persisted[] = $entity;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
 }
 
 final class AutomaticAliasMailboxContext implements ViMbAdmin_Plugin_MailboxContext
@@ -126,15 +141,32 @@ final class AutomaticAliasMailboxContext implements ViMbAdmin_Plugin_MailboxCont
         private \Entities\Admin $admin,
         private \Entities\Domain $domain,
         private \Entities\Mailbox $mailbox,
-    ) {}
+    ) {
+    }
 
     /** @return array<string, mixed> */
-    public function getOptions(): array { return $this->options; }
-    public function getD2EM(): AutomaticAliasEntityManager { return $this->entityManager; }
-    public function getAdmin(): \Entities\Admin { return $this->admin; }
-    public function getDomain(): \Entities\Domain { return $this->domain; }
-    public function getMailbox(): \Entities\Mailbox { return $this->mailbox; }
-    public function addMessage(mixed $message, mixed $class = null, mixed $type = null): void {
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
+    public function getD2EM(): AutomaticAliasEntityManager
+    {
+        return $this->entityManager;
+    }
+    public function getAdmin(): \Entities\Admin
+    {
+        return $this->admin;
+    }
+    public function getDomain(): \Entities\Domain
+    {
+        return $this->domain;
+    }
+    public function getMailbox(): \Entities\Mailbox
+    {
+        return $this->mailbox;
+    }
+    public function addMessage(mixed $message, mixed $class = null, mixed $type = null): void
+    {
         $this->messages[] = $message;
         $this->messageClasses[] = $class;
     }
@@ -154,27 +186,46 @@ final class AutomaticAliasAliasContext implements ViMbAdmin_Plugin_AliasContext
         private \Entities\Admin $admin,
         private \Entities\Domain $domain,
         private \Entities\Alias $alias,
-    ) {}
+    ) {
+    }
 
     /** @return array<string, mixed> */
-    public function getOptions(): array { return $this->options; }
-    public function getD2EM(): AutomaticAliasEntityManager { return $this->entityManager; }
-    public function getAdmin(): \Entities\Admin { return $this->admin; }
-    public function getDomain(): \Entities\Domain { return $this->domain; }
-    public function getAlias(): \Entities\Alias { return $this->alias; }
-    public function addMessage(mixed $message, mixed $class = null, mixed $type = null): void {
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
+    public function getD2EM(): AutomaticAliasEntityManager
+    {
+        return $this->entityManager;
+    }
+    public function getAdmin(): \Entities\Admin
+    {
+        return $this->admin;
+    }
+    public function getDomain(): \Entities\Domain
+    {
+        return $this->domain;
+    }
+    public function getAlias(): \Entities\Alias
+    {
+        return $this->alias;
+    }
+    public function addMessage(mixed $message, mixed $class = null, mixed $type = null): void
+    {
         $this->messages[] = $message;
         $this->messageClasses[] = $class;
     }
 }
 
 $failures = 0;
-function checkAutomaticAlias(string $label, bool $ok): int {
+function checkAutomaticAlias(string $label, bool $ok): int
+{
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
     return $ok ? 0 : 1;
 }
 
-function automaticAliasThrows(string $message, \Closure $operation): bool {
+function automaticAliasThrows(string $message, \Closure $operation): bool
+{
     try {
         $operation();
     } catch (\LogicException $exception) {
@@ -184,7 +235,8 @@ function automaticAliasThrows(string $message, \Closure $operation): bool {
     return false;
 }
 
-function automaticAliasDomain(bool $initialized = true, bool $named = true): \Entities\Domain {
+function automaticAliasDomain(bool $initialized = true, bool $named = true): \Entities\Domain
+{
     $domain = new \Entities\Domain();
     if ($named) {
         $domain->setDomain('example.test');
@@ -195,7 +247,8 @@ function automaticAliasDomain(bool $initialized = true, bool $named = true): \En
     return $domain;
 }
 
-function makeContext(AutomaticAliasRepository $repository, bool $initialized = true, bool $named = true, bool $mailboxNamed = true): AutomaticAliasMailboxContext {
+function makeContext(AutomaticAliasRepository $repository, bool $initialized = true, bool $named = true, bool $mailboxNamed = true): AutomaticAliasMailboxContext
+{
     $domain = automaticAliasDomain($initialized, $named);
     $admin = new \Entities\Admin();
     $admin->addDomain($domain);
@@ -215,7 +268,8 @@ function makeContext(AutomaticAliasRepository $repository, bool $initialized = t
     );
 }
 
-function makeAliasContext(AutomaticAliasRepository $repository, \Entities\Alias $alias): AutomaticAliasAliasContext {
+function makeAliasContext(AutomaticAliasRepository $repository, \Entities\Alias $alias): AutomaticAliasAliasContext
+{
     $domain = automaticAliasDomain()->setAliasCount(0);
     $admin = new \Entities\Admin();
     $admin->addDomain($domain);
@@ -274,10 +328,12 @@ $duplicateContext = new AutomaticAliasMailboxContext(
 );
 (new ViMbAdminPlugin_MailboxAutomaticAliases($duplicateContext))
     ->mailbox_add_addPostflush($duplicateContext, ['options' => []]);
-$failures += checkAutomaticAlias('duplicate configured aliases persist once and flush once',
+$failures += checkAutomaticAlias(
+    'duplicate configured aliases persist once and flush once',
     count($duplicateContext->getD2EM()->persisted) === 1
     && $duplicateContext->getD2EM()->flushes === 1
-    && count($duplicateContext->messages) === 1);
+    && count($duplicateContext->messages) === 1
+);
 
 $unpersistedContext = makeContext(new AutomaticAliasRepository(), false);
 $failures += checkAutomaticAlias(

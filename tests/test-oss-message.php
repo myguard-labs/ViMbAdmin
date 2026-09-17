@@ -9,7 +9,9 @@ require __DIR__ . '/../library/OSS/Smarty/functions/function.OSS_Message.php';
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 final class MessageSmartyDouble extends \Smarty\Smarty
@@ -42,7 +44,11 @@ $plain = new OSS_Message('<b>Saved</b>', OSS_Message::ALERT, true);
 $check('ALERT normalizes to warning', $plain->getClass() === OSS_Message::WARNING);
 $check('plaintext strips tags for HTML messages', $plain->getPlaintext() === 'Saved');
 $plaintextShapeRejected = false;
-try { (new OSS_Message(['not-text']))->getPlaintext(); } catch (\UnexpectedValueException) { $plaintextShapeRejected = true; }
+try {
+    (new OSS_Message(['not-text']))->getPlaintext();
+} catch (\UnexpectedValueException) {
+    $plaintextShapeRejected = true;
+}
 $check('plaintext rejects non-string message content', $plaintextShapeRejected);
 
 $block = new OSS_Message_Block('Block body', OSS_Message::SUCCESS, false);
@@ -82,11 +88,13 @@ $hostilePopupSmarty = new MessageSmartyDouble([
     'OSS_Messages' => [new OSS_Message_Pop_Up($hostilePopupText, OSS_Message::INFO, false)],
 ]);
 $hostilePopup = smarty_function_OSS_Message([], $hostilePopupSmarty);
-$check('popup JSON encoding cannot terminate its script element',
+$check(
+    'popup JSON encoding cannot terminate its script element',
     substr_count($hostilePopup, '</script>') === 1
     && str_contains($hostilePopup, '\\u003C\\/script\\u003E')
     && str_contains($hostilePopup, '\\u0022double\\u0022')
-    && str_contains($hostilePopup, '\\u0026amp;'));
+    && str_contains($hostilePopup, '\\u0026amp;')
+);
 
 $missingPopupNonceRejected = false;
 try {
@@ -103,9 +111,11 @@ $randomSmarty = new MessageSmartyDouble([
     'OSS_Messages' => [new OSS_Message('Random', OSS_Message::SUCCESS, false)],
 ]);
 $randomRendered = smarty_function_OSS_Message(['randomid' => true], $randomSmarty);
-$check('truthy randomid uses a collision-free process counter',
+$check(
+    'truthy randomid uses a collision-free process counter',
     preg_match('/id="oss-message-([0-9]+)"/', $randomRendered, $randomMatch) === 1
-    && (int) $randomMatch[1] > 2);
+    && (int) $randomMatch[1] > 2
+);
 
 $emptySmarty = new MessageSmartyDouble([]);
 $check('empty message collection renders empty output', smarty_function_OSS_Message(['randomid' => false], $emptySmarty) === '');
@@ -155,12 +165,14 @@ $_SESSION = ['Application' => ['flashMessages' => [
 ]]];
 $escapedFlashSmarty = new MessageSmartyDouble([]);
 $escapedFlash = smarty_function_OSS_Message([], $escapedFlashSmarty);
-$check('native flash preserves raw HTML only when isHtml is true',
+$check(
+    'native flash preserves raw HTML only when isHtml is true',
     str_contains($escapedFlash, '<b>raw</b>')
     && str_contains($escapedFlash, '&lt;b&gt;escaped&lt;/b&gt;')
     && !str_contains($escapedFlash, '<b>escaped</b>')
     && str_contains($escapedFlash, '&lt;img src=x onerror=alert(1)&gt;')
-    && !str_contains($escapedFlash, '<img src=x onerror=alert(1)>'));
+    && !str_contains($escapedFlash, '<img src=x onerror=alert(1)>')
+);
 $_SESSION = [];
 
 echo "\n";

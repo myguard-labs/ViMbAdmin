@@ -16,7 +16,7 @@ use ViMbAdmin\Kernel\DataTable\DataTableQuery;
  */
 class Log extends EntityRepository
 {
-	/**
+    /**
      * @return array<int,array{id:mixed,action:mixed,data:mixed,timestamp:mixed,admin:mixed,domain:mixed}>
      */
     private static function requiredLogListRows(mixed $rows): array
@@ -44,36 +44,38 @@ class Log extends EntityRepository
         return $result;
     }
 
-	/**
+    /**
      * Load logs for log list .
      *
      * @param \Entities\Admin|null $admin Admin for filtering mailboxes.
      * @param \Entities\Domain|null $domain Domain for filtering mailboxes.
      * @return array<int,array{id:mixed,action:mixed,data:mixed,timestamp:mixed,admin:mixed,domain:mixed}>
      */
-    public function loadForLogList( $admin, $domain = null )
+    public function loadForLogList($admin, $domain = null)
     {
         return self::requiredLogListRows(
-            $this->logListQuery( $admin, $domain )->getQuery()->getArrayResult()
+            $this->logListQuery($admin, $domain)->getQuery()->getArrayResult()
         );
     }
 
-    private function logListQuery( ?\Entities\Admin $admin, ?\Entities\Domain $domain ): QueryBuilder
+    private function logListQuery(?\Entities\Admin $admin, ?\Entities\Domain $domain): QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'l.id as id , l.action as action, l.data as data, l.timestamp as timestamp, a.username as admin, d.domain as domain' )
-            ->from( '\\Entities\\Log', 'l' )
-            ->leftJoin( 'l.Domain', 'd' )
-            ->join( 'l.Admin', 'a' );
+            ->select('l.id as id , l.action as action, l.data as data, l.timestamp as timestamp, a.username as admin, d.domain as domain')
+            ->from('\\Entities\\Log', 'l')
+            ->leftJoin('l.Domain', 'd')
+            ->join('l.Admin', 'a');
 
-        if( $admin )
-            $qb->join( 'd.Admins', 'd2a' )
-                ->where( 'd2a = ?1' )
-                ->setParameter( 1, $admin );
+        if ($admin) {
+            $qb->join('d.Admins', 'd2a')
+                ->where('d2a = ?1')
+                ->setParameter(1, $admin);
+        }
 
-        if( $domain )
-            $qb->andWhere( 'l.Domain = ?2' )
-                ->setParameter( 2, $domain );
+        if ($domain) {
+            $qb->andWhere('l.Domain = ?2')
+                ->setParameter(2, $domain);
+        }
 
         return $qb;
     }
@@ -91,63 +93,66 @@ class Log extends EntityRepository
      * @param \Entities\Domain|null $domain
      * @return array{rows: array<int,array{id:mixed,action:mixed,data:mixed,timestamp:mixed,admin:mixed,domain:mixed}>, total: int, filtered: int}
      */
-    public function pagedForLogList( $admin, $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length )
+    public function pagedForLogList($admin, $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length)
     {
         // Unfiltered total stable per scope -> cache briefly (the log is large).
-        $scopeKey = 'vimb_total_log_' . ( is_object( $admin ) ? $admin->getId() : 0 ) . '_' . ( $domain ? $domain->requiredId() : 0 );
-        $total    = (int) $this->logCountQuery( $admin, $domain, '', $contains )->getQuery()
-            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $scopeKey = 'vimb_total_log_' . (is_object($admin) ? $admin->getId() : 0) . '_' . ($domain ? $domain->requiredId() : 0);
+        $total    = (int) $this->logCountQuery($admin, $domain, '', $contains)->getQuery()
+            ->enableResultCache(30, $scopeKey)->getSingleScalarResult();
         $filtered = $search === ''
             ? $total
-            : (int) $this->logCountQuery( $admin, $domain, $search, $contains )->getQuery()->getSingleScalarResult();
+            : (int) $this->logCountQuery($admin, $domain, $search, $contains)->getQuery()->getSingleScalarResult();
 
         $rows = self::requiredLogListRows(
-            $this->pagedLogRowsQuery( $admin, $domain, $search, $contains, $sortField, $sortDir, $start, $length )
+            $this->pagedLogRowsQuery($admin, $domain, $search, $contains, $sortField, $sortDir, $start, $length)
                 ->getQuery()->getArrayResult()
         );
 
         return [ 'rows' => $rows, 'total' => $total, 'filtered' => $filtered ];
     }
 
-    private function scopedLogQuery( ?\Entities\Admin $admin, ?\Entities\Domain $domain ): QueryBuilder
+    private function scopedLogQuery(?\Entities\Admin $admin, ?\Entities\Domain $domain): QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->from( '\\Entities\\Log', 'l' )
-            ->leftJoin( 'l.Domain', 'd' )
-            ->join( 'l.Admin', 'a' );
+            ->from('\\Entities\\Log', 'l')
+            ->leftJoin('l.Domain', 'd')
+            ->join('l.Admin', 'a');
 
-        if( $admin )
-            $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+        if ($admin) {
+            $qb->join('d.Admins', 'd2a')->andWhere('d2a = :admin')->setParameter('admin', $admin);
+        }
 
-        if( $domain )
-            $qb->andWhere( 'l.Domain = :domain' )->setParameter( 'domain', $domain );
+        if ($domain) {
+            $qb->andWhere('l.Domain = :domain')->setParameter('domain', $domain);
+        }
 
         return $qb;
     }
 
-    private function applyLogSearch( QueryBuilder $qb, string $search, bool $contains ): QueryBuilder
+    private function applyLogSearch(QueryBuilder $qb, string $search, bool $contains): QueryBuilder
     {
-        if( $search !== '' )
-            $qb->andWhere( '( l.action LIKE :s OR a.username LIKE :s OR d.domain LIKE :s )' )
-               ->setParameter( 's', DataTableQuery::likePattern( $search, $contains ) );
+        if ($search !== '') {
+            $qb->andWhere('( l.action LIKE :s OR a.username LIKE :s OR d.domain LIKE :s )')
+               ->setParameter('s', DataTableQuery::likePattern($search, $contains));
+        }
         return $qb;
     }
 
-    private function logCountQuery( ?\Entities\Admin $admin, ?\Entities\Domain $domain, string $search, bool $contains ): QueryBuilder
+    private function logCountQuery(?\Entities\Admin $admin, ?\Entities\Domain $domain, string $search, bool $contains): QueryBuilder
     {
-        return $this->applyLogSearch( $this->scopedLogQuery( $admin, $domain ), $search, $contains )
-            ->select( 'COUNT(DISTINCT l.id)' );
+        return $this->applyLogSearch($this->scopedLogQuery($admin, $domain), $search, $contains)
+            ->select('COUNT(DISTINCT l.id)');
     }
 
-    private function pagedLogRowsQuery( ?\Entities\Admin $admin, ?\Entities\Domain $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length ): QueryBuilder
+    private function pagedLogRowsQuery(?\Entities\Admin $admin, ?\Entities\Domain $domain, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length): QueryBuilder
     {
         $sortMap = [ 'action' => 'l.action', 'admin' => 'a.username', 'domain' => 'd.domain', 'timestamp' => 'l.timestamp' ];
         $orderBy = $sortMap[ $sortField ] ?? 'l.timestamp';
 
-        return $this->applyLogSearch( $this->scopedLogQuery( $admin, $domain ), $search, $contains )
-            ->select( 'l.id as id, l.action as action, l.data as data, l.timestamp as timestamp, a.username as admin, d.domain as domain' )
-            ->orderBy( $orderBy, $sortDir === 'ASC' ? 'ASC' : 'DESC' )
-            ->setFirstResult( max( 0, $start ) )
-            ->setMaxResults( max( 1, $length ) );
+        return $this->applyLogSearch($this->scopedLogQuery($admin, $domain), $search, $contains)
+            ->select('l.id as id, l.action as action, l.data as data, l.timestamp as timestamp, a.username as admin, d.domain as domain')
+            ->orderBy($orderBy, $sortDir === 'ASC' ? 'ASC' : 'DESC')
+            ->setFirstResult(max(0, $start))
+            ->setMaxResults(max(1, $length));
     }
 }

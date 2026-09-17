@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -56,10 +57,11 @@
  * @param int $length Wanted max string length
  * @return string
  */
-function smarty_modifier_shorten( $string, $length )
+function smarty_modifier_shorten($string, $length)
 {
-    if( mb_strlen( $string ) > $length )
-        return rtrim( mb_substr( $string, 0, $length ) ) . '...';
-    else
+    if (mb_strlen($string) > $length) {
+        return rtrim(mb_substr($string, 0, $length)) . '...';
+    } else {
         return $string;
+    }
 }

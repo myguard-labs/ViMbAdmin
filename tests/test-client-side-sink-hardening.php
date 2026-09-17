@@ -23,19 +23,23 @@ $textSinks = [
 ];
 foreach ($textSinks as $path => $safeCall) {
     $source = file_get_contents(__DIR__ . '/../' . $path);
-    $check($path . ' inserts the confirmation label as text',
-        is_string($source) && str_contains($source, $safeCall));
+    $check(
+        $path . ' inserts the confirmation label as text',
+        is_string($source) && str_contains($source, $safeCall)
+    );
 }
 
 $mailboxListPath = getenv('VIMBADMIN_MAILBOX_LIST_SOURCE')
     ?: __DIR__ . '/../application/views/mailbox/js/list.js';
 $mailboxList = file_get_contents($mailboxListPath);
-$check('mailbox size dialog escapes every dynamic table value',
+$check(
+    'mailbox size dialog escapes every dynamic table value',
     is_string($mailboxList)
         && str_contains($mailboxList, 'htmlEntity( mdirsize.toFixed( 5 ) )')
         && str_contains($mailboxList, 'htmlEntity( data[2] )')
         && str_contains($mailboxList, 'htmlEntity( prc.toFixed(0) )')
-        && str_contains($mailboxList, 'htmlEntity( data[4] )'));
+        && str_contains($mailboxList, 'htmlEntity( data[4] )')
+);
 
 $emailSettingsPath = __DIR__ . '/../application/views/mailbox/native-email-settings.phtml';
 $emailSettings = file_get_contents($emailSettingsPath);
@@ -78,11 +82,17 @@ $renderEmailSettings = static function (string $selectedType) use (
         $smarty->setCompileDir($emailSettingsCompileDir);
         $smarty->setForceCompile(true);
         // Constant-output test stub: rendering only needs the URL tag to compile.
-        $smarty->registerPlugin('function', 'genUrl', static fn(array $params): string => '/fixture');
+        $smarty->registerPlugin('function', 'genUrl', static fn (array $params): string => '/fixture');
         $smarty->assign([
-            'mailbox' => new class {
-                public function requiredUsername(): string { return 'fixture@example.test'; }
-                public function getId(): int { return 1; }
+            'mailbox' => new class () {
+                public function requiredUsername(): string
+                {
+                    return 'fixture@example.test';
+                }
+                public function getId(): int
+                {
+                    return 1;
+                }
             },
             'esError' => false,
             'typeOptions' => [
@@ -143,21 +153,29 @@ $renderFailedOrHasRequiredClass = static function (?string $html, string $select
     }
     return false;
 };
-$check('email-settings modal emits native required constraints',
+$check(
+    'email-settings modal emits native required constraints',
     is_string($emailSettings)
         && str_contains($emailSettings, '<select name="type" id="type" class="form-select" required')
         && str_contains($emailSettings, 'class="form-control"')
-        && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}"));
+        && str_contains($emailSettings, "{if \$selectedType == 'other'} required{/if}")
+);
 foreach (['username', 'alt_email', 'other'] as $selectedType) {
-    $check("email-settings {$selectedType} render omits legacy required class",
-        !$renderFailedOrHasRequiredClass($renderEmailSettings($selectedType), $selectedType));
+    $check(
+        "email-settings {$selectedType} render omits legacy required class",
+        !$renderFailedOrHasRequiredClass($renderEmailSettings($selectedType), $selectedType)
+    );
 }
 $removeEmailSettingsCompileDir();
 clearstatcache();
-$check('email-settings rendering leaves checkout compile output unchanged',
-    $snapshotCompileDir($checkoutCompileDir) === $checkoutCompileSnapshot);
-$check('email-settings rendering removes temporary compile output',
-    !file_exists($emailSettingsCompileDir));
+$check(
+    'email-settings rendering leaves checkout compile output unchanged',
+    $snapshotCompileDir($checkoutCompileDir) === $checkoutCompileSnapshot
+);
+$check(
+    'email-settings rendering removes temporary compile output',
+    !file_exists($emailSettingsCompileDir)
+);
 $emailSettingsSaveHandler = '';
 if (is_string($mailboxList)
     && preg_match(
@@ -169,14 +187,18 @@ if (is_string($mailboxList)
 ) {
     $emailSettingsSaveHandler = $saveHandlerMatch['handler'];
 }
-$check('email-settings modal validates before AJAX in the same save handler',
+$check(
+    'email-settings modal validates before AJAX in the same save handler',
     preg_match(
         '/if\( !form\[0\]\.reportValidity\(\) \)\s*return;[\s\S]*?ossAjax\(\{/',
         $emailSettingsSaveHandler
-    ) === 1);
-$check('email-settings modal tracks conditional email requirement',
+    ) === 1
+);
+$check(
+    'email-settings modal tracks conditional email requirement',
     is_string($mailboxList)
-        && str_contains($mailboxList, "DataTable.Dom.select( '#email' ).prop( 'required', other );"));
+        && str_contains($mailboxList, "DataTable.Dom.select( '#email' ).prop( 'required', other );")
+);
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

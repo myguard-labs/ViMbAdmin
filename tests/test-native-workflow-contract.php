@@ -11,7 +11,9 @@ $checks = 0;
 $check = static function (string $label, bool $ok) use (&$failures, &$checks): void {
     $checks++;
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 // Differential oracle captured from tag 4.0.0, commit
@@ -33,15 +35,21 @@ $contracts = [
     'alias-edit' => ['alias', 'edit', ['alid' => '1'], ['plugin_additionalInfo_department'], ['goto' => 'new@example.test'], ['plugin_additionalInfo_department' => 'new-alias-value', 'pluginsf_AdditionalInfo' => ['plugin_additionalInfo_department' => 'nested-alias-value']]],
 ];
 
-$check('native workflow removals have an explicit contract version',
+$check(
+    'native workflow removals have an explicit contract version',
     defined('ViMbAdmin_Version::NATIVE_WORKFLOW_CONTRACT')
-    && constant('ViMbAdmin_Version::NATIVE_WORKFLOW_CONTRACT') === 'native-workflows/1');
+    && constant('ViMbAdmin_Version::NATIVE_WORKFLOW_CONTRACT') === 'native-workflows/1'
+);
 $docPath = __DIR__ . '/../docs/NATIVE-WORKFLOWS-1.md';
 $doc = is_file($docPath) ? file_get_contents($docPath) : '';
-if (!is_string($doc)) { throw new RuntimeException('Could not read workflow contract'); }
-$check('versioned migration contract identifies the immutable legacy baseline',
+if (!is_string($doc)) {
+    throw new RuntimeException('Could not read workflow contract');
+}
+$check(
+    'versioned migration contract identifies the immutable legacy baseline',
     str_contains($doc, 'native-workflows/1')
-    && str_contains($doc, 'a0c7a20a376ff3aa25d071068ab3f33054009594'));
+    && str_contains($doc, 'a0c7a20a376ff3aa25d071068ab3f33054009594')
+);
 
 foreach ($contracts as $name => [$controller, $action, $params, $removedFields, $valid, $legacyOptIn]) {
     $check($name . ': removal and replacement instructions are documented', str_contains($doc, '`' . $name . '`'));
@@ -53,7 +61,9 @@ foreach ($contracts as $name => [$controller, $action, $params, $removedFields, 
     if (str_starts_with($name, 'mailbox-') && $action !== 'password') {
         $modes = [...$modes, 'welcome-only', 'cc-only'];
     }
-    if ($controller === 'alias') { $modes[] = 'plugin-off'; }
+    if ($controller === 'alias') {
+        $modes[] = 'plugin-off';
+    }
     foreach ($modes as $mode) {
         ViMbAdminPlugin_WorkflowProbe::$events = [];
         // Welcome-mail removal is independent of mailbox preference creation;
@@ -62,71 +72,98 @@ foreach ($contracts as $name => [$controller, $action, $params, $removedFields, 
         $get = $h->run($controller, $action, $params);
         $check($name . '/' . $mode . ': GET renders a usable form', $get->status === 200 && str_contains($get->body, 'name="csrf"'));
         foreach ($removedFields as $field) {
-            $check($name . '/' . $mode . ': legacy field removed: ' . $field,
+            $check(
+                $name . '/' . $mode . ': legacy field removed: ' . $field,
                 !str_contains($get->body, 'name="' . $field . '"')
-                && !str_contains($get->body, 'name="pluginsf_AdditionalInfo[' . $field . ']"'));
+                && !str_contains($get->body, 'name="pluginsf_AdditionalInfo[' . $field . ']"')
+            );
         }
         $legacyFields = $mode === 'off' ? [] : $legacyOptIn;
         if ($mode === 'malformed') {
             $legacyFields = array_fill_keys(array_keys($legacyOptIn), ['unsupported']);
         }
-        if ($mode === 'welcome-only') { unset($legacyFields['cc_welcome_email']); }
-        if ($mode === 'cc-only') { $legacyFields['welcome_email'] = '0'; }
+        if ($mode === 'welcome-only') {
+            unset($legacyFields['cc_welcome_email']);
+        }
+        if ($mode === 'cc-only') {
+            $legacyFields['welcome_email'] = '0';
+        }
         $post = $valid + $legacyFields + ['csrf' => 'workflow-csrf'];
-        if ($mode === 'csrf-error') { $post['csrf'] = 'incorrect'; }
+        if ($mode === 'csrf-error') {
+            $post['csrf'] = 'incorrect';
+        }
         if ($mode === 'field-error') {
             $post[array_key_first($valid)] = '';
-            if ($controller === 'alias') { $post['goto'] = 'not-an-address'; }
-            if ($name === 'mailbox-edit') { $post['quota'] = '-1'; }
+            if ($controller === 'alias') {
+                $post['goto'] = 'not-an-address';
+            }
+            if ($name === 'mailbox-edit') {
+                $post['quota'] = '-1';
+            }
         }
         $response = $h->run($controller, $action, $params, $post);
         $success = !in_array($mode, ['csrf-error', 'field-error'], true);
-        $check($name . '/' . $mode . ': expected action branch executes',
+        $check(
+            $name . '/' . $mode . ': expected action branch executes',
             $success ? $response->status === 302 && $h->persistence->flushes === 1
-                : $response->status === 200 && $h->persistence->flushes === 0);
+                : $response->status === 200 && $h->persistence->flushes === 0
+        );
         $check($name . '/' . $mode . ': removed workflow sends no mail', count($h->transport->messages) === 0);
         if ($name === 'setup' || $name === 'admin-add') {
-            $created = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\Admin));
+            $created = array_values(array_filter($h->persistence->persisted, static fn (object $e): bool => $e instanceof \Entities\Admin));
             $admin = $created[0] ?? null;
-            $check($name . '/' . $mode . ': accepted request persists the expected administrator',
+            $check(
+                $name . '/' . $mode . ': accepted request persists the expected administrator',
                 $success ? count($created) === 1 && $admin instanceof \Entities\Admin
                     && $admin->getUsername() === 'new@example.test' && $admin->getActive() === true
                     && $admin->isSuper() === ($name === 'setup')
                     && \OSS_Auth_Password::verify(WorkflowHarness::PASSWORD, $admin->requiredPassword(), ['pwhash' => 'crypt:sha512'])
-                    : $created === []);
+                    : $created === []
+            );
         }
         if ($name === 'setup') {
-            $versions = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\DatabaseVersion));
+            $versions = array_values(array_filter($h->persistence->persisted, static fn (object $e): bool => $e instanceof \Entities\DatabaseVersion));
             $version = $versions[0] ?? null;
-            $check($name . '/' . $mode . ': accepted setup persists the database version',
+            $check(
+                $name . '/' . $mode . ': accepted setup persists the database version',
                 $success ? count($versions) === 1 && $version instanceof \Entities\DatabaseVersion
                     && $version->getVersion() === \ViMbAdmin_Version::DBVERSION
                     && $version->getName() === \ViMbAdmin_Version::DBVERSION_NAME
-                    : $versions === []);
+                    : $versions === []
+            );
         }
         if ($name === 'mailbox-add') {
-            $created = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\Mailbox));
+            $created = array_values(array_filter($h->persistence->persisted, static fn (object $e): bool => $e instanceof \Entities\Mailbox));
             $mailbox = $created[0] ?? null;
-            $check($name . '/' . $mode . ': accepted request persists the expected mailbox',
+            $check(
+                $name . '/' . $mode . ': accepted request persists the expected mailbox',
                 $success ? count($created) === 1 && $mailbox instanceof \Entities\Mailbox
                     && $mailbox->getUsername() === 'new@example.test' && $mailbox->getLocalPart() === 'new'
                     && $mailbox->getDomain() === $h->domain && $mailbox->getName() === 'New'
                     && $mailbox->getQuota() === 1024 && $mailbox->getAltEmail() === 'alternate@example.test'
                     && $mailbox->getActive() === true && $mailbox->getDeletePending() === false
                     && \OSS_Auth_Password::verify(WorkflowHarness::PASSWORD, $mailbox->requiredPassword(), ['pwhash' => 'crypt:sha512'])
-                    : $created === []);
+                    : $created === []
+            );
         }
         if ($name === 'mailbox-edit') {
-            $check($name . '/' . $mode . ': mailbox fields follow the accepted request',
+            $check(
+                $name . '/' . $mode . ': mailbox fields follow the accepted request',
                 $h->mailbox->getName() === ($success ? 'Edited' : null)
                 && $h->mailbox->getQuota() === ($success ? 2048 : 0)
-                && $h->mailbox->getAltEmail() === ($success ? 'edited@example.test' : null));
+                && $h->mailbox->getAltEmail() === ($success ? 'edited@example.test' : null)
+            );
         }
         if ($action === 'password') {
             $target = $controller === 'admin' ? $h->target : $h->mailbox;
-            $check($name . '/' . $mode . ': password mutation matches the accepted request',
-                \OSS_Auth_Password::verify($success ? 'replacement workflow password' : WorkflowHarness::PASSWORD,
-                    $target->requiredPassword(), ['pwhash' => 'crypt:sha512']));
+            $check(
+                $name . '/' . $mode . ': password mutation matches the accepted request',
+                \OSS_Auth_Password::verify(
+                    $success ? 'replacement workflow password' : WorkflowHarness::PASSWORD,
+                    $target->requiredPassword(),
+                    ['pwhash' => 'crypt:sha512']
+                )
+            );
         }
         if ($name === 'login') {
             $check($name . '/' . $mode . ': session identity follows password/CSRF result', $h->container->auth()->isAuthenticated() === $success);
@@ -135,20 +172,26 @@ foreach ($contracts as $name => [$controller, $action, $params, $removedFields, 
         if ($controller === 'alias') {
             $alias = $h->alias;
             if ($action === 'add' && $success) {
-                $created = array_values(array_filter($h->persistence->persisted, static fn(object $e): bool => $e instanceof \Entities\Alias));
+                $created = array_values(array_filter($h->persistence->persisted, static fn (object $e): bool => $e instanceof \Entities\Alias));
                 $candidate = $created[0] ?? null;
                 $check($name . '/' . $mode . ': expected alias created', count($created) === 1
                     && $candidate instanceof \Entities\Alias && $candidate->getAddress() === 'new@example.test'
                     && $candidate->getDomain() === $h->domain);
                 $alias = $candidate instanceof \Entities\Alias ? $candidate : $h->alias;
             }
-            $check($name . '/' . $mode . ': alias destination follows the accepted request',
-                $alias->getGoto() === ($success ? 'new@example.test' : 'old@example.test'));
-            $check($name . '/' . $mode . ': alias AdditionalInfo never writes preferences',
+            $check(
+                $name . '/' . $mode . ': alias destination follows the accepted request',
+                $alias->getGoto() === ($success ? 'new@example.test' : 'old@example.test')
+            );
+            $check(
+                $name . '/' . $mode . ': alias AdditionalInfo never writes preferences',
                 $action === 'add' && $success ? $alias->getPreferences()->isEmpty()
-                    : $alias->getPreference('xpiInfo.department') === 'existing-alias-value');
-            $check($name . '/' . $mode . ': observer sees only the supported mutation hook',
-                ViMbAdminPlugin_WorkflowProbe::$events === ($success && $mode !== 'plugin-off' ? ['alias_add_addPostflush'] : []));
+                    : $alias->getPreference('xpiInfo.department') === 'existing-alias-value'
+            );
+            $check(
+                $name . '/' . $mode . ': observer sees only the supported mutation hook',
+                ViMbAdminPlugin_WorkflowProbe::$events === ($success && $mode !== 'plugin-off' ? ['alias_add_addPostflush'] : [])
+            );
         }
     }
 }
@@ -159,17 +202,21 @@ $get = $h->run('auth', 'login');
 $check('legacy remember-me cookies alone cannot authenticate', $get->status === 200 && !$h->container->auth()->isAuthenticated());
 $h->actor->addPreference((new \Entities\AdminPreference())->setAttribute(\ViMbAdmin_TwoFactor::PREF_SECRET)->setValue('enabled-marker')->setIx(0)->setExpire(0)->setAdmin($h->actor));
 $response = $h->run('auth', 'login', [], ['csrf' => 'workflow-csrf', 'username' => 'actor@example.test', 'password' => WorkflowHarness::PASSWORD, 'rememberme' => '1']);
-$check('remember-me input cannot bypass the native second-factor gate',
+$check(
+    'remember-me input cannot bypass the native second-factor gate',
     ($response->headers['Location'] ?? '') === '/auth/totp' && !$h->container->auth()->isAuthenticated()
-    && $h->session->get('totp_pending_admin_id') === 1 && $h->persistence->persisted === []);
+    && $h->session->get('totp_pending_admin_id') === 1 && $h->persistence->persisted === []
+);
 $_COOKIE = [];
 
 foreach (['mailbox' => 'mid', 'alias' => 'alid'] as $controller => $idKey) {
     $h = new WorkflowHarness();
     $response = $h->run($controller, 'add', [$idKey => '1']);
-    $check($controller . ': legacy edit entry redirects to native edit',
+    $check(
+        $controller . ': legacy edit entry redirects to native edit',
         ($response->headers['Location'] ?? '') === '/' . $controller . '/edit/' . $idKey . '/1'
-        && $response->status === 302 && $h->persistence->flushes === 0);
+        && $response->status === 302 && $h->persistence->flushes === 0
+    );
 }
 
 // Positive controls: neither boundary spy may be disabled globally to satisfy

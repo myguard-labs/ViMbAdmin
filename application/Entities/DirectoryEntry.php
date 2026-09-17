@@ -209,7 +209,7 @@ class DirectoryEntry
     public function setBusinessCategory($businessCategory)
     {
         $this->businessCategory = $businessCategory;
-    
+
         return $this;
     }
 
@@ -232,7 +232,7 @@ class DirectoryEntry
     public function setCarLicense($carLicense)
     {
         $this->carLicense = $carLicense;
-    
+
         return $this;
     }
 
@@ -255,7 +255,7 @@ class DirectoryEntry
     public function setDepartmentNumber($departmentNumber)
     {
         $this->departmentNumber = $departmentNumber;
-    
+
         return $this;
     }
 
@@ -278,7 +278,7 @@ class DirectoryEntry
     public function setDisplayName($displayName)
     {
         $this->displayName = $displayName;
-    
+
         return $this;
     }
 
@@ -301,7 +301,7 @@ class DirectoryEntry
     public function setEmployeeNumber($employeeNumber)
     {
         $this->employeeNumber = $employeeNumber;
-    
+
         return $this;
     }
 
@@ -324,7 +324,7 @@ class DirectoryEntry
     public function setEmployeeType($employeeType)
     {
         $this->employeeType = $employeeType;
-    
+
         return $this;
     }
 
@@ -347,7 +347,7 @@ class DirectoryEntry
     public function setHomePhone($homePhone)
     {
         $this->homePhone = $homePhone;
-    
+
         return $this;
     }
 
@@ -370,7 +370,7 @@ class DirectoryEntry
     public function setHomePostalAddress($homePostalAddress)
     {
         $this->homePostalAddress = $homePostalAddress;
-    
+
         return $this;
     }
 
@@ -393,7 +393,7 @@ class DirectoryEntry
     public function setInitials($initials)
     {
         $this->initials = $initials;
-    
+
         return $this;
     }
 
@@ -416,7 +416,7 @@ class DirectoryEntry
     public function setJpegPhoto($jpegPhoto)
     {
         $this->jpegPhoto = $jpegPhoto;
-    
+
         return $this;
     }
 
@@ -439,7 +439,7 @@ class DirectoryEntry
     public function setLabeledURI($labeledURI)
     {
         $this->labeledURI = $labeledURI;
-    
+
         return $this;
     }
 
@@ -462,7 +462,7 @@ class DirectoryEntry
     public function setMail($mail)
     {
         $this->mail = $mail;
-    
+
         return $this;
     }
 
@@ -485,7 +485,7 @@ class DirectoryEntry
     public function setManager($manager)
     {
         $this->manager = $manager;
-    
+
         return $this;
     }
 
@@ -508,7 +508,7 @@ class DirectoryEntry
     public function setMobile($mobile)
     {
         $this->mobile = $mobile;
-    
+
         return $this;
     }
 
@@ -531,7 +531,7 @@ class DirectoryEntry
     public function setO($o)
     {
         $this->o = $o;
-    
+
         return $this;
     }
 
@@ -554,7 +554,7 @@ class DirectoryEntry
     public function setPager($pager)
     {
         $this->pager = $pager;
-    
+
         return $this;
     }
 
@@ -577,7 +577,7 @@ class DirectoryEntry
     public function setPreferredLanguage($preferredLanguage)
     {
         $this->preferredLanguage = $preferredLanguage;
-    
+
         return $this;
     }
 
@@ -600,7 +600,7 @@ class DirectoryEntry
     public function setRoomNumber($roomNumber)
     {
         $this->roomNumber = $roomNumber;
-    
+
         return $this;
     }
 
@@ -623,7 +623,7 @@ class DirectoryEntry
     public function setSecretary($secretary)
     {
         $this->secretary = $secretary;
-    
+
         return $this;
     }
 
@@ -646,7 +646,7 @@ class DirectoryEntry
     public function setPersonalTitle($personalTitle)
     {
         $this->personalTitle = $personalTitle;
-    
+
         return $this;
     }
 
@@ -669,7 +669,7 @@ class DirectoryEntry
     public function setSn($sn)
     {
         $this->sn = $sn;
-    
+
         return $this;
     }
 
@@ -692,7 +692,7 @@ class DirectoryEntry
     public function setOu($ou)
     {
         $this->ou = $ou;
-    
+
         return $this;
     }
 
@@ -715,7 +715,7 @@ class DirectoryEntry
     public function setTitle($title)
     {
         $this->title = $title;
-    
+
         return $this;
     }
 
@@ -738,7 +738,7 @@ class DirectoryEntry
     public function setFacsimileTelephoneNumber($facsimileTelephoneNumber)
     {
         $this->facsimileTelephoneNumber = $facsimileTelephoneNumber;
-    
+
         return $this;
     }
 
@@ -761,7 +761,7 @@ class DirectoryEntry
     public function setGivenName($givenName)
     {
         $this->givenName = $givenName;
-    
+
         return $this;
     }
 
@@ -784,7 +784,7 @@ class DirectoryEntry
     public function setTelephoneNumber($telephoneNumber)
     {
         $this->telephoneNumber = $telephoneNumber;
-    
+
         return $this;
     }
 
@@ -807,7 +807,7 @@ class DirectoryEntry
     public function setVimbCreated($vimbCreated)
     {
         $this->vimb_created = $vimbCreated;
-    
+
         return $this;
     }
 
@@ -830,7 +830,7 @@ class DirectoryEntry
     public function setVimbUpdate($vimbUpdate)
     {
         $this->vimb_update = $vimbUpdate;
-    
+
         return $this;
     }
 
@@ -863,7 +863,7 @@ class DirectoryEntry
     public function setMailbox(\Entities\Mailbox $mailbox)
     {
         $this->Mailbox = $mailbox;
-    
+
         return $this;
     }
 

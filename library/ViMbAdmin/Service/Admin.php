@@ -44,15 +44,15 @@ class ViMbAdmin_Service_Admin
      */
     public function toggleActive(\Entities\Admin $target, \Entities\Admin $actor): bool
     {
-        $target->setActive( !$target->getActive() );
-        $target->setModified( new \DateTime() );
+        $target->setActive(!$target->getActive());
+        $target->setModified(new \DateTime());
 
         $active = (bool) $target->getActive();
 
         $this->log(
             $actor,
             $active ? \Entities\Log::ACTION_ADMIN_ACTIVATE : \Entities\Log::ACTION_ADMIN_DEACTIVATE,
-            "{$actor->getFormattedName()} " . ( $active ? 'activated' : 'deactivated' ) . " admin {$target->getFormattedName()}"
+            "{$actor->getFormattedName()} " . ($active ? 'activated' : 'deactivated') . " admin {$target->getFormattedName()}"
         );
 
         $this->em->flush();
@@ -74,14 +74,14 @@ class ViMbAdmin_Service_Admin
         }
 
         $target->setSuper(!$current);
-        $target->setModified( new \DateTime() );
+        $target->setModified(new \DateTime());
 
         $super = (bool) $target->getSuper();
 
         $this->log(
             $actor,
             $super ? \Entities\Log::ACTION_ADMIN_SUPER : \Entities\Log::ACTION_ADMIN_NORMAL,
-            "{$actor->getFormattedName()} set admin {$target->getFormattedName()} as " . ( $super ? 'super' : 'normal' )
+            "{$actor->getFormattedName()} set admin {$target->getFormattedName()} as " . ($super ? 'super' : 'normal')
         );
 
         $this->em->flush();
@@ -97,11 +97,12 @@ class ViMbAdmin_Service_Admin
      */
     public function assignDomain(\Entities\Admin $target, \Entities\Domain $domain, \Entities\Admin $actor): void
     {
-        if( $target->getDomains()->contains( $domain ) )
-            throw new ViMbAdmin_Service_Exception( 'This domain is already assigned to the admin.' );
+        if ($target->getDomains()->contains($domain)) {
+            throw new ViMbAdmin_Service_Exception('This domain is already assigned to the admin.');
+        }
 
         $domainName = $domain->requiredDomainName();
-        $target->addDomain( $domain );
+        $target->addDomain($domain);
 
         $this->log(
             $actor,
@@ -120,7 +121,7 @@ class ViMbAdmin_Service_Admin
     public function removeDomain(\Entities\Admin $target, \Entities\Domain $domain, \Entities\Admin $actor): void
     {
         $domainName = $domain->requiredDomainName();
-        $target->removeDomain( $domain );
+        $target->removeDomain($domain);
 
         $this->log(
             $actor,
@@ -140,19 +141,23 @@ class ViMbAdmin_Service_Admin
      */
     public function purge(\Entities\Admin $target, \Entities\Admin $actor): void
     {
-        foreach( $target->getPreferences() as $pref )
-            $this->em->remove( $pref );
+        foreach ($target->getPreferences() as $pref) {
+            $this->em->remove($pref);
+        }
 
-        foreach( $target->getLogs() as $log )
-            $this->em->remove( $log );
+        foreach ($target->getLogs() as $log) {
+            $this->em->remove($log);
+        }
 
-        foreach( $target->getRememberMes() as $rememberMe )
-            $this->em->remove( $rememberMe );
+        foreach ($target->getRememberMes() as $rememberMe) {
+            $this->em->remove($rememberMe);
+        }
 
-        foreach( $target->getDomains() as $domain )
-            $domain->removeAdmin( $target );
+        foreach ($target->getDomains() as $domain) {
+            $domain->removeAdmin($target);
+        }
 
-        $this->em->remove( $target );
+        $this->em->remove($target);
 
         $this->log(
             $actor,
@@ -173,13 +178,13 @@ class ViMbAdmin_Service_Admin
     public function create(string $username, string $plainPassword, bool $super, \Entities\Admin $actor, array $authOptions): \Entities\Admin
     {
         $admin = new \Entities\Admin();
-        $admin->setUsername( $username );
-        $admin->setPassword( OSS_Auth_Password::hash( $plainPassword, $authOptions ) );
-        $admin->setSuper( $super );
-        $admin->setActive( true );
-        $admin->setCreated( new \DateTime() );
+        $admin->setUsername($username);
+        $admin->setPassword(OSS_Auth_Password::hash($plainPassword, $authOptions));
+        $admin->setSuper($super);
+        $admin->setActive(true);
+        $admin->setCreated(new \DateTime());
 
-        $this->em->persist( $admin );
+        $this->em->persist($admin);
 
         $this->log(
             $actor,
@@ -204,7 +209,7 @@ class ViMbAdmin_Service_Admin
      */
     public function changePassword(\Entities\Admin $target, string $plainPassword, \Entities\Admin $actor, bool $isSelf, array $authOptions): void
     {
-        $target->setPassword( OSS_Auth_Password::hash( $plainPassword, $authOptions ) );
+        $target->setPassword(OSS_Auth_Password::hash($plainPassword, $authOptions));
 
         if (!$isSelf) {
             $this->log(
@@ -225,15 +230,16 @@ class ViMbAdmin_Service_Admin
     private function log(\Entities\Admin $actor, string $action, string $message, ?\Entities\Domain $domain = null): void
     {
         $log = new \Entities\Log();
-        $log->setAction( $action );
-        $log->setData( $message );
-        $log->setAdmin( $actor );
+        $log->setAction($action);
+        $log->setData($message);
+        $log->setAdmin($actor);
 
-        if( $domain !== null )
-            $log->setDomain( $domain );
+        if ($domain !== null) {
+            $log->setDomain($domain);
+        }
 
-        $log->setTimestamp( new \DateTime() );
+        $log->setTimestamp(new \DateTime());
 
-        $this->em->persist( $log );
+        $this->em->persist($log);
     }
 }

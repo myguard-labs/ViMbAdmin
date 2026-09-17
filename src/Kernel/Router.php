@@ -101,7 +101,7 @@ final class Router
     {
         $segments = array_values(array_filter(
             array_map('rawurldecode', explode('/', $path)),
-            static fn(string $s): bool => $s !== '',
+            static fn (string $s): bool => $s !== '',
         ));
 
         // ZF1 treated the controller/action tokens case-insensitively and
@@ -149,7 +149,7 @@ final class Router
     private static function camel(string $name, bool $upperFirst): string
     {
         $parts = preg_split('/[-.]/', $name) ?: [$name];
-        $parts = array_map(static fn(string $p): string => ucfirst(strtolower($p)), $parts);
+        $parts = array_map(static fn (string $p): string => ucfirst(strtolower($p)), $parts);
         $out   = implode('', $parts);
 
         return $upperFirst ? $out : lcfirst($out);

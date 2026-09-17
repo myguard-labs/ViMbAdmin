@@ -28,64 +28,63 @@
 
 /**
  * A class to encapsulate messages to be displayed on the webpages.
- * 
+ *
  * These are the main required elements for this:
- * 
+ *
  * 1. The OSS/Message.php class (this file)
  * 2. The OSS/Smarty/functions/function.OSS_Message.php (to display the message on the view)
  * 3. The relevant CSS classes in public/css/oss.css
- * 
+ *
  * To use this, add a message to the view as follows:
- * 
+ *
  * public function exampleAction() {
  *     $this->view->ossAddMessage( new OSS_Message( 'This is a info message!', OSS_Message::INFO ) );
  * }
- * 
+ *
  * Multiple messages can be added of different kinds (INFO, ALERT, etc).
  *
  * Then to display these messages in your view (Smarty template) just include the following
  * text (i.e. Smarty function):
- * 
- * {OSS_Message}
- * 
- */
- 
- /**
- * OSS: Message
  *
- * @author Barry O'Donovan <barry@opensolutions.ie>
- * @author Roland Huszti <roland@opensolutions.ie>
- * @author Nerijus Barauskas <nerijus@opensolutions.ie>
- * @category   OSS
- * @package    OSS_Message
- * @copyright  Copyright (c) 2009 - 2012 Open Source Solutions Limited, Dublin, Ireland
+ * {OSS_Message}
+ *
  */
+
+/**
+* OSS: Message
+*
+* @author Barry O'Donovan <barry@opensolutions.ie>
+* @author Roland Huszti <roland@opensolutions.ie>
+* @author Nerijus Barauskas <nerijus@opensolutions.ie>
+* @category   OSS
+* @package    OSS_Message
+* @copyright  Copyright (c) 2009 - 2012 Open Source Solutions Limited, Dublin, Ireland
+*/
 class OSS_Message
 {
+    public const INFO    = 'info';
+    public const WARNING = 'warning';
+    public const ALERT   = 'warning';
+    public const SUCCESS = 'success';
+    public const ERROR   = 'error';
 
-    const INFO    = 'info';
-    const WARNING = 'warning';
-    const ALERT   = 'warning';
-    const SUCCESS = 'success';
-    const ERROR   = 'error';
+    public const TYPE_MESSAGE = 0;
+    public const TYPE_BLOCK   = 1;
+    public const TYPE_POP_UP  = 2;
 
-    const TYPE_MESSAGE = 0;
-    const TYPE_BLOCK   = 1;
-    const TYPE_POP_UP  = 2;
-    
-    
+
     /**
      * The type of OSS_Message
      *
      * @var int
      */
     protected $type = self::TYPE_MESSAGE;
-    
-    
+
+
     /**
      * A variable to hold the message (either scalar string or array of strings )
      *
-     * @var mixed 
+     * @var mixed
      */
     protected $message;
 
@@ -112,10 +111,10 @@ class OSS_Message
      * @return void
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
      */
-    public function __construct( $message = '', $class = '', $isHTML = true )
+    public function __construct($message = '', $class = '', $isHTML = true)
     {
         $this->message = $message;
-        $this->setClass( $class );
+        $this->setClass($class);
         $this->isHTML  = $isHTML;
     }
 
@@ -128,12 +127,14 @@ class OSS_Message
      */
     public function getPlaintext()
     {
-        if (!is_string($this->message))
+        if (!is_string($this->message)) {
             throw new \UnexpectedValueException('OSS message plaintext requires string content');
-        if( $this->isHTML )
-            return( strip_tags( $this->message ) );
-        else
-            return( $this->message );
+        }
+        if ($this->isHTML) {
+            return(strip_tags($this->message));
+        } else {
+            return($this->message);
+        }
     }
 
     /**
@@ -143,7 +144,7 @@ class OSS_Message
      */
     public function getMessage()
     {
-        return( $this->message );
+        return($this->message);
     }
 
     /**
@@ -153,20 +154,20 @@ class OSS_Message
      */
     public function getType()
     {
-        return( $this->type );
+        return($this->type);
     }
-    
+
     /**
      * Set the message type
      *
      * @param int $type Message type
      * @return void
      */
-    public function setType( $type )
+    public function setType($type)
     {
         $this->type = $type;
     }
-    
+
     /**
      * Get the class
      *
@@ -174,7 +175,7 @@ class OSS_Message
      */
     public function getClass()
     {
-        return( $this->class );
+        return($this->class);
     }
 
     /**
@@ -182,11 +183,12 @@ class OSS_Message
      *
      * @param string $class the class
      */
-    public function setClass( $class ): void
+    public function setClass($class): void
     {
-        if( $class == self::ALERT )
+        if ($class == self::ALERT) {
             $class = self::WARNING;
-            
+        }
+
         $this->class = $class;
     }
 }

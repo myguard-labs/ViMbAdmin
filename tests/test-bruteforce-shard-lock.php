@@ -333,13 +333,13 @@ $entries = scandir($capDirectory);
 $entries = is_array($entries) ? $entries : [];
 $lockEntries = array_values(array_filter(
     $entries,
-    static fn(string $entry): bool => str_starts_with($entry, '.lock'),
+    static fn (string $entry): bool => str_starts_with($entry, '.lock'),
 ));
 shardCheck(
     'lock sidecars exist and are drawn from the fixed .lock.00 .. .lock.ff alphabet',
     $lockEntries !== [] && array_values(array_filter(
         $lockEntries,
-        static fn(string $entry): bool => preg_match('/^\.lock\.[0-9a-f]{2}$/D', $entry) === 1,
+        static fn (string $entry): bool => preg_match('/^\.lock\.[0-9a-f]{2}$/D', $entry) === 1,
     )) === $lockEntries,
     implode(',', $lockEntries),
 );

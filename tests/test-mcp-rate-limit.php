@@ -56,8 +56,10 @@ echo "== MCP destructive rate limit ==\n";
 
 $defaultLimiter = new ViMbAdmin_Mcp_RateLimit();
 $dirProperty = new ReflectionProperty(ViMbAdmin_Mcp_RateLimit::class, '_dir');
-mcpRateLimitCheck('default state is kept under the project var directory',
-    $dirProperty->getValue($defaultLimiter) === dirname(__DIR__) . '/var/mcp-ratelimit');
+mcpRateLimitCheck(
+    'default state is kept under the project var directory',
+    $dirProperty->getValue($defaultLimiter) === dirname(__DIR__) . '/var/mcp-ratelimit'
+);
 
 $stateDir = sys_get_temp_dir() . '/vimbadmin-rate-limit-' . bin2hex(random_bytes(8));
 $limiter = new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => 2, 'window' => 3600]);
@@ -83,53 +85,69 @@ mcpRateLimitCheck('timestamps outside the window are pruned before counting', co
 
 $malformedFile = $stateDir . '/8-destructive.json';
 file_put_contents($malformedFile, '{not-json');
-mcpRateLimitDenied('malformed JSON denies destructive work instead of resetting the limiter',
-    static function() use ($stateDir): void {
+mcpRateLimitDenied(
+    'malformed JSON denies destructive work instead of resetting the limiter',
+    static function () use ($stateDir): void {
         (new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => 1, 'window' => 60]))->hit(8);
-    });
+    }
+);
 mcpRateLimitCheck('denied malformed state remains unchanged', file_get_contents($malformedFile) === '{not-json');
 
 $stringTimestampFile = $stateDir . '/11-destructive.json';
 file_put_contents($stringTimestampFile, json_encode([(string) time()]));
 (new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => 2, 'window' => 60]))->hit(11);
 $stringTimestampState = json_decode((string) file_get_contents($stringTimestampFile), true);
-mcpRateLimitCheck('canonical legacy numeric-string timestamps retain their limiting effect',
-    is_array($stringTimestampState) && count($stringTimestampState) === 2);
+mcpRateLimitCheck(
+    'canonical legacy numeric-string timestamps retain their limiting effect',
+    is_array($stringTimestampState) && count($stringTimestampState) === 2
+);
 
 $wrongShapeFile = $stateDir . '/12-destructive.json';
 file_put_contents($wrongShapeFile, json_encode([true, [], '1e2']));
-mcpRateLimitDenied('container and coercive timestamp shapes deny destructive work',
-    static function() use ($stateDir): void {
+mcpRateLimitDenied(
+    'container and coercive timestamp shapes deny destructive work',
+    static function () use ($stateDir): void {
         (new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => 2, 'window' => 60]))->hit(12);
-    });
+    }
+);
 
 $disabledDir = $stateDir . '/disabled';
 (new ViMbAdmin_Mcp_RateLimit(['statedir' => $disabledDir, 'max' => 0]))->hit(9);
 mcpRateLimitCheck('zero maximum disables the limiter without creating state', !file_exists($disabledDir));
-mcpRateLimitDenied('zero window cannot silently disable an enabled destructive limiter',
-    static function() use ($stateDir): void {
+mcpRateLimitDenied(
+    'zero window cannot silently disable an enabled destructive limiter',
+    static function () use ($stateDir): void {
         new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => 1, 'window' => 0]);
-    });
-mcpRateLimitDenied('negative maximum cannot silently disable the destructive limiter',
-    static function() use ($stateDir): void {
+    }
+);
+mcpRateLimitDenied(
+    'negative maximum cannot silently disable the destructive limiter',
+    static function () use ($stateDir): void {
         new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => -1, 'window' => 60]);
-    });
-mcpRateLimitDenied('non-integer maximum is rejected instead of coerced',
-    static function() use ($stateDir): void {
+    }
+);
+mcpRateLimitDenied(
+    'non-integer maximum is rejected instead of coerced',
+    static function () use ($stateDir): void {
         new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => 'off', 'window' => 60]);
-    });
-mcpRateLimitDenied('invalid window is rejected even when maximum explicitly disables limiting',
-    static function() use ($stateDir): void {
+    }
+);
+mcpRateLimitDenied(
+    'invalid window is rejected even when maximum explicitly disables limiting',
+    static function () use ($stateDir): void {
         new ViMbAdmin_Mcp_RateLimit(['statedir' => $stateDir, 'max' => 0, 'window' => 0]);
-    });
+    }
+);
 
 $unsafeDir = $stateDir . '/unsafe';
 mkdir($unsafeDir, 0777);
 chmod($unsafeDir, 0770);
-mcpRateLimitDenied('group/world-writable state directory denies destructive work',
-    static function() use ($unsafeDir): void {
+mcpRateLimitDenied(
+    'group/world-writable state directory denies destructive work',
+    static function () use ($unsafeDir): void {
         (new ViMbAdmin_Mcp_RateLimit(['statedir' => $unsafeDir, 'max' => 1]))->hit(13);
-    });
+    }
+);
 chmod($unsafeDir, 0750);
 rmdir($unsafeDir);
 
@@ -143,8 +161,10 @@ try {
 } catch (ViMbAdmin_Mcp_Exception) {
     $parentAccepted = false;
 }
-mcpRateLimitCheck('representative group-writable project parent permits its safe state child',
-    $parentAccepted && is_file($safeChild . '/14-destructive.json'));
+mcpRateLimitCheck(
+    'representative group-writable project parent permits its safe state child',
+    $parentAccepted && is_file($safeChild . '/14-destructive.json')
+);
 foreach (glob($safeChild . '/*') ?: [] as $file) {
     unlink($file);
 }
@@ -156,10 +176,12 @@ $symlinkTarget = $stateDir . '/symlink-target';
 $symlinkState = $stateDir . '/symlink-state';
 mkdir($symlinkTarget, 0750);
 symlink($symlinkTarget, $symlinkState);
-mcpRateLimitDenied('symlink-substituted state directory denies destructive work',
-    static function() use ($symlinkState): void {
+mcpRateLimitDenied(
+    'symlink-substituted state directory denies destructive work',
+    static function () use ($symlinkState): void {
         (new ViMbAdmin_Mcp_RateLimit(['statedir' => $symlinkState, 'max' => 1]))->hit(15);
-    });
+    }
+);
 unlink($symlinkState);
 rmdir($symlinkTarget);
 
@@ -167,10 +189,12 @@ $notDirectory = $stateDir . '/not-a-directory';
 file_put_contents($notDirectory, 'occupied');
 $errorLog = $stateDir . '/error.log';
 $previousLog = ini_set('error_log', $errorLog);
-mcpRateLimitDenied('state open failure denies destructive work',
-    static function() use ($notDirectory): void {
+mcpRateLimitDenied(
+    'state open failure denies destructive work',
+    static function () use ($notDirectory): void {
         (new ViMbAdmin_Mcp_RateLimit(['statedir' => $notDirectory, 'max' => 1]))->hit(10);
-    });
+    }
+);
 if ($previousLog !== false) {
     ini_set('error_log', $previousLog);
 }

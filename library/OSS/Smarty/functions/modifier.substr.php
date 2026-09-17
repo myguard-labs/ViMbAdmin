@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -57,7 +58,7 @@
  * @param int|null $length Maximum length, or null for the remainder
  * @return string
  */
-function smarty_modifier_substr($string,$offset,$length=null)
+function smarty_modifier_substr($string, $offset, $length = null)
 {
-    return substr( $string, $offset, $length );
+    return substr($string, $offset, $length);
 }

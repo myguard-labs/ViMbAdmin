@@ -1,4 +1,5 @@
 <?php
+
 /** Focused contract test for the framework-free mutation contexts. */
 
 namespace ViMbAdmin\Tests;
@@ -61,18 +62,22 @@ $admin = new \Entities\Admin();
 $domain = new \Entities\Domain();
 $alias = new \Entities\Alias();
 $mailbox = new \Entities\Mailbox();
-$callback = static fn(string $value): string => strtoupper($value);
+$callback = static fn (string $value): string => strtoupper($value);
 $options = ['feature' => ['enabled' => true], 'limit' => 0, 'callback' => $callback];
-$context = new class($em, $admin, $domain, $options, $flash) extends AbstractContext {};
+$context = new class ($em, $admin, $domain, $options, $flash) extends AbstractContext {};
 $aliasContext = new AliasContext($em, $admin, $domain, $alias, $options, $flash);
 $mailboxContext = new MailboxContext($em, $admin, $domain, $mailbox, $options, $flash);
 
 checkMutationContext('returns the complete typed options map', $context->getOptions() === $options);
 checkMutationContext('preserves configured callbacks by identity', $context->getOptions()['callback'] === $callback);
-checkMutationContext('returns each mutation dependency unchanged',
-    $context->getD2EM() === $em && $context->getAdmin() === $admin && $context->getDomain() === $domain);
-checkMutationContext('returns each specialized plugin entity unchanged',
-    $aliasContext->getAlias() === $alias && $mailboxContext->getMailbox() === $mailbox);
+checkMutationContext(
+    'returns each mutation dependency unchanged',
+    $context->getD2EM() === $em && $context->getAdmin() === $admin && $context->getDomain() === $domain
+);
+checkMutationContext(
+    'returns each specialized plugin entity unchanged',
+    $aliasContext->getAlias() === $alias && $mailboxContext->getMailbox() === $mailbox
+);
 
 // The public legacy surface intentionally remains object-based. Plugin test
 // doubles and compatibility adapters must not be rejected or copied eagerly.
@@ -82,23 +87,37 @@ $legacyDomain = new stdClass();
 $legacyAlias = new stdClass();
 $legacyMailbox = new stdClass();
 $legacyAliasContext = new AliasContext(
-    $legacyEm, $legacyAdmin, $legacyDomain, $legacyAlias, [], $flash,
+    $legacyEm,
+    $legacyAdmin,
+    $legacyDomain,
+    $legacyAlias,
+    [],
+    $flash,
 );
 $legacyMailboxContext = new MailboxContext(
-    $legacyEm, $legacyAdmin, $legacyDomain, $legacyMailbox, [], $flash,
+    $legacyEm,
+    $legacyAdmin,
+    $legacyDomain,
+    $legacyMailbox,
+    [],
+    $flash,
 );
-checkMutationContext('accepts wrong-object legacy adapters without eager validation',
+checkMutationContext(
+    'accepts wrong-object legacy adapters without eager validation',
     $legacyAliasContext->getD2EM() === $legacyEm
         && $legacyAliasContext->getAdmin() === $legacyAdmin
         && $legacyAliasContext->getDomain() === $legacyDomain
         && $legacyAliasContext->getAlias() === $legacyAlias
-        && $legacyMailboxContext->getMailbox() === $legacyMailbox);
-checkMutationContext('keeps public legacy accessors free of native return narrowing',
+        && $legacyMailboxContext->getMailbox() === $legacyMailbox
+);
+checkMutationContext(
+    'keeps public legacy accessors free of native return narrowing',
     !(new ReflectionMethod(AbstractContext::class, 'getD2EM'))->hasReturnType()
         && !(new ReflectionMethod(AbstractContext::class, 'getAdmin'))->hasReturnType()
         && !(new ReflectionMethod(AbstractContext::class, 'getDomain'))->hasReturnType()
         && !(new ReflectionMethod(AliasContext::class, 'getAlias'))->hasReturnType()
-        && !(new ReflectionMethod(MailboxContext::class, 'getMailbox'))->hasReturnType());
+        && !(new ReflectionMethod(MailboxContext::class, 'getMailbox'))->hasReturnType()
+);
 
 $context->addMessage('created');
 $message = $flash->peek()[0] ?? null;
@@ -117,8 +136,10 @@ try {
 } catch (\TypeError) {
     $messageRejected = true;
 }
-checkMutationContext('rejects container plugin messages without queueing',
-    $messageRejected && count($flash->peek()) === 3);
+checkMutationContext(
+    'rejects container plugin messages without queueing',
+    $messageRejected && count($flash->peek()) === 3
+);
 
 $failures = MutationContextAssertions::$failures;
 echo $failures === 0 ? "\nALL PASSED\n" : "\n{$failures} FAILED\n";

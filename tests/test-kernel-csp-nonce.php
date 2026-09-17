@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin\Kernel\Security\ContentSecurityPolicy (VIM-D07).
  *

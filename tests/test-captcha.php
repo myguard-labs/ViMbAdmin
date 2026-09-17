@@ -7,10 +7,13 @@ final class TestCaptchaHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestCaptchaHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestCaptchaHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestCaptchaHarnessState::$count++; }
+    if (!$ok) {
+        TestCaptchaHarnessState::$count++;
+    }
 }
 
 $root = sys_get_temp_dir() . '/vimbadmin-captcha-test-' . bin2hex(random_bytes(6));
@@ -35,7 +38,7 @@ $_SESSION = $sessionBeforeDirectoryFailure;
 $serializedSessionBeforeDirectoryFailure = serialize($_SESSION);
 OSS_Runtime::configure(['temporary_directory' => '/proc/1/vimbadmin-captcha-denied'], '', new stdClass());
 $directoryFailureThrown = false;
-set_error_handler(static fn(): bool => true);
+set_error_handler(static fn (): bool => true);
 try {
     (new OSS_Captcha_Image(0, 0, 6, 60))->generate();
 } catch (RuntimeException $exception) {
@@ -43,8 +46,10 @@ try {
 } finally {
     restore_error_handler();
 }
-check('failed captcha directory creation leaves session state unchanged',
-    $directoryFailureThrown && serialize($_SESSION) === $serializedSessionBeforeDirectoryFailure);
+check(
+    'failed captcha directory creation leaves session state unchanged',
+    $directoryFailureThrown && serialize($_SESSION) === $serializedSessionBeforeDirectoryFailure
+);
 OSS_Runtime::configure(['temporary_directory' => $root], '', new stdClass());
 $_SESSION = [];
 
@@ -66,10 +71,12 @@ try {
 } catch (RuntimeException $exception) {
     $writeFailureThrown = $exception->getMessage() === 'Unable to write captcha image';
 }
-check('failed PNG output throws and removes session and partial file state',
+check(
+    'failed PNG output throws and removes session and partial file state',
     $writeFailureThrown
         && count($_SESSION) === 1
-        && (glob($root . '/captchas/*.png') ?: []) === [$path]);
+        && (glob($root . '/captchas/*.png') ?: []) === [$path]
+);
 
 check('generated id is a 32-character hex value', preg_match('/^[a-f0-9]{32}$/', $id) === 1);
 check('generated image exists', $path !== null && is_file($path));
@@ -79,10 +86,12 @@ check('validation consumes the session value', count($_SESSION) === 0);
 check('validation removes the image', OSS_Captcha_Image::path($id) === null);
 
 $malformedAnswerId = (new OSS_Captcha_Image(0, 0, 6, 60))->generate();
-check('malformed answer consumes the session value and image',
+check(
+    'malformed answer consumes the session value and image',
     OSS_Captcha_Image::_isValid($malformedAnswerId, ['array-answer']) === false
     && count($_SESSION) === 0
-    && OSS_Captcha_Image::path($malformedAnswerId) === null);
+    && OSS_Captcha_Image::path($malformedAnswerId) === null
+);
 
 $expired = $root . '/captchas/' . str_repeat('a', 32) . '.png';
 file_put_contents($expired, 'expired');

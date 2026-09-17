@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -46,27 +47,30 @@
  */
 class OSS_Auth_Password
 {
-    private static function stringValue( mixed $value, string $name ): string
+    private static function stringValue(mixed $value, string $name): string
     {
-        if( !is_string( $value ) )
-            throw new OSS_Exception( $name . ' must be a string' );
+        if (!is_string($value)) {
+            throw new OSS_Exception($name . ' must be a string');
+        }
         return $value;
     }
 
-    private static function costValue( mixed $value ): int
+    private static function costValue(mixed $value): int
     {
-        if( is_string( $value ) && preg_match( '/^[0-9]+$/D', $value ) )
+        if (is_string($value) && preg_match('/^[0-9]+$/D', $value)) {
             $value = (int) $value;
-        if( !is_int( $value ) || $value < 4 || $value > 16 )
-            throw new OSS_Exception( 'Bcrypt cost must be an integer between 4 and 16' );
+        }
+        if (!is_int($value) || $value < 4 || $value > 16) {
+            throw new OSS_Exception('Bcrypt cost must be an integer between 4 and 16');
+        }
         return $value;
     }
-    const HASH_PLAINTEXT    = 'plaintext';
-    const HASH_PLAIN        = 'plain';
-    const HASH_BCRYPT       = 'bcrypt';
-    const HASH_DOVECOT      = 'dovecot:';
-    const HASH_CRYPT        = 'crypt:';
-    const HASH_UNKNOWN      = '*unknown*';
+    public const HASH_PLAINTEXT    = 'plaintext';
+    public const HASH_PLAIN        = 'plain';
+    public const HASH_BCRYPT       = 'bcrypt';
+    public const HASH_DOVECOT      = 'dovecot:';
+    public const HASH_CRYPT        = 'crypt:';
+    public const HASH_UNKNOWN      = '*unknown*';
 
     /**
      * A generic password hashing method using a given configuration array
@@ -82,58 +86,54 @@ class OSS_Auth_Password
      * @throws OSS_Exception
      * @return string The hashed password
      */
-    public static function hash( $pw, $config )
+    public static function hash($pw, $config)
     {
         $hash = self::HASH_UNKNOWN;
 
-        if( is_array( $config ) )
-        {
-            if( !isset( $config['pwhash'] ) )
-                throw new OSS_Exception( 'Cannot hash password without a hash method' );
+        if (is_array($config)) {
+            if (!isset($config['pwhash'])) {
+                throw new OSS_Exception('Cannot hash password without a hash method');
+            }
 
-            $hash = self::stringValue( $config['pwhash'], 'Password hash method' );
+            $hash = self::stringValue($config['pwhash'], 'Password hash method');
+        } else {
+            $hash = self::stringValue($config, 'Password hash method');
         }
-        else
-            $hash = self::stringValue( $config, 'Password hash method' );
 
-        $username = is_array( $config ) && array_key_exists( 'username', $config )
-            ? self::stringValue( $config['username'], 'Password username' ) : '';
+        $username = is_array($config) && array_key_exists('username', $config)
+            ? self::stringValue($config['username'], 'Password username') : '';
 
-        if( substr( $hash, 0, 8 ) == 'dovecot:' )
-        {
-            return ViMbAdmin_Dovecot::password( substr( $hash, 8 ), $pw, $username );
-        }
-        else if ( substr( $hash, 0, 6) == 'crypt:' )
-        {
-            if( !in_array( $hash, [ 'crypt:md5', 'crypt:blowfish', 'crypt:sha256', 'crypt:sha512' ], true ) )
-                throw new OSS_Exception( 'Unknown crypt password hashing method' );
+        if (substr($hash, 0, 8) == 'dovecot:') {
+            return ViMbAdmin_Dovecot::password(substr($hash, 8), $pw, $username);
+        } elseif (substr($hash, 0, 6) == 'crypt:') {
+            if (!in_array($hash, [ 'crypt:md5', 'crypt:blowfish', 'crypt:sha256', 'crypt:sha512' ], true)) {
+                throw new OSS_Exception('Unknown crypt password hashing method');
+            }
 
-            if( strlen( $pw ) > 72 )
-                throw new OSS_Exception( 'Password must not exceed 72 bytes for legacy crypt configuration' );
+            if (strlen($pw) > 72) {
+                throw new OSS_Exception('Password must not exceed 72 bytes for legacy crypt configuration');
+            }
 
             // Keep accepting legacy crypt:* configuration names, but never
             // create their manually constructed hashes. Existing hashes are
             // still checked by verify()'s crypt-compatible legacy path.
-            return password_hash( $pw, PASSWORD_BCRYPT, [ 'cost' => 12 ] );
-        }
-        else
-        {
-            switch( $hash )
-            {
+            return password_hash($pw, PASSWORD_BCRYPT, [ 'cost' => 12 ]);
+        } else {
+            switch ($hash) {
                 case self::HASH_PLAINTEXT:
                 case self::HASH_PLAIN:
                     return $pw;
 
                 case self::HASH_BCRYPT:
-                    $cost = is_array( $config ) && array_key_exists( 'hash_cost', $config )
-                        ? self::costValue( $config['hash_cost'] ) : 12;
-                    $bcrypt = new OSS_Crypt_Bcrypt( $cost );
-                    return $bcrypt->hash( $pw );
+                    $cost = is_array($config) && array_key_exists('hash_cost', $config)
+                        ? self::costValue($config['hash_cost']) : 12;
+                    $bcrypt = new OSS_Crypt_Bcrypt($cost);
+                    return $bcrypt->hash($pw);
 
-                // UPDATE PHPDOC ABOVE WHEN ADDING NEW METHODS!
+                    // UPDATE PHPDOC ABOVE WHEN ADDING NEW METHODS!
 
                 default:
-                    throw new OSS_Exception( 'Unknown password hashing method' );
+                    throw new OSS_Exception('Unknown password hashing method');
             }
         }
     }
@@ -150,43 +150,43 @@ class OSS_Auth_Password
      * @throws OSS_Exception
      * @return bool True if the passwords match
      */
-    public static function verify( $pwplain, $pwhash, $config )
+    public static function verify($pwplain, $pwhash, $config)
     {
         $hash = self::HASH_UNKNOWN;
 
-        if( is_array( $config ) )
-        {
-            if( !isset( $config['pwhash'] ) )
-                throw new OSS_Exception( 'Cannot verify password without a hash method' );
+        if (is_array($config)) {
+            if (!isset($config['pwhash'])) {
+                throw new OSS_Exception('Cannot verify password without a hash method');
+            }
 
-            $hash = self::stringValue( $config['pwhash'], 'Password hash method' );
+            $hash = self::stringValue($config['pwhash'], 'Password hash method');
+        } else {
+            $hash = self::stringValue($config, 'Password hash method');
         }
-        else
-            $hash = self::stringValue( $config, 'Password hash method' );
 
-        $username = is_array( $config ) && array_key_exists( 'username', $config )
-            ? self::stringValue( $config['username'], 'Password username' ) : '';
+        $username = is_array($config) && array_key_exists('username', $config)
+            ? self::stringValue($config['username'], 'Password username') : '';
 
-        switch( $hash )
-        {
+        switch ($hash) {
             case self::HASH_BCRYPT:
-                return OSS_Crypt_Bcrypt::verify( $pwplain, $pwhash );
+                return OSS_Crypt_Bcrypt::verify($pwplain, $pwhash);
         }
 
-        if( substr( $hash, 0, 6) == 'crypt:' )
-        {
-            if( str_starts_with( $pwhash, '$2y$' ) && strlen( $pwplain ) > 72 )
+        if (substr($hash, 0, 6) == 'crypt:') {
+            if (str_starts_with($pwhash, '$2y$') && strlen($pwplain) > 72) {
                 return false;
+            }
 
-            return hash_equals( $pwhash, crypt( $pwplain, $pwhash ) );
+            return hash_equals($pwhash, crypt($pwplain, $pwhash));
         }
 
-        if( substr( $hash, 0, 8 ) == 'dovecot:' )
-            return ViMbAdmin_Dovecot::passwordVerify( substr( $hash, 8 ), $pwhash, $pwplain, $username );
+        if (substr($hash, 0, 8) == 'dovecot:') {
+            return ViMbAdmin_Dovecot::passwordVerify(substr($hash, 8), $pwhash, $pwplain, $username);
+        }
 
 
         // Constant-time comparison to avoid leaking the hash via timing.
-        return hash_equals( $pwhash, self::hash( $pwplain, $config ) );
+        return hash_equals($pwhash, self::hash($pwplain, $config));
     }
 
     /**
@@ -200,21 +200,20 @@ class OSS_Auth_Password
      * @param array<string, mixed>|string $config
      * @return string|null
      */
-    public static function verifyAndRehash( string $pwplain, string $pwhash, $config ): ?string
+    public static function verifyAndRehash(string $pwplain, string $pwhash, $config): ?string
     {
-        if( !self::verify( $pwplain, $pwhash, $config ) )
+        if (!self::verify($pwplain, $pwhash, $config)) {
             return null;
-
-        try
-        {
-            if( !self::needsRehash( $pwhash, $config ) )
-                return $pwhash;
-
-            $replacement = self::hash( $pwplain, $config );
-            return is_string( $replacement ) ? $replacement : $pwhash;
         }
-        catch( Throwable )
-        {
+
+        try {
+            if (!self::needsRehash($pwhash, $config)) {
+                return $pwhash;
+            }
+
+            $replacement = self::hash($pwplain, $config);
+            return is_string($replacement) ? $replacement : $pwhash;
+        } catch (Throwable) {
             // Rehashing is opportunistic.  A bad generation policy or a local
             // hashing failure must not turn a verified credential into an
             // authentication failure; retain the usable stored hash instead.
@@ -223,30 +222,32 @@ class OSS_Auth_Password
     }
 
     /** @param array<string, mixed>|string $config */
-    private static function needsRehash( string $pwhash, $config ): bool
+    private static function needsRehash(string $pwhash, $config): bool
     {
         $classifiedHash = $pwhash;
-        if( str_starts_with( $classifiedHash, '{' )
-            && ( $prefixEnd = strpos( $classifiedHash, '}' ) ) !== false )
-            $classifiedHash = substr( $classifiedHash, $prefixEnd + 1 );
+        if (str_starts_with($classifiedHash, '{')
+            && ($prefixEnd = strpos($classifiedHash, '}')) !== false) {
+            $classifiedHash = substr($classifiedHash, $prefixEnd + 1);
+        }
 
-        $method = is_array( $config )
-            ? self::stringValue( $config['pwhash'] ?? null, 'Password hash method' )
-            : self::stringValue( $config, 'Password hash method' );
+        $method = is_array($config)
+            ? self::stringValue($config['pwhash'] ?? null, 'Password hash method')
+            : self::stringValue($config, 'Password hash method');
 
         $desiredBcryptCost = null;
-        if( $method === self::HASH_BCRYPT )
-            $desiredBcryptCost = is_array( $config ) && array_key_exists( 'hash_cost', $config )
-                ? self::costValue( $config['hash_cost'] ) : 12;
-        else if( str_starts_with( $method, self::HASH_CRYPT ) )
+        if ($method === self::HASH_BCRYPT) {
+            $desiredBcryptCost = is_array($config) && array_key_exists('hash_cost', $config)
+                ? self::costValue($config['hash_cost']) : 12;
+        } elseif (str_starts_with($method, self::HASH_CRYPT)) {
             $desiredBcryptCost = 12;
-        else if( strcasecmp( $method, 'dovecot:BLF-CRYPT' ) === 0 )
+        } elseif (strcasecmp($method, 'dovecot:BLF-CRYPT') === 0) {
             $desiredBcryptCost = PASSWORD_BCRYPT_DEFAULT_COST;
+        }
 
-        if( $desiredBcryptCost !== null )
-        {
-            if( preg_match( '/^\$2[aby]\$(\d{2})\$/', $classifiedHash, $matches ) !== 1 )
+        if ($desiredBcryptCost !== null) {
+            if (preg_match('/^\$2[aby]\$(\d{2})\$/', $classifiedHash, $matches) !== 1) {
                 return true;
+            }
 
             // Never turn a login into an accidental work-factor downgrade.
             return (int) $matches[1] < $desiredBcryptCost;
@@ -254,19 +255,20 @@ class OSS_Auth_Password
 
         // Plaintext policies are retained for compatibility, but must never
         // replace an already hashed credential with plaintext during login.
-        if( $method === self::HASH_PLAIN || $method === self::HASH_PLAINTEXT )
+        if ($method === self::HASH_PLAIN || $method === self::HASH_PLAINTEXT) {
             return false;
+        }
 
         // For Dovecot crypt policies, upgrade older schemes while preserving a
         // bcrypt credential if an installation changes to a weaker policy.
-        if( str_starts_with( $method, self::HASH_DOVECOT ) )
-        {
-            if( preg_match( '/^\$2[aby]\$/', $classifiedHash ) === 1 )
+        if (str_starts_with($method, self::HASH_DOVECOT)) {
+            if (preg_match('/^\$2[aby]\$/', $classifiedHash) === 1) {
                 return false;
+            }
 
-            return match( strtoupper( substr( $method, 8 ) ) ) {
-                'SHA512-CRYPT' => !str_starts_with( $classifiedHash, '$6$' ),
-                'SHA256-CRYPT' => !str_starts_with( $classifiedHash, '$5$' ),
+            return match(strtoupper(substr($method, 8))) {
+                'SHA512-CRYPT' => !str_starts_with($classifiedHash, '$6$'),
+                'SHA256-CRYPT' => !str_starts_with($classifiedHash, '$5$'),
                 default => false,
             };
         }

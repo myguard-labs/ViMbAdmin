@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -44,13 +45,13 @@
  */
 class OSS_Date
 {
-    const DF_EUROPEAN = 1;
-    const DF_AMERICAN = 2;
-    const DF_COMPUTER = 3;
-    const DF_REVERSE  = 4;
-    const DF_COMPACT  = 5;
-    
-    
+    public const DF_EUROPEAN = 1;
+    public const DF_AMERICAN = 2;
+    public const DF_COMPUTER = 3;
+    public const DF_REVERSE  = 4;
+    public const DF_COMPACT  = 5;
+
+
     /**
      * Date formats
      *
@@ -63,8 +64,8 @@ class OSS_Date
         self::DF_REVERSE  => 'YYYY/MM/DD',
         self::DF_COMPACT  => 'YYYYMMDD'
     ];
-    
-    
+
+
     /**
      * Date formats for data picker
      *
@@ -77,7 +78,7 @@ class OSS_Date
         self::DF_REVERSE  => 'yy/mm/dd',
         self::DF_COMPACT  => 'yymmdd'
     ];
-    
+
     /**
      * Date formats for PHP
      *
@@ -90,9 +91,9 @@ class OSS_Date
         self::DF_REVERSE  => 'Y/m/d',
         self::DF_COMPACT  => 'Ymd'
     ];
-    
-    
-    
+
+
+
     /**
      * Returns an associative array of date formats.
      *
@@ -104,7 +105,7 @@ class OSS_Date
     {
         return self::$DATE_FORMATS;
     }
-    
+
     /**
      * Returns array of date format codes.
      *
@@ -114,9 +115,9 @@ class OSS_Date
      */
     public static function getDateFormatKeys()
     {
-        return array_keys( self::$DATE_FORMATS );
+        return array_keys(self::$DATE_FORMATS);
     }
-    
+
     /**
      * Returns the format for a given format code or fallback to default.
      *
@@ -124,14 +125,15 @@ class OSS_Date
      * @param int $default The default value if $code does not exist
      * @return string|bool
      */
-    public static function getFormat( $code, $default = self::DF_EUROPEAN )
+    public static function getFormat($code, $default = self::DF_EUROPEAN)
     {
-        if( isset( self::$DATE_FORMATS[$code] ) )
+        if (isset(self::$DATE_FORMATS[$code])) {
             return self::$DATE_FORMATS[$code];
-        else
+        } else {
             return self::$DATE_FORMATS[$default];
+        }
     }
-    
+
     /**
      * Returns the JQuery date picker format for a given format code or fallback to default.
      *
@@ -139,14 +141,15 @@ class OSS_Date
      * @param int $default The default value if $code does not exist
      * @return string|bool
      */
-    public static function getDatepickerFormat( $code, $default = self::DF_EUROPEAN )
+    public static function getDatepickerFormat($code, $default = self::DF_EUROPEAN)
     {
-        if( isset( self::$DATEPICKER_FORMATS[$code] ) )
+        if (isset(self::$DATEPICKER_FORMATS[$code])) {
             return self::$DATEPICKER_FORMATS[$code];
-        else
+        } else {
             return self::$DATEPICKER_FORMATS[$default];
+        }
     }
-    
+
     /**
      * Returns the PHP date() format for a given format code or fallback to default.
      *
@@ -154,14 +157,15 @@ class OSS_Date
      * @param int $default The default value if $code does not exist
      * @return string|bool
      */
-    public static function getPhpFormat( $code, $default = self::DF_EUROPEAN )
+    public static function getPhpFormat($code, $default = self::DF_EUROPEAN)
     {
-        if( isset( self::$PHP_FORMATS[$code] ) )
+        if (isset(self::$PHP_FORMATS[$code])) {
             return self::$PHP_FORMATS[$code];
-        else
+        } else {
             return self::$PHP_FORMATS[$default];
+        }
     }
-    
+
     /**
      * Parse a string in a given format to a UNIX timestamp
      *
@@ -169,17 +173,18 @@ class OSS_Date
      * @param int $format
      * @return int|false
      */
-    public static function getTimestamp( $string, $format = self::DF_EUROPEAN )
+    public static function getTimestamp($string, $format = self::DF_EUROPEAN)
     {
         // strtotime will parse all our (current) formats except European and compact
-        if( $format == self::DF_EUROPEAN )
-            $string = str_replace( '/', '.', $string );
-        else if( $format == self::DF_COMPACT )
-            $string = substr( $string, 0, 4 ) . '-' . substr( $string, 4, 2 ) . '-' . substr( $string, 6, 2 );
-        
-        return strtotime( $string );
+        if ($format == self::DF_EUROPEAN) {
+            $string = str_replace('/', '.', $string);
+        } elseif ($format == self::DF_COMPACT) {
+            $string = substr($string, 0, 4) . '-' . substr($string, 4, 2) . '-' . substr($string, 6, 2);
+        }
+
+        return strtotime($string);
     }
-    
+
     /**
      * Parse a date in a given format to an array of (day, month, year)
      *
@@ -187,51 +192,50 @@ class OSS_Date
      * @param int $format
      * @return array<int, string|null>
      */
-    public static function dateSplit( $string, $format = self::DF_EUROPEAN )
+    public static function dateSplit($string, $format = self::DF_EUROPEAN)
     {
         $dparts = [];
-    
+
         // case values correspond to OSS_Date DF_* constants
-        switch( $format )
-        {
+        switch ($format) {
             case self::DF_AMERICAN: // mm/dd/yyyy
-                $t = explode( '/', $string );
+                $t = explode('/', $string);
                 $dparts[0] = $t[1];
                 $dparts[1] = $t[0];
                 $dparts[2] = $t[2];
                 break;
-                	
+
             case self::DF_COMPUTER: // YYYY-MM-DD
-                $t = explode( '-', $string );
+                $t = explode('-', $string);
                 $dparts[0] = $t[2];
                 $dparts[1] = $t[1];
                 $dparts[2] = $t[0];
                 break;
-                	
+
             case self::DF_REVERSE: // yyyy/mm/dd
-                $t = explode( '/', $string );
+                $t = explode('/', $string);
                 $dparts[0] = $t[2];
                 $dparts[1] = $t[1];
                 $dparts[2] = $t[0];
                 break;
-                
+
             case self::DF_COMPACT: // yyyymmdd
-                    $dparts[0] = substr( $string, 6, 2 );
-                    $dparts[1] = substr( $string, 4, 2 );
-                    $dparts[2] = substr( $string, 0, 4 );
-                    break;
-                
+                $dparts[0] = substr($string, 6, 2);
+                $dparts[1] = substr($string, 4, 2);
+                $dparts[2] = substr($string, 0, 4);
+                break;
+
             case self::DF_EUROPEAN: // dd/mm/yyyy
             default:
-                $t = explode( '/', $string );
+                $t = explode('/', $string);
                 $dparts[0] = $t[0];
                 $dparts[1] = $t[1];
                 $dparts[2] = $t[2];
                 break;
         }
-    
+
         return $dparts;
     }
-    
-    
+
+
 }

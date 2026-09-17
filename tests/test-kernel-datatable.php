@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin\Kernel\DataTable\{DataTableQuery,DataTableResult}.
  *
@@ -20,7 +21,9 @@ final class DataTableTestState
 function dataTableCheck(string $label, bool $ok): void
 {
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$ok) { DataTableTestState::$failures++; }
+    if (!$ok) {
+        DataTableTestState::$failures++;
+    }
 }
 
 /**
@@ -81,29 +84,29 @@ $q = DataTableQuery::fromArray([
     'draw' => '3', 'start' => '20', 'length' => '25',
     'search' => ['value' => '  foo '], 'order' => [['column' => '2', 'dir' => 'desc']],
 ]);
-dataTableCheck('draw parsed',            $q->draw === 3);
-dataTableCheck('start parsed',           $q->start === 20);
-dataTableCheck('length parsed',          $q->length === 25);
-dataTableCheck('search trimmed',         $q->search === 'foo');
+dataTableCheck('draw parsed', $q->draw === 3);
+dataTableCheck('start parsed', $q->start === 20);
+dataTableCheck('length parsed', $q->length === 25);
+dataTableCheck('search trimmed', $q->search === 'foo');
 dataTableCheck('search at configured minimum retained', DataTableQuery::fromArray(['search' => ['value' => 'foo']], 3)->search === 'foo');
 dataTableCheck('zero minimum explicitly permits short searches', DataTableQuery::fromArray(['search' => ['value' => 'x']], 0)->search === 'x');
 dataTableCheck('empty search remains valid with a minimum', DataTableQuery::fromArray(['search' => ['value' => '']], 3)->search === '');
 dataTableCheck('whitespace search remains empty with a minimum', DataTableQuery::fromArray(['search' => ['value' => '  ']], 3)->search === '');
-dataTableCheck('sort column parsed',     $q->sortColumn === 2);
-dataTableCheck('sort dir normalised',    $q->sortDir === 'DESC');
+dataTableCheck('sort column parsed', $q->sortColumn === 2);
+dataTableCheck('sort dir normalised', $q->sortDir === 'DESC');
 
 // --- leading `*` contains toggle --------------------------------------------
 $plain = DataTableQuery::fromArray(['search' => ['value' => 'abc']]);
-dataTableCheck('plain search: contains false',  $plain->contains === false);
-dataTableCheck('plain search: term unchanged',  $plain->searchTerm === 'abc');
+dataTableCheck('plain search: contains false', $plain->contains === false);
+dataTableCheck('plain search: term unchanged', $plain->searchTerm === 'abc');
 
 $star = DataTableQuery::fromArray(['search' => ['value' => '*abc']]);
-dataTableCheck('starred search: contains true',  $star->contains === true);
+dataTableCheck('starred search: contains true', $star->contains === true);
 dataTableCheck('starred search: sigil stripped', $star->searchTerm === 'abc');
 
 $starOnly = DataTableQuery::fromArray(['search' => ['value' => '*']]);
 dataTableCheck('lone star: contains false (empty search)', $starOnly->contains === false);
-dataTableCheck('lone star: term empty',                    $starOnly->searchTerm === '');
+dataTableCheck('lone star: term empty', $starOnly->searchTerm === '');
 
 // Minimum-length gate applies to the stripped term, not to the raw search
 // (which still carries the `*` sigil): `*ab` has a 2-char term and must be
@@ -115,39 +118,53 @@ try {
     $starMinimumRejected = $e->getMessage() === 'Search must be empty or at least 3 characters';
 }
 dataTableCheck('starred search: minimum applies to stripped term', $starMinimumRejected);
-dataTableCheck('starred search at minimum retained',
-    DataTableQuery::fromArray(['search' => ['value' => '*abc']], 3)->searchTerm === 'abc');
+dataTableCheck(
+    'starred search at minimum retained',
+    DataTableQuery::fromArray(['search' => ['value' => '*abc']], 3)->searchTerm === 'abc'
+);
 
 // A lone `*` is an empty search and must sail through any minimum, exactly
 // like an empty search value would.
-dataTableCheck('lone star bypasses minimum like an empty search',
-    DataTableQuery::fromArray(['search' => ['value' => '*']], 3)->searchTerm === '');
+dataTableCheck(
+    'lone star bypasses minimum like an empty search',
+    DataTableQuery::fromArray(['search' => ['value' => '*']], 3)->searchTerm === ''
+);
 
 // --- DataTableQuery::likePattern ---------------------------------------------
-dataTableCheck('likePattern anchored (default)',  DataTableQuery::likePattern('term', false) === 'term%');
-dataTableCheck('likePattern contains (starred)',   DataTableQuery::likePattern('term', true) === '%term%');
-dataTableCheck('likePattern escapes %/_/\\ (anchored)',
-    DataTableQuery::likePattern('a%b_c\\d', false) === 'a\\%b\\_c\\\\d%');
-dataTableCheck('likePattern escapes %/_/\\ (contains)',
-    DataTableQuery::likePattern('a%b_c\\d', true) === '%a\\%b\\_c\\\\d%');
+dataTableCheck('likePattern anchored (default)', DataTableQuery::likePattern('term', false) === 'term%');
+dataTableCheck('likePattern contains (starred)', DataTableQuery::likePattern('term', true) === '%term%');
+dataTableCheck(
+    'likePattern escapes %/_/\\ (anchored)',
+    DataTableQuery::likePattern('a%b_c\\d', false) === 'a\\%b\\_c\\\\d%'
+);
+dataTableCheck(
+    'likePattern escapes %/_/\\ (contains)',
+    DataTableQuery::likePattern('a%b_c\\d', true) === '%a\\%b\\_c\\\\d%'
+);
 
 $d = DataTableQuery::fromArray([]);
-dataTableCheck('defaults: draw 1',       $d->draw === 1);
-dataTableCheck('defaults: start 0',      $d->start === 0);
-dataTableCheck('defaults: length 10',    $d->length === 10);
-dataTableCheck('defaults: dir ASC',      $d->sortDir === 'ASC');
+dataTableCheck('defaults: draw 1', $d->draw === 1);
+dataTableCheck('defaults: start 0', $d->start === 0);
+dataTableCheck('defaults: length 10', $d->length === 10);
+dataTableCheck('defaults: dir ASC', $d->sortDir === 'ASC');
 
 dataTableCheck('negative start clamped', DataTableQuery::fromArray(['start' => '-5'])->start === 0);
 dataTableCheck('length -1 (All) capped', DataTableQuery::fromArray(['length' => '-1'])->length === DataTableQuery::MAX_LENGTH);
 dataTableCheck('over-cap length capped', DataTableQuery::fromArray(['length' => '99999'])->length === DataTableQuery::MAX_LENGTH);
-dataTableCheck('zero length -> 10',      DataTableQuery::fromArray(['length' => '0'])->length === 10);
-dataTableCheck('bad sort dir -> ASC',    DataTableQuery::fromArray(['order' => [['dir' => 'nonsense']]])->sortDir === 'ASC');
-dataTableCheck('integer request values remain supported',
-    DataTableQuery::fromArray(['draw' => 9, 'start' => 15, 'length' => 5])->draw === 9);
-dataTableCheck('only the first ordering is applied',
-    DataTableQuery::fromArray(['order' => [['column' => '2', 'dir' => 'desc'], ['column' => '4', 'dir' => 'asc']]])->sortColumn === 2);
-dataTableCheck('unused column metadata and regex flags do not change literal search',
-    DataTableQuery::fromArray(['search' => ['value' => 'a.*', 'regex' => 'true'], 'columns' => [['data' => 'id']]])->searchTerm === 'a.*');
+dataTableCheck('zero length -> 10', DataTableQuery::fromArray(['length' => '0'])->length === 10);
+dataTableCheck('bad sort dir -> ASC', DataTableQuery::fromArray(['order' => [['dir' => 'nonsense']]])->sortDir === 'ASC');
+dataTableCheck(
+    'integer request values remain supported',
+    DataTableQuery::fromArray(['draw' => 9, 'start' => 15, 'length' => 5])->draw === 9
+);
+dataTableCheck(
+    'only the first ordering is applied',
+    DataTableQuery::fromArray(['order' => [['column' => '2', 'dir' => 'desc'], ['column' => '4', 'dir' => 'asc']]])->sortColumn === 2
+);
+dataTableCheck(
+    'unused column metadata and regex flags do not change literal search',
+    DataTableQuery::fromArray(['search' => ['value' => 'a.*', 'regex' => 'true'], 'columns' => [['data' => 'id']]])->searchTerm === 'a.*'
+);
 
 // Wrong container shapes must be rejected before offsets are read, and leaf
 // values retain the scalar checks of the original protocol.
@@ -206,16 +223,18 @@ dataTableCheck('negative minimum is rejected', $negativeMinimumRejected);
 // --- DataTableResult::envelope ---------------------------------------------
 $rows = [['id' => 1, 'username' => 'a@b.c'], ['id' => 2, 'username' => 'd@e.f']];
 $env  = dataTableEnvelope(DataTableResult::envelope($q, 100, 42, $rows));
-dataTableCheck('envelope has exactly the modern protocol keys',
-    array_keys(DataTableResult::envelope($q, 100, 42, $rows)) === ['draw', 'recordsTotal', 'recordsFiltered', 'data']);
-dataTableCheck('envelope echoes draw',           $env['draw'] === 3);
-dataTableCheck('envelope total',                  $env['recordsTotal'] === 100);
-dataTableCheck('envelope filtered',               $env['recordsFiltered'] === 42);
-dataTableCheck('envelope carries page rows',      $env['data'] === $rows);
+dataTableCheck(
+    'envelope has exactly the modern protocol keys',
+    array_keys(DataTableResult::envelope($q, 100, 42, $rows)) === ['draw', 'recordsTotal', 'recordsFiltered', 'data']
+);
+dataTableCheck('envelope echoes draw', $env['draw'] === 3);
+dataTableCheck('envelope total', $env['recordsTotal'] === 100);
+dataTableCheck('envelope filtered', $env['recordsFiltered'] === 42);
+dataTableCheck('envelope carries page rows', $env['data'] === $rows);
 
 $json = DataTableResult::json($q, 100, 42, $rows);
 $back = dataTableEnvelope(json_decode($json, true));
-dataTableCheck('json round-trips',       $back['recordsFiltered'] === 42 && $back['data'][1]['username'] === 'd@e.f');
+dataTableCheck('json round-trips', $back['recordsFiltered'] === 42 && $back['data'][1]['username'] === 'd@e.f');
 
 $storedDestination = '"<svg/onload=document.body.dataset.pwned=1>"@example.com';
 $aliasRows = [[

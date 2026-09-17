@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: Repositories\Admin::getNotAssignedForDomain() exclusion contract.
  *

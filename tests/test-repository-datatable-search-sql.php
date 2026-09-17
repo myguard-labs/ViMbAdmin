@@ -300,15 +300,17 @@ $em = searchSqlEntityManager();
 $repo = new \Repositories\Mailbox($em, $em->getClassMetadata(\Entities\Mailbox::class));
 $admin = superAdmin();
 
-$default = capturedSearch(static fn() => $repo->pagedForMailboxList($admin, null, 'term', false, 'username', 'ASC', 0, 10));
+$default = capturedSearch(static fn () => $repo->pagedForMailboxList($admin, null, 'term', false, 'username', 'ASC', 0, 10));
 $check('Mailbox: default search binds the anchored pattern', ($default->params[1] ?? null) === 'term%');
-$check('Mailbox: default search compiles a LIKE over username/name/domain',
-    (bool) preg_match('/username LIKE .+ OR .+name LIKE .+ OR .+domain LIKE /i', $default->sql));
+$check(
+    'Mailbox: default search compiles a LIKE over username/name/domain',
+    (bool) preg_match('/username LIKE .+ OR .+name LIKE .+ OR .+domain LIKE /i', $default->sql)
+);
 
-$contains = capturedSearch(static fn() => $repo->pagedForMailboxList($admin, null, 'term', true, 'username', 'ASC', 0, 10));
+$contains = capturedSearch(static fn () => $repo->pagedForMailboxList($admin, null, 'term', true, 'username', 'ASC', 0, 10));
 $check('Mailbox: starred search binds the contains pattern', ($contains->params[1] ?? null) === '%term%');
 
-$escaped = capturedSearch(static fn() => $repo->pagedForMailboxList($admin, null, 'a%b_c', false, 'username', 'ASC', 0, 10));
+$escaped = capturedSearch(static fn () => $repo->pagedForMailboxList($admin, null, 'a%b_c', false, 'username', 'ASC', 0, 10));
 $check('Mailbox: %/_ are escaped in the anchored pattern', ($escaped->params[1] ?? null) === 'a\\%b\\_c%');
 
 // ---- Alias -------------------------------------------------------------- //
@@ -316,9 +318,9 @@ $em = searchSqlEntityManager();
 $repo = new \Repositories\Alias($em, $em->getClassMetadata(\Entities\Alias::class));
 $admin = superAdmin();
 
-$default = capturedSearch(static fn() => $repo->pagedForAliasList($admin, null, false, 'term', false, 'address', 'ASC', 0, 10));
+$default = capturedSearch(static fn () => $repo->pagedForAliasList($admin, null, false, 'term', false, 'address', 'ASC', 0, 10));
 $check('Alias: default search binds the anchored pattern', ($default->params[1] ?? null) === 'term%');
-$contains = capturedSearch(static fn() => $repo->pagedForAliasList($admin, null, false, 'term', true, 'address', 'ASC', 0, 10));
+$contains = capturedSearch(static fn () => $repo->pagedForAliasList($admin, null, false, 'term', true, 'address', 'ASC', 0, 10));
 $check('Alias: starred search binds the contains pattern', ($contains->params[1] ?? null) === '%term%');
 
 // ---- Archive -------------------------------------------------------------- //
@@ -326,9 +328,9 @@ $em = searchSqlEntityManager();
 $repo = new \Repositories\Archive($em, $em->getClassMetadata(\Entities\Archive::class));
 $admin = superAdmin();
 
-$default = capturedSearch(static fn() => $repo->pagedForArchiveList($admin, null, 'term', false, 'username', 'ASC', 0, 10));
+$default = capturedSearch(static fn () => $repo->pagedForArchiveList($admin, null, 'term', false, 'username', 'ASC', 0, 10));
 $check('Archive: default search binds the anchored pattern', ($default->params[1] ?? null) === 'term%');
-$contains = capturedSearch(static fn() => $repo->pagedForArchiveList($admin, null, 'term', true, 'username', 'ASC', 0, 10));
+$contains = capturedSearch(static fn () => $repo->pagedForArchiveList($admin, null, 'term', true, 'username', 'ASC', 0, 10));
 $check('Archive: starred search binds the contains pattern', ($contains->params[1] ?? null) === '%term%');
 
 // ---- Domain -------------------------------------------------------------- //
@@ -336,18 +338,18 @@ $em = searchSqlEntityManager();
 $repo = new \Repositories\Domain($em, $em->getClassMetadata(\Entities\Domain::class));
 $admin = superAdmin();
 
-$default = capturedSearch(static fn() => $repo->pagedForDomainList($admin, 'term', false, 'domain', 'ASC', 0, 10));
+$default = capturedSearch(static fn () => $repo->pagedForDomainList($admin, 'term', false, 'domain', 'ASC', 0, 10));
 $check('Domain: default search binds the anchored pattern', ($default->params[1] ?? null) === 'term%');
-$contains = capturedSearch(static fn() => $repo->pagedForDomainList($admin, 'term', true, 'domain', 'ASC', 0, 10));
+$contains = capturedSearch(static fn () => $repo->pagedForDomainList($admin, 'term', true, 'domain', 'ASC', 0, 10));
 $check('Domain: starred search binds the contains pattern', ($contains->params[1] ?? null) === '%term%');
 
 // ---- Log ------------------------------------------------------------------ //
 $em = searchSqlEntityManager();
 $repo = new \Repositories\Log($em, $em->getClassMetadata(\Entities\Log::class));
 
-$default = capturedSearch(static fn() => $repo->pagedForLogList(null, null, 'term', false, 'timestamp', 'DESC', 0, 10));
+$default = capturedSearch(static fn () => $repo->pagedForLogList(null, null, 'term', false, 'timestamp', 'DESC', 0, 10));
 $check('Log: default search binds the anchored pattern', ($default->params[1] ?? null) === 'term%');
-$contains = capturedSearch(static fn() => $repo->pagedForLogList(null, null, 'term', true, 'timestamp', 'DESC', 0, 10));
+$contains = capturedSearch(static fn () => $repo->pagedForLogList(null, null, 'term', true, 'timestamp', 'DESC', 0, 10));
 $check('Log: starred search binds the contains pattern', ($contains->params[1] ?? null) === '%term%');
 
 echo "\n";

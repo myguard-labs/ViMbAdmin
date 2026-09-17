@@ -152,9 +152,11 @@ final class MaintenanceController extends AbstractController
         $conn->beginTransaction();
         try {
             $mb = $conn->executeStatement(
-                'UPDATE mailbox m JOIN domain d ON d.id = m.Domain_id SET m.active = 0 WHERE d.active = 0 AND m.active = 1');
+                'UPDATE mailbox m JOIN domain d ON d.id = m.Domain_id SET m.active = 0 WHERE d.active = 0 AND m.active = 1'
+            );
             $al = $conn->executeStatement(
-                'UPDATE alias a JOIN domain d ON d.id = a.Domain_id SET a.active = 0 WHERE d.active = 0 AND a.active = 1');
+                'UPDATE alias a JOIN domain d ON d.id = a.Domain_id SET a.active = 0 WHERE d.active = 0 AND a.active = 1'
+            );
             $conn->commit();
         } catch (\Throwable $e) {
             $conn->rollBack();
@@ -427,7 +429,8 @@ final class MaintenanceController extends AbstractController
         $alreadyQueued = [];
         foreach ($em->createQuery(
             'SELECT DISTINCT t.username AS username FROM \Entities\MailboxTask t'
-            . ' WHERE t.type = :t AND t.status IN (:open) AND t.username IN (:users)')
+            . ' WHERE t.type = :t AND t.status IN (:open) AND t.username IN (:users)'
+        )
             ->setParameter('t', \Entities\MailboxTask::TYPE_BACKUP_ORPHAN)
             ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
             ->setParameter('users', $orphans)

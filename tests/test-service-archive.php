@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin_Service_Archive (docs/ZF1-REMOVAL.md, Phase 4). Pure
  * logic over a fake ObjectManager + real entities — no framework, no DB. Proves
@@ -32,19 +33,54 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     /** @var object[] */ public array $removed = [];
     public int $flushes = 0;
 
-    public function persist(object $object): void { $this->persisted[] = $object; }
-    public function remove(object $object): void { $this->removed[] = $object; }
-    public function flush(): void { $this->flushes++; }
-    public function find(string $className, mixed $id): ?object { return null; }
-    public function clear(): void {}
-    public function detach(object $object): void {}
-    public function refresh(object $object): void {}
-    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository { throw new \RuntimeException('not used'); }
-    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata { throw new \RuntimeException('not used'); }
-    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory { throw new \RuntimeException('not used'); }
-    public function initializeObject(object $obj): void {}
-    public function isUninitializedObject(mixed $value): bool { return false; }
-    public function contains(object $object): bool { return false; }
+    public function persist(object $object): void
+    {
+        $this->persisted[] = $object;
+    }
+    public function remove(object $object): void
+    {
+        $this->removed[] = $object;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
+    public function find(string $className, mixed $id): ?object
+    {
+        return null;
+    }
+    public function clear(): void
+    {
+    }
+    public function detach(object $object): void
+    {
+    }
+    public function refresh(object $object): void
+    {
+    }
+    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function initializeObject(object $obj): void
+    {
+    }
+    public function isUninitializedObject(mixed $value): bool
+    {
+        return false;
+    }
+    public function contains(object $object): bool
+    {
+        return false;
+    }
 
     public function lastLog(): ?\Entities\Log
     {
@@ -62,10 +98,13 @@ final class TestServiceArchiveHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestServiceArchiveHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestServiceArchiveHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestServiceArchiveHarnessState::$count++; }
+    if (!$ok) {
+        TestServiceArchiveHarnessState::$count++;
+    }
 }
 
 echo "== ViMbAdmin_Service_Archive ==\n";
@@ -82,8 +121,10 @@ $mkArchive = static function (bool $autoprune): \Entities\Archive {
 
 // --- nullable lifecycle getters + required operational boundaries ----- //
 $uninitialized = new \Entities\Archive();
-check('pre-hydration archive identities remain nullable',
-    $uninitialized->getUsername() === null && $uninitialized->getDomain() === null);
+check(
+    'pre-hydration archive identities remain nullable',
+    $uninitialized->getUsername() === null && $uninitialized->getDomain() === null
+);
 
 $usernameError = null;
 try {
@@ -91,8 +132,10 @@ try {
 } catch (\LogicException $e) {
     $usernameError = $e->getMessage();
 }
-check('required username rejects an uninitialized archive',
-    $usernameError === 'Archive username cannot be null.');
+check(
+    'required username rejects an uninitialized archive',
+    $usernameError === 'Archive username cannot be null.'
+);
 
 $domainError = null;
 try {
@@ -100,16 +143,20 @@ try {
 } catch (\LogicException $e) {
     $domainError = $e->getMessage();
 }
-check('required domain rejects an uninitialized archive',
-    $domainError === 'Archive domain cannot be null.');
+check(
+    'required domain rejects an uninitialized archive',
+    $domainError === 'Archive domain cannot be null.'
+);
 
 $identityDomain = (new \Entities\Domain())->setDomain('example.test');
 $initialized = (new \Entities\Archive())
     ->setUsername('box@example.test')
     ->setDomain($identityDomain);
-check('required archive identities preserve initialized values',
+check(
+    'required archive identities preserve initialized values',
     $initialized->requiredUsername() === 'box@example.test'
-        && $initialized->requiredDomain() === $identityDomain);
+        && $initialized->requiredDomain() === $identityDomain
+);
 
 $invalidToggleManager = new FakeObjectManager();
 $invalidToggle = new \Entities\Archive();
@@ -119,11 +166,13 @@ try {
 } catch (\LogicException $e) {
     $invalidToggleError = $e->getMessage();
 }
-check('toggle rejects a missing username before mutation',
+check(
+    'toggle rejects a missing username before mutation',
     $invalidToggleError === 'Archive username cannot be null.'
         && $invalidToggle->getAutoprune() === false
         && $invalidToggleManager->persisted === []
-        && $invalidToggleManager->flushes === 0);
+        && $invalidToggleManager->flushes === 0
+);
 
 $invalidDeleteManager = new FakeObjectManager();
 $invalidDelete = new \Entities\Archive();
@@ -133,38 +182,40 @@ try {
 } catch (\LogicException $e) {
     $invalidDeleteError = $e->getMessage();
 }
-check('delete rejects a missing username before mutation',
+check(
+    'delete rejects a missing username before mutation',
     $invalidDeleteError === 'Archive username cannot be null.'
         && $invalidDeleteManager->removed === []
         && $invalidDeleteManager->persisted === []
-        && $invalidDeleteManager->flushes === 0);
+        && $invalidDeleteManager->flushes === 0
+);
 
 // --- OFF -> ON: sets autoprune, resets archivedAt + statusChangedAt ----- //
 $emOn = new FakeObjectManager();
 $arOff = $mkArchive(false);
 $arOff->setArchivedAt(new \DateTime('2000-01-01'));
 $resOn = (new ViMbAdmin_Service_Archive($emOn))->toggleAutoprune($arOff, $actor);
-check('OFF->ON returns true',                $resOn === true);
-check('OFF->ON sets autoprune',              (bool) $arOff->getAutoprune() === true);
-check('OFF->ON reset archivedAt to now',     $arOff->getArchivedAt() instanceof \DateTime && $arOff->getArchivedAt()->getTimestamp() > strtotime('2001-01-01'));
-check('OFF->ON stamped statusChangedAt',     $arOff->getStatusChangedAt() instanceof \DateTime);
-check('OFF->ON one flush',                   $emOn->flushes === 1);
-check('OFF->ON logged ARCHIVE_REQUEST',      $emOn->lastLog()?->getAction() === \Entities\Log::ACTION_ARCHIVE_REQUEST);
-check('OFF->ON log mentions enabled',        str_contains((string) $emOn->lastLog()?->getData(), 'enabled autoprune'));
+check('OFF->ON returns true', $resOn === true);
+check('OFF->ON sets autoprune', (bool) $arOff->getAutoprune() === true);
+check('OFF->ON reset archivedAt to now', $arOff->getArchivedAt() instanceof \DateTime && $arOff->getArchivedAt()->getTimestamp() > strtotime('2001-01-01'));
+check('OFF->ON stamped statusChangedAt', $arOff->getStatusChangedAt() instanceof \DateTime);
+check('OFF->ON one flush', $emOn->flushes === 1);
+check('OFF->ON logged ARCHIVE_REQUEST', $emOn->lastLog()?->getAction() === \Entities\Log::ACTION_ARCHIVE_REQUEST);
+check('OFF->ON log mentions enabled', str_contains((string) $emOn->lastLog()?->getData(), 'enabled autoprune'));
 
 // --- ON -> OFF: clears autoprune, stamps only statusChangedAt ----------- //
 $emOff = new FakeObjectManager();
 $arOn  = $mkArchive(true);
 $arOn->setArchivedAt(new \DateTime('2000-01-01'));
 $resOff = (new ViMbAdmin_Service_Archive($emOff))->toggleAutoprune($arOn, $actor);
-check('ON->OFF returns false',               $resOff === false);
-check('ON->OFF clears autoprune',            (bool) $arOn->getAutoprune() === false);
+check('ON->OFF returns false', $resOff === false);
+check('ON->OFF clears autoprune', (bool) $arOn->getAutoprune() === false);
 $archivedAt = $arOn->getArchivedAt();
-check('ON->OFF did NOT touch archivedAt',    $archivedAt instanceof \DateTime && $archivedAt->getTimestamp() === strtotime('2000-01-01'));
-check('ON->OFF stamped statusChangedAt',     $arOn->getStatusChangedAt() instanceof \DateTime);
-check('ON->OFF one flush',                   $emOff->flushes === 1);
-check('ON->OFF logged ARCHIVE_REQUEST',      $emOff->lastLog()?->getAction() === \Entities\Log::ACTION_ARCHIVE_REQUEST);
-check('ON->OFF log mentions disabled',       str_contains((string) $emOff->lastLog()?->getData(), 'disabled autoprune'));
+check('ON->OFF did NOT touch archivedAt', $archivedAt instanceof \DateTime && $archivedAt->getTimestamp() === strtotime('2000-01-01'));
+check('ON->OFF stamped statusChangedAt', $arOn->getStatusChangedAt() instanceof \DateTime);
+check('ON->OFF one flush', $emOff->flushes === 1);
+check('ON->OFF logged ARCHIVE_REQUEST', $emOff->lastLog()?->getAction() === \Entities\Log::ACTION_ARCHIVE_REQUEST);
+check('ON->OFF log mentions disabled', str_contains((string) $emOff->lastLog()?->getData(), 'disabled autoprune'));
 
 // --- repository list query contracts --------------------------------- //
 $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([

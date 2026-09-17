@@ -14,33 +14,45 @@ function directoryEntryJpegCheck(string $label, bool $ok): void
 {
     DirectoryEntryJpegTestState::$checks++;
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$ok) { DirectoryEntryJpegTestState::$failures++; }
+    if (!$ok) {
+        DirectoryEntryJpegTestState::$failures++;
+    }
 }
 
 echo "== directory entry JPEG contract ==\n";
 
 $entry = new \Entities\DirectoryEntry();
-directoryEntryJpegCheck('pre-hydration JPEG value preserves null',
-    $entry->getJpegPhoto() === null);
+directoryEntryJpegCheck(
+    'pre-hydration JPEG value preserves null',
+    $entry->getJpegPhoto() === null
+);
 
 $binary = "\xff\x00jpeg-bytes";
-directoryEntryJpegCheck('setter is fluent and preserves binary string bytes',
-    $entry->setJpegPhoto($binary) === $entry && $entry->getJpegPhoto() === $binary);
+directoryEntryJpegCheck(
+    'setter is fluent and preserves binary string bytes',
+    $entry->setJpegPhoto($binary) === $entry && $entry->getJpegPhoto() === $binary
+);
 
 $entry->setJpegPhoto(false);
-directoryEntryJpegCheck('false remains distinct from a missing JPEG value',
-    $entry->getJpegPhoto() === false);
+directoryEntryJpegCheck(
+    'false remains distinct from a missing JPEG value',
+    $entry->getJpegPhoto() === false
+);
 
 $array = ['legacy' => 'serialized-value'];
 $entry->setJpegPhoto($array);
-directoryEntryJpegCheck('legacy array value is not coerced or replaced',
-    $entry->getJpegPhoto() === $array);
+directoryEntryJpegCheck(
+    'legacy array value is not coerced or replaced',
+    $entry->getJpegPhoto() === $array
+);
 
 $object = new stdClass();
 $object->bytes = 'legacy-object';
 $entry->setJpegPhoto($object);
-directoryEntryJpegCheck('legacy object identity is preserved in memory',
-    $entry->getJpegPhoto() === $object);
+directoryEntryJpegCheck(
+    'legacy object identity is preserved in memory',
+    $entry->getJpegPhoto() === $object
+);
 
 directoryEntryJpegCheck('fixed assertion count', DirectoryEntryJpegTestState::$checks === 5);
 

@@ -280,7 +280,7 @@ final class AliasController extends AbstractController
         $result = (new \ViMbAdmin_Service_Alias($this->em()))->toggleActive(
             $alias,
             $admin,
-            fn() => $host->notify('alias', 'toggleActive', 'preToggle', $context, ['active' => $alias->getActive()]) === true,
+            fn () => $host->notify('alias', 'toggleActive', 'preToggle', $context, ['active' => $alias->getActive()]) === true,
             function () use ($host, $context, $alias): void {
                 $host->notify('alias', 'toggleActive', 'preflush', $context, ['active' => $alias->getActive()]);
             },
@@ -555,7 +555,7 @@ final class AliasController extends AbstractController
         $deleted = (new \ViMbAdmin_Service_Alias($this->em()))->delete(
             $alias,
             $admin,
-            fn() => $host->notify('alias', 'delete', 'preRemove', $context) !== false,
+            fn () => $host->notify('alias', 'delete', 'preRemove', $context) !== false,
             function () use ($host, $context): void {
                 $host->notify('alias', 'delete', 'preFlush', $context);
             },

@@ -10,7 +10,6 @@ final class OSS_Utils_TestRecorder
 
 final class OSS_Utils_TestDouble
 {
-
     /**
      * @param string|false $controller
      * @param string|false $action

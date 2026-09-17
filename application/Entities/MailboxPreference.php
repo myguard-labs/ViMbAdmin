@@ -72,7 +72,7 @@ class MailboxPreference
     public function setAttribute($attribute)
     {
         $this->attribute = $attribute;
-    
+
         return $this;
     }
 
@@ -95,7 +95,7 @@ class MailboxPreference
     public function setIx($ix)
     {
         $this->ix = $ix;
-    
+
         return $this;
     }
 
@@ -118,7 +118,7 @@ class MailboxPreference
     public function setOp($op)
     {
         $this->op = $op;
-    
+
         return $this;
     }
 
@@ -141,7 +141,7 @@ class MailboxPreference
     public function setValue($value)
     {
         $this->value = $value;
-    
+
         return $this;
     }
 
@@ -164,7 +164,7 @@ class MailboxPreference
     public function setExpire($expire)
     {
         $this->expire = $expire;
-    
+
         return $this;
     }
 
@@ -197,7 +197,7 @@ class MailboxPreference
     public function setMailbox(?\Entities\Mailbox $mailbox = null)
     {
         $this->Mailbox = $mailbox;
-    
+
         return $this;
     }
 

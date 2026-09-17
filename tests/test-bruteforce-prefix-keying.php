@@ -309,13 +309,13 @@ $mkdirFault = new ViMbAdmin_BruteForce(null, ['statedir' => $mkdirState]);
 $_SERVER['REMOTE_ADDR'] = '198.51.100.30';
 prefixCheck(
     'CONTROL: a mkdir fault still denies authentication after the reap moved off the lock',
-    prefixDenied(static function() use ($mkdirFault): void {
+    prefixDenied(static function () use ($mkdirFault): void {
         $mkdirFault->record('victim', null);
     }),
 );
 prefixCheck(
     'CONTROL: a mkdir fault denies the pre-auth lock assertion too',
-    prefixDenied(static function() use ($mkdirFault): void {
+    prefixDenied(static function () use ($mkdirFault): void {
         $mkdirFault->assertNotLocked(null);
     }),
 );
@@ -328,7 +328,7 @@ $writeTarget = $writeDirectory . '/' . hash('sha256', prefixKey($writeFault, '19
 mkdir($writeTarget . '.' . getmypid() . '.tmp', 0700, true);
 prefixCheck(
     'CONTROL: a write fault on the prefix-keyed path still denies persistence',
-    prefixDenied(static function() use ($writeFault): void {
+    prefixDenied(static function () use ($writeFault): void {
         (new ReflectionMethod($writeFault, '_save'))->invoke($writeFault, '198.51.100.40', [
             'attempts' => 1, 'first' => time(), 'last' => time(), 'locked_until' => 0,
         ]);
@@ -343,7 +343,7 @@ $renameTarget = $renameDirectory . '/' . hash('sha256', prefixKey($renameFault, 
 mkdir($renameTarget, 0700, true);
 prefixCheck(
     'CONTROL: a rename fault on the prefix-keyed path still denies persistence',
-    prefixDenied(static function() use ($renameFault): void {
+    prefixDenied(static function () use ($renameFault): void {
         (new ReflectionMethod($renameFault, '_save'))->invoke($renameFault, '198.51.100.50', [
             'attempts' => 1, 'first' => time(), 'last' => time(), 'locked_until' => 0,
         ]);

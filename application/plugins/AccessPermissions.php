@@ -47,11 +47,10 @@
  */
 class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_Plugin_Observer, ViMbAdmin_Plugin_MailboxFormExtension
 {
-
-    public function __construct( object $controller )
+    public function __construct(object $controller)
     {
-        parent::__construct( $controller, get_class( $this ) );
-        
+        parent::__construct($controller, get_class($this));
+
         // no setup tasks are required
         //
         // typically you might load an config file for example, but as this is a system
@@ -66,17 +65,25 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $options
      * @return array<string,string>
      */
-    private function _types( array $options ): array
+    private function _types(array $options): array
     {
         $plugins = array_key_exists('vimbadmin_plugins', $options) ? $options['vimbadmin_plugins'] : [];
-        if (!is_array($plugins)) throw new \TypeError('vimbadmin_plugins must be an array');
+        if (!is_array($plugins)) {
+            throw new \TypeError('vimbadmin_plugins must be an array');
+        }
         $config = array_key_exists('AccessPermissions', $plugins) ? $plugins['AccessPermissions'] : [];
-        if (!is_array($config)) throw new \TypeError('AccessPermissions options must be an array');
+        if (!is_array($config)) {
+            throw new \TypeError('AccessPermissions options must be an array');
+        }
         $types = array_key_exists('type', $config) ? $config['type'] : [];
-        if (!is_array($types)) throw new \TypeError('AccessPermissions type must be an array');
+        if (!is_array($types)) {
+            throw new \TypeError('AccessPermissions type must be an array');
+        }
         $result = [];
         foreach ($types as $name => $label) {
-            if (!is_string($name) || !is_string($label)) throw new \TypeError('AccessPermissions types must be a string map');
+            if (!is_string($name) || !is_string($label)) {
+                throw new \TypeError('AccessPermissions types must be a string map');
+            }
             $result[$name] = $label;
         }
         return $result;
@@ -86,31 +93,30 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $options
      * @return list<\ViMbAdmin\Kernel\Form\Field>
      */
-    public function nativeMailboxFields( ?\Entities\Mailbox $mailbox, array $options ): array
+    public function nativeMailboxFields(?\Entities\Mailbox $mailbox, array $options): array
     {
-        $types      = $this->_types( $options );
+        $types      = $this->_types($options);
         $restricted = $mailbox !== null && $mailbox->getAccessRestriction() !== null
             && $mailbox->getAccessRestriction() !== 'ALL';
-        $selected   = $restricted ? explode( ',', (string) $mailbox->getAccessRestriction() ) : [];
+        $selected   = $restricted ? explode(',', (string) $mailbox->getAccessRestriction()) : [];
 
         $fields = [];
 
         $master = new \ViMbAdmin\Kernel\Form\Field(
             'plugin_accessPermissions',
-            _( 'Set specific access permissions for this mailbox' ),
+            _('Set specific access permissions for this mailbox'),
             'checkbox'
         );
-        $master->setValue( $restricted );
+        $master->setValue($restricted);
         $fields[] = $master;
 
-        foreach( $types as $name => $label )
-        {
+        foreach ($types as $name => $label) {
             $field = new \ViMbAdmin\Kernel\Form\Field(
                 "plugin_accessPermission_{$name}",
-                _( $label ),
+                _($label),
                 'checkbox'
             );
-            $field->setValue( in_array( (string) $name, $selected, true ) );
+            $field->setValue(in_array((string) $name, $selected, true));
             $fields[] = $field;
         }
 
@@ -124,12 +130,14 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $options
      * @return list<string>
      */
-    private function _selected( array $values, array $options ): array
+    private function _selected(array $values, array $options): array
     {
         $selected = [];
-        foreach( array_keys( $this->_types( $options ) ) as $name )
-            if( !empty( $values["plugin_accessPermission_{$name}"] ) )
+        foreach (array_keys($this->_types($options)) as $name) {
+            if (!empty($values["plugin_accessPermission_{$name}"])) {
                 $selected[] = (string) $name;
+            }
+        }
 
         return $selected;
     }
@@ -138,18 +146,20 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
-    public function nativeMailboxValidate( array $values, array $options ): ?string
+    public function nativeMailboxValidate(array $values, array $options): ?string
     {
         // "Restricted" means the master box is ticked OR at least one service is
         // ticked (ticking a service alone is enough — the master is just a hint).
-        $wantsRestriction = !empty( $values['plugin_accessPermissions'] );
-        $selected         = $this->_selected( $values, $options );
+        $wantsRestriction = !empty($values['plugin_accessPermissions']);
+        $selected         = $this->_selected($values, $options);
 
-        if( !$wantsRestriction )
-            return null; // no master, no services -> unrestricted (ALL), valid
+        if (!$wantsRestriction) {
+            return null;
+        } // no master, no services -> unrestricted (ALL), valid
 
-        if( $selected === [] )
-            return _( 'You must select which services the user can access if you are choosing to apply specific access permissions' );
+        if ($selected === []) {
+            return _('You must select which services the user can access if you are choosing to apply specific access permissions');
+        }
 
         return null;
     }
@@ -158,13 +168,13 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
-    public function nativeMailboxApply( \Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null ): void
+    public function nativeMailboxApply(\Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null): void
     {
         // Apply a restriction when any service is ticked, even if the master
         // checkbox was left unticked (matches user intent: ticking SMTP/IMAP/…
         // clearly asks to restrict). Nothing ticked -> ALL (no restriction).
-        $selected = $this->_selected( $values, $options );
+        $selected = $this->_selected($values, $options);
 
-        $mailbox->setAccessRestriction( $selected === [] ? 'ALL' : implode( ',', $selected ) );
+        $mailbox->setAccessRestriction($selected === [] ? 'ALL' : implode(',', $selected));
     }
 }

@@ -52,10 +52,13 @@ final class TestNativeEntrypointHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestNativeEntrypointHarnessState::$count;
-function nativeEntrypointCheck(string $label, bool $ok): void {
+$failures = & TestNativeEntrypointHarnessState::$count;
+function nativeEntrypointCheck(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestNativeEntrypointHarnessState::$count++; }
+    if (!$ok) {
+        TestNativeEntrypointHarnessState::$count++;
+    }
 }
 
 echo "== native entry point ==\n";

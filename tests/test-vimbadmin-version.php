@@ -22,9 +22,13 @@ echo "\n== gitCommit() memoization and ref path hardening ==\n";
 
 $tmpDir = sys_get_temp_dir() . '/vimbadmin-test-' . bin2hex(random_bytes(8));
 $rmTree = static function (string $dir) use (&$rmTree): void {
-    if (!is_dir($dir)) { return; }
+    if (!is_dir($dir)) {
+        return;
+    }
     foreach (scandir($dir) as $e) {
-        if ($e === '.' || $e === '..') { continue; }
+        if ($e === '.' || $e === '..') {
+            continue;
+        }
         $p = $dir . '/' . $e;
         is_dir($p) ? $rmTree($p) : @unlink($p);
     }
@@ -53,57 +57,93 @@ $sha = 'abcdef0123456789abcdef0123456789abcdef01';
 
 try {
     // Accepts a normal ref and returns the SHA it points at.
-    $check('normal ref resolves to its SHA',
-        $probe("ref: refs/heads/master\n", 'refs/heads/master', $sha . "\n"), $sha);
+    $check(
+        'normal ref resolves to its SHA',
+        $probe("ref: refs/heads/master\n", 'refs/heads/master', $sha . "\n"),
+        $sha
+    );
 
     // Traversal out of .git is refused even though the target IS readable --
     // 'planted' sits outside .git, so a null here can only come from the guard,
     // never from an unreadable path.
     $planted = 'cafebabe0123456789cafebabe0123456789cafe';
-    $check('traversal ref is rejected even when its target is readable',
-        $probe("ref: refs/heads/../../../planted\n", null, null, $planted), null);
-    $check('traversal ref with single .. is rejected',
-        $probe("ref: refs/../../planted\n", null, null, $planted), null);
+    $check(
+        'traversal ref is rejected even when its target is readable',
+        $probe("ref: refs/heads/../../../planted\n", null, null, $planted),
+        null
+    );
+    $check(
+        'traversal ref with single .. is rejected',
+        $probe("ref: refs/../../planted\n", null, null, $planted),
+        null
+    );
     // Control: without traversal, that same planted content IS reachable,
     // proving the probe can see the file and the rejection above is the guard.
-    $check('non-traversing ref reaches a planted target',
-        $probe("ref: refs/heads/planted\n", 'refs/heads/planted', $planted . "\n"), $planted);
+    $check(
+        'non-traversing ref reaches a planted target',
+        $probe("ref: refs/heads/planted\n", 'refs/heads/planted', $planted . "\n"),
+        $planted
+    );
 
     // A ref outside the refs/ namespace is refused. 'planted' is placed at the
     // exact path the ref names and IS readable, so null can only be the ^refs/
     // prefix constraint -- not a missing file. This is what pins the regex
     // independently of the '..' check.
-    $check('non-refs ref is rejected even when its target is readable',
-        $probe("ref: config\n", 'config', $planted . "\n"), null);
-    $check('absolute-looking ref is rejected',
-        $probe("ref: /etc/passwd\n", null, null), null);
+    $check(
+        'non-refs ref is rejected even when its target is readable',
+        $probe("ref: config\n", 'config', $planted . "\n"),
+        null
+    );
+    $check(
+        'absolute-looking ref is rejected',
+        $probe("ref: /etc/passwd\n", null, null),
+        null
+    );
 
     // A readable but corrupt ref file is not a commit SHA: it must not be
     // returned, and must not be memoized as one.
-    $check('corrupt loose ref is rejected',
-        $probe("ref: refs/heads/master\n", 'refs/heads/master', "not-a-sha\n"), null);
-    $check('truncated loose ref is rejected',
-        $probe("ref: refs/heads/master\n", 'refs/heads/master', "abcdef0\n"), null);
+    $check(
+        'corrupt loose ref is rejected',
+        $probe("ref: refs/heads/master\n", 'refs/heads/master', "not-a-sha\n"),
+        null
+    );
+    $check(
+        'truncated loose ref is rejected',
+        $probe("ref: refs/heads/master\n", 'refs/heads/master', "abcdef0\n"),
+        null
+    );
 
     // A detached 40-char SHA in HEAD is still honoured.
-    $check('detached HEAD sha is returned',
-        $probe($sha . "\n", null, null), $sha);
+    $check(
+        'detached HEAD sha is returned',
+        $probe($sha . "\n", null, null),
+        $sha
+    );
 
     // Memoization: the seam path must NOT populate the production cache...
     $cacheProperty = new ReflectionProperty(ViMbAdmin_Version::class, '_gitCommitCache');
     $cacheProperty->setAccessible(true);
     $cacheProperty->setValue(null, false);
     $probe("ref: refs/heads/master\n", 'refs/heads/master', $sha . "\n");
-    $check('test seam does not poison the production memo',
-        $cacheProperty->getValue(), false);
+    $check(
+        'test seam does not poison the production memo',
+        $cacheProperty->getValue(),
+        false
+    );
 
     // ...while the default path computes once and then serves the cache.
     $first = ViMbAdmin_Version::gitCommit();
-    $check('production call populates the memo',
-        $cacheProperty->getValue(), $first);
+    $check(
+        'production call populates the memo',
+        $cacheProperty->getValue(),
+        $first
+    );
     $cacheProperty->setValue(null, 'sentinel-from-cache');
-    $check('second production call is served from the memo',
-        ViMbAdmin_Version::gitCommit(), 'sentinel-from-cache');
+    $check(
+        'second production call is served from the memo',
+        ViMbAdmin_Version::gitCommit(),
+        'sentinel-from-cache'
+    );
     $cacheProperty->setValue(null, false);
 } finally {
     $rmTree($tmpDir);

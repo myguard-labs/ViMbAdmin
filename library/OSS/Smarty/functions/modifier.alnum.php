@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -55,7 +56,7 @@
  * @param string $string Strint to modify
  * @return string
  */
-function smarty_modifier_alnum( $string )
+function smarty_modifier_alnum($string)
 {
-    return preg_replace( "/[^a-zA-Z0-9]/", '', $string ) ?? '';
+    return preg_replace("/[^a-zA-Z0-9]/", '', $string) ?? '';
 }

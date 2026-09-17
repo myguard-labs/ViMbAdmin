@@ -5,7 +5,9 @@ require __DIR__ . '/../vendor/autoload.php';
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 echo "== OSS utilities ==\n";
@@ -35,16 +37,28 @@ $check(
 
 OSS_Runtime::configure(['utils' => ['genurl' => ['host_mode' => 'REPLACE', 'host_replace' => null]]], '/vimbadmin', new stdClass());
 $badReplacementRejected = false;
-try { OSS_Utils::genUrl('mailbox'); } catch (\TypeError) { $badReplacementRejected = true; }
+try {
+    OSS_Utils::genUrl('mailbox');
+} catch (\TypeError) {
+    $badReplacementRejected = true;
+}
 $check('malformed host replacement fails closed', $badReplacementRejected);
 OSS_Runtime::configure([], '/vimbadmin', new stdClass());
 $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'javascript';
 $badProtocolRejected = false;
-try { OSS_Utils::genUrl('mailbox'); } catch (\TypeError) { $badProtocolRejected = true; }
+try {
+    OSS_Utils::genUrl('mailbox');
+} catch (\TypeError) {
+    $badProtocolRejected = true;
+}
 $check('malformed forwarded protocol fails closed', $badProtocolRejected);
 unset($_SERVER['HTTP_X_FORWARDED_PROTO']);
 $badParameterRejected = false;
-try { OSS_Utils::genUrl('mailbox', false, false, ['bad' => ['nested']]); } catch (\TypeError) { $badParameterRejected = true; }
+try {
+    OSS_Utils::genUrl('mailbox', false, false, ['bad' => ['nested']]);
+} catch (\TypeError) {
+    $badParameterRejected = true;
+}
 $check('container URL parameter fails closed', $badParameterRejected);
 
 $previousInternalErrors = libxml_use_internal_errors(true);

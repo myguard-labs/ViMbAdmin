@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Regression guard: no phantom pending schema changes.
  *

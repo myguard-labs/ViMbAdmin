@@ -22,7 +22,9 @@ final class MailboxAliasIdentityAliasRepository extends \Repositories\Alias
     /** @var list<\Entities\Alias> */
     public array $withMailbox = [];
 
-    public function __construct() {}
+    public function __construct()
+    {
+    }
 
     /** @return list<\Entities\Alias> */
     public function loadForMailbox($mailbox, $admin, $ima = false): array

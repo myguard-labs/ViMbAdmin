@@ -24,29 +24,29 @@ class MailboxTask
 {
     // ---- task types -----------------------------------------------------
     /** force-resync + index + purge (non-destructive repair/optimize). */
-    const TYPE_REPAIR  = "REPAIR";
+    public const TYPE_REPAIR  = "REPAIR";
     /** Alias kept for clarity; handled identically to REPAIR. */
-    const TYPE_OPTIMIZE = "OPTIMIZE";
+    public const TYPE_OPTIMIZE = "OPTIMIZE";
     /** doveadm backup, then empty the mail store. KEEPS the mailbox row. */
-    const TYPE_ARCHIVE = "ARCHIVE";
+    public const TYPE_ARCHIVE = "ARCHIVE";
     /** doveadm backup, empty the mail store, then REMOVE the mailbox row. */
-    const TYPE_DELETE  = "DELETE";
+    public const TYPE_DELETE  = "DELETE";
     /** doveadm quota recalc only (non-destructive; refresh quota usage). */
-    const TYPE_QUOTA_RECALC = "QUOTA_RECALC";
+    public const TYPE_QUOTA_RECALC = "QUOTA_RECALC";
 
     /**
      * Measure the real on-disk (zstd-compressed) size of an archive backup via
      * the doveadm REST fs-walk and store it on the archive row. Enqueued at low
      * priority after an ARCHIVE/DELETE backup; runs in the background.
      */
-    const TYPE_MEASURE_SIZE = "MEASURE_SIZE";
+    public const TYPE_MEASURE_SIZE = "MEASURE_SIZE";
 
     /**
      * Prune ONE expired autoprune archive: remove its /backups maildir (doveadm
      * fs delete) and its archive row. Enqueued (one per expired backup) by the
      * queue runner's periodic autoprune sweep; lowest priority.
      */
-    const TYPE_PRUNE = "PRUNE";
+    public const TYPE_PRUNE = "PRUNE";
 
     /**
      * Back up ONE ORPHAN maildir — mail on disk with no ViMbAdmin mailbox row
@@ -56,9 +56,9 @@ class MailboxTask
      * (autoprune off), then removes the temp row. Enqueued by the Maintenance
      * "scan for unmanaged maildirs" action; low priority.
      */
-    const TYPE_BACKUP_ORPHAN = "BACKUP_ORPHAN";
+    public const TYPE_BACKUP_ORPHAN = "BACKUP_ORPHAN";
     /** Discover unmanaged maildirs for later UI confirmation. */
-    const TYPE_SCAN_ORPHANS = "SCAN_ORPHANS";
+    public const TYPE_SCAN_ORPHANS = "SCAN_ORPHANS";
 
     /** @var array<string, string> */
     public static $TYPES = [
@@ -71,14 +71,14 @@ class MailboxTask
     ];
 
     // ---- statuses -------------------------------------------------------
-    const STATUS_PENDING   = "PENDING";
-    const STATUS_RUNNING   = "RUNNING";
-    const STATUS_DONE      = "DONE";
-    const STATUS_FAILED    = "FAILED";
-    const STATUS_CANCELLED = "CANCELLED";
+    public const STATUS_PENDING   = "PENDING";
+    public const STATUS_RUNNING   = "RUNNING";
+    public const STATUS_DONE      = "DONE";
+    public const STATUS_FAILED    = "FAILED";
+    public const STATUS_CANCELLED = "CANCELLED";
 
     /** Statuses represented by a non-null generated open_task marker. */
-    const OPEN_STATUSES = [ self::STATUS_PENDING, self::STATUS_RUNNING ];
+    public const OPEN_STATUSES = [ self::STATUS_PENDING, self::STATUS_RUNNING ];
 
     /** @var array<string, string> */
     public static $STATUSES = [
@@ -172,18 +172,31 @@ class MailboxTask
     private ?\Entities\QueueRunner $Runner = null;
 
     /** @return int|null */
-    public function getId()                 { return $this->id; }
+    public function getId()
+    {
+        return $this->id;
+    }
 
     /** @return string|null */
-    public function getType()               { return $this->type; }
+    public function getType()
+    {
+        return $this->type;
+    }
     /**
      * @param string $v
      * @return $this
      */
-    public function setType( $v )           { $this->type = $v; return $this; }
+    public function setType($v)
+    {
+        $this->type = $v;
+        return $this;
+    }
 
     /** @return string|null */
-    public function getUsername()           { return $this->username; }
+    public function getUsername()
+    {
+        return $this->username;
+    }
     public function requiredUsername(): string
     {
         if ($this->username === null) {
@@ -196,71 +209,119 @@ class MailboxTask
      * @param string $v
      * @return $this
      */
-    public function setUsername( $v )       { $this->username = $v; return $this; }
+    public function setUsername($v)
+    {
+        $this->username = $v;
+        return $this;
+    }
 
     /** @return string|null */
-    public function getStatus()             { return $this->status; }
+    public function getStatus()
+    {
+        return $this->status;
+    }
     /** @return bool */
-    public function isOpen()                { return $this->open_task === true; }
+    public function isOpen()
+    {
+        return $this->open_task === true;
+    }
     /** @return bool */
-    public function isAbandoned()           { return $this->abandoned; }
+    public function isAbandoned()
+    {
+        return $this->abandoned;
+    }
     /** @return $this */
-    public function setAbandoned( bool $v )
+    public function setAbandoned(bool $v)
     {
         $this->abandoned = $v;
-        $this->open_task = $this->abandoned || in_array( $this->status, self::OPEN_STATUSES, true ) ? true : null;
+        $this->open_task = $this->abandoned || in_array($this->status, self::OPEN_STATUSES, true) ? true : null;
         return $this;
     }
     /**
      * @param string $v
      * @return $this
      */
-    public function setStatus( $v )
+    public function setStatus($v)
     {
         $this->status = $v;
-        $this->open_task = $this->abandoned || in_array( $v, self::OPEN_STATUSES, true ) ? true : null;
+        $this->open_task = $this->abandoned || in_array($v, self::OPEN_STATUSES, true) ? true : null;
         return $this;
     }
 
     /** @return int */
-    public function getPriority()           { return $this->priority; }
+    public function getPriority()
+    {
+        return $this->priority;
+    }
     /**
      * @param int $v
      * @return $this
      */
-    public function setPriority( $v )       { $this->priority = (int) $v; return $this; }
+    public function setPriority($v)
+    {
+        $this->priority = (int) $v;
+        return $this;
+    }
 
     /** @return \DateTime|null */
-    public function getCreatedAt()          { return $this->created_at; }
+    public function getCreatedAt()
+    {
+        return $this->created_at;
+    }
     /**
      * @param \DateTime $v
      * @return $this
      */
-    public function setCreatedAt( $v )      { $this->created_at = $v; return $this; }
+    public function setCreatedAt($v)
+    {
+        $this->created_at = $v;
+        return $this;
+    }
 
     /** @return \DateTime|null */
-    public function getStartedAt()          { return $this->started_at; }
+    public function getStartedAt()
+    {
+        return $this->started_at;
+    }
     /**
      * @param \DateTime|null $v
      * @return $this
      */
-    public function setStartedAt( $v )      { $this->started_at = $v; return $this; }
+    public function setStartedAt($v)
+    {
+        $this->started_at = $v;
+        return $this;
+    }
 
     /** @return \DateTime|null */
-    public function getFinishedAt()         { return $this->finished_at; }
+    public function getFinishedAt()
+    {
+        return $this->finished_at;
+    }
     /**
      * @param \DateTime|null $v
      * @return $this
      */
-    public function setFinishedAt( $v )     { $this->finished_at = $v; return $this; }
+    public function setFinishedAt($v)
+    {
+        $this->finished_at = $v;
+        return $this;
+    }
 
     /** @return string|null */
-    public function getLog()                { return $this->log; }
+    public function getLog()
+    {
+        return $this->log;
+    }
     /**
      * @param string|null $v
      * @return $this
      */
-    public function setLog( $v )            { $this->log = $v; return $this; }
+    public function setLog($v)
+    {
+        $this->log = $v;
+        return $this;
+    }
 
     /**
      * Append a timestamped line to the task log.
@@ -268,41 +329,69 @@ class MailboxTask
      * @param string $line
      * @return MailboxTask
      */
-    public function appendLog( $line )
+    public function appendLog($line)
     {
-        $this->log = (string) $this->log . '[' . gmdate( 'Y-m-d H:i:s' ) . '] ' . $line . "\n";
+        $this->log = (string) $this->log . '[' . gmdate('Y-m-d H:i:s') . '] ' . $line . "\n";
         return $this;
     }
 
     /** @return string|null */
-    public function getData()               { return $this->data; }
+    public function getData()
+    {
+        return $this->data;
+    }
     /**
      * @param string|null $v
      * @return $this
      */
-    public function setData( $v )           { $this->data = $v; return $this; }
+    public function setData($v)
+    {
+        $this->data = $v;
+        return $this;
+    }
 
     /** @return \Entities\Domain|null */
-    public function getDomain()             { return $this->Domain; }
+    public function getDomain()
+    {
+        return $this->Domain;
+    }
     /** @return $this */
-    public function setDomain( ?\Entities\Domain $v = null )     { $this->Domain = $v; return $this; }
+    public function setDomain(?\Entities\Domain $v = null)
+    {
+        $this->Domain = $v;
+        return $this;
+    }
 
     /** @return \Entities\Admin|null */
-    public function getRequestedBy()        { return $this->RequestedBy; }
+    public function getRequestedBy()
+    {
+        return $this->RequestedBy;
+    }
     /** @return $this */
-    public function setRequestedBy( ?\Entities\Admin $v = null ) { $this->RequestedBy = $v; return $this; }
+    public function setRequestedBy(?\Entities\Admin $v = null)
+    {
+        $this->RequestedBy = $v;
+        return $this;
+    }
 
     /** @return \Entities\QueueRunner|null */
-    public function getRunner()             { return $this->Runner; }
+    public function getRunner()
+    {
+        return $this->Runner;
+    }
     /** @return $this */
-    public function setRunner( ?\Entities\QueueRunner $v = null ) { $this->Runner = $v; return $this; }
+    public function setRunner(?\Entities\QueueRunner $v = null)
+    {
+        $this->Runner = $v;
+        return $this;
+    }
 
     /**
      * @return string|null Human-readable type label, or null before hydration.
      */
     public function getTypeLabel()
     {
-        return isset( self::$TYPES[ $this->type ] ) ? self::$TYPES[ $this->type ] : $this->type;
+        return isset(self::$TYPES[ $this->type ]) ? self::$TYPES[ $this->type ] : $this->type;
     }
 
     /**
@@ -310,6 +399,6 @@ class MailboxTask
      */
     public function getStatusLabel()
     {
-        return isset( self::$STATUSES[ $this->status ] ) ? self::$STATUSES[ $this->status ] : $this->status;
+        return isset(self::$STATUSES[ $this->status ]) ? self::$STATUSES[ $this->status ] : $this->status;
     }
 }

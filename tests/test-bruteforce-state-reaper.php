@@ -110,8 +110,10 @@ $other = reaperState($stateDirectory, 'other-inode', [
     'locked_until' => 0,
 ]);
 $stableFile = new ReflectionMethod($bruteForce, '_isStableRegularFile');
-reaperCheck('inode substitution is rejected before deletion',
-    !$stableFile->invoke($bruteForce, lstat($boundary), lstat($other)));
+reaperCheck(
+    'inode substitution is rejected before deletion',
+    !$stableFile->invoke($bruteForce, lstat($boundary), lstat($other))
+);
 
 for ($index = 0; $index < 140; $index++) {
     reaperState($stateDirectory, 'prefix-active-' . $index, [
@@ -142,8 +144,10 @@ $capacityReaper = new ViMbAdmin_BruteForce(null, [
     'statedir' => $capacityDirectory, 'window' => 60, 'lockout' => $retention,
 ]);
 reaperRun($capacityReaper, $now, 2);
-reaperCheck('each request has removal capacity above one created record',
-    count(glob($capacityDirectory . '/*.json') ?: []) === 0);
+reaperCheck(
+    'each request has removal capacity above one created record',
+    count(glob($capacityDirectory . '/*.json') ?: []) === 0
+);
 
 $cursorTarget = $root . '/cursor-target';
 file_put_contents($cursorTarget, "do-not-change\n");
@@ -151,9 +155,11 @@ $cursorPath = $stateDirectory . '/.reap-cursor';
 unlink($cursorPath);
 symlink($cursorTarget, $cursorPath);
 reaperRun($bruteForce, $now);
-reaperCheck('a substituted cursor is replaced without modifying its target',
+reaperCheck(
+    'a substituted cursor is replaced without modifying its target',
     is_file($cursorPath) && !is_link($cursorPath)
-        && file_get_contents($cursorTarget) === "do-not-change\n");
+        && file_get_contents($cursorTarget) === "do-not-change\n"
+);
 
 $linkedTarget = $root . '/linked-target';
 mkdir($linkedTarget, 0700);

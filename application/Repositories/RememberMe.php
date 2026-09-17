@@ -21,20 +21,22 @@ class RememberMe extends EntityRepository
      * @param string $key The key
      * @return \Entities\RememberMe|null Null or the remember me entity with the user entity loaded
      */
-    public function load( $userhash, $key )
+    public function load($userhash, $key)
     {
         $result = $this->getEntityManager()
-            ->createQuery( 'SELECT r, u FROM \\Entities\\RememberMe r JOIN r.User u WHERE r.userhash = ?1 AND r.ckey = ?2' )
-            ->setParameter( 1, $userhash )
-            ->setParameter( 2, $key )
+            ->createQuery('SELECT r, u FROM \\Entities\\RememberMe r JOIN r.User u WHERE r.userhash = ?1 AND r.ckey = ?2')
+            ->setParameter(1, $userhash)
+            ->setParameter(2, $key)
             ->getOneOrNullResult();
 
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::nullableEntity(
-            $result, \Entities\RememberMe::class, 'Remember-me lookup'
+            $result,
+            \Entities\RememberMe::class,
+            'Remember-me lookup'
         );
     }
-    
-    
+
+
 
     /**
      * Delete all RememberMe entries for a given user
@@ -42,12 +44,13 @@ class RememberMe extends EntityRepository
      * @param \Entities\Admin $user The user to delete all RememberMe entries for
      * @return int The number of entries removed
      */
-    public function deleteForUser( $user )
+    public function deleteForUser($user)
     {
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::affectedRows(
-            $this->getEntityManager()->createQuery( "DELETE \\Entities\\RememberMe me WHERE me.User = ?1" )
-            ->setParameter( 1, $user )
-            ->execute(), 'Remember-me purge'
+            $this->getEntityManager()->createQuery("DELETE \\Entities\\RememberMe me WHERE me.User = ?1")
+            ->setParameter(1, $user)
+            ->execute(),
+            'Remember-me purge'
         );
     }
 }

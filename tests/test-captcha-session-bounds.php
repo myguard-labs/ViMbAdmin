@@ -41,7 +41,9 @@ function captchaBoundsCheck(string $label, bool $condition): void
 {
     CaptchaBoundsState::$checks++;
     echo ($condition ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$condition) { CaptchaBoundsState::$failures++; }
+    if (!$condition) {
+        CaptchaBoundsState::$failures++;
+    }
 }
 
 /**
@@ -78,7 +80,7 @@ function captchaSessionKeys(): array
 {
     return array_values(array_filter(
         array_keys(captchaSession()),
-        static fn(string $key): bool => str_starts_with($key, 'OSS_Captcha_'),
+        static fn (string $key): bool => str_starts_with($key, 'OSS_Captcha_'),
     ));
 }
 
@@ -111,15 +113,41 @@ function captchaSessionScalar(string $key): string
 final class CaptchaBoundsSession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->get($key); }
-    public function __set(string $key, mixed $value): void { $this->set($key, $value); }
-    public function __isset(string $key): bool { return $this->has($key); }
-    public function __unset(string $key): void { $this->remove($key); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->get($key);
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->set($key, $value);
+    }
+    public function __isset(string $key): bool
+    {
+        return $this->has($key);
+    }
+    public function __unset(string $key): void
+    {
+        $this->remove($key);
+    }
 }
 
 #[AllowDynamicProperties]
@@ -127,7 +155,10 @@ final class CaptchaBoundsView
 {
     /** @var array<string,mixed> */
     public array $values = [];
-    public function __set(string $key, mixed $value): void { $this->values[$key] = $value; }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->values[$key] = $value;
+    }
     public function render(string $script): string
     {
         $form = $this->values['formHtml'] ?? null;
@@ -149,7 +180,10 @@ final class CaptchaBoundsAdminRepository extends \Repositories\Admin
         return self::$admin;
     }
 
-    public function getCount(): int { return 1; }
+    public function getCount(): int
+    {
+        return 1;
+    }
 }
 
 final class CaptchaBoundsBootstrap
@@ -160,7 +194,8 @@ final class CaptchaBoundsBootstrap
         private CaptchaBoundsSession $session,
         private CaptchaBoundsView $view,
         private array $options,
-    ) {}
+    ) {
+    }
 
     public function getResource(string $name): mixed
     {
@@ -173,7 +208,10 @@ final class CaptchaBoundsBootstrap
     }
 
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
 }
 
 /**
@@ -184,8 +222,7 @@ function captchaBoundsController(
     bool $useCaptcha,
     int $maxAttempts = 5,
     ?int $lostPasswordMaxAttempts = null,
-): array
-{
+): array {
     CaptchaBoundsAdminRepository::$admin = null;
 
     $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([
@@ -219,7 +256,7 @@ function captchaBoundsController(
     ];
     $container = new Container(
         new CaptchaBoundsBootstrap($entityManager, $session, $view, $options),
-        new Auth($session, static fn(int $id): ?\Entities\Admin => null),
+        new Auth($session, static fn (int $id): ?\Entities\Admin => null),
     );
 
     return [
@@ -270,8 +307,10 @@ captchaBoundsCheck(
     '200 generate() calls leave a bounded number of captcha session entries (got ' . count($bounded) . ')',
     count($bounded) > 0 && count($bounded) <= 8,
 );
-captchaBoundsCheck('capping does not disturb unrelated session state',
-    captchaSessionScalar('unrelated-marker') === 'untouched');
+captchaBoundsCheck(
+    'capping does not disturb unrelated session state',
+    captchaSessionScalar('unrelated-marker') === 'untouched'
+);
 
 // Over-cap eviction takes the entries CLOSEST to expiry first, so a captcha
 // with a long life outlives the short-lived ones it competes with, and the
@@ -281,10 +320,14 @@ $longLived = (new OSS_Captcha_Image(0, 0, 6, 86400))->generate();
 for ($i = 0; $i < 20; $i++) {
     $latest = (new OSS_Captcha_Image(0, 0, 6, 60))->generate();
 }
-captchaBoundsCheck('eviction drops the soonest-expiring captcha, not the longest-lived one',
-    captchaSessionHas($longLived));
-captchaBoundsCheck('the newest captcha survives the per-session cap',
-    captchaSessionHas($latest));
+captchaBoundsCheck(
+    'eviction drops the soonest-expiring captcha, not the longest-lived one',
+    captchaSessionHas($longLived)
+);
+captchaBoundsCheck(
+    'the newest captcha survives the per-session cap',
+    captchaSessionHas($latest)
+);
 
 // --- 2. expired entries are pruned -----------------------------------------
 $_SESSION = [];
@@ -292,21 +335,31 @@ $_SESSION['OSS_Captcha_' . str_repeat('a', 32)] = ['word' => 'AAAAAA', 'expires'
 $_SESSION['OSS_Captcha_' . str_repeat('b', 32)] = ['word' => 'BBBBBB', 'expires' => time() + 600];
 $_SESSION['OSS_Captcha_' . str_repeat('c', 32)] = 'not an array at all';
 (new OSS_Captcha_Image(0, 0, 6, 1800))->generate();
-captchaBoundsCheck('an expired captcha session entry is pruned by generate()',
-    !captchaSessionHas(str_repeat('a', 32)));
-captchaBoundsCheck('a malformed captcha session entry is pruned by generate()',
-    !captchaSessionHas(str_repeat('c', 32)));
-captchaBoundsCheck('an unexpired captcha session entry survives the prune',
-    captchaSessionHas(str_repeat('b', 32)));
+captchaBoundsCheck(
+    'an expired captcha session entry is pruned by generate()',
+    !captchaSessionHas(str_repeat('a', 32))
+);
+captchaBoundsCheck(
+    'a malformed captcha session entry is pruned by generate()',
+    !captchaSessionHas(str_repeat('c', 32))
+);
+captchaBoundsCheck(
+    'an unexpired captcha session entry survives the prune',
+    captchaSessionHas(str_repeat('b', 32))
+);
 
 // --- 3. captcha validation still succeeds on the happy path ----------------
 $_SESSION = [];
 $happyId = (new OSS_Captcha_Image(0, 0, 6, 1800))->generate();
 $happyWord = captchaSessionWord($happyId);
-captchaBoundsCheck('a freshly minted captcha validates against its own word',
-    OSS_Captcha_Image::_isValid($happyId, $happyWord));
-captchaBoundsCheck('a wrong answer is still rejected',
-    !OSS_Captcha_Image::_isValid((new OSS_Captcha_Image(0, 0, 6, 1800))->generate(), 'WRONG1'));
+captchaBoundsCheck(
+    'a freshly minted captcha validates against its own word',
+    OSS_Captcha_Image::_isValid($happyId, $happyWord)
+);
+captchaBoundsCheck(
+    'a wrong answer is still rejected',
+    !OSS_Captcha_Image::_isValid((new OSS_Captcha_Image(0, 0, 6, 1800))->generate(), 'WRONG1')
+);
 
 // --- 4. the controller mints only for the render actually shown ------------
 $_SESSION = [];
@@ -315,11 +368,15 @@ $withCaptcha = captchaBoundsController($stateA, true);
 $response = captchaBoundsRequest($withCaptcha['controller']);
 $renderedIdValue = $withCaptcha['view']->values['captchaId'] ?? null;
 $renderedId = is_string($renderedIdValue) ? $renderedIdValue : '';
-captchaBoundsCheck('a rendered lost-password GET carries a captcha id',
+captchaBoundsCheck(
+    'a rendered lost-password GET carries a captcha id',
     $renderedId !== '' && preg_match('/^[a-f0-9]{32}$/', $renderedId) === 1
-        && $response->status === 200);
-captchaBoundsCheck('one lost-password render mints exactly one captcha session entry',
-    $renderedId !== '' && captchaSessionKeys() === ['OSS_Captcha_' . $renderedId]);
+        && $response->status === 200
+);
+captchaBoundsCheck(
+    'one lost-password render mints exactly one captcha session entry',
+    $renderedId !== '' && captchaSessionKeys() === ['OSS_Captcha_' . $renderedId]
+);
 
 // The redirect path (submitting a valid form for an unknown user) renders
 // nothing, so it must mint nothing.
@@ -330,8 +387,10 @@ $redirect = captchaBoundsRequest($noCaptcha['controller'], [
     'csrf' => 'csrf-sentinel',
     'username' => 'nobody@example.test',
 ]);
-captchaBoundsCheck('a non-rendering lost-password POST mints no captcha at all',
-    captchaSessionKeys() === [] && $redirect->status === 302);
+captchaBoundsCheck(
+    'a non-rendering lost-password POST mints no captcha at all',
+    captchaSessionKeys() === [] && $redirect->status === 302
+);
 
 // The same non-rendering path WITH captchas on: the redirect leaves nothing
 // behind, which is exactly what the eager per-action mint used to leak.
@@ -346,12 +405,16 @@ $redirect2 = captchaBoundsRequest($captchaRedirect['controller'], [
     'captchaid' => $captchaRedirectId,
     'captchatext' => $captchaRedirectWord,
 ]);
-captchaBoundsCheck('a redirecting lost-password POST with captchas on leaks no session entry',
-    $redirect2->status === 302 && captchaSessionKeys() === []);
-captchaBoundsCheck('use_captcha off still serves the lost-password page',
+captchaBoundsCheck(
+    'a redirecting lost-password POST with captchas on leaks no session entry',
+    $redirect2->status === 302 && captchaSessionKeys() === []
+);
+captchaBoundsCheck(
+    'use_captcha off still serves the lost-password page',
     captchaBoundsRequest($noCaptcha['controller'])->status === 200
         && ($noCaptcha['view']->values['useCaptcha'] ?? null) === false
-        && captchaSessionKeys() === []);
+        && captchaSessionKeys() === []
+);
 
 // --- 5. the "click image for a new one" refresh still works ----------------
 $_SESSION = [];
@@ -368,17 +431,23 @@ $refreshResponse = captchaBoundsRequest($refresh['controller'], [
     'requestnewimage' => '1',
 ]);
 $refreshId = $refresh['view']->values['captchaId'] ?? null;
-captchaBoundsCheck('requestnewimage re-renders with a fresh captcha and keeps the username',
+captchaBoundsCheck(
+    'requestnewimage re-renders with a fresh captcha and keeps the username',
     $refreshResponse->status === 200
         && is_string($refreshId)
-        && str_contains($refreshResponse->body, 'someone@example.test'));
-captchaBoundsCheck('requestnewimage short-circuits before validation (no error, held captcha not consumed)',
+        && str_contains($refreshResponse->body, 'someone@example.test')
+);
+captchaBoundsCheck(
+    'requestnewimage short-circuits before validation (no error, held captcha not consumed)',
     !str_contains($refreshResponse->body, 'does not match that of the image')
-        && captchaSessionHas($heldId));
-captchaBoundsCheck('requestnewimage leaves only the held and the freshly minted captcha',
+        && captchaSessionHas($heldId)
+);
+captchaBoundsCheck(
+    'requestnewimage leaves only the held and the freshly minted captcha',
     count(captchaSessionKeys()) === 2
         && is_string($refreshId)
-        && captchaSessionHas($refreshId));
+        && captchaSessionHas($refreshId)
+);
 
 // --- 6. the lost-password flood throttles ITSELF and not login -------------
 // The whole point of the split budget: a flood of unauthenticated
@@ -395,12 +464,12 @@ $flood = captchaBoundsController($stateE, true, 5, $lostPasswordBudget);
 // The login budget, built exactly as the login/change-password call sites build
 // it: the configured statedir, untouched. If lostPasswordAction() ever spends
 // this, an unauthenticated GET flood locks real admins out of /auth/login.
-$loginBudget = static fn(): ViMbAdmin_BruteForce => new ViMbAdmin_BruteForce(null, [
+$loginBudget = static fn (): ViMbAdmin_BruteForce => new ViMbAdmin_BruteForce(null, [
     'enabled' => '1',
     'max_attempts' => '5',
     'statedir' => $stateE,
 ]);
-$lostPasswordState = static fn(): ViMbAdmin_BruteForce => new ViMbAdmin_BruteForce(null, [
+$lostPasswordState = static fn (): ViMbAdmin_BruteForce => new ViMbAdmin_BruteForce(null, [
     'enabled' => '1',
     'max_attempts' => (string) $lostPasswordBudget,
     'statedir' => $stateE . '/lost-password',
@@ -426,22 +495,30 @@ for ($i = 0; $i < 12; $i++) {
     $floodStatuses[] = captchaBoundsRequest($flood['controller'])->status;
     $floodRequests++;
 }
-captchaBoundsCheck('a sustained unauthenticated lost-password flood locks the source out of lost-password',
-    $floodLocked && $floodStatuses === [200, 200, 200]);
+captchaBoundsCheck(
+    'a sustained unauthenticated lost-password flood locks the source out of lost-password',
+    $floodLocked && $floodStatuses === [200, 200, 200]
+);
 // Its own budget, and only its own: locking must not cost more than the
 // configured lost-password ceiling.
-captchaBoundsCheck('the lost-password lockout needs no more than its own budget',
-    $floodRequests === $lostPasswordBudget);
+captchaBoundsCheck(
+    'the lost-password lockout needs no more than its own budget',
+    $floodRequests === $lostPasswordBudget
+);
 // THE NEGATIVE CONTROL for the split: same source, same flood, login untouched.
-captchaBoundsCheck('the lost-password flood does NOT lock the source out of login',
-    !$loginLockedDuringFlood && !$loginBudget()->isLocked(null));
+captchaBoundsCheck(
+    'the lost-password flood does NOT lock the source out of login',
+    !$loginLockedDuringFlood && !$loginBudget()->isLocked(null)
+);
 
 // The login budget's state directory must stay byte-identical for its existing
 // callers, so no live lockout state is orphaned or relocated by the split.
-captchaBoundsCheck('the lost-password budget lives in its own state subdirectory',
+captchaBoundsCheck(
+    'the lost-password budget lives in its own state subdirectory',
     is_dir($stateE . '/lost-password')
         && !file_exists(bruteForceStatePath($stateE, $floodSource))
-        && file_exists(bruteForceStatePath($stateE . '/lost-password', $floodSource)));
+        && file_exists(bruteForceStatePath($stateE . '/lost-password', $floodSource))
+);
 
 // A locked source is actually refused by the action: run it in a subprocess,
 // because the 429 path terminates the request. The probe boots the same
@@ -465,11 +542,15 @@ $probeText = implode("\n", $probeOutput);
 // Guard against a vacuous pass: a probe that died before reaching the action
 // (missing env, boot error) also prints no NOT-REFUSED, so require the 429 body
 // AND that the probe did not exit with its own setup failure status.
-captchaBoundsCheck('the locked-source probe reached the action (no setup failure)',
-    $probeStatus !== 2 && !str_contains($probeText, 'is not set'));
-captchaBoundsCheck('a locked source is refused by lostPasswordAction with 429',
+captchaBoundsCheck(
+    'the locked-source probe reached the action (no setup failure)',
+    $probeStatus !== 2 && !str_contains($probeText, 'is not set')
+);
+captchaBoundsCheck(
+    'a locked source is refused by lostPasswordAction with 429',
     str_contains($probeText, 'Too many failed login attempts')
-        && !str_contains($probeText, 'NOT-REFUSED'));
+        && !str_contains($probeText, 'NOT-REFUSED')
+);
 
 echo "\n";
 if (CaptchaBoundsState::$failures === 0) {

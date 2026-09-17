@@ -16,13 +16,13 @@ class McpToken extends EntityRepository
      *
      * @param string $hash hex sha256
      */
-    public function findByHash( string $hash ): ?\Entities\McpToken
+    public function findByHash(string $hash): ?\Entities\McpToken
     {
-        return $this->findOneBy( [ 'token_hash' => $hash ] );
+        return $this->findOneBy([ 'token_hash' => $hash ]);
     }
 
-    public function findByName( string $name ): ?\Entities\McpToken
+    public function findByName(string $name): ?\Entities\McpToken
     {
-        return $this->findOneBy( [ 'name' => $name ] );
+        return $this->findOneBy([ 'name' => $name ]);
     }
 }

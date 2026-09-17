@@ -14,18 +14,38 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class MaintenanceTestSession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
 }
 
 final class MaintenanceTestResources
 {
     /** @return array<string,mixed> */
-    public function getOptions(): array { return []; }
-    public function getResource(string $name): object { return new stdClass(); }
+    public function getOptions(): array
+    {
+        return [];
+    }
+    public function getResource(string $name): object
+    {
+        return new stdClass();
+    }
 }
 
 /** @param (callable(int): ?object) $loader */
@@ -40,16 +60,20 @@ function maintenanceController(MaintenanceTestSession $session, callable $loader
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 echo "== native maintenance controller boundaries ==\n";
 
-$anonymous = maintenanceController(new MaintenanceTestSession(), static fn(int $id): ?object => null);
+$anonymous = maintenanceController(new MaintenanceTestSession(), static fn (int $id): ?object => null);
 $anonymousResponse = $anonymous->indexAction();
-$check('anonymous users are redirected to login',
+$check(
+    'anonymous users are redirected to login',
     $anonymousResponse->status === 302
-    && str_ends_with($anonymousResponse->headers['Location'] ?? '', '/auth/login'));
+    && str_ends_with($anonymousResponse->headers['Location'] ?? '', '/auth/login')
+);
 
 $admin = new \Entities\Admin();
 $admin->setUsername('operator@example.test');
@@ -57,17 +81,19 @@ $admin->setSuper(false);
 $admin->setActive(true);
 $normal = maintenanceController(
     new MaintenanceTestSession(['identity' => ['id' => 7]]),
-    static fn(int $id): object => $admin,
+    static fn (int $id): object => $admin,
 );
 $normalResponse = $normal->indexAction();
-$check('non-super admins are redirected to login',
+$check(
+    'non-super admins are redirected to login',
     $normalResponse->status === 302
-    && str_ends_with($normalResponse->headers['Location'] ?? '', '/auth/login'));
+    && str_ends_with($normalResponse->headers['Location'] ?? '', '/auth/login')
+);
 
 $admin->setSuper(true);
 $super = maintenanceController(
     new MaintenanceTestSession(['identity' => ['id' => 7]]),
-    static fn(int $id): object => $admin,
+    static fn (int $id): object => $admin,
 );
 $typeGuarded = false;
 try {

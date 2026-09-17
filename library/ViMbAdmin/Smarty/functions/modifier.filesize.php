@@ -22,23 +22,23 @@
  * @param int|string|null $bytes
  * @return string
  */
-function smarty_modifier_filesize( $bytes )
+function smarty_modifier_filesize($bytes)
 {
     $bytes = (float) $bytes;
-    if( $bytes <= 0 )
+    if ($bytes <= 0) {
         return '0 B';
+    }
 
     $units = [ 'B', 'KB', 'MB', 'GB', 'TB', 'PB' ];
     $i = 0;
-    while( $bytes >= 1024 && $i < count( $units ) - 1 )
-    {
+    while ($bytes >= 1024 && $i < count($units) - 1) {
         $bytes /= 1024;
         $i++;
     }
 
     // Whole numbers print without a trailing ".0"; otherwise one decimal.
-    $rounded = round( $bytes, 1 );
-    $str = ( $rounded == (int) $rounded ) ? (string) (int) $rounded : number_format( $rounded, 1 );
+    $rounded = round($bytes, 1);
+    $str = ($rounded == (int) $rounded) ? (string) (int) $rounded : number_format($rounded, 1);
 
     return $str . ' ' . $units[ $i ];
 }

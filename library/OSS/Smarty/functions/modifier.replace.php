@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Smarty |replace modifier (Smarty 4 built-in, dropped in Smarty 5).
  *
@@ -9,7 +10,7 @@
  * @param  string $replace
  * @return string
  */
-function smarty_modifier_replace( $string, $search, $replace )
+function smarty_modifier_replace($string, $search, $replace)
 {
-    return str_replace( $search, $replace, (string) $string );
+    return str_replace($search, $replace, (string) $string);
 }

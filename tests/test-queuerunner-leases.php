@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Focused queue-runner lease tests. The doubles model a database UNIQUE(slot)
  * constraint and a fake clock so contention and long calls are deterministic.
@@ -21,7 +22,8 @@ final class QueueRunnerLeaseQuery
     public function __construct(
         private QueueRunnerLeaseEntityManager $em,
         private string $dql
-    ) {}
+    ) {
+    }
 
     public function setParameter(string $name, mixed $value): self
     {
@@ -81,7 +83,9 @@ final class QueueRunnerLeaseConnection
     private bool $acquireLockHeld = false;
     private int $lastId = 0;
 
-    public function __construct(private QueueRunnerLeaseEntityManager $em) {}
+    public function __construct(private QueueRunnerLeaseEntityManager $em)
+    {
+    }
 
     /** @param array<string,mixed> $data */
     public function insert(string $table, array $data): int
@@ -181,7 +185,9 @@ final class QueueRunnerLeaseTaskRepository extends \Repositories\MailboxTask
     public bool $claimResult = true;
     public ?QueueRunnerLeaseEntityManager $fakeEntityManager = null;
 
-    public function __construct() {}
+    public function __construct()
+    {
+    }
 
     public function claim(\Entities\MailboxTask $task, \Entities\QueueRunner $runner)
     {
@@ -328,7 +334,7 @@ final class QueueRunnerSilentTransfer extends ViMbAdmin_Doveadm
     {
         $performs = 0;
         $this->driveTransfer(
-            static function() use (&$performs, $waits): array {
+            static function () use (&$performs, $waits): array {
                 $running = $performs++ < $waits ? 1 : 0;
                 return [0, $running];
             },
@@ -340,11 +346,11 @@ final class QueueRunnerSilentTransfer extends ViMbAdmin_Doveadm
     {
         $performs = 0;
         $this->driveTransfer(
-            static function() use (&$performs): array {
+            static function () use (&$performs): array {
                 $performs++;
                 return $performs === 1 ? [-1, 1] : [0, 0];
             },
-            static function(): int {
+            static function (): int {
                 throw new RuntimeException('call-again result must not wait');
             }
         );
@@ -354,17 +360,20 @@ final class QueueRunnerSilentTransfer extends ViMbAdmin_Doveadm
     public function runAlreadyComplete(): void
     {
         $this->driveTransfer(
-            static function(): array {
+            static function (): array {
                 return [0, 0];
             },
-            static function(): int {
+            static function (): int {
                 throw new RuntimeException('completed transfer must not wait');
             }
         );
     }
 }
 
-final class QueueRunnerLeaseAssertions { public static int $failures = 0; }
+final class QueueRunnerLeaseAssertions
+{
+    public static int $failures = 0;
+}
 
 function queueRunnerCheck(string $label, bool $ok): void
 {
@@ -466,7 +475,8 @@ $lockTimeoutCallbackRan = false;
 $lockTimeoutRunner = queueRunnerService(
     $lockTimeout,
     clone $epoch,
-    static function(callable $progress): void {},
+    static function (callable $progress): void {
+    },
 );
 $lockTimeoutTask = (new \Entities\MailboxTask())
     ->setType(\Entities\MailboxTask::TYPE_QUOTA_RECALC)
@@ -476,7 +486,7 @@ queueRunnerCheck(
     'manual run maps a database mutex timeout to busy without claiming',
     $lockTimeoutRunner->runOne(
         $lockTimeoutTask,
-        static function() use (&$lockTimeoutCallbackRan): void {
+        static function () use (&$lockTimeoutCallbackRan): void {
             $lockTimeoutCallbackRan = true;
         }
     ) === ViMbAdmin_Service_QueueRunner::RUN_ONE_BUSY
@@ -568,7 +578,8 @@ $manualCallbackRan = false;
 $manualRunner = queueRunnerService(
     $manual,
     clone $epoch,
-    static function(callable $progress): void {},
+    static function (callable $progress): void {
+    },
 );
 $manualTask = (new \Entities\MailboxTask())
     ->setType(\Entities\MailboxTask::TYPE_QUOTA_RECALC)
@@ -576,7 +587,7 @@ $manualTask = (new \Entities\MailboxTask())
     ->setStatus(\Entities\MailboxTask::STATUS_PENDING);
 $manualResult = $manualRunner->runOne(
     $manualTask,
-    static function() use (&$manualCallbackRan): void {
+    static function () use (&$manualCallbackRan): void {
         $manualCallbackRan = true;
     }
 );
@@ -595,7 +606,7 @@ $liveRunner = null;
 $liveRunner = queueRunnerService(
     $live,
     clone $epoch,
-    static function(callable $progress) use (&$liveRunner, $live, $epoch, &$liveLeaseVisible): void {
+    static function (callable $progress) use (&$liveRunner, $live, $epoch, &$liveLeaseVisible): void {
         if (!$liveRunner instanceof QueueRunnerBlockingService) {
             throw new RuntimeException('blocking runner missing');
         }
@@ -618,7 +629,7 @@ $task = (new \Entities\MailboxTask())
     ->setStatus(\Entities\MailboxTask::STATUS_PENDING);
 $liveResult = $liveRunner->runOne(
     $task,
-    static function(?Throwable $error): void {
+    static function (?Throwable $error): void {
         if ($error !== null) {
             throw $error;
         }
@@ -654,7 +665,8 @@ if (!$silentLease instanceof \Entities\QueueRunner) {
 $silentRunner = queueRunnerService(
     $silent,
     clone $epoch,
-    static function(callable $progress): void {},
+    static function (callable $progress): void {
+    },
 );
 $leaseProgress = (new ReflectionMethod(ViMbAdmin_Service_QueueRunner::class, 'leaseProgress'))
     ->invoke($silentRunner, $silentLease);
@@ -669,7 +681,7 @@ $silentWaits = (int) ceil(
 $silentTransfer = new QueueRunnerSilentTransfer($leaseProgress);
 $silentTransfer->runSilent(
     $silentWaits,
-    static function() use (
+    static function () use (
         $silent,
         $silentRunner,
         &$silentCompetitorDenied
@@ -703,7 +715,7 @@ queueRunnerRelease($silent, $silentLease);
 
 $callAgainTicks = 0;
 $callAgainTransfer = new QueueRunnerSilentTransfer(
-    static function() use (&$callAgainTicks): void {
+    static function () use (&$callAgainTicks): void {
         $callAgainTicks++;
     }
 );
@@ -715,7 +727,7 @@ queueRunnerCheck(
 
 $completedHeartbeatCalls = 0;
 $completedTransfer = new QueueRunnerSilentTransfer(
-    static function() use (&$completedHeartbeatCalls): void {
+    static function () use (&$completedHeartbeatCalls): void {
         $completedHeartbeatCalls++;
         throw new RuntimeException('completed transfer heartbeat must not run');
     }
@@ -733,14 +745,14 @@ queueRunnerCheck(
 
 $liveHeartbeatCalls = 0;
 $liveTransfer = new QueueRunnerSilentTransfer(
-    static function() use (&$liveHeartbeatCalls): void {
+    static function () use (&$liveHeartbeatCalls): void {
         $liveHeartbeatCalls++;
         throw new RuntimeException('live transfer heartbeat failed');
     }
 );
 $liveHeartbeatFailurePropagated = false;
 try {
-    $liveTransfer->runSilent(1, static function(): int {
+    $liveTransfer->runSilent(1, static function (): int {
         throw new RuntimeException('failed live heartbeat must abort before wait');
     });
 } catch (RuntimeException $e) {

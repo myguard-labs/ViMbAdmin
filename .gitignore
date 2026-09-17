@@ -29,3 +29,5 @@ vimbadmin3.sublime-project
 vimbadmin3.sublime-workspace
 
 .idea
+# PHP-CS-Fixer writes a per-machine cache next to .php-cs-fixer.dist.php.
+.php-cs-fixer.cache

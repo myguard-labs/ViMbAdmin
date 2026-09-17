@@ -25,15 +25,41 @@ const AUTH_INPUT_TEST_CREDENTIAL = 'correct horse';
 final class AuthInputShapeSession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->get($key); }
-    public function __set(string $key, mixed $value): void { $this->set($key, $value); }
-    public function __isset(string $key): bool { return $this->has($key); }
-    public function __unset(string $key): void { $this->remove($key); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->get($key);
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->set($key, $value);
+    }
+    public function __isset(string $key): bool
+    {
+        return $this->has($key);
+    }
+    public function __unset(string $key): void
+    {
+        $this->remove($key);
+    }
 }
 
 #[AllowDynamicProperties]
@@ -41,7 +67,10 @@ final class AuthInputShapeView
 {
     /** @var array<string,mixed> */
     private array $values = [];
-    public function __set(string $key, mixed $value): void { $this->values[$key] = $value; }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->values[$key] = $value;
+    }
     public function render(string $script): string
     {
         $form = $this->values['formHtml'] ?? null;
@@ -179,7 +208,8 @@ final class AuthInputShapeBootstrap
         private AuthInputShapeSession $session,
         private AuthInputShapeView $view,
         private array $options,
-    ) {}
+    ) {
+    }
 
     public function getResource(string $name): mixed
     {
@@ -192,7 +222,10 @@ final class AuthInputShapeBootstrap
     }
 
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
 }
 
 final class AuthInputShapeState
@@ -205,7 +238,9 @@ function authInputShapeCheck(string $label, bool $condition): void
 {
     AuthInputShapeState::$checks++;
     echo ($condition ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$condition) { AuthInputShapeState::$failures++; }
+    if (!$condition) {
+        AuthInputShapeState::$failures++;
+    }
 }
 
 /**
@@ -219,8 +254,7 @@ function authInputShapeController(
     ?array $options = null,
     int $adminCount = 1,
     bool $authenticated = false,
-): array
-{
+): array {
     AuthInputShapeAdminRepository::$admin = $admin
         ?? (new \Entities\Admin())
             ->setUsername('admin@example.test')
@@ -257,7 +291,7 @@ function authInputShapeController(
     $options ??= ['securitysalt' => str_repeat('s', 64)];
     $container = new Container(
         new AuthInputShapeBootstrap($entityManager, $session, $view, $options),
-        new Auth($session, static fn(int $id): ?\Entities\Admin => $authenticated ? AuthInputShapeAdminRepository::$admin : null),
+        new Auth($session, static fn (int $id): ?\Entities\Admin => $authenticated ? AuthInputShapeAdminRepository::$admin : null),
     );
 
     $method = match ($action) {
@@ -367,11 +401,15 @@ try {
 } catch (RuntimeException $exception) {
     $quotedSetupReachedFlush = $exception->getMessage() === 'expected test stop before database write';
 }
-authInputShapeCheck('setup rejects quoted-local-part admin usernames at the controller boundary',
-    !$quotedSetupReachedFlush && $response?->status === 200 && str_contains($response->body, 'unquoted local part'));
-authInputShapeCheck('rejected setup username performs no persistence or flush',
+authInputShapeCheck(
+    'setup rejects quoted-local-part admin usernames at the controller boundary',
+    !$quotedSetupReachedFlush && $response?->status === 200 && str_contains($response->body, 'unquoted local part')
+);
+authInputShapeCheck(
+    'rejected setup username performs no persistence or flush',
     $quotedSetup['listener']->flushes === 0
-        && $quotedSetup['entityManager']->getUnitOfWork()->getScheduledEntityInsertions() === []);
+        && $quotedSetup['entityManager']->getUnitOfWork()->getScheduledEntityInsertions() === []
+);
 
 $normalSetup = authInputShapeController(null, null, 'setup', $adminOptions, 0);
 $normalSetup['listener']->stopBeforeDatabase = true;
@@ -383,10 +421,12 @@ try {
     $normalSetupReachedFlush = $exception->getMessage() === 'expected test stop before database write';
 }
 $setupInsertions = $normalSetup['entityManager']->getUnitOfWork()->getScheduledEntityInsertions();
-authInputShapeCheck('setup accepts a normal admin address and reaches persistence',
+authInputShapeCheck(
+    'setup accepts a normal admin address and reaches persistence',
     $normalSetupReachedFlush
-        && count(array_filter($setupInsertions, static fn(object $entity): bool => $entity instanceof \Entities\Admin
-            && $entity->getUsername() === 'admin@example.test')) === 1);
+        && count(array_filter($setupInsertions, static fn (object $entity): bool => $entity instanceof \Entities\Admin
+            && $entity->getUsername() === 'admin@example.test')) === 1
+);
 
 $addActor = (new \Entities\Admin())
     ->setUsername('actor@example.test')
@@ -409,11 +449,15 @@ try {
 } catch (RuntimeException $exception) {
     $quotedAddReachedFlush = $exception->getMessage() === 'expected test stop before database write';
 }
-authInputShapeCheck('admin add rejects quoted-local-part usernames at the controller boundary',
-    !$quotedAddReachedFlush && $response?->status === 200 && str_contains($response->body, 'unquoted local part'));
-authInputShapeCheck('rejected add username performs no persistence or flush',
+authInputShapeCheck(
+    'admin add rejects quoted-local-part usernames at the controller boundary',
+    !$quotedAddReachedFlush && $response?->status === 200 && str_contains($response->body, 'unquoted local part')
+);
+authInputShapeCheck(
+    'rejected add username performs no persistence or flush',
     $quotedAdd['listener']->flushes === 0
-        && $quotedAdd['entityManager']->getUnitOfWork()->getScheduledEntityInsertions() === []);
+        && $quotedAdd['entityManager']->getUnitOfWork()->getScheduledEntityInsertions() === []
+);
 
 $normalAdd = authInputShapeController(1, $addActor, 'login', $adminOptions, 1, true);
 $normalAdd['entityManager']->getUnitOfWork()->registerManaged($addActor, ['id' => 41], []);
@@ -430,43 +474,57 @@ try {
     $normalAddReachedFlush = $exception->getMessage() === 'expected test stop before database write';
 }
 $addInsertions = $normalAdd['entityManager']->getUnitOfWork()->getScheduledEntityInsertions();
-authInputShapeCheck('admin add accepts a normal address and reaches persistence',
+authInputShapeCheck(
+    'admin add accepts a normal address and reaches persistence',
     $normalAddReachedFlush
-        && count(array_filter($addInsertions, static fn(object $entity): bool => $entity instanceof \Entities\Admin
-            && $entity->getUsername() === 'second-admin@example.test')) === 1);
+        && count(array_filter($addInsertions, static fn (object $entity): bool => $entity instanceof \Entities\Admin
+            && $entity->getUsername() === 'second-admin@example.test')) === 1
+);
 
 $malformedPending = authInputShapeController('1junk');
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_POST = [];
 $response = $malformedPending['controller']->totpAction();
-authInputShapeCheck('non-canonical pending admin id redirects to login',
-    $response->status === 302 && ($response->headers['Location'] ?? null) === '/auth/login');
-authInputShapeCheck('non-canonical pending id is cleared before repository lookup',
+authInputShapeCheck(
+    'non-canonical pending admin id redirects to login',
+    $response->status === 302 && ($response->headers['Location'] ?? null) === '/auth/login'
+);
+authInputShapeCheck(
+    'non-canonical pending id is cleared before repository lookup',
     $malformedPending['session']->get('totp_pending_admin_id') === null
-        && $malformedPending['repository']->findCalls === 0);
+        && $malformedPending['repository']->findCalls === 0
+);
 
 $missingCsrf = authInputShapeController(1);
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = ['code' => '123456'];
 $response = $missingCsrf['controller']->totpAction();
-authInputShapeCheck('TOTP POST rejects a missing CSRF token in the rendered form',
+authInputShapeCheck(
+    'TOTP POST rejects a missing CSRF token in the rendered form',
     $response->status === 200
-        && str_contains($response->body, 'Invalid or missing security token.'));
-authInputShapeCheck('missing CSRF reaches no TOTP mutation or flush',
+        && str_contains($response->body, 'Invalid or missing security token.')
+);
+authInputShapeCheck(
+    'missing CSRF reaches no TOTP mutation or flush',
     $missingCsrf['listener']->flushes === 0
         && $missingCsrf['session']->get('totp_pending_admin_id') === 1
-        && $missingCsrf['repository']->findCalls === 1);
+        && $missingCsrf['repository']->findCalls === 1
+);
 
 $containerCode = authInputShapeController('1');
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_POST = ['csrf' => 'csrf-sentinel', 'code' => ['123456']];
 $response = $containerCode['controller']->totpAction();
-authInputShapeCheck('TOTP form rejects a container-shaped authentication code',
-    $response->status === 200 && str_contains($response->body, 'This field has an invalid type.'));
-authInputShapeCheck('container-shaped code reaches no TOTP mutation or flush',
+authInputShapeCheck(
+    'TOTP form rejects a container-shaped authentication code',
+    $response->status === 200 && str_contains($response->body, 'This field has an invalid type.')
+);
+authInputShapeCheck(
+    'container-shaped code reaches no TOTP mutation or flush',
     $containerCode['listener']->flushes === 0
         && $containerCode['session']->get('totp_pending_admin_id') === '1'
-        && $containerCode['repository']->findCalls === 1);
+        && $containerCode['repository']->findCalls === 1
+);
 
 $testIp = '192.0.2.41';
 $_SERVER['REMOTE_ADDR'] = $testIp;
@@ -500,7 +558,8 @@ $_POST['password'] = 'wrong horse';
 $wrongResponse = $wrongPassword['controller']->loginAction();
 $wrongMessages = $wrongPassword['session']->get('flashMessages');
 
-authInputShapeCheck('inactive correct credentials retain the generic login response',
+authInputShapeCheck(
+    'inactive correct credentials retain the generic login response',
     $inactiveResponse->status === 200
         && $inactiveResponse->body === $wrongResponse->body
         && $inactiveMessages === $wrongMessages
@@ -508,14 +567,19 @@ authInputShapeCheck('inactive correct credentials retain the generic login respo
             'text' => 'Invalid username or password. Please try again.',
             'level' => 'error',
             'isHtml' => false,
-        ]]);
-authInputShapeCheck('inactive login retains failed-attempt accounting',
+        ]]
+);
+authInputShapeCheck(
+    'inactive login retains failed-attempt accounting',
     authInputShapeBruteForceAttempts($inactiveState, $testIp) === 1
-        && authInputShapeBruteForceAttempts($wrongState, $testIp) === 1);
-authInputShapeCheck('inactive password login grants no identity or second-factor state',
+        && authInputShapeBruteForceAttempts($wrongState, $testIp) === 1
+);
+authInputShapeCheck(
+    'inactive password login grants no identity or second-factor state',
     $inactive['session']->get('identity') === null
         && $inactive['session']->get('totp_pending_admin_id') === null
-        && $inactive['listener']->flushes === 0);
+        && $inactive['listener']->flushes === 0
+);
 
 $persistenceParent = sys_get_temp_dir() . '/vimbadmin-bruteforce-denied-' . bin2hex(random_bytes(8));
 if (file_put_contents($persistenceParent, 'not a directory') === false) {
@@ -544,10 +608,12 @@ try {
         unlink($persistenceParent);
     }
 }
-authInputShapeCheck('brute-force persistence failure denies authentication before credential lookup',
+authInputShapeCheck(
+    'brute-force persistence failure denies authentication before credential lookup',
     $persistenceException?->getMessage() === 'bruteforce state persistence unavailable'
         && $persistenceFault['session']->get('identity') === null
-        && $persistenceFault['repository']->findOneByCalls === 0);
+        && $persistenceFault['repository']->findOneByCalls === 0
+);
 
 $latePersistenceState = sys_get_temp_dir() . '/vimbadmin-bruteforce-late-denied-' . bin2hex(random_bytes(8));
 $latePersistenceAdmin = authInputShapeAdmin(true);
@@ -568,12 +634,14 @@ try {
         unlink($latePersistenceState);
     }
 }
-authInputShapeCheck('late brute-force persistence failure denies session establishment',
+authInputShapeCheck(
+    'late brute-force persistence failure denies session establishment',
     $latePersistenceException?->getMessage() === 'bruteforce state persistence unavailable'
         && $latePersistenceFault['repository']->findOneByCalls === 1
         && $latePersistenceFault['session']->get('identity') === null
         && $latePersistenceFault['session']->get('logged_in_via') === null
-        && $latePersistenceFault['listener']->flushes === 0);
+        && $latePersistenceFault['listener']->flushes === 0
+);
 
 $enabledInactiveAdmin = authInputShapeAdmin(false, [
     \ViMbAdmin_TwoFactor::PREF_SECRET => 'encrypted-secret',
@@ -586,11 +654,13 @@ $enabledInactive = authInputShapeController(
 );
 $_POST['password'] = AUTH_INPUT_TEST_CREDENTIAL;
 $enabledInactiveResponse = $enabledInactive['controller']->loginAction();
-authInputShapeCheck('inactive enrolled-2FA admin is denied before a TOTP challenge',
+authInputShapeCheck(
+    'inactive enrolled-2FA admin is denied before a TOTP challenge',
     $enabledInactiveResponse->status === 200
         && $enabledInactive['session']->get('identity') === null
         && $enabledInactive['session']->get('totp_pending_admin_id') === null
-        && $enabledInactiveAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_SECRET));
+        && $enabledInactiveAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_SECRET)
+);
 
 $forcedInactiveAdmin = authInputShapeAdmin(false, [
     \ViMbAdmin_TwoFactor::PREF_FORCE => '1',
@@ -602,11 +672,13 @@ $forcedInactive = authInputShapeController(
     authInputShapeLoginOptions($inactiveState, ['bruteforce' => ['enabled' => '0']]),
 );
 $forcedInactiveResponse = $forcedInactive['controller']->loginAction();
-authInputShapeCheck('inactive forced-2FA admin is denied before enrolment',
+authInputShapeCheck(
+    'inactive forced-2FA admin is denied before enrolment',
     $forcedInactiveResponse->status === 200
         && $forcedInactive['session']->get('identity') === null
         && $forcedInactive['session']->get('totp_pending_admin_id') === null
-        && $forcedInactiveAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_FORCE));
+        && $forcedInactiveAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_FORCE)
+);
 
 $active = authInputShapeController(
     null,
@@ -616,13 +688,15 @@ $active = authInputShapeController(
 );
 $activeResponse = $active['controller']->loginAction();
 $activeIdentity = $active['session']->get('identity');
-authInputShapeCheck('active password login retains normal session establishment',
+authInputShapeCheck(
+    'active password login retains normal session establishment',
     $activeResponse->status === 302
         && ($activeResponse->headers['Location'] ?? null) === '/'
         && is_array($activeIdentity)
         && ($activeIdentity['id'] ?? null) === 41
         && $active['session']->get('logged_in_via') === 'auth'
-        && $active['listener']->flushes === 1);
+        && $active['listener']->flushes === 1
+);
 
 $staleAdmin = authInputShapeAdmin(true);
 $staleAdmin->setPassword(\OSS_Auth_Password::hash(
@@ -640,12 +714,14 @@ $rehashLogin = authInputShapeController(
     ]),
 );
 $rehashResponse = authInputShapeLogin($rehashLogin['controller'], AUTH_INPUT_TEST_CREDENTIAL);
-authInputShapeCheck('successful active login rehashes a stale bcrypt cost before authentication completes',
+authInputShapeCheck(
+    'successful active login rehashes a stale bcrypt cost before authentication completes',
     $rehashResponse->status === 302
         && $staleAdmin->requiredPassword() !== $staleHash
         && str_starts_with($staleAdmin->requiredPassword(), '$2a$05$')
         && $rehashLogin['listener']->flushes === 1
-        && $rehashLogin['repository']->passwordSwaps[0][0] === $staleHash);
+        && $rehashLogin['repository']->passwordSwaps[0][0] === $staleHash
+);
 
 $failedRehashAdmin = authInputShapeAdmin(true);
 $failedRehashAdmin->setPassword($staleHash);
@@ -659,7 +735,8 @@ $failedRehash = authInputShapeController(
     ]),
 );
 $failedRehashResponse = authInputShapeLogin($failedRehash['controller'], 'wrong horse');
-authInputShapeCheck('failed login keeps the generic response and performs no password write',
+authInputShapeCheck(
+    'failed login keeps the generic response and performs no password write',
     $failedRehashResponse->status === 200
         && $failedRehashAdmin->requiredPassword() === $staleHash
         && $failedRehash['listener']->flushes === 0
@@ -667,7 +744,8 @@ authInputShapeCheck('failed login keeps the generic response and performs no pas
             'text' => 'Invalid username or password. Please try again.',
             'level' => 'error',
             'isHtml' => false,
-        ]]);
+        ]]
+);
 
 $rehashErrorAdmin = authInputShapeAdmin(true);
 $rehashErrorAdmin->setPassword($staleHash);
@@ -682,11 +760,13 @@ $rehashError = authInputShapeController(
 );
 $rehashError['repository']->passwordSwapThrows = true;
 $rehashErrorResponse = authInputShapeLogin($rehashError['controller'], AUTH_INPUT_TEST_CREDENTIAL);
-authInputShapeCheck('rehash database errors retain clean managed state without denying login',
+authInputShapeCheck(
+    'rehash database errors retain clean managed state without denying login',
     $rehashErrorResponse->status === 302
         && $rehashErrorAdmin->requiredPassword() === $staleHash
         && $rehashError['listener']->flushes === 1
-        && is_array($rehashError['session']->get('identity')));
+        && is_array($rehashError['session']->get('identity'))
+);
 
 $racedResetAdmin = authInputShapeAdmin(true);
 $racedResetAdmin->setPassword($staleHash);
@@ -701,12 +781,14 @@ $racedReset = authInputShapeController(
 );
 $racedReset['repository']->passwordSwapAffected = 0;
 $racedResetResponse = authInputShapeLogin($racedReset['controller'], AUTH_INPUT_TEST_CREDENTIAL);
-authInputShapeCheck('concurrent password reset wins a zero-row exact-hash CAS without denying login',
+authInputShapeCheck(
+    'concurrent password reset wins a zero-row exact-hash CAS without denying login',
     $racedResetResponse->status === 302
         && $racedResetAdmin->requiredPassword() === $staleHash
         && $racedReset['repository']->passwordSwaps[0][0] === $staleHash
         && str_starts_with($racedReset['repository']->passwordSwaps[0][1], '$2a$05$')
-        && $racedReset['listener']->flushes === 1);
+        && $racedReset['listener']->flushes === 1
+);
 
 $enabledActive = authInputShapeController(
     null,
@@ -715,12 +797,14 @@ $enabledActive = authInputShapeController(
     authInputShapeLoginOptions($inactiveState, ['bruteforce' => ['enabled' => '0']]),
 );
 $enabledActiveResponse = $enabledActive['controller']->loginAction();
-authInputShapeCheck('active enrolled-2FA login still parks for TOTP',
+authInputShapeCheck(
+    'active enrolled-2FA login still parks for TOTP',
     $enabledActiveResponse->status === 302
         && ($enabledActiveResponse->headers['Location'] ?? null) === '/auth/totp'
         && $enabledActive['session']->get('identity') === null
         && $enabledActive['session']->get('totp_pending_admin_id') === 41
-        && $enabledActive['session']->get('totp_pending_via') === 'auth');
+        && $enabledActive['session']->get('totp_pending_via') === 'auth'
+);
 
 $forcedActive = authInputShapeController(
     null,
@@ -729,11 +813,13 @@ $forcedActive = authInputShapeController(
     authInputShapeLoginOptions($inactiveState, ['bruteforce' => ['enabled' => '0']]),
 );
 $forcedActiveResponse = $forcedActive['controller']->loginAction();
-authInputShapeCheck('active forced-2FA login still parks for enrolment',
+authInputShapeCheck(
+    'active forced-2FA login still parks for enrolment',
     $forcedActiveResponse->status === 302
         && ($forcedActiveResponse->headers['Location'] ?? null) === '/auth/totp-setup'
         && $forcedActive['session']->get('identity') === null
-        && $forcedActive['session']->get('totp_pending_admin_id') === 41);
+        && $forcedActive['session']->get('totp_pending_admin_id') === 41
+);
 
 $demoActive = authInputShapeController(
     null,
@@ -745,11 +831,13 @@ $demoActive = authInputShapeController(
     ]),
 );
 $demoActiveResponse = $demoActive['controller']->loginAction();
-authInputShapeCheck('active demo login retains its configured 2FA bypass',
+authInputShapeCheck(
+    'active demo login retains its configured 2FA bypass',
     $demoActiveResponse->status === 302
         && ($demoActiveResponse->headers['Location'] ?? null) === '/'
         && is_array($demoActive['session']->get('identity'))
-        && $demoActive['session']->get('totp_pending_admin_id') === null);
+        && $demoActive['session']->get('totp_pending_admin_id') === null
+);
 
 $recoveryAdmin = authInputShapeAdmin(true, [
     \ViMbAdmin_TwoFactor::PREF_SECRET => 'encrypted-secret',
@@ -767,7 +855,8 @@ $recovery = authInputShapeController(
     ]),
 );
 $recoveryResponse = $recovery['controller']->loginAction();
-authInputShapeCheck('active force-disable recovery still clears 2FA and logs in',
+authInputShapeCheck(
+    'active force-disable recovery still clears 2FA and logs in',
     $recoveryResponse->status === 302
         && ($recoveryResponse->headers['Location'] ?? null) === '/'
         && is_array($recovery['session']->get('identity'))
@@ -775,7 +864,8 @@ authInputShapeCheck('active force-disable recovery still clears 2FA and logs in'
         && !$recoveryAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_BACKUP)
         && !$recoveryAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_LASTTS)
         && !$recoveryAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_FORCE)
-        && $recovery['listener']->flushes === 2);
+        && $recovery['listener']->flushes === 2
+);
 
 $firstRun = authInputShapeController(
     null,
@@ -787,10 +877,12 @@ $firstRun = authInputShapeController(
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_POST = [];
 $firstRunResponse = $firstRun['controller']->loginAction();
-authInputShapeCheck('first-run login still redirects to setup before credential lookup',
+authInputShapeCheck(
+    'first-run login still redirects to setup before credential lookup',
     $firstRunResponse->status === 302
         && ($firstRunResponse->headers['Location'] ?? null) === '/auth/setup'
-        && $firstRun['repository']->findOneByCalls === 0);
+        && $firstRun['repository']->findOneByCalls === 0
+);
 
 foreach (['totp', 'totp-setup'] as $pendingAction) {
     $pendingInactive = authInputShapeController(
@@ -804,7 +896,8 @@ foreach (['totp', 'totp-setup'] as $pendingAction) {
     $pendingResponse = $pendingAction === 'totp'
         ? $pendingInactive['controller']->totpAction()
         : $pendingInactive['controller']->totpSetupAction();
-    authInputShapeCheck("inactive {$pendingAction} flow revokes pending authentication state",
+    authInputShapeCheck(
+        "inactive {$pendingAction} flow revokes pending authentication state",
         $pendingResponse->status === 302
             && ($pendingResponse->headers['Location'] ?? null) === '/auth/login'
             && $pendingInactive['session']->get('totp_pending_admin_id') === null
@@ -816,7 +909,8 @@ foreach (['totp', 'totp-setup'] as $pendingAction) {
                 'text' => 'Invalid username or password. Please try again.',
                 'level' => 'error',
                 'isHtml' => false,
-            ]]);
+            ]]
+    );
 }
 
 $totpClearState = __DIR__ . '/../var/tmp/test-totp-clear-failure-' . getmypid();
@@ -862,14 +956,16 @@ try {
     }
     rmdir($totpClearState);
 }
-authInputShapeCheck('TOTP enrolment remains untouched when brute-force state cannot be cleared',
+authInputShapeCheck(
+    'TOTP enrolment remains untouched when brute-force state cannot be cleared',
     $totpClearException?->getMessage() === 'bruteforce state persistence unavailable'
         && !$totpClearAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_SECRET)
         && !$totpClearAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_BACKUP)
         && $totpClearAdmin->hasTestPreference(\ViMbAdmin_TwoFactor::PREF_FORCE)
         && $totpClearFailure['listener']->flushes === 0
         && $totpClearFailure['session']->get('identity') === null
-        && $totpClearFailure['session']->get('totp_setup_secret') === $totpClearSecret);
+        && $totpClearFailure['session']->get('totp_setup_secret') === $totpClearSecret
+);
 
 $deactivatedDuringSetupAdmin = authInputShapeAdmin(true, [
     \ViMbAdmin_TwoFactor::PREF_FORCE => '1',
@@ -891,14 +987,16 @@ $_POST = [
     ))->getCode($setupSecret),
 ];
 $deactivatedDuringSetupResponse = $deactivatedDuringSetup['controller']->totpSetupAction();
-authInputShapeCheck('deactivation during TOTP enrolment revokes the pending login without rendering backup codes',
+authInputShapeCheck(
+    'deactivation during TOTP enrolment revokes the pending login without rendering backup codes',
     $deactivatedDuringSetupResponse->status === 302
         && ($deactivatedDuringSetupResponse->headers['Location'] ?? null) === '/auth/login'
         && $deactivatedDuringSetup['session']->get('identity') === null
         && $deactivatedDuringSetup['session']->get('totp_pending_admin_id') === null
         && $deactivatedDuringSetup['session']->get('totp_pending_via') === null
         && $deactivatedDuringSetup['session']->get('totp_setup_secret') === null
-        && !str_contains($deactivatedDuringSetupResponse->body, 'Two-factor is now enabled.'));
+        && !str_contains($deactivatedDuringSetupResponse->body, 'Two-factor is now enabled.')
+);
 
 authInputShapeCheck('fixed assertion count', AuthInputShapeState::$checks === 33);
 

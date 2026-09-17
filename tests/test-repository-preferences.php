@@ -75,8 +75,10 @@ $values = $uniqueMethod->invoke(null, [
 echo "== preference repositories ==\n";
 $check('scalar preference values retain order and remove duplicates', $values === ['alpha', 'beta']);
 $preferenceRows = [3 => ['value' => 'preserved']];
-$check('preference row preserves integer key and string value',
-    $requiredRowsMethod->invoke(null, $preferenceRows) === $preferenceRows);
+$check(
+    'preference row preserves integer key and string value',
+    $requiredRowsMethod->invoke(null, $preferenceRows) === $preferenceRows
+);
 $invalidPreferenceRows = static function (mixed $rows) use ($requiredRowsMethod): ?string {
     try {
         $requiredRowsMethod->invoke(null, $rows);
@@ -85,18 +87,30 @@ $invalidPreferenceRows = static function (mixed $rows) use ($requiredRowsMethod)
     }
     return null;
 };
-$check('preference rows reject a scalar result',
-    $invalidPreferenceRows('invalid') === 'Preference query result must be an array.');
-$check('preference rows reject a scalar row',
-    $invalidPreferenceRows(['invalid']) === 'Preference query row has an invalid shape.');
-$check('preference rows reject a string outer key',
-    $invalidPreferenceRows(['row' => ['value' => 'x']]) === 'Preference query row has an invalid shape.');
-$check('preference rows reject a missing value key',
-    $invalidPreferenceRows([['other' => 'x']]) === 'Preference query row has an invalid shape.');
-$check('preference rows reject an extra field',
-    $invalidPreferenceRows([['value' => 'x', 'other' => 'y']]) === 'Preference query row has an invalid shape.');
-$check('preference rows reject a non-string value',
-    $invalidPreferenceRows([['value' => null]]) === 'Preference query row has an invalid shape.');
+$check(
+    'preference rows reject a scalar result',
+    $invalidPreferenceRows('invalid') === 'Preference query result must be an array.'
+);
+$check(
+    'preference rows reject a scalar row',
+    $invalidPreferenceRows(['invalid']) === 'Preference query row has an invalid shape.'
+);
+$check(
+    'preference rows reject a string outer key',
+    $invalidPreferenceRows(['row' => ['value' => 'x']]) === 'Preference query row has an invalid shape.'
+);
+$check(
+    'preference rows reject a missing value key',
+    $invalidPreferenceRows([['other' => 'x']]) === 'Preference query row has an invalid shape.'
+);
+$check(
+    'preference rows reject an extra field',
+    $invalidPreferenceRows([['value' => 'x', 'other' => 'y']]) === 'Preference query row has an invalid shape.'
+);
+$check(
+    'preference rows reject a non-string value',
+    $invalidPreferenceRows([['value' => null]]) === 'Preference query row has an invalid shape.'
+);
 $numericValues = $uniqueMethod->invoke(null, [['value' => '0'], ['value' => '00']]);
 $check('legacy loose duplicate comparison is preserved', $numericValues === ['0']);
 $check('attribute predicate is retained for a scoped admin', str_contains($query->getDQL(), 'mp.attribute = :attr'));

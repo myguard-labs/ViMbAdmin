@@ -36,8 +36,10 @@ $check('integer and bigint-string byte totals preserve exact values', $method->i
 $check('empty and unknown domain strings remain visible', $method->invoke(null, [
     ['domain' => '', 'bytes' => '3'], ['domain' => 'legacy', 'bytes' => 4],
 ]) === ['' => '3', 'legacy' => 4]);
-$check('scalar outer result is rejected',
-    $failure('invalid') === 'Domain usage query result must be an array.');
+$check(
+    'scalar outer result is rejected',
+    $failure('invalid') === 'Domain usage query result must be an array.'
+);
 $check('duplicate domain is rejected', $failure([
     ['domain' => 'example.test', 'bytes' => '1'],
     ['domain' => 'Example.Test', 'bytes' => '2'],
@@ -51,14 +53,18 @@ foreach ([
     'extra field' => [['domain' => 'example.test', 'bytes' => '1', 'extra' => true]],
     'non-string domain' => [['domain' => null, 'bytes' => '1']],
 ] as $label => $rows) {
-    $check($label . ' is rejected',
-        $failure($rows) === 'Domain usage query row has an invalid shape.');
+    $check(
+        $label . ' is rejected',
+        $failure($rows) === 'Domain usage query row has an invalid shape.'
+    );
 }
 
 foreach ([null, false, 1.0, -1, '-1', '+1', '01', '1.5', '1e2', ' 1', 'abc'] as $bytes) {
-    $check('invalid bytes are rejected: ' . get_debug_type($bytes) . ':' . var_export($bytes, true),
+    $check(
+        'invalid bytes are rejected: ' . get_debug_type($bytes) . ':' . var_export($bytes, true),
         $failure([['domain' => 'example.test', 'bytes' => $bytes]])
-            === 'Domain usage query row has invalid bytes.');
+            === 'Domain usage query row has invalid bytes.'
+    );
 }
 
 $domainRows = [
@@ -79,20 +85,26 @@ $mergeFailure = static function (mixed $rows) use ($merge): ?string {
     }
     return null;
 };
-$check('usage merge rejects a scalar outer result',
-    $mergeFailure('invalid') === 'Domain list rows must be an array.');
+$check(
+    'usage merge rejects a scalar outer result',
+    $mergeFailure('invalid') === 'Domain list rows must be an array.'
+);
 foreach ([
     'scalar row' => ['invalid'],
     'string outer key' => ['row' => ['name' => 'example.test']],
     'missing name' => [['active' => true]],
     'wrong name type' => [['name' => null]],
 ] as $label => $rows) {
-    $check('usage merge rejects ' . $label,
-        $mergeFailure($rows) === 'Domain list row has an invalid usage shape.');
+    $check(
+        'usage merge rejects ' . $label,
+        $mergeFailure($rows) === 'Domain list row has an invalid usage shape.'
+    );
 }
-$check('usage merge rejects a non-string row field',
+$check(
+    'usage merge rejects a non-string row field',
     $mergeFailure([['name' => 'example.test', 0 => 'invalid']])
-        === 'Domain list row has an invalid usage field.');
+        === 'Domain list row has an invalid usage field.'
+);
 
 $check('fixed assertion count', $checks === 29);
 

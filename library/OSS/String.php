@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -46,7 +47,6 @@
  */
 class OSS_String
 {
-
     /**
      * The Unicode version of ucfirst().
      *
@@ -54,18 +54,16 @@ class OSS_String
      * @param string $encoding default null the character encoding, if omitted the the PHP internal encoding is used
      * @return string
      */
-    public static function mb_ucfirst( $string, $encoding = null )
+    public static function mb_ucfirst($string, $encoding = null)
     {
-        if( function_exists( 'mb_strtoupper' ) && !empty( $string ) )
-        {
-            if ($encoding === null)
+        if (function_exists('mb_strtoupper') && !empty($string)) {
+            if ($encoding === null) {
                 $encoding = mb_internal_encoding();
+            }
 
-            return mb_strtoupper( mb_substr( $string, 0, 1, $encoding ) ) . mb_substr( $string, 1, mb_strlen( $string, $encoding ) );
-        }
-        else
-        {
-            return ucfirst( $string );
+            return mb_strtoupper(mb_substr($string, 0, 1, $encoding)) . mb_substr($string, 1, mb_strlen($string, $encoding));
+        } else {
+            return ucfirst($string);
         }
     }
 
@@ -77,12 +75,13 @@ class OSS_String
      * @param string $encoding default null the character encoding, if omitted the the PHP internal encoding is used
      * @return string
      */
-    public static function mb_ucwords( $string, $encoding = null )
+    public static function mb_ucwords($string, $encoding = null)
     {
-        if( $encoding === null )
+        if ($encoding === null) {
             $encoding = mb_internal_encoding();
+        }
 
-        return mb_convert_case( $string, MB_CASE_TITLE, $encoding );
+        return mb_convert_case($string, MB_CASE_TITLE, $encoding);
     }
 
 
@@ -94,16 +93,15 @@ class OSS_String
      * @param string $haystack    The haystack
      * @return string
      */
-    public static function mb_str_replace( $needle, $replacement, $haystack )
+    public static function mb_str_replace($needle, $replacement, $haystack)
     {
-        $needle_len      = mb_strlen( $needle );
-        $replacement_len = mb_strlen( $replacement );
-        $pos             = mb_strpos( $haystack, $needle );
+        $needle_len      = mb_strlen($needle);
+        $replacement_len = mb_strlen($replacement);
+        $pos             = mb_strpos($haystack, $needle);
 
-        while( $pos !== false )
-        {
-            $haystack = mb_substr( $haystack, 0, $pos ) . $replacement . mb_substr( $haystack, $pos + $needle_len );
-            $pos = mb_strpos( $haystack, $needle, $pos + $replacement_len );
+        while ($pos !== false) {
+            $haystack = mb_substr($haystack, 0, $pos) . $replacement . mb_substr($haystack, $pos + $needle_len);
+            $pos = mb_strpos($haystack, $needle, $pos + $replacement_len);
         }
 
         return $haystack;
@@ -119,38 +117,40 @@ class OSS_String
      * @param bool    $numbers    If true then numbers will be used. Default: true
      * @param string  $additional These characters also will be used. Default: ''
      * @param string  $exclude    These characters will be excluded. Default: '1iIl0O'
-     * @return string 
+     * @return string
      */
-    public static function random( $length=16, $lowerCase = true, $upperCase = true, $numbers = true, $additional = '', $exclude = '1iIl0O' )
+    public static function random($length = 16, $lowerCase = true, $upperCase = true, $numbers = true, $additional = '', $exclude = '1iIl0O')
     {
         $str = '';
 
-        if( $length == 0 )
+        if ($length == 0) {
             return '';
+        }
 
-        if( $lowerCase == true )
+        if ($lowerCase == true) {
             $str .= 'abcdefghijklmnopqrstuvwxyz';
+        }
 
-        if( $upperCase == true )
+        if ($upperCase == true) {
             $str .= 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        }
 
-        if( $numbers == true )
+        if ($numbers == true) {
             $str .= '0123456789';
+        }
 
         $str .= $additional;
 
-        if( $exclude != '' )
-        {
-            foreach( str_split( $exclude ) as $char )
-            {
-                $str = OSS_String::mb_str_replace( $char, '', $str );
+        if ($exclude != '') {
+            foreach (str_split($exclude) as $char) {
+                $str = OSS_String::mb_str_replace($char, '', $str);
             }
         }
 
         // Use a CSPRNG (random_int) rather than str_shuffle()/str_repeat(),
         // which rely on the insecure Mersenne-Twister PRNG. This function feeds
         // remember-me tokens and salts, so predictability is a security issue.
-        return self::randomFromSet( $str, $length );
+        return self::randomFromSet($str, $length);
     }
 
 
@@ -162,24 +162,28 @@ class OSS_String
     * @return string
     * @SuppressWarnings("PHPMD.MissingImport") TypeError is in the global namespace.
     */
-    public static function randomFromSet( $charSet, $length = 16 )
+    public static function randomFromSet($charSet, $length = 16)
     {
-        if( $length <= 0 || $charSet === '' )
+        if ($length <= 0 || $charSet === '') {
             return '';
+        }
 
         // Multibyte-safe, CSPRNG-backed random selection.
-        $chars = preg_split( '//u', $charSet, -1, PREG_SPLIT_NO_EMPTY );
-        if( $chars === false )
-            throw new \TypeError( 'The character set must be valid UTF-8' );
+        $chars = preg_split('//u', $charSet, -1, PREG_SPLIT_NO_EMPTY);
+        if ($chars === false) {
+            throw new \TypeError('The character set must be valid UTF-8');
+        }
 
-        if( $chars === [] )
+        if ($chars === []) {
             return '';
+        }
 
-        $max = count( $chars ) - 1;
+        $max = count($chars) - 1;
 
         $retVal = '';
-        for( $i = 0; $i < $length; $i++ )
-            $retVal .= $chars[ random_int( 0, $max ) ];
+        for ($i = 0; $i < $length; $i++) {
+            $retVal .= $chars[ random_int(0, $max) ];
+        }
 
         return $retVal;
     }
@@ -194,18 +198,18 @@ class OSS_String
     * @param int $length The length of the password to be generated.
     * @return string The password string.
     */
-    public static function randomPassword( $length = 8 )
+    public static function randomPassword($length = 8)
     {
         $chars = "23456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
-        while( true )
-        {
+        while (true) {
             // CSPRNG-backed (randomFromSet uses random_int), not str_shuffle().
-            $password = self::randomFromSet( $chars, $length );
+            $password = self::randomFromSet($chars, $length);
 
             // "/[a-zA-Z0-9]/" is NOT the same!
-            if( preg_match( "/[a-z]/", $password ) && preg_match( "/[A-Z]/", $password ) && preg_match( "/[0-9]/", $password ) )
+            if (preg_match("/[a-z]/", $password) && preg_match("/[A-Z]/", $password) && preg_match("/[0-9]/", $password)) {
                 return $password;
+            }
         }
     }
 
@@ -219,17 +223,19 @@ class OSS_String
     * @param string $string
     * @return string
     */
-    public static function toValidFieldName( $string )
+    public static function toValidFieldName($string)
     {
-        $string = mb_strtolower( trim( $string ) );
-        $string = preg_replace( "/[^0-9a-z]+/u", '_', $string ) ?? '';
-        $string = preg_replace ("/[_]+/u", '_', $string ) ?? '';
+        $string = mb_strtolower(trim($string));
+        $string = preg_replace("/[^0-9a-z]+/u", '_', $string) ?? '';
+        $string = preg_replace("/[_]+/u", '_', $string) ?? '';
 
-        if( $string !== '' && $string[0] == '_' )
-            $string = mb_substr( $string, 1 );
+        if ($string !== '' && $string[0] == '_') {
+            $string = mb_substr($string, 1);
+        }
 
-        if( mb_substr( $string, -1 ) == '_')
-            $string = mb_substr( $string, 0, -1 );
+        if (mb_substr($string, -1) == '_') {
+            $string = mb_substr($string, 0, -1);
+        }
 
         return 'cf_' . $string;
     }
@@ -247,11 +253,11 @@ class OSS_String
     * @param bool $keepSpaces By default is false and it will remove spaces from string. Then it is set true it will keep spaces in string.
     * @return string
     */
-    public static function normalise( $input, $keepSpaces = false )
+    public static function normalise($input, $keepSpaces = false)
     {
-        iconv_set_encoding( 'internal_encoding', 'utf-8' );
-        iconv_set_encoding( 'input_encoding', 'utf-8' );
-        iconv_set_encoding( 'output_encoding', 'utf-8' );
+        iconv_set_encoding('internal_encoding', 'utf-8');
+        iconv_set_encoding('input_encoding', 'utf-8');
+        iconv_set_encoding('output_encoding', 'utf-8');
 
         /**
         * Special cases
@@ -270,14 +276,16 @@ class OSS_String
         $from = [ "\xC3\x86", "\xC3\xA6", "\xC3\xB0", "\xC3\x98", "\xC3\xB8", "\xC3\x9F", "\xC3\x9E", "\xC3\xBE", "\xC5\x81", "\xC5\x82", "\xC4\x91", "\xC4\x90", "\xE2\x82\xAC" ];
         $to = [   'AE',       'ae',       'd',        'O',        'o',        'ss',       'Th',       'th',       'L',        'l',        "d",        "D",        "EUR" ];
 
-        $retVal = iconv( 'UTF-8', 'ASCII//TRANSLIT', str_replace( $from, $to, $input ) ); // TRANSLIT does the whole job
-        if( $retVal === false )
+        $retVal = iconv('UTF-8', 'ASCII//TRANSLIT', str_replace($from, $to, $input)); // TRANSLIT does the whole job
+        if ($retVal === false) {
             $retVal = '';
+        }
 
-        if( !$keepSpaces )
-            $retVal = preg_replace( "/[^a-z]/", '', mb_strtolower( $retVal ) ) ?? '';
-        else
-            $retVal = preg_replace( "/[^a-z\s]/", '', mb_strtolower( $retVal ) ) ?? '';
+        if (!$keepSpaces) {
+            $retVal = preg_replace("/[^a-z]/", '', mb_strtolower($retVal)) ?? '';
+        } else {
+            $retVal = preg_replace("/[^a-z\s]/", '', mb_strtolower($retVal)) ?? '';
+        }
 
         return $retVal;
     }
@@ -288,9 +296,9 @@ class OSS_String
      * @param int $len Length of return salt.
      * @return string
      */
-    public static function salt( $len )
+    public static function salt($len)
     {
-        return self::random( $len, true, true, true, '!$%^&*()_+-=[]{};#:@~\\|<>?,./', '' );
+        return self::random($len, true, true, true, '!$%^&*()_+-=[]{};#:@~\\|<>?,./', '');
     }
 
     /**
@@ -299,16 +307,17 @@ class OSS_String
      * @param bool $upperCase default false
      * @return string
      */
-    public static function randomMacAddress( $upperCase = false )
+    public static function randomMacAddress($upperCase = false)
     {
         $retArr = [];
 
-        for( $x = 1; $x <= 6; $x++ )
-            $retArr[] = OSS_String::random( 2, false, false, false, '0123456789abcdef', '' );
+        for ($x = 1; $x <= 6; $x++) {
+            $retArr[] = OSS_String::random(2, false, false, false, '0123456789abcdef', '');
+        }
 
-        $retVal = implode( ':', $retArr );
+        $retVal = implode(':', $retArr);
 
-        return ( $upperCase ? strtoupper( $retVal ) : $retVal );
+        return ($upperCase ? strtoupper($retVal) : $retVal);
     }
 
 
@@ -321,26 +330,27 @@ class OSS_String
      * @param mixed $input
      * @return array<array-key, mixed>|string
      */
-    public static function stripSlashes( $input )
+    public static function stripSlashes($input)
     {
-        if( is_string( $input ) )
-            return stripslashes( $input );
-
-        if( !is_array( $input ) && !is_object( $input ) )
-        {
-            $input = is_scalar( $input ) ? (string) $input : '';
-            return stripslashes( $input );
+        if (is_string($input)) {
+            return stripslashes($input);
         }
 
-        if( is_object( $input ) )
-            $input = (array) $input;    
+        if (!is_array($input) && !is_object($input)) {
+            $input = is_scalar($input) ? (string) $input : '';
+            return stripslashes($input);
+        }
 
-        foreach( $input as $key => $item )
-        {
-            if ( is_scalar( $item ) )
-                $input[ $key ] = stripslashes( (string) $item );
-            else
-                $input[ $key ] = self::stripSlashes( $item );
+        if (is_object($input)) {
+            $input = (array) $input;
+        }
+
+        foreach ($input as $key => $item) {
+            if (is_scalar($item)) {
+                $input[ $key ] = stripslashes((string) $item);
+            } else {
+                $input[ $key ] = self::stripSlashes($item);
+            }
         }
 
         return $input;
@@ -356,26 +366,27 @@ class OSS_String
      * @param mixed $input
      * @return array<array-key, mixed>|string
      */
-    public static function htmlEntityDecode( $input )
+    public static function htmlEntityDecode($input)
     {
-        if( is_string( $input ) )
-            return html_entity_decode( $input );
-
-        if( !is_array( $input ) && !is_object( $input ) )
-        {
-            $input = is_scalar( $input ) ? (string) $input : '';
-            return html_entity_decode( $input );
+        if (is_string($input)) {
+            return html_entity_decode($input);
         }
 
-        if( is_object( $input ) )
-            $input = (array) $input;
+        if (!is_array($input) && !is_object($input)) {
+            $input = is_scalar($input) ? (string) $input : '';
+            return html_entity_decode($input);
+        }
 
-        foreach( $input as $key => $item )
-        {
-            if ( is_scalar( $item ) )
-                $input[ $key ] = html_entity_decode( (string) $item );
-            else
-                $input[ $key ] = self::htmlEntityDecode( $item );
+        if (is_object($input)) {
+            $input = (array) $input;
+        }
+
+        foreach ($input as $key => $item) {
+            if (is_scalar($item)) {
+                $input[ $key ] = html_entity_decode((string) $item);
+            } else {
+                $input[ $key ] = self::htmlEntityDecode($item);
+            }
         }
 
         return $input;

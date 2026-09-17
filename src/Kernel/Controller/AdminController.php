@@ -513,7 +513,7 @@ final class AdminController extends AbstractController
             $form->add(new Field('confirm_password', 'Confirm new password', 'password', [
                 Validators::required(),
                 Validators::matches(
-                    static fn() => $form->field('password')?->value(),
+                    static fn () => $form->field('password')?->value(),
                     'The confirmation password is required and must match the new password'
                 ),
             ]));

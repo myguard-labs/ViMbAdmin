@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin\Kernel\Session\MagicPropertyStorage (Phase 5,
  * docs/ZF1-REMOVAL.md). Proves the adapter round-trips through any object with
@@ -20,10 +21,22 @@ final class MagicNamespaceFake
 {
     /** @var array<string,mixed> */
     private array $d = [];
-    public function __get(string $k): mixed { return $this->d[$k] ?? null; }
-    public function __set(string $k, mixed $v): void { $this->d[$k] = $v; }
-    public function __isset(string $k): bool { return isset($this->d[$k]); }
-    public function __unset(string $k): void { unset($this->d[$k]); }
+    public function __get(string $k): mixed
+    {
+        return $this->d[$k] ?? null;
+    }
+    public function __set(string $k, mixed $v): void
+    {
+        $this->d[$k] = $v;
+    }
+    public function __isset(string $k): bool
+    {
+        return isset($this->d[$k]);
+    }
+    public function __unset(string $k): void
+    {
+        unset($this->d[$k]);
+    }
 }
 
 final class TestKernelSessionAdapterHarnessState
@@ -31,10 +44,13 @@ final class TestKernelSessionAdapterHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelSessionAdapterHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestKernelSessionAdapterHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestKernelSessionAdapterHarnessState::$count++; }
+    if (!$ok) {
+        TestKernelSessionAdapterHarnessState::$count++;
+    }
 }
 
 echo "== ViMbAdmin\\Kernel\\Session\\MagicPropertyStorage ==\n";
@@ -42,31 +58,31 @@ echo "== ViMbAdmin\\Kernel\\Session\\MagicPropertyStorage ==\n";
 $ns = new MagicNamespaceFake();
 $s  = new MagicPropertyStorage($ns);
 
-check('has() false on empty',       $s->has('x') === false);
-check('get() null on empty',        $s->get('x') === null);
+check('has() false on empty', $s->has('x') === false);
+check('get() null on empty', $s->get('x') === null);
 $s->set('x', 'hi');
-check('set then has',               $s->has('x') === true);
-check('set then get',               $s->get('x') === 'hi');
-check('writes through to object',    $ns->__get('x') === 'hi');
+check('set then has', $s->has('x') === true);
+check('set then get', $s->get('x') === 'hi');
+check('writes through to object', $ns->__get('x') === 'hi');
 $ns->__set('y', 'direct');
-check('reads object writes',         $s->get('y') === 'direct' && $s->has('y'));
+check('reads object writes', $s->get('y') === 'direct' && $s->has('y'));
 $s->remove('x');
-check('remove() clears',            $s->has('x') === false && $s->get('x') === null && !$ns->__isset('x'));
+check('remove() clears', $s->has('x') === false && $s->get('x') === null && !$ns->__isset('x'));
 
 echo "== Csrf over the namespace adapter ==\n";
 $ns2  = new MagicNamespaceFake();
 $csrf = new Csrf(new MagicPropertyStorage($ns2));
 $t = $csrf->token();
-check('token minted + stored on ns',  strlen($t) === 64 && $ns2->__get('csrfToken') === $t);
-check('isValid(token) true',          $csrf->isValid($t) === true);
-check('isValid(bad) false',           $csrf->isValid('nope') === false);
+check('token minted + stored on ns', strlen($t) === 64 && $ns2->__get('csrfToken') === $t);
+check('isValid(token) true', $csrf->isValid($t) === true);
+check('isValid(bad) false', $csrf->isValid('nope') === false);
 
 // Back-compat: a pre-existing (old-format) token on the namespace is honoured,
 // not regenerated — so tokens minted before the upgrade keep validating.
 $ns3 = new MagicNamespaceFake();
 $ns3->__set('csrfToken', 'legacy-40-char-token-from-OSS_String-random');
 $csrf3 = new Csrf(new MagicPropertyStorage($ns3));
-check('pre-existing token reused',    $csrf3->token() === 'legacy-40-char-token-from-OSS_String-random');
+check('pre-existing token reused', $csrf3->token() === 'legacy-40-char-token-from-OSS_String-random');
 check('pre-existing token validates', $csrf3->isValid('legacy-40-char-token-from-OSS_String-random') === true);
 
 echo "\n";

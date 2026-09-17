@@ -125,7 +125,7 @@ class Alias
     public function setAddress($address)
     {
         $this->address = $address;
-    
+
         return $this;
     }
 
@@ -148,7 +148,7 @@ class Alias
     public function setGoto($goto)
     {
         $this->goto = $goto;
-    
+
         return $this;
     }
 
@@ -171,7 +171,7 @@ class Alias
     public function setActive($active)
     {
         $this->active = $active;
-    
+
         return $this;
     }
 
@@ -194,7 +194,7 @@ class Alias
     public function setCreated($created)
     {
         $this->created = $created;
-    
+
         return $this;
     }
 
@@ -217,7 +217,7 @@ class Alias
     public function setModified($modified)
     {
         $this->modified = $modified;
-    
+
         return $this;
     }
 
@@ -250,7 +250,7 @@ class Alias
     public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
-    
+
         return $this;
     }
 
@@ -274,7 +274,7 @@ class Alias
     {
         $this->Preferences = new \Doctrine\Common\Collections\ArrayCollection();
     }
-    
+
     /**
      * Add Preferences
      *
@@ -284,7 +284,7 @@ class Alias
     public function addPreference(\Entities\AliasPreference $preferences)
     {
         $this->Preferences[] = $preferences;
-    
+
         return $this;
     }
 

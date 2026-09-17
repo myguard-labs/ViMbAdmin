@@ -30,23 +30,54 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class ArchiveIdentitySession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function __set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function __isset(string $key): bool { return isset($this->data[$key]); }
-    public function __unset(string $key): void { unset($this->data[$key]); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function __isset(string $key): bool
+    {
+        return isset($this->data[$key]);
+    }
+    public function __unset(string $key): void
+    {
+        unset($this->data[$key]);
+    }
     /** @return array<string,mixed> */
-    public function values(): array { return $this->data; }
+    public function values(): array
+    {
+        return $this->data;
+    }
 }
 
 final class ArchiveIdentityView
 {
     public int $renders = 0;
-    public function __set(string $key, mixed $value): void {}
+    public function __set(string $key, mixed $value): void
+    {
+    }
     public function render(string $script): string
     {
         $this->renders++;
@@ -62,10 +93,14 @@ final class ArchiveIdentityResources
         private readonly ArchiveIdentitySession $session,
         private readonly ArchiveIdentityView $view,
         private readonly array $options = [],
-    ) {}
+    ) {
+    }
 
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
     public function getResource(string $name): mixed
     {
         return match ($name) {
@@ -79,17 +114,36 @@ final class ArchiveIdentityResources
 
 final class ArchiveIdentityAdmin extends \Entities\Admin
 {
-    public function __construct(private readonly bool $super) {}
-    public function getId(): int { return 1; }
-    public function getUsername(): string { return 'admin@example.test'; }
-    public function getSuper(): bool { return $this->super; }
-    public function getActive(): bool { return true; }
-    public function isSuper(): bool { return $this->super; }
+    public function __construct(private readonly bool $super)
+    {
+    }
+    public function getId(): int
+    {
+        return 1;
+    }
+    public function getUsername(): string
+    {
+        return 'admin@example.test';
+    }
+    public function getSuper(): bool
+    {
+        return $this->super;
+    }
+    public function getActive(): bool
+    {
+        return true;
+    }
+    public function isSuper(): bool
+    {
+        return $this->super;
+    }
 }
 
 final class ArchiveIdentityArchiveRepository extends \Repositories\Archive
 {
-    public function __construct(private readonly \Entities\Archive $archive) {}
+    public function __construct(private readonly \Entities\Archive $archive)
+    {
+    }
 
     /**
      * @param array<string,mixed> $criteria
@@ -108,7 +162,9 @@ final class ArchiveIdentityArchiveRepository extends \Repositories\Archive
 
 final class ArchiveIdentityMailboxRepository extends \Repositories\Mailbox
 {
-    public function __construct(private readonly ?\Entities\Mailbox $mailbox) {}
+    public function __construct(private readonly ?\Entities\Mailbox $mailbox)
+    {
+    }
 
     /**
      * @param array<string,mixed> $criteria
@@ -123,7 +179,9 @@ final class ArchiveIdentityMailboxRepository extends \Repositories\Mailbox
 final class ArchiveIdentityAutopruneRepository extends \Repositories\Archive
 {
     /** @param list<\Entities\Archive> $archives */
-    public function __construct(private readonly array $archives) {}
+    public function __construct(private readonly array $archives)
+    {
+    }
     /** @return list<\Entities\Archive> */
     public function findAutoprune(?\DateTime $cutoff = null)
     {
@@ -133,9 +191,15 @@ final class ArchiveIdentityAutopruneRepository extends \Repositories\Archive
 
 final class ArchiveIdentityAutopruneQuery
 {
-    public function setParameter(string|int $key, mixed $value): self { return $this; }
+    public function setParameter(string|int $key, mixed $value): self
+    {
+        return $this;
+    }
     /** @return list<array{username:string}> */
-    public function getArrayResult(): array { return []; }
+    public function getArrayResult(): array
+    {
+        return [];
+    }
 }
 
 final class ArchiveIdentityAutopruneConnection
@@ -157,10 +221,15 @@ final class ArchiveIdentityAutopruneEntityManager
     {
         $this->connection = new ArchiveIdentityAutopruneConnection();
     }
-    public function getConnection(): ArchiveIdentityAutopruneConnection { return $this->connection; }
+    public function getConnection(): ArchiveIdentityAutopruneConnection
+    {
+        return $this->connection;
+    }
     public function getRepository(string $class): ArchiveIdentityAutopruneRepository
     {
-        if ($class !== '\\Entities\\Archive') { throw new RuntimeException('Unexpected repository'); }
+        if ($class !== '\\Entities\\Archive') {
+            throw new RuntimeException('Unexpected repository');
+        }
         return $this->repository;
     }
     public function createQuery(string $dql): ArchiveIdentityAutopruneQuery
@@ -170,8 +239,14 @@ final class ArchiveIdentityAutopruneEntityManager
         }
         return new ArchiveIdentityAutopruneQuery();
     }
-    public function persist(object $entity): void { $this->persisted[] = $entity; }
-    public function flush(): void { $this->flushes++; }
+    public function persist(object $entity): void
+    {
+        $this->persisted[] = $entity;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
 }
 
 /** @param array<string,EntityRepository<covariant object>> $repositories */
@@ -220,7 +295,9 @@ final class ArchiveIdentityState
 function archiveIdentityCheck(string $label, bool $ok): void
 {
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$ok) { ArchiveIdentityState::$failures++; }
+    if (!$ok) {
+        ArchiveIdentityState::$failures++;
+    }
 }
 
 /** @param array<string,mixed> $options */
@@ -234,7 +311,7 @@ function archiveIdentityContainer(
     $admin = new ArchiveIdentityAdmin($super);
     return new Container(
         new ArchiveIdentityResources($entityManager, $session, $view, $options),
-        new Auth($session, static fn(int $id): object => $admin),
+        new Auth($session, static fn (int $id): object => $admin),
     );
 }
 
@@ -269,9 +346,11 @@ foreach ([
         new RouteMatch('archive', 'list-data', ArchiveController::class, 'listDataAction', []),
     );
     $response = $searchController->listDataAction();
-    archiveIdentityCheck("archive list-data enforces {$case} search minimum argument",
+    archiveIdentityCheck(
+        "archive list-data enforces {$case} search minimum argument",
         $response->status === 400
-            && $response->body === 'Search must be empty or at least 4 characters');
+            && $response->body === 'Search must be empty or at least 4 characters'
+    );
 }
 $_GET = $oldGet;
 
@@ -302,14 +381,18 @@ try {
 } catch (Throwable $e) {
     $authError = $e->getMessage();
 }
-archiveIdentityCheck('non-super authorization rejects a null archive domain',
-    $authError === 'Archive domain cannot be null.');
-archiveIdentityCheck('authorization identity failure occurs before mutation or output',
+archiveIdentityCheck(
+    'non-super authorization rejects a null archive domain',
+    $authError === 'Archive domain cannot be null.'
+);
+archiveIdentityCheck(
+    'authorization identity failure occurs before mutation or output',
     $missingDomain->getAutoprune() === false
         && $authManager->getUnitOfWork()->getScheduledEntityInsertions() === []
         && $authManager->getUnitOfWork()->getScheduledEntityDeletions() === []
         && $authView->renders === 0
-        && $authSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']);
+        && $authSession->values() === ['identity' => ['id' => 1], 'csrfToken' => 'test-token']
+);
 
 // A super-admin delete does not need a domain and remains operational.
 $optionalDomainDelete = (new \Entities\Archive())->setUsername('box@example.test');
@@ -334,11 +417,13 @@ try {
 } catch (Throwable $e) {
     $deleteError = $e;
 }
-archiveIdentityCheck('super-admin delete preserves the optional-domain flow to persistence',
+archiveIdentityCheck(
+    'super-admin delete preserves the optional-domain flow to persistence',
     $deleteError instanceof Throwable
         && $deleteError->getMessage() !== 'Archive domain cannot be null.'
         && $optionalDomainDelete->getDomain() === null
-        && in_array($optionalDomainDelete, $deleteManager->getUnitOfWork()->getScheduledEntityDeletions(), true));
+        && in_array($optionalDomainDelete, $deleteManager->getUnitOfWork()->getScheduledEntityDeletions(), true)
+);
 
 // Restore needs a domain only when it must recreate the mailbox.
 $restoreArchive = (new \Entities\Archive())
@@ -365,11 +450,15 @@ try {
 } catch (Throwable $e) {
     $restoreError = $e->getMessage();
 }
-archiveIdentityCheck('mailbox recreation rejects a null archive domain',
-    $restoreError === 'Archive domain cannot be null.');
-archiveIdentityCheck('restore domain failure precedes persist, flush, remove and doveadm',
+archiveIdentityCheck(
+    'mailbox recreation rejects a null archive domain',
+    $restoreError === 'Archive domain cannot be null.'
+);
+archiveIdentityCheck(
+    'restore domain failure precedes persist, flush, remove and doveadm',
     $restoreManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $restoreManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $restoreManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 $nativeSnapshotDomain = (new \Entities\Domain())->setDomain('example.test')->setMailboxCount(1);
 $nativeSnapshotArchive = (new \Entities\Archive())
@@ -394,11 +483,13 @@ $nativeSnapshotController = new ArchiveController(
     ]),
 );
 $nativeSnapshotResponse = $nativeSnapshotController->restoreAction();
-archiveIdentityCheck('native restore rejects a mismatched snapshot identity before persistence',
+archiveIdentityCheck(
+    'native restore rejects a mismatched snapshot identity before persistence',
     $nativeSnapshotResponse->status === 302
         && $nativeSnapshotDomain->getMailboxCount() === 1
         && $nativeSnapshotManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $nativeSnapshotManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $nativeSnapshotManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 // MCP delete intentionally authorizes only when a domain is attached.
 $mcpArchive = (new \Entities\Archive())->setUsername('box@example.test');
@@ -412,7 +503,7 @@ $mcpController = new McpController(
         new ArchiveIdentityResources($mcpManager, $mcpSession, new ArchiveIdentityView(), [
             'doveadm' => ['http' => ['url' => 'http://doveadm.invalid/v1', 'api_key' => 'test']],
         ]),
-        new Auth($mcpSession, static fn(int $id): null => null),
+        new Auth($mcpSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -422,9 +513,11 @@ try {
 } catch (ViMbAdmin_Mcp_Exception $e) {
     $unknownOperationError = $e->getMessage();
 }
-archiveIdentityCheck('MCP archive rejects unknown operation before persistence',
+archiveIdentityCheck(
+    'MCP archive rejects unknown operation before persistence',
     $unknownOperationError === 'unknown archive operation'
-    && $mcpManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+    && $mcpManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 $mcpError = null;
 try {
     archiveIdentityMcpState(
@@ -435,11 +528,13 @@ try {
 } catch (Throwable $e) {
     $mcpError = $e;
 }
-archiveIdentityCheck('MCP delete preserves the optional-domain flow to persistence',
+archiveIdentityCheck(
+    'MCP delete preserves the optional-domain flow to persistence',
     $mcpError instanceof Throwable
         && $mcpError->getMessage() !== 'Archive domain cannot be null.'
         && $mcpArchive->getDomain() === null
-        && in_array($mcpArchive, $mcpManager->getUnitOfWork()->getScheduledEntityDeletions(), true));
+        && in_array($mcpArchive, $mcpManager->getUnitOfWork()->getScheduledEntityDeletions(), true)
+);
 
 $snapshotDomain = (new \Entities\Domain())->setDomain('example.test')->setMailboxCount(1);
 $mismatchedSnapshotArchive = (new \Entities\Archive())
@@ -465,7 +560,7 @@ $mismatchedSnapshotMcp = new McpController(
         new ArchiveIdentityResources($mismatchedSnapshotManager, $mismatchedSnapshotSession, new ArchiveIdentityView(), [
             'doveadm' => ['http' => ['url' => 'http://doveadm.invalid/v1', 'api_key' => 'test']],
         ]),
-        new Auth($mismatchedSnapshotSession, static fn(int $id): null => null),
+        new Auth($mismatchedSnapshotSession, static fn (int $id): null => null),
     ),
     new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
 );
@@ -479,11 +574,13 @@ try {
 } catch (ViMbAdmin_Mcp_Exception $e) {
     $mismatchedSnapshotError = $e->getMessage();
 }
-archiveIdentityCheck('MCP restore rejects a snapshot for another mailbox before mutation',
+archiveIdentityCheck(
+    'MCP restore rejects a snapshot for another mailbox before mutation',
     $mismatchedSnapshotError === 'archive mailbox snapshot identity mismatch'
         && $snapshotDomain->getMailboxCount() === 1
         && $mismatchedSnapshotManager->getUnitOfWork()->getScheduledEntityInsertions() === []
-        && $mismatchedSnapshotManager->getUnitOfWork()->getScheduledEntityDeletions() === []);
+        && $mismatchedSnapshotManager->getUnitOfWork()->getScheduledEntityDeletions() === []
+);
 
 // QueueRunner deliberately copies a nullable Archive domain into a nullable task.
 $malformedQueueArchive = new \Entities\Archive();
@@ -510,9 +607,11 @@ try {
 } catch (Throwable $e) {
     $queueIsolationError = $e->getMessage();
 }
-archiveIdentityCheck('QueueRunner isolates a malformed archive before considering the next',
+archiveIdentityCheck(
+    'QueueRunner isolates a malformed archive before considering the next',
     $queueIsolationError === null
-        && $queueCandidates === [[$validQueueArchive, 'valid@example.test']]);
+        && $queueCandidates === [[$validQueueArchive, 'valid@example.test']]
+);
 
 $nullableDomainArchive = (new \Entities\Archive())
     ->setUsername('box@example.test')
@@ -531,13 +630,15 @@ $autopruneRunner = (new ReflectionClass(ViMbAdmin_Service_QueueRunner::class))->
 (new ReflectionMethod($autopruneRunner, 'autopruneSweep'))->invoke($autopruneRunner);
 $queuedPrune = $autopruneManager->persisted[0] ?? null;
 $mappedPrune = $autopruneManager->persisted[1] ?? null;
-archiveIdentityCheck('QueueRunner retains its nullable archive-domain association',
+archiveIdentityCheck(
+    'QueueRunner retains its nullable archive-domain association',
     $queuedPrune instanceof \Entities\MailboxTask
         && $queuedPrune->requiredUsername() === 'box@example.test'
         && $queuedPrune->getDomain() === null
         && $mappedPrune instanceof \Entities\MailboxTask
         && $mappedPrune->getDomain() === $mappedDomain
-        && $autopruneManager->flushes === 1);
+        && $autopruneManager->flushes === 1
+);
 
 echo ArchiveIdentityState::$failures === 0
     ? "\nALL PASSED\n"

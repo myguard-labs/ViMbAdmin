@@ -87,7 +87,9 @@ awk '
   }
   END {
     finish_job()
-    if (jobs != 10) failed = 1
+    # Every PR-triggered job across the four workflows must be accounted for,
+    # so adding or removing one requires updating this count deliberately.
+    if (jobs != 11) failed = 1
     exit failed ? 1 : 0
   }
 ' "${workflows[@]}" || {

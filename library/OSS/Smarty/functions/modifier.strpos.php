@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -57,7 +58,7 @@
  * @param int    $offset   Starting offset
  * @return int|false
  */
-function smarty_modifier_strpos($string,$haystack,$offset=0)
+function smarty_modifier_strpos($string, $haystack, $offset = 0)
 {
-    return strpos( $string, $haystack,$offset );
+    return strpos($string, $haystack, $offset);
 }

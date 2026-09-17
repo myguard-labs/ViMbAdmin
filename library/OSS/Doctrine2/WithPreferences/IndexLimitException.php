@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -46,7 +47,4 @@
  */
 class OSS_Doctrine2_WithPreferences_IndexLimitException extends \Exception
 {
-
 }
-
-

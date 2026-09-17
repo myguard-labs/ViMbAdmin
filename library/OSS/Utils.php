@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -44,21 +45,19 @@
  */
 class OSS_Utils
 {
-
     /**
      * Parses an XML using SimpleXML and returns with the result object, or false on error.
      *
      * @param string $XML
      * @return \SimpleXMLElement|false
      */
-    public static function parseXML( $XML )
+    public static function parseXML($XML)
     {
-        libxml_use_internal_errors( true );
+        libxml_use_internal_errors(true);
 
-        $parsedXML = simplexml_load_string( $XML );
+        $parsedXML = simplexml_load_string($XML);
 
-        if( !$parsedXML )
-        {
+        if (!$parsedXML) {
             //foreach ( libxml_get_errors() as $error) logError( 'SimpleXML error: ' . $error->message, null, false, false );
             return false;
         }
@@ -76,9 +75,9 @@ class OSS_Utils
      * @param string $option
      * @return mixed
      */
-    public static function getIniOption( $option )
+    public static function getIniOption($option)
     {
-        return OSS_Runtime::option( $option );
+        return OSS_Runtime::option($option);
     }
 
 
@@ -88,10 +87,11 @@ class OSS_Utils
     * @param string $resource
     * @return object|null
     */
-    public static function getResource( $resource )
+    public static function getResource($resource)
     {
-        if( strtolower( (string) $resource ) === 'doctrine2' )
+        if (strtolower((string) $resource) === 'doctrine2') {
             return OSS_Runtime::entityManager();
+        }
 
         return null;
     }
@@ -106,7 +106,7 @@ class OSS_Utils
     */
     public static function getTempDir()
     {
-        $tempDir = OSS_Utils::getIniOption( 'temporary_directory' );
+        $tempDir = OSS_Utils::getIniOption('temporary_directory');
 
         return is_string($tempDir) && $tempDir !== '' ? $tempDir : sys_get_temp_dir();
     }
@@ -132,95 +132,103 @@ class OSS_Utils
      * @param string $host Defaults to null. Hostname (including http[s]://) to override url with
      * @return string
      */
-    public static function genUrl( $controller = false, $action = false, $module = false, $params = [], $host = null )
+    public static function genUrl($controller = false, $action = false, $module = false, $params = [], $host = null)
     {
         $options = OSS_Runtime::options();
         $url = OSS_Runtime::baseUrl();
-        
-        if( $host !== null )
-        {
+
+        if ($host !== null) {
             // strip out http[s]://
-            if( strpos( $url, 'https://' ) === 0 )
-                $url = substr( $url, 8 );
-            else if( strpos( $url, 'http://' ) === 0 )
-                $url = substr( $url, 7 );
+            if (strpos($url, 'https://') === 0) {
+                $url = substr($url, 8);
+            } elseif (strpos($url, 'http://') === 0) {
+                $url = substr($url, 7);
+            }
 
-            $pos = strpos( $url, '/' );
+            $pos = strpos($url, '/');
 
-            if( $pos !== false )
-                $url = substr( $url, $pos );
-        }
-        else 
-        {
+            if ($pos !== false) {
+                $url = substr($url, $pos);
+            }
+        } else {
             $utils = array_key_exists('utils', $options) ? $options['utils'] : [];
-            if (!is_array($utils)) throw new \TypeError('utils options must be an array');
+            if (!is_array($utils)) {
+                throw new \TypeError('utils options must be an array');
+            }
             $genurl = array_key_exists('genurl', $utils) ? $utils['genurl'] : [];
-            if (!is_array($genurl)) throw new \TypeError('utils.genurl options must be an array');
-            if( array_key_exists('host_mode', $genurl) )
-            {
-                if (!is_string($genurl['host_mode'])) throw new \TypeError('genurl host mode must be a string');
-                switch( $genurl['host_mode'] )
-                {
+            if (!is_array($genurl)) {
+                throw new \TypeError('utils.genurl options must be an array');
+            }
+            if (array_key_exists('host_mode', $genurl)) {
+                if (!is_string($genurl['host_mode'])) {
+                    throw new \TypeError('genurl host mode must be a string');
+                }
+                switch ($genurl['host_mode']) {
                     case 'HTTP_X_FORWARDED_HOST':
                         $host = $_SERVER['HTTP_X_FORWARDED_HOST'] ?? $_SERVER['HTTP_HOST'] ?? 'localhost';
-                        if (!is_string($host)) throw new \TypeError('forwarded host must be a string');
+                        if (!is_string($host)) {
+                            throw new \TypeError('forwarded host must be a string');
+                        }
                         break;
-                        
+
                     case 'REPLACE':
-                        if (!array_key_exists('host_replace', $genurl) || !is_string($genurl['host_replace']))
+                        if (!array_key_exists('host_replace', $genurl) || !is_string($genurl['host_replace'])) {
                             throw new \TypeError('genurl host replacement must be a string');
+                        }
                         $host = $genurl['host_replace'];
                         break;
-                        
+
                     default:
                         $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
                 }
-            }
-            else
+            } else {
                 $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+            }
         }
 
-        if (!is_string($host)) throw new \TypeError('URL host must be a string');
+        if (!is_string($host)) {
+            throw new \TypeError('URL host must be a string');
+        }
 
         $url = $host . $url;
-        
+
         // when the webpage is directly under "xyz.com/", and not in "xyz.com/wherever"
         // an empty href attribute in an anchor tag means "the current URL", which is not always good
         //if( $url == '' )
-        
-        if( strpos( $url, 'http' ) !== 0 )
-        {
+
+        if (strpos($url, 'http') !== 0) {
             $protocol = 'http';
 
-            if( isset( $_SERVER['HTTPS'] ) && ( $_SERVER['HTTPS'] == 'on' ) )
-            {
+            if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] == 'on')) {
                 $protocol = 'https';
-            }
-            elseif( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) )
-            {
+            } elseif (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
                 if (!is_string($_SERVER['HTTP_X_FORWARDED_PROTO'])
-                    || !in_array(strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']), ['http', 'https'], true))
+                    || !in_array(strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']), ['http', 'https'], true)) {
                     throw new \TypeError('forwarded protocol must be http or https');
+                }
                 $protocol = strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']);
             }
 
             $url = "{$protocol}://{$url}";
         }
 
-        if( $module )
+        if ($module) {
             $url .= "/{$module}";
+        }
 
-        if( $controller )
+        if ($controller) {
             $url .= "/{$controller}";
+        }
 
-        if ( $action )
+        if ($action) {
             $url .= "/{$action}";
+        }
 
-        if( sizeof( $params ) > 0 )
-        {
-            foreach( $params as $var => $value ) {
-                if (!is_scalar($value) && $value !== null)
+        if (sizeof($params) > 0) {
+            foreach ($params as $var => $value) {
+                if (!is_scalar($value) && $value !== null) {
                     throw new \TypeError('URL parameter values must be scalar');
+                }
                 $url .= "/{$var}/" . ($value === null ? '' : (string) $value);
             }
         }
@@ -234,14 +242,14 @@ class OSS_Utils
      * @param int $number
      * @return string
      */
-    public static function ordinal( $number )
+    public static function ordinal($number)
     {
         $ends = [ 'th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th' ];
 
-        return ( in_array( $number % 100, [ 11, 12, 13 ] ) ? $number . 'th' : $number . $ends[ $number % 10 ] );
+        return (in_array($number % 100, [ 11, 12, 13 ]) ? $number . 'th' : $number . $ends[ $number % 10 ]);
     }
 
-    
+
     /**
      * Creates a uniformly distributed directory path from given numeric id.
      *
@@ -249,7 +257,7 @@ class OSS_Utils
      * zeros to reach given length ( 3 by default ) if necessary. And then
      * new string is reversed. From reversed string function takes as many
      * characters as defined in length.
-     * 
+     *
      * e.g. `uniformDistHash( 216 )` returns `8/d/0/216/`
      *      `uniformDistHash( 7 )` returns `7/0/0/7/`
      *      `uniformDistHash( 5057 )` returns `1/c/3/5057/`
@@ -258,12 +266,13 @@ class OSS_Utils
      * @param int $length How many levels should be created
      * @return string
      */
-    public static function uniformDistHash( $id, $length = 3 )
+    public static function uniformDistHash($id, $length = 3)
     {
-        $tmpstr = strrev( str_pad( dechex( $id ), $length, '0', STR_PAD_LEFT ) );
+        $tmpstr = strrev(str_pad(dechex($id), $length, '0', STR_PAD_LEFT));
         $str = "";
-        for( $i = 0; $i < $length; $i++ )
+        for ($i = 0; $i < $length; $i++) {
             $str .= $tmpstr[ $i ] . "/";
+        }
         $str .= $id . "/";
 
         return $str;

@@ -41,8 +41,9 @@ final class ResetTotpCommand implements CliCommand
 
         $options = $container->options();
         $salt = $options['securitysalt'] ?? '';
-        if( !is_string( $salt ) )
-            throw new \TypeError( 'TOTP security salt must be a string.' );
+        if (!is_string($salt)) {
+            throw new \TypeError('TOTP security salt must be a string.');
+        }
 
         $tfa = new \ViMbAdmin_TwoFactor('ViMbAdmin', $salt);
         $entityManager = $container->entityManager();

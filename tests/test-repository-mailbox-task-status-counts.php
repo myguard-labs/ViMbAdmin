@@ -48,8 +48,10 @@ $check('unknown and empty statuses remain supported', $method->invoke(null, [
     ['status' => 'LEGACY', 'cnt' => 4],
 ]) === ['' => 3, 'LEGACY' => 4]);
 
-$check('scalar outer result is rejected',
-    $failure('invalid') === 'Mailbox task status query result must be an array.');
+$check(
+    'scalar outer result is rejected',
+    $failure('invalid') === 'Mailbox task status query result must be an array.'
+);
 $check('equal duplicate status is rejected', $failure([
     ['status' => 'PENDING', 'cnt' => '1'], ['status' => 'PENDING', 'cnt' => '1'],
 ]) === 'Mailbox task status query returned a duplicate status.');
@@ -65,17 +67,21 @@ foreach ([
     'extra field' => [['status' => 'PENDING', 'cnt' => '1', 'extra' => true]],
     'non-string status' => [['status' => null, 'cnt' => '1']],
 ] as $label => $rows) {
-    $check($label . ' is rejected',
-        $failure($rows) === 'Mailbox task status query row has an invalid shape.');
+    $check(
+        $label . ' is rejected',
+        $failure($rows) === 'Mailbox task status query row has an invalid shape.'
+    );
 }
 
 foreach ([
     null, false, 1.0, -1, '-1', '+1', '01', '1.5', '1e2', ' 1', 'abc',
     $incrementDecimal((string) PHP_INT_MAX),
 ] as $count) {
-    $check('invalid count is rejected: ' . get_debug_type($count) . ':' . var_export($count, true),
+    $check(
+        'invalid count is rejected: ' . get_debug_type($count) . ':' . var_export($count, true),
         $failure([['status' => 'PENDING', 'cnt' => $count]])
-            === 'Mailbox task status query row has an invalid count.');
+            === 'Mailbox task status query row has an invalid count.'
+    );
 }
 
 $check('fixed assertion count', $checks === 24);

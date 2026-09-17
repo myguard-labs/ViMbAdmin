@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -49,7 +50,6 @@
  */
 class OSS_Crypt_Bcrypt
 {
-    
     /**
      * @var int The cost for the hashing algorithm
      *
@@ -73,24 +73,26 @@ class OSS_Crypt_Bcrypt
      */
     private $_cost = 9;
 
-    
+
     /**
      * @param int|numeric-string $cost Bcrypt work factor (4 through 31)
      * @throws OSS_Crypt_Exception
      * @SuppressWarnings("PHPMD.MissingImport") Legacy OSS classes use global PSR-0 names.
      */
-    public function __construct( $cost = 9 )
+    public function __construct($cost = 9)
     {
-        if( !is_int( $cost ) && !( is_string( $cost ) && preg_match( '/^\d+$/D', $cost ) === 1 ) )
-            throw new OSS_Crypt_Exception( 'Bcrypt cost must be an integer between 4 and 31' );
+        if (!is_int($cost) && !(is_string($cost) && preg_match('/^\d+$/D', $cost) === 1)) {
+            throw new OSS_Crypt_Exception('Bcrypt cost must be an integer between 4 and 31');
+        }
 
         $cost = (int) $cost;
-        if( $cost < 4 || $cost > 31 )
-            throw new OSS_Crypt_Exception( 'Bcrypt cost must be an integer between 4 and 31' );
+        if ($cost < 4 || $cost > 31) {
+            throw new OSS_Crypt_Exception('Bcrypt cost must be an integer between 4 and 31');
+        }
 
         $this->_cost = $cost;
     }
-    
+
 
     /**
      * @param string $plain
@@ -98,26 +100,27 @@ class OSS_Crypt_Bcrypt
      * @throws OSS_Crypt_Exception
      * @SuppressWarnings("PHPMD.MissingImport") Legacy OSS classes use global PSR-0 names.
      */
-    public function hash( $plain )
+    public function hash($plain)
     {
-        $hash = crypt( $plain, $this->generateSalt() );
+        $hash = crypt($plain, $this->generateSalt());
 
-        if( preg_match( '/^\$2a\$\d{2}\$[.\/A-Za-z0-9]{53}$/D', $hash ) === 1 )
+        if (preg_match('/^\$2a\$\d{2}\$[.\/A-Za-z0-9]{53}$/D', $hash) === 1) {
             return $hash;
+        }
 
-        throw new OSS_Crypt_Exception( 'Bcrypt hashing failed' );
+        throw new OSS_Crypt_Exception('Bcrypt hashing failed');
     }
-    
-    
+
+
     /**
      * @param string $plain
      * @param string $hash
      * @return bool
      */
-    public static function verify( $plain, $hash )
+    public static function verify($plain, $hash)
     {
         // Constant-time comparison (avoid timing side-channel on the hash).
-        return hash_equals( (string) $hash, crypt( $plain, (string) $hash ) );
+        return hash_equals((string) $hash, crypt($plain, (string) $hash));
     }
 
     /**
@@ -126,10 +129,10 @@ class OSS_Crypt_Bcrypt
      */
     public function generateSalt()
     {
-        $salt = OSS_String::randomFromSet( './ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', 21 );
-        $salt .= OSS_String::randomFromSet( '.Oeu', 1 );
+        $salt = OSS_String::randomFromSet('./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', 21);
+        $salt .= OSS_String::randomFromSet('.Oeu', 1);
 
-        return sprintf( '$2a$%02d$%s', $this->_cost, $salt );
+        return sprintf('$2a$%02d$%s', $this->_cost, $salt);
     }
 
 }

@@ -41,8 +41,8 @@ class Admin extends EntityRepository
     public function getCount()
     {
         return $this->getEntityManager()->createQuery(
-                "SELECT COUNT( a.id ) FROM \\Entities\\Admin a"
-            )
+            "SELECT COUNT( a.id ) FROM \\Entities\\Admin a"
+        )
             ->getSingleScalarResult();
     }
 
@@ -56,7 +56,7 @@ class Admin extends EntityRepository
      * @param \Entities\Domain $domain Domain to look for admins
      * @return array<int|string,string|null>
      */
-    public function getNotAssignedForDomain( $domain )
+    public function getNotAssignedForDomain($domain)
     {
         $dql = 'SELECT a.id AS id, a.username AS username, a.active AS active'
             . ' FROM \\Entities\\Admin a'
@@ -65,7 +65,7 @@ class Admin extends EntityRepository
             .     'SELECT a2 FROM \\Entities\\Domain d JOIN d.Admins a2 WHERE d = ?1'
             . ')';
 
-        return self::mapNotAssignedRows( $this->runNotAssignedQuery( $dql, $domain ) );
+        return self::mapNotAssignedRows($this->runNotAssignedQuery($dql, $domain));
     }
 
     /**
@@ -80,10 +80,10 @@ class Admin extends EntityRepository
      * @param \Entities\Domain $domain Bound to parameter 1
      * @return mixed Doctrine::getArrayResult() output
      */
-    protected function runNotAssignedQuery( $dql, $domain )
+    protected function runNotAssignedQuery($dql, $domain)
     {
-        $query = $this->getEntityManager()->createQuery( $dql );
-        $query->setParameter( 1, $domain );
+        $query = $this->getEntityManager()->createQuery($dql);
+        $query->setParameter(1, $domain);
 
         return $query->getArrayResult();
     }
@@ -97,15 +97,15 @@ class Admin extends EntityRepository
      * @param mixed $rows Doctrine::getArrayResult() output
      * @return array<int|string,string|null>
      */
-    public static function mapNotAssignedRows( $rows )
+    public static function mapNotAssignedRows($rows)
     {
-        if( !is_array( $rows ) )
-            throw new UnexpectedValueException( 'Admin not-assigned query result must be an array.' );
+        if (!is_array($rows)) {
+            throw new UnexpectedValueException('Admin not-assigned query result must be an array.');
+        }
 
         $adminNames = [];
-        foreach( $rows as $row )
-        {
-            [ $id, $username, $active ] = self::requiredNotAssignedRowShape( $row );
+        foreach ($rows as $row) {
+            [ $id, $username, $active ] = self::requiredNotAssignedRowShape($row);
             $adminNames[ $id ] = $active ? $username : $username . " (inactive)";
         }
 
@@ -116,13 +116,14 @@ class Admin extends EntityRepository
      * @param mixed $row One element of getArrayResult() output
      * @return array{0:int|string,1:string,2:mixed}
      */
-    private static function requiredNotAssignedRowShape( $row )
+    private static function requiredNotAssignedRowShape($row)
     {
-        if( !is_array( $row ) || !array_key_exists( 'id', $row )
-            || !( is_int( $row['id'] ) || is_string( $row['id'] ) )
-            || !isset( $row['username'] ) || !is_string( $row['username'] )
-            || !array_key_exists( 'active', $row ) )
-            throw new UnexpectedValueException( 'Admin not-assigned query row has an invalid shape.' );
+        if (!is_array($row) || !array_key_exists('id', $row)
+            || !(is_int($row['id']) || is_string($row['id']))
+            || !isset($row['username']) || !is_string($row['username'])
+            || !array_key_exists('active', $row)) {
+            throw new UnexpectedValueException('Admin not-assigned query row has an invalid shape.');
+        }
 
         return [ $row['id'], $row['username'], $row['active'] ];
     }

@@ -499,14 +499,14 @@ class Mailbox
      * @param string $str The format string
      * @return string The newly created maildir (also set in the object)
      */
-    public static function substitute( $email, $str )
+    public static function substitute($email, $str)
     {
-        list( $un, $dn ) = explode( '@', $email );
+        list($un, $dn) = explode('@', $email);
 
-        $str = str_replace ( '%atmail', substr( $email, 0, 1 ) . '/' . substr( $email, 1, 1 ) . '/' . $email, $str );
-        $str = str_replace ( '%u',      $un,    $str );
-        $str = str_replace ( '%d',      $dn,    $str );
-        $str = str_replace ( '%m',      $email, $str );
+        $str = str_replace('%atmail', substr($email, 0, 1) . '/' . substr($email, 1, 1) . '/' . $email, $str);
+        $str = str_replace('%u', $un, $str);
+        $str = str_replace('%d', $dn, $str);
+        $str = str_replace('%m', $email, $str);
 
         return $str;
     }

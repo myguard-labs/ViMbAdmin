@@ -64,7 +64,9 @@ final class DeleteRetryState
 
 final class DeleteRetryMailboxRepository
 {
-    public function __construct(private readonly DeleteRetryState $state) {}
+    public function __construct(private readonly DeleteRetryState $state)
+    {
+    }
 
     /** @param array<string,mixed> $criteria */
     public function findOneBy(array $criteria): ?\Entities\Mailbox
@@ -88,7 +90,9 @@ final class DeleteRetryMailboxRepository
 
 final class DeleteRetryArchiveRepository
 {
-    public function __construct(private readonly DeleteRetryState $state) {}
+    public function __construct(private readonly DeleteRetryState $state)
+    {
+    }
 
     /** @param array<string,mixed> $criteria */
     public function findOneBy(array $criteria): ?\Entities\Archive
@@ -230,7 +234,9 @@ final class DeleteRetryEntityManager
 
 final class DeleteRetryDoveadm extends ViMbAdmin_Doveadm
 {
-    public function __construct(private readonly DeleteRetryState $state) {}
+    public function __construct(private readonly DeleteRetryState $state)
+    {
+    }
 
     public function fsListDirs($path, $filter = 'posix')
     {
@@ -406,8 +412,7 @@ function deleteRetryCompleted(mixed $data): ?array
 function deleteRetryOptions(
     int $days,
     string $destination = 'maildir:/backups/%d/%u',
-): array
-{
+): array {
     return [
         'queue' => ['autoprune' => ['days' => $days]],
         'doveadm' => [

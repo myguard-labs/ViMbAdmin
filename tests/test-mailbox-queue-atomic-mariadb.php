@@ -116,7 +116,7 @@ function runMailboxTaskTransitionWorker(string $role, string $syncDir, int $task
     if ($role === 'schema-migrate') {
         $sql = array_values(array_filter(
             (new \ViMbAdmin_Schema($em))->pendingSql(),
-            static fn(string $statement): bool => stripos($statement, 'mailbox_task') !== false,
+            static fn (string $statement): bool => stripos($statement, 'mailbox_task') !== false,
         ));
         array_unshift($sql, 'DO SLEEP(1)');
         touch($syncDir . '/schema-migrate-started');
@@ -142,7 +142,7 @@ function runMailboxTaskTransitionWorker(string $role, string $syncDir, int $task
         }
         touch($syncDir . '/old-owner-paused');
         waitForPath($syncDir . '/resume-old-owner', 10.0);
-        $published = $repo->publishIfOwned($task, $runner, static function() use ($task): void {
+        $published = $repo->publishIfOwned($task, $runner, static function () use ($task): void {
             $task->setStatus(\Entities\MailboxTask::STATUS_DONE)->setRunner(null)->setFinishedAt(new DateTime());
         });
         echo 'published:' . ($published ? '1' : '0') . "\n";
@@ -158,7 +158,7 @@ function runMailboxTaskTransitionWorker(string $role, string $syncDir, int $task
         if (!$repo instanceof \Repositories\MailboxTask) {
             throw new RuntimeException('mailbox-task repository mismatch');
         }
-        $published = $repo->publishIfOwned($task, $runner, static function() use ($task, $syncDir): void {
+        $published = $repo->publishIfOwned($task, $runner, static function () use ($task, $syncDir): void {
             touch($syncDir . '/publish-locks-held');
             waitForPath($syncDir . '/release-publish', 10.0);
             $task->setStatus(\Entities\MailboxTask::STATUS_DONE)->setRunner(null)->setFinishedAt(new DateTime());
@@ -430,12 +430,14 @@ try {
         . ' FROM mailbox_task WHERE id = ?',
         [$claimedId],
     );
-    mailboxQueueAtomicCheck('claim atomically binds fresh work to its owner using database time',
+    mailboxQueueAtomicCheck(
+        'claim atomically binds fresh work to its owner using database time',
         $firstClaim && is_array($claimRow)
         && ($claimRow['status'] ?? null) === \Entities\MailboxTask::STATUS_RUNNING
         && mailboxQueueRequiredCount($claimRow['QueueRunner_id'] ?? null) === $liveRunnerId
         && mailboxQueueRequiredCount($claimRow['age'] ?? null) <= 2
-        && !$taskRepo->claim($claimedTask, $runnerEntity));
+        && !$taskRepo->claim($claimedTask, $runnerEntity)
+    );
     $connection->executeStatement(
         'UPDATE mailbox_task SET status = ?, finished_at = CURRENT_TIMESTAMP, QueueRunner_id = NULL WHERE id = ?',
         [\Entities\MailboxTask::STATUS_DONE, $claimedId],
@@ -454,24 +456,31 @@ try {
     $terminalRepublished = $taskRepo->publishIfOwned(
         $terminalOwnedTask,
         $runnerEntity,
-        static function() use (&$terminalCallback): void { $terminalCallback = true; },
+        static function () use (&$terminalCallback): void {
+            $terminalCallback = true;
+        },
     );
-    mailboxQueueAtomicCheck('terminal publication requires both matching owner and RUNNING status',
-        !$terminalRepublished && !$terminalCallback);
+    mailboxQueueAtomicCheck(
+        'terminal publication requires both matching owner and RUNNING status',
+        !$terminalRepublished && !$terminalCallback
+    );
     $initialReaped = $taskRepo->reapStaleRunning();
     $recoveryRows = $connection->fetchAllKeyValue(
         'SELECT username, status FROM mailbox_task WHERE username IN (?, ?, ?, ?)',
         ['live-owned@example.test', 'fresh-orphan@example.test', 'null-start@example.test', 'pending-boundary@example.test'],
     );
-    mailboxQueueAtomicCheck('reaper fails fresh and null-start ownerless tasks but preserves pending and arbitrarily old live-owned work',
+    mailboxQueueAtomicCheck(
+        'reaper fails fresh and null-start ownerless tasks but preserves pending and arbitrarily old live-owned work',
         $initialReaped === 2
         && ($recoveryRows['live-owned@example.test'] ?? null) === \Entities\MailboxTask::STATUS_RUNNING
         && ($recoveryRows['fresh-orphan@example.test'] ?? null) === \Entities\MailboxTask::STATUS_FAILED
         && ($recoveryRows['null-start@example.test'] ?? null) === \Entities\MailboxTask::STATUS_FAILED
-        && ($recoveryRows['pending-boundary@example.test'] ?? null) === \Entities\MailboxTask::STATUS_PENDING);
+        && ($recoveryRows['pending-boundary@example.test'] ?? null) === \Entities\MailboxTask::STATUS_PENDING
+    );
 
     $liveTaskId = mailboxQueueRequiredCount($connection->fetchOne(
-        'SELECT id FROM mailbox_task WHERE username = ?', ['live-owned@example.test'],
+        'SELECT id FROM mailbox_task WHERE username = ?',
+        ['live-owned@example.test'],
     ));
     $liveTask = $taskRepo->find($liveTaskId);
     if (!$liveTask instanceof \Entities\MailboxTask) {
@@ -491,12 +500,15 @@ try {
     touch($syncDir . '/resume-old-owner');
     $resumeResult = waitMailboxQueueWorker($resumeWorker, 10.0);
     $fencedStatus = $connection->fetchOne('SELECT status FROM mailbox_task WHERE id = ?', [$liveTaskId]);
-    mailboxQueueAtomicCheck('lease reap fences a paused old owner and keeps destructive retry blocked',
+    mailboxQueueAtomicCheck(
+        'lease reap fences a paused old owner and keeps destructive retry blocked',
         $blockedDuplicate === null && $resumeResult['stdout'] === 'published:0'
         && $fencedStatus === \Entities\MailboxTask::STATUS_FAILED,
-        $resumeResult['stderr']);
+        $resumeResult['stderr']
+    );
     $orphanTaskId = mailboxQueueRequiredCount($connection->fetchOne(
-        'SELECT id FROM mailbox_task WHERE username = ?', ['live-owned@example.test'],
+        'SELECT id FROM mailbox_task WHERE username = ?',
+        ['live-owned@example.test'],
     ));
     $orphanTask = $taskRepo->find($orphanTaskId);
     if (!$orphanTask instanceof \Entities\MailboxTask) {
@@ -521,7 +533,8 @@ try {
         ],
     );
     $cleared = $em->createQuery(
-        'DELETE FROM \\Entities\\MailboxTask t WHERE t.status IN (:done) AND t.abandoned = false')
+        'DELETE FROM \\Entities\\MailboxTask t WHERE t.status IN (:done) AND t.abandoned = false'
+    )
         ->setParameter('done', [
             \Entities\MailboxTask::STATUS_DONE,
             \Entities\MailboxTask::STATUS_FAILED,
@@ -537,7 +550,8 @@ try {
         "SELECT COUNT(*) FROM mailbox_task WHERE username LIKE 'clear-%@example.test'",
     ));
     $abandonedId = mailboxQueueRequiredCount($connection->fetchOne(
-        'SELECT id FROM mailbox_task WHERE username = ?', ['fresh-orphan@example.test'],
+        'SELECT id FROM mailbox_task WHERE username = ?',
+        ['fresh-orphan@example.test'],
     ));
     $abandonedTask = $taskRepo->find($abandonedId);
     if (!$abandonedTask instanceof \Entities\MailboxTask) {
@@ -550,11 +564,15 @@ try {
         \Entities\MailboxTask::TYPE_REPAIR,
     );
     $em->flush();
-    mailboxQueueAtomicCheck('bulk clear removes normal terminal tasks but preserves an abandoned failure dedupe fence',
+    mailboxQueueAtomicCheck(
+        'bulk clear removes normal terminal tasks but preserves an abandoned failure dedupe fence',
         is_int($cleared) && $cleared >= 3 && $remainingClearFixtures === 0
-        && $blockedRetry === null && $blockedAfterClear === null);
-    mailboxQueueAtomicCheck('abandoned failure blocks retry until explicit operator deletion',
-        $deletedAbandoned && $retry instanceof \Entities\MailboxTask);
+        && $blockedRetry === null && $blockedAfterClear === null
+    );
+    mailboxQueueAtomicCheck(
+        'abandoned failure blocks retry until explicit operator deletion',
+        $deletedAbandoned && $retry instanceof \Entities\MailboxTask
+    );
 
     $connection->executeStatement('DELETE FROM mailbox_task');
     $connection->executeStatement(
@@ -567,16 +585,20 @@ try {
     waitForPath($syncDir . '/completion-locked', 10.0);
     $reapWorker = startMailboxQueueWorker('reap', $syncDir, $transitionId);
     waitForPath($syncDir . '/reaper-started', 10.0);
-    mailboxQueueAtomicCheck('competing reaper waits for an in-flight terminal transition',
-        mailboxQueueWorkerRemainsBlocked($reapWorker, 0.25));
+    mailboxQueueAtomicCheck(
+        'competing reaper waits for an in-flight terminal transition',
+        mailboxQueueWorkerRemainsBlocked($reapWorker, 0.25)
+    );
     touch($syncDir . '/release-completion');
     $completeResult = waitMailboxQueueWorker($completeWorker, 10.0);
     $reapResult = waitMailboxQueueWorker($reapWorker, 10.0);
     $transitionStatus = $connection->fetchOne('SELECT status FROM mailbox_task WHERE id = ?', [$transitionId]);
-    mailboxQueueAtomicCheck('terminal transition wins deterministically and is never reaped',
+    mailboxQueueAtomicCheck(
+        'terminal transition wins deterministically and is never reaped',
         $completeResult['exit'] === 0 && $reapResult['stdout'] === 'reaped:0'
         && $transitionStatus === \Entities\MailboxTask::STATUS_DONE,
-        $completeResult['stderr'] . ' ' . $reapResult['stderr']);
+        $completeResult['stderr'] . ' ' . $reapResult['stderr']
+    );
 
     $connection->executeStatement(
         'INSERT INTO queue_runner (slot, host, pid, started_at, heartbeat_at)'
@@ -593,14 +615,18 @@ try {
     waitForPath($syncDir . '/publish-locks-held', 10.0);
     $deleteOwnerWorker = startMailboxQueueWorker('delete-owner', $syncDir, $publishRunnerId);
     waitForPath($syncDir . '/delete-owner-started', 10.0);
-    mailboxQueueAtomicCheck('runner deletion waits behind runner-to-task terminal publication locks',
-        mailboxQueueWorkerRemainsBlocked($deleteOwnerWorker, 0.25));
+    mailboxQueueAtomicCheck(
+        'runner deletion waits behind runner-to-task terminal publication locks',
+        mailboxQueueWorkerRemainsBlocked($deleteOwnerWorker, 0.25)
+    );
     touch($syncDir . '/release-publish');
     $publishOwnerResult = waitMailboxQueueWorker($publishWorker, 10.0);
     $deleteOwnerResult = waitMailboxQueueWorker($deleteOwnerWorker, 10.0);
-    mailboxQueueAtomicCheck('runner-to-task order completes publication then lease deletion without deadlock',
+    mailboxQueueAtomicCheck(
+        'runner-to-task order completes publication then lease deletion without deadlock',
         $publishOwnerResult['stdout'] === 'published:1' && $deleteOwnerResult['stdout'] === 'deleted:1',
-        $publishOwnerResult['stderr'] . ' ' . $deleteOwnerResult['stderr']);
+        $publishOwnerResult['stderr'] . ' ' . $deleteOwnerResult['stderr']
+    );
 
     $connection->executeStatement(
         'INSERT INTO domain (domain, created) VALUES (?, CURRENT_TIMESTAMP)',
@@ -639,7 +665,7 @@ try {
         && ($bulkRows[1]['username'] ?? null) === 'new@bulk.example.test'
         && array_reduce(
             $bulkRows,
-            static fn(bool $valid, array $row): bool => $valid
+            static fn (bool $valid, array $row): bool => $valid
                 && ($row['type'] ?? null) === \Entities\MailboxTask::TYPE_REPAIR
                 && ($row['status'] ?? null) === \Entities\MailboxTask::STATUS_PENDING
                 && mailboxQueueRequiredCount($row['Domain_id'] ?? null) === $domainId,
@@ -662,10 +688,12 @@ try {
         ],
     );
     $cancelRaceId = mailboxQueueRequiredCount($connection->fetchOne(
-        'SELECT id FROM mailbox_task WHERE username = ?', ['cancel-race@example.test'],
+        'SELECT id FROM mailbox_task WHERE username = ?',
+        ['cancel-race@example.test'],
     ));
     $cancelWinId = mailboxQueueRequiredCount($connection->fetchOne(
-        'SELECT id FROM mailbox_task WHERE username = ?', ['cancel-win@example.test'],
+        'SELECT id FROM mailbox_task WHERE username = ?',
+        ['cancel-win@example.test'],
     ));
     $cancelRace = $taskRepo->find($cancelRaceId);
     $cancelWin = $taskRepo->find($cancelWinId);
@@ -682,10 +710,12 @@ try {
         'SELECT username, status FROM mailbox_task WHERE username IN (?, ?)',
         ['cancel-race@example.test', 'cancel-win@example.test'],
     );
-    mailboxQueueAtomicCheck('conditional cancellation loses safely to a concurrent claim and updates pending work',
+    mailboxQueueAtomicCheck(
+        'conditional cancellation loses safely to a concurrent claim and updates pending work',
         !$lostCancel && $wonCancel
         && ($cancelRows['cancel-race@example.test'] ?? null) === \Entities\MailboxTask::STATUS_RUNNING
-        && ($cancelRows['cancel-win@example.test'] ?? null) === \Entities\MailboxTask::STATUS_CANCELLED);
+        && ($cancelRows['cancel-win@example.test'] ?? null) === \Entities\MailboxTask::STATUS_CANCELLED
+    );
     $connection->executeStatement('DELETE FROM mailbox_task WHERE username LIKE ?', ['cancel-%@example.test']);
 
     $connection->executeStatement(
@@ -696,16 +726,25 @@ try {
     $gateNow = new DateTimeImmutable('2026-09-03T08:00:00+00:00');
     $gateCutoff = $gateNow->modify('-8 hours');
     $firstGateClaim = \ViMbAdmin_Setting::claimTimestamp(
-        $em, \ViMbAdmin_Setting::LAST_PRUNE_SWEEP, $gateCutoff, $gateNow
+        $em,
+        \ViMbAdmin_Setting::LAST_PRUNE_SWEEP,
+        $gateCutoff,
+        $gateNow
     );
     $secondGateClaim = \ViMbAdmin_Setting::claimTimestamp(
-        $em, \ViMbAdmin_Setting::LAST_PRUNE_SWEEP, $gateCutoff, $gateNow
+        $em,
+        \ViMbAdmin_Setting::LAST_PRUNE_SWEEP,
+        $gateCutoff,
+        $gateNow
     );
-    mailboxQueueAtomicCheck('timestamp gate has one winner while the fresh value closes later claims',
-        $firstGateClaim && !$secondGateClaim);
+    mailboxQueueAtomicCheck(
+        'timestamp gate has one winner while the fresh value closes later claims',
+        $firstGateClaim && !$secondGateClaim
+    );
 
     $connection->executeStatement(
-        'INSERT INTO domain (domain, created) VALUES (?, CURRENT_TIMESTAMP)', ['orphan-temp.example.test'],
+        'INSERT INTO domain (domain, created) VALUES (?, CURRENT_TIMESTAMP)',
+        ['orphan-temp.example.test'],
     );
     $tempDomainId = mailboxQueueRequiredCount($connection->lastInsertId());
     $connection->executeStatement(
@@ -722,10 +761,12 @@ try {
         ],
     );
     $liveTempTaskId = mailboxQueueRequiredCount($connection->fetchOne(
-        'SELECT id FROM mailbox_task WHERE username = ?', ['live-temp@orphan-temp.example.test'],
+        'SELECT id FROM mailbox_task WHERE username = ?',
+        ['live-temp@orphan-temp.example.test'],
     ));
     $deadTempTaskId = mailboxQueueRequiredCount($connection->fetchOne(
-        'SELECT id FROM mailbox_task WHERE username = ?', ['dead-temp@orphan-temp.example.test'],
+        'SELECT id FROM mailbox_task WHERE username = ?',
+        ['dead-temp@orphan-temp.example.test'],
     ));
     $tempPrefix = '{PLAIN}!vimbadmin-orphan-backup-temp-v1:';
     $connection->executeStatement(
@@ -741,10 +782,13 @@ try {
     $sweeper = new \ViMbAdmin_Service_QueueRunner($em, []);
     (new ReflectionMethod($sweeper, 'sweepOrphanBackupTemps'))->invoke($sweeper);
     $remainingTemps = $connection->fetchFirstColumn(
-        'SELECT username FROM mailbox WHERE Domain_id = ? ORDER BY username', [$tempDomainId],
+        'SELECT username FROM mailbox WHERE Domain_id = ? ORDER BY username',
+        [$tempDomainId],
     );
-    mailboxQueueAtomicCheck('orphan-temp sweep deletes dead sentinels but preserves live and unrelated inactive rows',
-        $remainingTemps === ['live-temp@orphan-temp.example.test', 'unrelated@orphan-temp.example.test']);
+    mailboxQueueAtomicCheck(
+        'orphan-temp sweep deletes dead sentinels but preserves live and unrelated inactive rows',
+        $remainingTemps === ['live-temp@orphan-temp.example.test', 'unrelated@orphan-temp.example.test']
+    );
     $connection->executeStatement(
         'INSERT INTO mailbox (username, password, local_part, active, created, Domain_id)'
         . ' VALUES (?, ?, ?, 0, CURRENT_TIMESTAMP, ?)',
@@ -753,23 +797,30 @@ try {
     $finalizeTempId = mailboxQueueRequiredCount($connection->lastInsertId());
     $tempFinalizer = new ReflectionMethod($sweeper, 'deleteOrphanBackupTemp');
     $connection->executeStatement(
-        'UPDATE mailbox SET password = ?, active = 1 WHERE id = ?', ['{PLAIN}!replacement!', $finalizeTempId],
+        'UPDATE mailbox SET password = ?, active = 1 WHERE id = ?',
+        ['{PLAIN}!replacement!', $finalizeTempId],
     );
     $replacedDeleted = $tempFinalizer->invoke($sweeper, $finalizeTempId, $tempPrefix . '999!');
     $replacementStillPresent = mailboxQueueRequiredCount($connection->fetchOne(
         'SELECT COUNT(*) FROM mailbox WHERE id = ? AND password = ? AND active = 1',
         [$finalizeTempId, '{PLAIN}!replacement!'],
     ));
-    mailboxQueueAtomicCheck('orphan-temp finalization preserves a concurrently activated replacement',
-        $replacedDeleted === false && $replacementStillPresent === 1);
-    $connection->executeStatement(
-        'UPDATE mailbox SET password = ?, active = 0 WHERE id = ?', [$tempPrefix . '999!', $finalizeTempId],
+    mailboxQueueAtomicCheck(
+        'orphan-temp finalization preserves a concurrently activated replacement',
+        $replacedDeleted === false && $replacementStillPresent === 1
     );
-    mailboxQueueAtomicCheck('orphan-temp finalization deletes an unchanged exact sentinel',
+    $connection->executeStatement(
+        'UPDATE mailbox SET password = ?, active = 0 WHERE id = ?',
+        [$tempPrefix . '999!', $finalizeTempId],
+    );
+    mailboxQueueAtomicCheck(
+        'orphan-temp finalization deletes an unchanged exact sentinel',
         $tempFinalizer->invoke($sweeper, $finalizeTempId, $tempPrefix . '999!') === true
         && mailboxQueueRequiredCount($connection->fetchOne(
-            'SELECT COUNT(*) FROM mailbox WHERE id = ?', [$finalizeTempId],
-        )) === 0);
+            'SELECT COUNT(*) FROM mailbox WHERE id = ?',
+            [$finalizeTempId],
+        )) === 0
+    );
     $connection->executeStatement('DELETE FROM mailbox WHERE Domain_id = ?', [$tempDomainId]);
     $connection->executeStatement('DELETE FROM mailbox_task WHERE username LIKE ?', ['%@orphan-temp.example.test']);
     $connection->executeStatement('DELETE FROM queue_runner WHERE id = ?', [$tempRunnerId]);
@@ -807,7 +858,7 @@ try {
     );
     $ownershipSql = array_values(array_filter(
         (new \ViMbAdmin_Schema($em))->pendingSql(),
-        static fn(string $statement): bool => stripos($statement, 'mailbox_task') !== false,
+        static fn (string $statement): bool => stripos($statement, 'mailbox_task') !== false,
     ));
     $ownershipMessage = '';
     try {
@@ -821,13 +872,16 @@ try {
         ['mailbox_task', 'QueueRunner_id', 'abandoned'],
     ));
     $legacyStatus = $connection->fetchOne(
-        'SELECT status FROM mailbox_task WHERE username = ?', ['legacy-running@example.test'],
+        'SELECT status FROM mailbox_task WHERE username = ?',
+        ['legacy-running@example.test'],
     );
-    mailboxQueueAtomicCheck('ownership upgrade is inert while a legacy RUNNING task may still complete',
+    mailboxQueueAtomicCheck(
+        'ownership upgrade is inert while a legacy RUNNING task may still complete',
         str_contains($ownershipMessage, 'quiesce queue runners')
         && $ownershipColumnsBeforeCompletion === 0
         && $legacyStatus === \Entities\MailboxTask::STATUS_RUNNING,
-        $ownershipMessage);
+        $ownershipMessage
+    );
     $connection->executeStatement(
         'UPDATE mailbox_task SET status = ?, finished_at = CURRENT_TIMESTAMP WHERE username = ?',
         [\Entities\MailboxTask::STATUS_DONE, 'legacy-running@example.test'],
@@ -843,16 +897,21 @@ try {
         $idleLeaseMessage = $e->getMessage();
     }
     $connection->executeStatement('DELETE FROM queue_runner');
-    mailboxQueueAtomicCheck('ownership upgrade refuses an old runner lease between task claims',
-        str_contains($idleLeaseMessage, 'runner lease(s)'));
+    mailboxQueueAtomicCheck(
+        'ownership upgrade refuses an old runner lease between task claims',
+        str_contains($idleLeaseMessage, 'runner lease(s)')
+    );
     $schemaWorker = startMailboxQueueWorker('schema-migrate', $syncDir, 0);
     waitForPath($syncDir . '/schema-migrate-started', 10.0);
     $lockDeadline = microtime(true) + 5.0;
     do {
         $migrationLockOwner = $connection->fetchOne(
-            'SELECT IS_USED_LOCK(?)', [\ViMbAdmin_QueueRunner::ACQUIRE_LOCK_NAME],
+            'SELECT IS_USED_LOCK(?)',
+            [\ViMbAdmin_QueueRunner::ACQUIRE_LOCK_NAME],
         );
-        if ($migrationLockOwner !== false && $migrationLockOwner !== null) break;
+        if ($migrationLockOwner !== false && $migrationLockOwner !== null) {
+            break;
+        }
         usleep(10_000);
     } while (microtime(true) < $lockDeadline);
     $acquireWorker = startMailboxQueueWorker('acquire-lease', $syncDir, 0);
@@ -866,11 +925,13 @@ try {
         . ' WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME IN (?, ?)',
         ['mailbox_task', 'QueueRunner_id', 'abandoned'],
     ));
-    mailboxQueueAtomicCheck('ownership upgrade succeeds after the old runner publishes terminal state',
+    mailboxQueueAtomicCheck(
+        'ownership upgrade succeeds after the old runner publishes terminal state',
         $ownershipColumnsAfterCompletion === 2
         && $acquireBlocked
         && $schemaResult['stdout'] === 'migrated'
-        && $acquireResult['stdout'] === 'acquired');
+        && $acquireResult['stdout'] === 'acquired'
+    );
 
     // Exercise the production Schema helper's upgrade path from the previous
     // queue shape. It must reject existing duplicates before adding even the
@@ -906,7 +967,7 @@ try {
         $schema = new \ViMbAdmin_Schema($em);
         $mailboxTaskSql = array_values(array_filter(
             $schema->pendingSql(),
-            static fn(string $statement): bool => stripos($statement, 'mailbox_task') !== false,
+            static fn (string $statement): bool => stripos($statement, 'mailbox_task') !== false,
         ));
         $schema->apply($mailboxTaskSql);
     }

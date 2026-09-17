@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -46,9 +47,8 @@
  */
 interface OSS_Plugin_Observable
 {
+    public function attach(OSS_Plugin_Observer $observer): void;
+    public function detach(OSS_Plugin_Observer $observer): void;
+    public function notify(string $controller, string $action, string $hook, object $controllerObject, mixed $params = null): bool;
 
-    function attach( OSS_Plugin_Observer $observer ): void;
-    function detach( OSS_Plugin_Observer $observer ): void;
-    function notify( string $controller, string $action, string $hook, object $controllerObject, mixed $params = null ): bool;
-        
 }

@@ -1,5 +1,6 @@
 #!/usr/bin/env php
 <?php
+
 /**
  * Generate the Doctrine ORM proxy classes from the XML mappings.
  *

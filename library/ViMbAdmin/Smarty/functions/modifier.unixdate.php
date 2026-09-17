@@ -20,10 +20,11 @@
  * @param string          $format date() format (default "Y-m-d H:i")
  * @return string  formatted date, or '' when the timestamp is empty
  */
-function smarty_modifier_unixdate( $ts, $format = 'Y-m-d H:i' )
+function smarty_modifier_unixdate($ts, $format = 'Y-m-d H:i')
 {
     $ts = (int) $ts;
-    if( $ts <= 0 )
+    if ($ts <= 0) {
         return '';
-    return date( $format, $ts );
+    }
+    return date($format, $ts);
 }

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin_Service_Domain (Phase 1 of docs/ZF1-REMOVAL.md).
  *
@@ -51,20 +52,54 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     public array $persisted = [];
     public int $flushes = 0;
 
-    public function persist(object $object): void { $this->persisted[] = $object; }
-    public function flush(): void { $this->flushes++; }
+    public function persist(object $object): void
+    {
+        $this->persisted[] = $object;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
 
-    public function find(string $className, mixed $id): ?object { return null; }
-    public function remove(object $object): void {}
-    public function clear(): void {}
-    public function detach(object $object): void {}
-    public function refresh(object $object): void {}
-    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository { throw new \RuntimeException('not used'); }
-    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata { throw new \RuntimeException('not used'); }
-    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory { throw new \RuntimeException('not used'); }
-    public function initializeObject(object $obj): void {}
-    public function isUninitializedObject(mixed $value): bool { return false; }
-    public function contains(object $object): bool { return false; }
+    public function find(string $className, mixed $id): ?object
+    {
+        return null;
+    }
+    public function remove(object $object): void
+    {
+    }
+    public function clear(): void
+    {
+    }
+    public function detach(object $object): void
+    {
+    }
+    public function refresh(object $object): void
+    {
+    }
+    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory
+    {
+        throw new \RuntimeException('not used');
+    }
+    public function initializeObject(object $obj): void
+    {
+    }
+    public function isUninitializedObject(mixed $value): bool
+    {
+        return false;
+    }
+    public function contains(object $object): bool
+    {
+        return false;
+    }
 
     /** Most recently persisted \Entities\Log, or null. */
     public function lastLog(): ?\Entities\Log
@@ -83,8 +118,9 @@ final class TestServiceDomainHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestServiceDomainHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestServiceDomainHarnessState::$count;
+function check(string $label, bool $ok): void
+{
 
     if ($ok) {
         echo "  ok   $label\n";
@@ -94,13 +130,15 @@ function check(string $label, bool $ok): void {
     }
 }
 
-function makeAdmin(string $username): \Entities\Admin {
+function makeAdmin(string $username): \Entities\Admin
+{
     $a = new \Entities\Admin();
     $a->setUsername($username);
     return $a;
 }
 
-function makeDomain(string $name, bool $active): \Entities\Domain {
+function makeDomain(string $name, bool $active): \Entities\Domain
+{
     $d = new \Entities\Domain();
     $d->setDomain($name);
     $d->setActive($active);
@@ -116,24 +154,24 @@ $actor   = makeAdmin('boss@example.com');
 $domain  = makeDomain('example.com', true);
 
 $result = $svc->toggleActive($domain, $actor);
-check('toggleActive(true) returns false',            $result === false);
-check('toggleActive(true) sets domain inactive',     $domain->getActive() === false);
-check('toggleActive stamps modified',                $domain->getModified() instanceof \DateTime);
-check('toggleActive flushed once',                   $em->flushes === 1);
+check('toggleActive(true) returns false', $result === false);
+check('toggleActive(true) sets domain inactive', $domain->getActive() === false);
+check('toggleActive stamps modified', $domain->getModified() instanceof \DateTime);
+check('toggleActive flushed once', $em->flushes === 1);
 $log = $em->lastLog();
-check('toggleActive wrote a Log row',                $log instanceof \Entities\Log);
-check('toggleActive logged DEACTIVATE',              $log !== null && $log->getAction() === \Entities\Log::ACTION_DOMAIN_DEACTIVATE);
-check('toggleActive log bound to actor',             $log !== null && $log->getAdmin() === $actor);
-check('toggleActive log bound to domain',            $log !== null && $log->getDomain() === $domain);
+check('toggleActive wrote a Log row', $log instanceof \Entities\Log);
+check('toggleActive logged DEACTIVATE', $log !== null && $log->getAction() === \Entities\Log::ACTION_DOMAIN_DEACTIVATE);
+check('toggleActive log bound to actor', $log !== null && $log->getAdmin() === $actor);
+check('toggleActive log bound to domain', $log !== null && $log->getDomain() === $domain);
 
 // ---- toggleActive: inactive -> active ----------------------------------- //
 $em2     = new FakeObjectManager();
 $svc2    = new ViMbAdmin_Service_Domain($em2);
 $domain2 = makeDomain('example.net', false);
 $res2    = $svc2->toggleActive($domain2, $actor);
-check('toggleActive(false) returns true',            $res2 === true);
-check('toggleActive(false) sets domain active',      $domain2->getActive() === true);
-check('toggleActive logged ACTIVATE',                $em2->lastLog() !== null && $em2->lastLog()->getAction() === \Entities\Log::ACTION_DOMAIN_ACTIVATE);
+check('toggleActive(false) returns true', $res2 === true);
+check('toggleActive(false) sets domain active', $domain2->getActive() === true);
+check('toggleActive logged ACTIVATE', $em2->lastLog() !== null && $em2->lastLog()->getAction() === \Entities\Log::ACTION_DOMAIN_ACTIVATE);
 
 // ---- required domain name fails before mutation ------------------------ //
 $malformedEm = new FakeObjectManager();
@@ -146,11 +184,13 @@ try {
     $malformedError = $e->getMessage();
 }
 check('toggleActive rejects a null domain name', $malformedError === 'Domain name cannot be null.');
-check('toggleActive name failure precedes mutation',
+check(
+    'toggleActive name failure precedes mutation',
     $malformedDomain->getActive() === true
         && $malformedDomain->getModified() === null
         && $malformedEm->persisted === []
-        && $malformedEm->flushes === 0);
+        && $malformedEm->flushes === 0
+);
 
 // ---- assignAdmin: happy path -------------------------------------------- //
 $em3    = new FakeObjectManager();
@@ -159,8 +199,8 @@ $dom3   = makeDomain('assign.example', true);
 $target = makeAdmin('newadmin@example.com');
 $svc3->assignAdmin($dom3, $target, $actor);
 check('assignAdmin mutates owning side (target->Domains)', $target->getDomains()->contains($dom3));
-check('assignAdmin flushed once',                          $em3->flushes === 1);
-check('assignAdmin logged ADMIN_TO_DOMAIN_ADD',            $em3->lastLog() !== null && $em3->lastLog()->getAction() === \Entities\Log::ACTION_ADMIN_TO_DOMAIN_ADD);
+check('assignAdmin flushed once', $em3->flushes === 1);
+check('assignAdmin logged ADMIN_TO_DOMAIN_ADD', $em3->lastLog() !== null && $em3->lastLog()->getAction() === \Entities\Log::ACTION_ADMIN_TO_DOMAIN_ADD);
 
 // ---- assignAdmin: duplicate throws, no flush ---------------------------- //
 $em4   = new FakeObjectManager();
@@ -175,8 +215,8 @@ try {
     $threw = true;
 }
 check('assignAdmin duplicate throws ViMbAdmin_Service_Exception', $threw);
-check('assignAdmin duplicate did NOT flush',                      $em4->flushes === 0);
-check('assignAdmin duplicate wrote no Log',                       $em4->lastLog() === null);
+check('assignAdmin duplicate did NOT flush', $em4->flushes === 0);
+check('assignAdmin duplicate wrote no Log', $em4->lastLog() === null);
 
 // ---- removeAdmin -------------------------------------------------------- //
 $em5    = new FakeObjectManager();
@@ -185,8 +225,8 @@ $dom5   = makeDomain('remove.example', true);
 $victim = makeAdmin('victim@example.com');
 $victim->addDomain($dom5); // it is currently assigned
 $svc5->removeAdmin($dom5, $victim, $actor);
-check('removeAdmin detaches owning side',          !$victim->getDomains()->contains($dom5));
-check('removeAdmin flushed once',                  $em5->flushes === 1);
+check('removeAdmin detaches owning side', !$victim->getDomains()->contains($dom5));
+check('removeAdmin flushed once', $em5->flushes === 1);
 check('removeAdmin logged ADMIN_TO_DOMAIN_REMOVE', $em5->lastLog() !== null && $em5->lastLog()->getAction() === \Entities\Log::ACTION_ADMIN_TO_DOMAIN_REMOVE);
 
 echo "\n";

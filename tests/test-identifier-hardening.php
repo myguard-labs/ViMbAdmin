@@ -8,7 +8,7 @@ if (!is_string($doveadm) || !is_string($message) || !is_string($captcha)) {
     exit(1);
 }
 $checks = [
-    'doveadm tag uses random_bytes' => str_contains($doveadm, "bin2hex( random_bytes( 4 ) )"),
+    'doveadm tag uses random_bytes' => str_contains($doveadm, "bin2hex(random_bytes(4))"),
     'doveadm tag has no uniqid' => !str_contains($doveadm, 'uniqid('),
     'message id has no mt_rand' => !str_contains($message, 'mt_rand('),
     'captcha uses unambiguous alphabet' => str_contains($captcha, "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"),

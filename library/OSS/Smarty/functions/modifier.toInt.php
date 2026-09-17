@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -53,11 +54,10 @@
  * @package    OSS_Smarty
  * @subpackage Modifier
  *
- * @param string $string 
+ * @param string $string
  * @return int
  */
-function smarty_modifier_toInt( $string )
+function smarty_modifier_toInt($string)
 {
     return (int) $string;
 }
-

@@ -9,26 +9,44 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 
 final class McpTestSession implements SessionStorage
 {
-    public function has(string $key): bool { return false; }
-    public function get(string $key): mixed { return null; }
-    public function set(string $key, mixed $value): void {}
-    public function remove(string $key): void {}
+    public function has(string $key): bool
+    {
+        return false;
+    }
+    public function get(string $key): mixed
+    {
+        return null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+    }
+    public function remove(string $key): void
+    {
+    }
 }
 
 final class McpTestResources
 {
     /** @param array<string,mixed> $options */
-    public function __construct(private array $options) {}
+    public function __construct(private array $options)
+    {
+    }
 
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
-    public function getResource(string $name): object { return new stdClass(); }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
+    public function getResource(string $name): object
+    {
+        return new stdClass();
+    }
 }
 
 /** @param array<string,mixed> $options */
 function controllerFor(array $options): McpController
 {
-    $auth = new Auth(new McpTestSession(), static fn(int $id): null => null);
+    $auth = new Auth(new McpTestSession(), static fn (int $id): null => null);
     $container = new Container(new McpTestResources($options), $auth);
     $route = new RouteMatch('mcp', 'index', 'McpController', 'indexAction', []);
 
@@ -40,9 +58,12 @@ final class McpTestState
     public static int $failures = 0;
 }
 
-function mcpCheck(string $label, bool $ok): void {
+function mcpCheck(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { McpTestState::$failures++; }
+    if (!$ok) {
+        McpTestState::$failures++;
+    }
 }
 
 echo "== native MCP transport ==\n";

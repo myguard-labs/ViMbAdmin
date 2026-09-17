@@ -151,7 +151,7 @@ class Admin
         $this->RememberMes = new \Doctrine\Common\Collections\ArrayCollection();
         $this->Archives = new \Doctrine\Common\Collections\ArrayCollection();
     }
-    
+
     /**
      * Set username
      *
@@ -161,7 +161,7 @@ class Admin
     public function setUsername($username)
     {
         $this->username = $username;
-    
+
         return $this;
     }
 
@@ -184,7 +184,7 @@ class Admin
 
         return $this->username;
     }
-    
+
     /**
      * Utility function to get the user's email (which is the username)
      *
@@ -194,7 +194,7 @@ class Admin
     {
         return $this->requiredUsername();
     }
-                                   
+
     /**
      * Utility function to get the user's "formatted name" as required by some OSS functions
      *
@@ -204,8 +204,8 @@ class Admin
     {
         return $this->requiredUsername();
     }
-                                   
-                                   
+
+
 
     /**
      * Set password
@@ -216,7 +216,7 @@ class Admin
     public function setPassword($password)
     {
         $this->password = $password;
-    
+
         return $this;
     }
 
@@ -249,7 +249,7 @@ class Admin
     public function setSuper($super)
     {
         $this->super = $super;
-    
+
         return $this;
     }
 
@@ -282,7 +282,7 @@ class Admin
     public function setActive($active)
     {
         $this->active = $active;
-    
+
         return $this;
     }
 
@@ -305,7 +305,7 @@ class Admin
     public function setCreated($created)
     {
         $this->created = $created;
-    
+
         return $this;
     }
 
@@ -328,7 +328,7 @@ class Admin
     public function setModified($modified)
     {
         $this->modified = $modified;
-    
+
         return $this;
     }
 
@@ -384,7 +384,7 @@ class Admin
     public function addAdmin(\Entities\AdminPreference $admin)
     {
         $this->Admin[] = $admin;
-    
+
         return $this;
     }
 
@@ -418,7 +418,7 @@ class Admin
     public function addLog(\Entities\Log $logs)
     {
         $this->Logs[] = $logs;
-    
+
         return $this;
     }
 
@@ -452,7 +452,7 @@ class Admin
     public function addDomain(\Entities\Domain $domains)
     {
         $this->Domains[] = $domains;
-    
+
         return $this;
     }
 
@@ -492,7 +492,7 @@ class Admin
     public function addPreference(\Entities\AdminPreference $preferences)
     {
         $this->Preferences[] = $preferences;
-    
+
         return $this;
     }
 
@@ -516,7 +516,7 @@ class Admin
     {
         return $this->Preferences;
     }
-    
+
 
     /**
      * Check to see if this user is linked to a given domain (does not check for super - see below)
@@ -530,15 +530,17 @@ class Admin
      * @param \Entities\Domain $domain The domain object
      * @return boolean
      */
-    public function canManageDomain( $domain )
+    public function canManageDomain($domain)
     {
-        foreach( $this->getDomains() as $d )
-            if( $domain->requiredId() == $d->requiredId() )
+        foreach ($this->getDomains() as $d) {
+            if ($domain->requiredId() == $d->requiredId()) {
                 return true;
-        
+            }
+        }
+
         return false;
     }
-    
+
 
     /**
      * Add Preferences
@@ -567,7 +569,7 @@ class Admin
     public function addRememberMe(\Entities\RememberMe $rememberMes)
     {
         $this->RememberMes[] = $rememberMes;
-    
+
         return $this;
     }
 
@@ -607,7 +609,7 @@ class Admin
     public function addArchive(\Entities\Archive $archives)
     {
         $this->Archives[] = $archives;
-    
+
         return $this;
     }
 

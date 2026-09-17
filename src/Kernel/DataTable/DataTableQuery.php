@@ -148,11 +148,17 @@ final class DataTableQuery
 
     private static function integer(mixed $value, int $default, string $name): int
     {
-        if ($value === null) return $default;
-        if (is_int($value)) return $value;
+        if ($value === null) {
+            return $default;
+        }
+        if (is_int($value)) {
+            return $value;
+        }
         if (is_string($value) && preg_match('/^-?[0-9]+$/D', $value) === 1) {
             $parsed = filter_var($value, FILTER_VALIDATE_INT);
-            if ($parsed !== false) return $parsed;
+            if ($parsed !== false) {
+                return $parsed;
+            }
         }
         throw new \TypeError($name . ' must be an integer');
     }

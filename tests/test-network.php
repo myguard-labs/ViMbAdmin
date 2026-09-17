@@ -49,7 +49,7 @@ networkCheck(
 // Negative controls: reserved-but-not-private ranges are NOT evidence of a
 // local reverse proxy, so a peer in one of them must never have its
 // X-Forwarded-For peeled in auto mode (VIM-D06).
-foreach( [ '100.64.0.1', '192.0.2.10', '198.51.100.7', '203.0.113.9', '240.0.0.1', '0.0.0.1' ] as $reservedPeer ) {
+foreach ([ '100.64.0.1', '192.0.2.10', '198.51.100.7', '203.0.113.9', '240.0.0.1', '0.0.0.1' ] as $reservedPeer) {
     networkCheck(
         "auto mode ignores X-Forwarded-For from reserved peer {$reservedPeer}",
         ViMbAdmin_Net::clientIp(
@@ -89,14 +89,22 @@ networkCheck('public IPv4 is not private', !ViMbAdmin_Net::isPrivate('8.8.8.8'))
 networkCheck('IPv6 unique-local is private', ViMbAdmin_Net::isPrivate('fd00::1'));
 networkCheck('malformed address is not private', !ViMbAdmin_Net::isPrivate('not-an-ip'));
 
-networkCheck('forwarded headers reject 0/8 in auto mode',
-    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('0.0.0.1'));
-networkCheck('forwarded headers reject reserved 240/4 in auto mode',
-    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('240.0.0.1'));
-networkCheck('forwarded headers reject IPv6 unspecified in auto mode',
-    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('::'));
-networkCheck('forwarded headers reject IPv6 multicast in auto mode',
-    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('ff02::1'));
+networkCheck(
+    'forwarded headers reject 0/8 in auto mode',
+    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('0.0.0.1')
+);
+networkCheck(
+    'forwarded headers reject reserved 240/4 in auto mode',
+    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('240.0.0.1')
+);
+networkCheck(
+    'forwarded headers reject IPv6 unspecified in auto mode',
+    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('::')
+);
+networkCheck(
+    'forwarded headers reject IPv6 multicast in auto mode',
+    !ViMbAdmin_Net::isTrustedForwardedHeaderPeer('ff02::1')
+);
 
 networkCheck('IPv4 exact address matches', ViMbAdmin_Net::ipInCidr('192.0.2.1', '192.0.2.1'));
 networkCheck('invalid exact values never match themselves', !ViMbAdmin_Net::ipInCidr('bad', 'bad'));
@@ -116,44 +124,74 @@ echo "== bare allowlist entries normalise before comparing ==\n";
 // textual forms, and a raw string comparison fails CLOSED on all of them: a
 // configured trusted proxy silently stops being trusted. Both sides are
 // normalised with inet_pton, so equivalent forms match.
-networkCheck('IPv6 leading-zero form matches its canonical entry',
-    ViMbAdmin_Net::ipInCidr('::1', '::0001'));
-networkCheck('IPv6 canonical form matches a leading-zero entry',
-    ViMbAdmin_Net::ipInCidr('::0001', '::1'));
-networkCheck('IPv6 compressed form matches its expanded entry',
-    ViMbAdmin_Net::ipInCidr('2001:db8::1', '2001:0db8:0000:0000:0000:0000:0000:0001'));
-networkCheck('IPv6 entries match case-insensitively',
-    ViMbAdmin_Net::ipInCidr('2001:db8::1', '2001:DB8::1'));
-networkCheck('an equivalent IPv6 form is trusted through the list form',
-    ViMbAdmin_Net::ipInList('::1', '10.0.0.0/8, ::0001'));
+networkCheck(
+    'IPv6 leading-zero form matches its canonical entry',
+    ViMbAdmin_Net::ipInCidr('::1', '::0001')
+);
+networkCheck(
+    'IPv6 canonical form matches a leading-zero entry',
+    ViMbAdmin_Net::ipInCidr('::0001', '::1')
+);
+networkCheck(
+    'IPv6 compressed form matches its expanded entry',
+    ViMbAdmin_Net::ipInCidr('2001:db8::1', '2001:0db8:0000:0000:0000:0000:0000:0001')
+);
+networkCheck(
+    'IPv6 entries match case-insensitively',
+    ViMbAdmin_Net::ipInCidr('2001:db8::1', '2001:DB8::1')
+);
+networkCheck(
+    'an equivalent IPv6 form is trusted through the list form',
+    ViMbAdmin_Net::ipInList('::1', '10.0.0.0/8, ::0001')
+);
 
 // Negative control: normalisation must not make genuinely different addresses
 // match. These stay false whether or not the entry is normalised.
-networkCheck('a different IPv6 address still does not match',
-    !ViMbAdmin_Net::ipInCidr('::2', '::0001'));
-networkCheck('a different IPv4 address still does not match',
-    !ViMbAdmin_Net::ipInCidr('192.0.2.2', '192.0.2.1'));
-networkCheck('a near-miss IPv6 address still does not match',
-    !ViMbAdmin_Net::ipInCidr('2001:db8::11', '2001:db8::1'));
+networkCheck(
+    'a different IPv6 address still does not match',
+    !ViMbAdmin_Net::ipInCidr('::2', '::0001')
+);
+networkCheck(
+    'a different IPv4 address still does not match',
+    !ViMbAdmin_Net::ipInCidr('192.0.2.2', '192.0.2.1')
+);
+networkCheck(
+    'a near-miss IPv6 address still does not match',
+    !ViMbAdmin_Net::ipInCidr('2001:db8::11', '2001:db8::1')
+);
 
 // Family discipline, consistent with the CIDR branch, which requires equal
 // packed lengths: an IPv4 entry never matches an IPv4-mapped IPv6 address.
-networkCheck('an IPv4 address does not match an IPv4-mapped IPv6 entry',
-    !ViMbAdmin_Net::ipInCidr('192.0.2.1', '::ffff:192.0.2.1'));
-networkCheck('an IPv4-mapped IPv6 address does not match an IPv4 entry',
-    !ViMbAdmin_Net::ipInCidr('::ffff:192.0.2.1', '192.0.2.1'));
+networkCheck(
+    'an IPv4 address does not match an IPv4-mapped IPv6 entry',
+    !ViMbAdmin_Net::ipInCidr('192.0.2.1', '::ffff:192.0.2.1')
+);
+networkCheck(
+    'an IPv4-mapped IPv6 address does not match an IPv4 entry',
+    !ViMbAdmin_Net::ipInCidr('::ffff:192.0.2.1', '192.0.2.1')
+);
 
 // Malformed input fails closed and raises nothing.
-networkCheck('a garbage entry does not match a valid address',
-    !ViMbAdmin_Net::ipInCidr('192.0.2.1', 'not-an-ip'));
-networkCheck('a garbage address does not match a valid entry',
-    !ViMbAdmin_Net::ipInCidr('not-an-ip', '192.0.2.1'));
-networkCheck('two identical garbage values do not match each other',
-    !ViMbAdmin_Net::ipInCidr('garbage', 'garbage'));
-networkCheck('an empty entry does not match',
-    !ViMbAdmin_Net::ipInCidr('192.0.2.1', ''));
-networkCheck('an ambiguous leading-zero IPv4 entry is rejected',
-    !ViMbAdmin_Net::ipInCidr('192.0.2.1', '192.0.2.001'));
+networkCheck(
+    'a garbage entry does not match a valid address',
+    !ViMbAdmin_Net::ipInCidr('192.0.2.1', 'not-an-ip')
+);
+networkCheck(
+    'a garbage address does not match a valid entry',
+    !ViMbAdmin_Net::ipInCidr('not-an-ip', '192.0.2.1')
+);
+networkCheck(
+    'two identical garbage values do not match each other',
+    !ViMbAdmin_Net::ipInCidr('garbage', 'garbage')
+);
+networkCheck(
+    'an empty entry does not match',
+    !ViMbAdmin_Net::ipInCidr('192.0.2.1', '')
+);
+networkCheck(
+    'an ambiguous leading-zero IPv4 entry is rejected',
+    !ViMbAdmin_Net::ipInCidr('192.0.2.1', '192.0.2.001')
+);
 
 networkCheck('empty list does not match', !ViMbAdmin_Net::ipInList('192.0.2.1', ''));
 networkCheck('malformed list entries do not match', !ViMbAdmin_Net::ipInList('192.0.2.1', 'bad, 2001:db8::/64'));

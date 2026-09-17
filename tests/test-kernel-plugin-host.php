@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin\Kernel\Plugin\PluginHost (Phase 4c of docs/ZF1-REMOVAL.md).
  *
@@ -21,10 +22,13 @@ final class TestKernelPluginHostHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelPluginHostHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestKernelPluginHostHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestKernelPluginHostHarnessState::$count++; }
+    if (!$ok) {
+        TestKernelPluginHostHarnessState::$count++;
+    }
 }
 
 // --- a fixture plugin directory ----------------------------------------- //
@@ -70,7 +74,7 @@ class ViMbAdminPlugin_Disabled
 PHP);
 
 // Context double: only getOptions() is needed at construction time.
-$context = new class {
+$context = new class () {
     /** @return array<string,mixed> */
     public function getOptions(): array
     {
@@ -88,26 +92,29 @@ $GLOBALS['rec_calls'] = [];
 
 $host = new PluginHost($context, $dir);
 
-check('host skips the disabled plugin',        $host->observerCount() === 2);
-check('disabled plugin never constructed',     true); // its ctor throws; reaching here proves it
-check('context passed to plugin ctor',         ($GLOBALS['rec_ctx'] ?? null) === $context);
+check('host skips the disabled plugin', $host->observerCount() === 2);
+check('disabled plugin never constructed', true); // its ctor throws; reaching here proves it
+check('context passed to plugin ctor', ($GLOBALS['rec_ctx'] ?? null) === $context);
 
 // notify dispatches to every observer, in order; returns true when none veto
 $ok = $host->notify('alias', 'toggleActive', 'preToggle', $context, ['active' => 1]);
-check('notify returns true when no veto',      $ok === true);
-check('notify reached the recorder',           serialize($GLOBALS['rec_calls']) === serialize(['alias_toggleActive_preToggle']));
-check('notify forwarded the params',           ($GLOBALS['rec_last_params'] ?? null) === ['active' => 1]);
+check('notify returns true when no veto', $ok === true);
+check('notify reached the recorder', serialize($GLOBALS['rec_calls']) === serialize(['alias_toggleActive_preToggle']));
+check('notify forwarded the params', ($GLOBALS['rec_last_params'] ?? null) === ['active' => 1]);
 
 // the veto plugin refuses a mailbox preToggle → notify short-circuits to false
 $vetoed = $host->notify('mailbox', 'toggleActive', 'preToggle', $context, ['active' => 1]);
-check('notify returns false on veto',          $vetoed === false);
+check('notify returns false on veto', $vetoed === false);
 
 // a non-vetoed hook still passes
 $passed = $host->notify('mailbox', 'toggleActive', 'postflush', $context);
-check('notify true for a non-vetoed hook',     $passed === true);
+check('notify true for a non-vetoed hook', $passed === true);
 
-$badOptionsContext = new class {
-    public function getOptions(): mixed { return ['vimbadmin_plugins' => null]; }
+$badOptionsContext = new class () {
+    public function getOptions(): mixed
+    {
+        return ['vimbadmin_plugins' => null];
+    }
 };
 $badOptionsRejected = false;
 try {
@@ -128,7 +135,7 @@ class ViMbAdminPlugin_Malformed
     public function __construct($context) { $GLOBALS['malformed_ctx'] = $context; }
 }
 PHP);
-$malformedContext = new class {
+$malformedContext = new class () {
     /** @return array<string,mixed> */
     public function getOptions(): array
     {

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: the native form core — Form + Field + Validators (Phase 4,
  * docs/ZF1-REMOVAL.md). Pure logic over an in-memory session for the CSRF guard;
@@ -24,11 +25,25 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class ArraySession implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
 }
 
 final class TestKernelFormHarnessState
@@ -36,78 +51,83 @@ final class TestKernelFormHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelFormHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestKernelFormHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestKernelFormHarnessState::$count++; }
+    if (!$ok) {
+        TestKernelFormHarnessState::$count++;
+    }
 }
 
 echo "== native form core ==\n";
 
 // --- validators ------------------------------------------------------- //
 $string = Validators::string();
-check('string: value -> ok',        $string('x') === null);
-check('string: empty -> ok',        $string('') === null);
+check('string: value -> ok', $string('x') === null);
+check('string: empty -> ok', $string('') === null);
 check('string: container -> error', $string(['x']) !== null);
 
 $invalidStringForm = new Form();
 $invalidStringForm->add(new Field('value', 'Value', 'text', [Validators::string()]));
 check('string: container form is invalid', !$invalidStringForm->isValid(['value' => ['x']]));
-check('string: renderer never stringifies a rejected container',
-    !str_contains((new FormRenderer())->render($invalidStringForm, '/test'), 'Array'));
+check(
+    'string: renderer never stringifies a rejected container',
+    !str_contains((new FormRenderer())->render($invalidStringForm, '/test'), 'Array')
+);
 
 $req = Validators::required();
-check('required: empty -> error',   $req('') !== null);
-check('required: spaces -> error',  $req('   ') !== null);
-check('required: value -> ok',      $req('x') === null);
+check('required: empty -> error', $req('') !== null);
+check('required: spaces -> error', $req('   ') !== null);
+check('required: value -> ok', $req('x') === null);
 
 $email = Validators::email();
-check('email: bad -> error',        $email('nope') !== null);
-check('email: good -> ok',          $email('a@b.com') === null);
-check('email: empty -> ok',         $email('') === null);
+check('email: bad -> error', $email('nope') !== null);
+check('email: good -> ok', $email('a@b.com') === null);
+check('email: empty -> ok', $email('') === null);
 
 $adminEmail = Validators::adminEmail();
 check('adminEmail: ordinary address -> ok', $adminEmail('admin@example.com') === null);
 check('adminEmail: quoted local part -> error', $adminEmail('"<b>admin</b>"@example.com') !== null);
 check('adminEmail: empty -> ok', $adminEmail('') === null);
 
-check('minLength: short -> error',  Validators::minLength(3)('ab') !== null);
-check('minLength: ok',              Validators::minLength(3)('abc') === null);
-check('regex: no match -> error',   Validators::regex('/^\d+$/')('a1') !== null);
-check('regex: match -> ok',         Validators::regex('/^\d+$/')('123') === null);
+check('minLength: short -> error', Validators::minLength(3)('ab') !== null);
+check('minLength: ok', Validators::minLength(3)('abc') === null);
+check('regex: no match -> error', Validators::regex('/^\d+$/')('a1') !== null);
+check('regex: match -> ok', Validators::regex('/^\d+$/')('123') === null);
 
 // --- localPart (RFC dot-atom; no leading/trailing/double dot, <=64) --- //
 $lp = Validators::localPart();
-check('localPart: empty passes',       $lp('') === null);
-check('localPart: simple ok',          $lp('john.doe') === null);
-check('localPart: tag (+) ok',         $lp('john+tag') === null);
+check('localPart: empty passes', $lp('') === null);
+check('localPart: simple ok', $lp('john.doe') === null);
+check('localPart: tag (+) ok', $lp('john+tag') === null);
 check('localPart: leading dot -> err', $lp('.foo') !== null);
-check('localPart: trailing dot -> err',$lp('foo.') !== null);
-check('localPart: double dot -> err',  $lp('a..b') !== null);
-check('localPart: space -> err',       $lp('a b') !== null);
-check('localPart: percent -> err',     $lp('a%b') !== null);
-check('localPart: >64 -> err',         $lp(str_repeat('a', 65)) !== null);
+check('localPart: trailing dot -> err', $lp('foo.') !== null);
+check('localPart: double dot -> err', $lp('a..b') !== null);
+check('localPart: space -> err', $lp('a b') !== null);
+check('localPart: percent -> err', $lp('a%b') !== null);
+check('localPart: >64 -> err', $lp(str_repeat('a', 65)) !== null);
 
 // --- hostname (>=2 labels, no slash/space/leading-hyphen) ------------- //
 $hn = Validators::hostname();
-check('hostname: empty passes',        $hn('') === null);
-check('hostname: fqdn ok',             $hn('sub.example.co.uk') === null);
+check('hostname: empty passes', $hn('') === null);
+check('hostname: fqdn ok', $hn('sub.example.co.uk') === null);
 check('hostname: single label -> err', $hn('foo') !== null);
-check('hostname: slash -> err',        $hn('bad/host') !== null);
-check('hostname: leading hyphen -> err',$hn('-foo.com') !== null);
-check('hostname: leading space -> err',$hn(' x.com') !== null);
+check('hostname: slash -> err', $hn('bad/host') !== null);
+check('hostname: leading hyphen -> err', $hn('-foo.com') !== null);
+check('hostname: leading space -> err', $hn(' x.com') !== null);
 
 // --- noControlChars (CR/LF/NUL/tab header-injection guard) ------------ //
 $cc = Validators::noControlChars();
-check('noControlChars: empty passes',  $cc('') === null);
-check('noControlChars: plain ok',      $cc('Jane Doe') === null);
-check('noControlChars: newline -> err',$cc("Jane\nBcc: evil") !== null);
-check('noControlChars: CR -> err',     $cc("a\rb") !== null);
-check('noControlChars: tab -> err',    $cc("a\tb") !== null);
+check('noControlChars: empty passes', $cc('') === null);
+check('noControlChars: plain ok', $cc('Jane Doe') === null);
+check('noControlChars: newline -> err', $cc("Jane\nBcc: evil") !== null);
+check('noControlChars: CR -> err', $cc("a\rb") !== null);
+check('noControlChars: tab -> err', $cc("a\tb") !== null);
 check('noControlChars: C1 NEL -> err', $cc("a\x85b") !== null);
 check('noControlChars: U+2028 -> err', $cc("a\xE2\x80\xA8b") !== null);
-check('noControlChars: bad UTF8 -> err',$cc("a\xFFb") !== null);
-check('noControlChars: utf8 name ok',  $cc('Renée') === null);
+check('noControlChars: bad UTF8 -> err', $cc("a\xFFb") !== null);
+check('noControlChars: utf8 name ok', $cc('Renée') === null);
 
 // bare '@' must NOT pass the goto domain-wildcard check (hostname() empty-passes,
 // so the substr('@',1)=='' case needs an explicit guard in parseGotos).
@@ -119,32 +139,46 @@ $form->add(new Field('username', 'Username', 'text', [Validators::required(), Va
      ->add(new Field('password', 'Password', 'password', [Validators::required(), Validators::minLength(4)]))
      ->add(new Field('super', 'Super', 'checkbox'));
 
-check('invalid: missing required fields',
-    $form->isValid(['username' => '', 'password' => '']) === false);
+check(
+    'invalid: missing required fields',
+    $form->isValid(['username' => '', 'password' => '']) === false
+);
 $errs = $form->errors();
-check('errors map has username + password',
-    isset($errs['username']) && isset($errs['password']));
-check('checkbox defaults to false when absent',
-    $form->values()['super'] === false);
+check(
+    'errors map has username + password',
+    isset($errs['username']) && isset($errs['password'])
+);
+check(
+    'checkbox defaults to false when absent',
+    $form->values()['super'] === false
+);
 
 $form2 = new Form();
 $form2->add(new Field('username', 'Username', 'text', [Validators::required(), Validators::email()]))
       ->add(new Field('password', 'Password', 'password', [Validators::required(), Validators::minLength(4)]));
-check('valid submission passes',
-    $form2->isValid(['username' => 'a@b.com', 'password' => 'secret']) === true);
+check(
+    'valid submission passes',
+    $form2->isValid(['username' => 'a@b.com', 'password' => 'secret']) === true
+);
 check('no errors on valid form', $form2->errors() === []);
-check('values() returns the bound data',
-    $form2->values() === ['username' => 'a@b.com', 'password' => 'secret']);
+check(
+    'values() returns the bound data',
+    $form2->values() === ['username' => 'a@b.com', 'password' => 'secret']
+);
 
 // --- matches (password confirmation) ---------------------------------- //
 $confirm = new Form();
 $pw = new Field('password', 'Password', 'password', [Validators::required()]);
 $confirm->add($pw)
-        ->add(new Field('confirm', 'Confirm', 'password', [Validators::matches(static fn() => $pw->value())]));
-check('matches: mismatch -> invalid',
-    $confirm->isValid(['password' => 'a', 'confirm' => 'b']) === false);
-check('matches: equal -> valid',
-    $confirm->isValid(['password' => 'a', 'confirm' => 'a']) === true);
+        ->add(new Field('confirm', 'Confirm', 'password', [Validators::matches(static fn () => $pw->value())]));
+check(
+    'matches: mismatch -> invalid',
+    $confirm->isValid(['password' => 'a', 'confirm' => 'b']) === false
+);
+check(
+    'matches: equal -> valid',
+    $confirm->isValid(['password' => 'a', 'confirm' => 'a']) === true
+);
 
 // --- CSRF guard ------------------------------------------------------- //
 $csrf  = new Csrf(new ArraySession());
@@ -152,16 +186,26 @@ $token = $csrf->token();
 $cform = new Form($csrf);
 $cform->add(new Field('name', 'Name', 'text', [Validators::required()]));
 
-check('csrf: valid token + valid field -> valid',
-    $cform->isValid(['name' => 'x', 'csrf' => $token]) === true);
-check('csrf: bad token -> invalid',
-    $cform->isValid(['name' => 'x', 'csrf' => 'wrong']) === false);
-check('csrf: bad token -> _form error',
-    isset($cform->errors()['_form']));
-check('csrf: missing token -> invalid',
-    $cform->isValid(['name' => 'x']) === false);
-check('csrfToken() returns the session token',
-    $cform->csrfToken() === $token);
+check(
+    'csrf: valid token + valid field -> valid',
+    $cform->isValid(['name' => 'x', 'csrf' => $token]) === true
+);
+check(
+    'csrf: bad token -> invalid',
+    $cform->isValid(['name' => 'x', 'csrf' => 'wrong']) === false
+);
+check(
+    'csrf: bad token -> _form error',
+    isset($cform->errors()['_form'])
+);
+check(
+    'csrf: missing token -> invalid',
+    $cform->isValid(['name' => 'x']) === false
+);
+check(
+    'csrfToken() returns the session token',
+    $cform->csrfToken() === $token
+);
 
 // --- renderer --------------------------------------------------------- //
 $rcsrf = new Csrf(new ArraySession());
@@ -177,22 +221,22 @@ $renderer = new FormRenderer();
 $rform->isValid(['username' => 'bad', 'password' => '', 'super' => '1', 'csrf' => $rtok]);
 $out = $renderer->render($rform, '/admin/add', 'Add');
 
-check('render: form posts to the action',     str_contains($out, 'action="/admin/add"'));
-check('render: text input for username',      str_contains($out, 'name="username"') && str_contains($out, 'type="text"'));
-check('render: label rendered',               str_contains($out, '>Username</label>'));
-check('render: invalid field gets .error',    str_contains($out, 'control-group error'));
-check('render: inline error shown',           str_contains($out, 'help-inline'));
-check('render: username value repopulated',   str_contains($out, 'value="bad"'));
-check('render: password value NOT echoed',    !str_contains($out, 'value="secret"'));
-check('render: checkbox checked from submit',  str_contains($out, 'type="checkbox"') && str_contains($out, 'checked="checked"'));
-check('render: hidden csrf token present',     str_contains($out, 'name="csrf"') && str_contains($out, 'value="' . $rtok . '"'));
-check('render: submit button label',          str_contains($out, '>Add</button>'));
+check('render: form posts to the action', str_contains($out, 'action="/admin/add"'));
+check('render: text input for username', str_contains($out, 'name="username"') && str_contains($out, 'type="text"'));
+check('render: label rendered', str_contains($out, '>Username</label>'));
+check('render: invalid field gets .error', str_contains($out, 'control-group error'));
+check('render: inline error shown', str_contains($out, 'help-inline'));
+check('render: username value repopulated', str_contains($out, 'value="bad"'));
+check('render: password value NOT echoed', !str_contains($out, 'value="secret"'));
+check('render: checkbox checked from submit', str_contains($out, 'type="checkbox"') && str_contains($out, 'checked="checked"'));
+check('render: hidden csrf token present', str_contains($out, 'name="csrf"') && str_contains($out, 'value="' . $rtok . '"'));
+check('render: submit button label', str_contains($out, '>Add</button>'));
 
 // --- form action honours the front-controller base URL (sub-path mount) -----
 require_once __DIR__ . '/../library/OSS/Runtime.php';
 \OSS_Runtime::configure([], '/vimbadmin', new stdClass());
 $out2 = $renderer->render($rform, '/admin/add', 'Add');
-check('render: action prefixed with base URL',  str_contains($out2, 'action="/vimbadmin/admin/add"'));
+check('render: action prefixed with base URL', str_contains($out2, 'action="/vimbadmin/admin/add"'));
 check('render: already-prefixed action not doubled', !str_contains($renderer->render($rform, '/vimbadmin/admin/add', 'Add'), '/vimbadmin/vimbadmin/'));
 \OSS_Runtime::configure([], '', new stdClass()); // reset for any later assertions
 
@@ -201,29 +245,31 @@ $xform = new Form();
 $xform->add(new Field('q', 'Q', 'text'));
 $xform->bind(['q' => '"><script>x</script>']);
 $xout = $renderer->render($xform, '/x');
-check('render: value is HTML-escaped',        str_contains($xout, '&quot;&gt;&lt;script&gt;') && !str_contains($xout, '<script>x'));
+check('render: value is HTML-escaped', str_contains($xout, '&quot;&gt;&lt;script&gt;') && !str_contains($xout, '<script>x'));
 
 // select field + in-array rule (assign-domain dropdown)
 $opts = [3 => 'three.example', 7 => 'seven.example (inactive)'];
 $selform = new Form();
 $selform->add((new Field('domain', 'Domain', 'select', [Validators::required(), Validators::inArray($opts)]))->setOptions($opts));
 $selout = $renderer->render($selform, '/admin/assign-domain/aid/1');
-check('render: select element emitted',       str_contains($selout, '<select name="domain"'));
-check('render: option value+label',           str_contains($selout, '<option value="7"') && str_contains($selout, 'seven.example (inactive)</option>'));
-$ok = new Form(); $ok->add((new Field('domain', 'D', 'select', [Validators::inArray($opts)]))->setOptions($opts));
-check('inArray: offered value valid',         $ok->isValid(['domain' => '7']));
-$bad = new Form(); $bad->add((new Field('domain', 'D', 'select', [Validators::inArray($opts)]))->setOptions($opts));
-check('inArray: forged value rejected',       !$bad->isValid(['domain' => '999']));
+check('render: select element emitted', str_contains($selout, '<select name="domain"'));
+check('render: option value+label', str_contains($selout, '<option value="7"') && str_contains($selout, 'seven.example (inactive)</option>'));
+$ok = new Form();
+$ok->add((new Field('domain', 'D', 'select', [Validators::inArray($opts)]))->setOptions($opts));
+check('inArray: offered value valid', $ok->isValid(['domain' => '7']));
+$bad = new Form();
+$bad->add((new Field('domain', 'D', 'select', [Validators::inArray($opts)]))->setOptions($opts));
+check('inArray: forged value rejected', !$bad->isValid(['domain' => '999']));
 $selform->bind(['domain' => '7']);
 $selsel = $renderer->render($selform, '/x');
-check('render: selected option marked',       str_contains($selsel, 'value="7" selected="selected"'));
+check('render: selected option marked', str_contains($selsel, 'value="7" selected="selected"'));
 
 // readonly field (edit forms render the domain name read-only)
 $roform = new Form();
 $roform->add((new Field('domain', 'Domain', 'text'))->setReadonly());
 $roform->add(new Field('other', 'Other', 'text'));
 $roout = $renderer->render($roform, '/domain/edit/did/1');
-check('field: setReadonly is reported',       (new Field('x'))->setReadonly()->isReadonly());
+check('field: setReadonly is reported', (new Field('x'))->setReadonly()->isReadonly());
 check('render: readonly attr on readonly field', preg_match('/name="domain"[^>]*readonly="readonly"/', $roout) === 1);
 $otherOffset = strpos($roout, 'name="other"');
 check('render: non-readonly field has no readonly', $otherOffset !== false

@@ -18,7 +18,7 @@ use UnexpectedValueException;
 class MailboxTask extends EntityRepository
 {
     /** Atomically cancel only a task that is still pending. */
-    public function cancelIfPending( \Entities\MailboxTask $task, string $actor ): bool
+    public function cancelIfPending(\Entities\MailboxTask $task, string $actor): bool
     {
         $message = '[' . gmdate('Y-m-d H:i:s') . '] cancelled by ' . $actor . "\n";
         $affected = $this->getEntityManager()->getConnection()->executeStatement(
@@ -32,10 +32,12 @@ class MailboxTask extends EntityRepository
                 'pending' => \Entities\MailboxTask::STATUS_PENDING,
             ]
         );
-        if( !is_int($affected) || $affected < 0 || $affected > 1 )
+        if (!is_int($affected) || $affected < 0 || $affected > 1) {
             throw new UnexpectedValueException('Mailbox task cancel returned an invalid affected-row count.');
-        if( $affected === 1 )
+        }
+        if ($affected === 1) {
             $this->getEntityManager()->refresh($task);
+        }
         return $affected === 1;
     }
 
@@ -46,7 +48,7 @@ class MailboxTask extends EntityRepository
      */
     public function reapStaleRunning(): int
     {
-        $message = '[' . gmdate( 'Y-m-d H:i:s' ) . "] FAILED: runner exited before task completion\n";
+        $message = '[' . gmdate('Y-m-d H:i:s') . "] FAILED: runner exited before task completion\n";
         $affected = $this->getEntityManager()->getConnection()->executeStatement(
             'UPDATE mailbox_task t LEFT JOIN queue_runner r ON r.id = t.QueueRunner_id'
             . ' SET t.status = :failed, t.abandoned = 1, t.finished_at = CURRENT_TIMESTAMP,'
@@ -59,8 +61,9 @@ class MailboxTask extends EntityRepository
             ]
         );
 
-        if( !is_int( $affected ) || $affected < 0 )
-            throw new UnexpectedValueException( 'Stale mailbox task reaper returned an invalid affected-row count.' );
+        if (!is_int($affected) || $affected < 0) {
+            throw new UnexpectedValueException('Stale mailbox task reaper returned an invalid affected-row count.');
+        }
         return $affected;
     }
 
@@ -68,7 +71,7 @@ class MailboxTask extends EntityRepository
      * Atomically delete a terminal/pending task, or an ownerless RUNNING task.
      * A task whose runner lease still exists cannot pass this database guard.
      */
-    public function deleteUnlessActive( \Entities\MailboxTask $task ): bool
+    public function deleteUnlessActive(\Entities\MailboxTask $task): bool
     {
         $affected = $this->getEntityManager()->getConnection()->executeStatement(
             'DELETE t FROM mailbox_task t LEFT JOIN queue_runner r ON r.id = t.QueueRunner_id'
@@ -78,10 +81,12 @@ class MailboxTask extends EntityRepository
                 'running' => \Entities\MailboxTask::STATUS_RUNNING,
             ]
         );
-        if( !is_int( $affected ) || $affected < 0 || $affected > 1 )
-            throw new UnexpectedValueException( 'Mailbox task delete returned an invalid affected-row count.' );
-        if( $affected === 1 )
-            $this->getEntityManager()->detach( $task );
+        if (!is_int($affected) || $affected < 0 || $affected > 1) {
+            throw new UnexpectedValueException('Mailbox task delete returned an invalid affected-row count.');
+        }
+        if ($affected === 1) {
+            $this->getEntityManager()->detach($task);
+        }
         return $affected === 1;
     }
 
@@ -100,14 +105,14 @@ class MailboxTask extends EntityRepository
         $connection->beginTransaction();
         try {
             $runnerId = $runner->getId();
-            if( !is_int( $runnerId ) || $runnerId < 1 )
-                throw new \LogicException( 'Runner lease must be persisted before terminal publication.' );
+            if (!is_int($runnerId) || $runnerId < 1) {
+                throw new \LogicException('Runner lease must be persisted before terminal publication.');
+            }
             $liveOwner = $connection->fetchOne(
                 'SELECT id FROM queue_runner WHERE id = ? FOR UPDATE',
                 [ $runnerId ]
             );
-            if( $liveOwner !== $runnerId && $liveOwner !== (string) $runnerId )
-            {
+            if ($liveOwner !== $runnerId && $liveOwner !== (string) $runnerId) {
                 $connection->rollBack();
                 return false;
             }
@@ -117,10 +122,10 @@ class MailboxTask extends EntityRepository
                 [ $task->getId(), \Entities\MailboxTask::STATUS_RUNNING ]
             );
             $owned = $owner === $runnerId;
-            if( is_string( $owner ) && preg_match( '/^[1-9][0-9]*$/D', $owner ) === 1 )
-                $owned = filter_var( $owner, FILTER_VALIDATE_INT ) === $runnerId;
-            if( !$owned )
-            {
+            if (is_string($owner) && preg_match('/^[1-9][0-9]*$/D', $owner) === 1) {
+                $owned = filter_var($owner, FILTER_VALIDATE_INT) === $runnerId;
+            }
+            if (!$owned) {
                 $connection->rollBack();
                 return false;
             }
@@ -128,11 +133,10 @@ class MailboxTask extends EntityRepository
             $this->getEntityManager()->flush();
             $connection->commit();
             return true;
-        }
-        catch( \Throwable $e )
-        {
-            if( $connection->isTransactionActive() )
+        } catch (\Throwable $e) {
+            if ($connection->isTransactionActive()) {
                 $connection->rollBack();
+            }
             throw $e;
         }
     }
@@ -177,25 +181,25 @@ class MailboxTask extends EntityRepository
      * @param int $limit
      * @return \Entities\MailboxTask[]
      */
-    public function pending( $limit = 5 )
+    public function pending($limit = 5)
     {
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $this->pendingQuery( (int) $limit )->getQuery()->getResult(),
+            $this->pendingQuery((int) $limit)->getQuery()->getResult(),
             \Entities\MailboxTask::class,
             'Pending mailbox task query'
         );
     }
 
-    private function pendingQuery( int $limit ): QueryBuilder
+    private function pendingQuery(int $limit): QueryBuilder
     {
         return $this->getEntityManager()->createQueryBuilder()
-            ->select( 't' )
-            ->from( '\\Entities\\MailboxTask', 't' )
-            ->where( 't.status = :s' )
-            ->setParameter( 's', \Entities\MailboxTask::STATUS_PENDING )
-            ->orderBy( 't.priority', 'DESC' )
-            ->addOrderBy( 't.id', 'ASC' )
-            ->setMaxResults( $limit );
+            ->select('t')
+            ->from('\\Entities\\MailboxTask', 't')
+            ->where('t.status = :s')
+            ->setParameter('s', \Entities\MailboxTask::STATUS_PENDING)
+            ->orderBy('t.priority', 'DESC')
+            ->addOrderBy('t.id', 'ASC')
+            ->setMaxResults($limit);
     }
 
     /**
@@ -206,7 +210,7 @@ class MailboxTask extends EntityRepository
      * @param \Entities\MailboxTask $task
      * @return bool
      */
-    public function claim( \Entities\MailboxTask $task, \Entities\QueueRunner $runner )
+    public function claim(\Entities\MailboxTask $task, \Entities\QueueRunner $runner)
     {
         $conn = $this->getEntityManager()->getConnection();
         $affected = $conn->executeStatement(
@@ -221,10 +225,9 @@ class MailboxTask extends EntityRepository
             ]
         );
 
-        if( $affected === 1 )
-        {
+        if ($affected === 1) {
             // Refresh the managed entity so in-memory state matches the DB.
-            $this->getEntityManager()->refresh( $task );
+            $this->getEntityManager()->refresh($task);
             return true;
         }
         return false;
@@ -238,9 +241,9 @@ class MailboxTask extends EntityRepository
     public function statusCounts()
     {
         $rows = $this->getEntityManager()->createQueryBuilder()
-            ->select( 't.status as status, COUNT(t.id) as cnt' )
-            ->from( '\\Entities\\MailboxTask', 't' )
-            ->groupBy( 't.status' )
+            ->select('t.status as status, COUNT(t.id) as cnt')
+            ->from('\\Entities\\MailboxTask', 't')
+            ->groupBy('t.status')
             ->getQuery()->getArrayResult();
 
         return self::requiredStatusCounts($rows);

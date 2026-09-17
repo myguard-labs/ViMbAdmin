@@ -26,20 +26,21 @@
  */
 class ViMbAdmin_Schema
 {
-    private static function countValue( mixed $value ): int
+    private static function countValue(mixed $value): int
     {
-        if( is_string( $value ) && preg_match( '/^[0-9]+$/D', $value ) === 1 ) {
-            $normalized = ltrim( $value, '0' );
-            $value = filter_var( $normalized === '' ? '0' : $normalized, FILTER_VALIDATE_INT );
+        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
+            $normalized = ltrim($value, '0');
+            $value = filter_var($normalized === '' ? '0' : $normalized, FILTER_VALIDATE_INT);
         }
-        if( !is_int( $value ) || $value < 0 )
-            throw new \UnexpectedValueException( 'Schema introspection count is malformed' );
+        if (!is_int($value) || $value < 0) {
+            throw new \UnexpectedValueException('Schema introspection count is malformed');
+        }
         return $value;
     }
     /** @var \Doctrine\ORM\EntityManagerInterface */
     private $_em;
 
-    public function __construct( \Doctrine\ORM\EntityManagerInterface $em )
+    public function __construct(\Doctrine\ORM\EntityManagerInterface $em)
     {
         $this->_em = $em;
     }
@@ -52,9 +53,9 @@ class ViMbAdmin_Schema
      */
     public function pendingSql()
     {
-        $tool = new \Doctrine\ORM\Tools\SchemaTool( $this->_em );
+        $tool = new \Doctrine\ORM\Tools\SchemaTool($this->_em);
         $meta = $this->_em->getMetadataFactory()->getAllMetadata();
-        $sql  = $tool->getUpdateSchemaSql( $meta );
+        $sql  = $tool->getUpdateSchemaSql($meta);
 
         // Strip table drops. Doctrine ORM 3 removed the $saveMode argument from
         // getUpdateSchemaSql() (ORM 2 accepted a second `true` to emit only the
@@ -65,9 +66,9 @@ class ViMbAdmin_Schema
         // pending statement in the Maintenance tab. This is an ADDITIVE
         // migrator: it must never drop a table, so filter every table drop
         // (mirrors the old saveMode=true behaviour).
-        $sql = array_values( array_filter( $sql, function( $stmt ) {
-            return !preg_match( '/^\s*DROP\s+TABLE\b/i', $stmt );
-        } ) );
+        $sql = array_values(array_filter($sql, function ($stmt) {
+            return !preg_match('/^\s*DROP\s+TABLE\b/i', $stmt);
+        }));
 
         // Drop no-op ALTERs against Dovecot-owned tables. These are read-only
         // entities (dovecot_quota / dovecot_last_login); their timestamp column
@@ -77,9 +78,9 @@ class ViMbAdmin_Schema
         // statement on every run -- a perpetual phantom "1 pending statement".
         // The ALTER is a no-op (column already in that exact shape), so filter
         // these tables out: ViMbAdmin must never rewrite tables Dovecot owns.
-        $sql = array_values( array_filter( $sql, function( $stmt ) {
-            return !preg_match( '/\bALTER\s+TABLE\s+`?dovecot_(quota|last_login)`?\b/i', $stmt );
-        } ) );
+        $sql = array_values(array_filter($sql, function ($stmt) {
+            return !preg_match('/\bALTER\s+TABLE\s+`?dovecot_(quota|last_login)`?\b/i', $stmt);
+        }));
 
         // Append migrations the Doctrine schema-tool can't express, because the
         // Dovecot-owned tables are mapped read-only with NO association (the
@@ -88,8 +89,9 @@ class ViMbAdmin_Schema
         // mailbox, so add ON DELETE CASCADE FKs at the DB layer. Each statement
         // is introspection-guarded — it appears here only while actually
         // missing, so it counts as "pending" exactly once and is a no-op after.
-        foreach( $this->extraSql() as $stmt )
+        foreach ($this->extraSql() as $stmt) {
             $sql[] = $stmt;
+        }
 
         return $sql;
     }
@@ -101,44 +103,50 @@ class ViMbAdmin_Schema
      *
      * @param string[] $sql
      */
-    private function assertMailboxTaskOpenUniquenessCanMigrate( array $sql ): void
+    private function assertMailboxTaskOpenUniquenessCanMigrate(array $sql): void
     {
         $needsIndex = false;
-        foreach( $sql as $stmt )
-        {
-            if( stripos( $stmt, 'mailbox_task_open_unique' ) !== false )
-            {
+        foreach ($sql as $stmt) {
+            if (stripos($stmt, 'mailbox_task_open_unique') !== false) {
                 $needsIndex = true;
                 break;
             }
         }
-        if( !$needsIndex )
+        if (!$needsIndex) {
             return;
+        }
 
         $conn = $this->_em->getConnection();
         $db = $conn->getDatabase();
-        if( $db === null || $db === '' )
+        if ($db === null || $db === '') {
             throw new \RuntimeException(
-                'Cannot verify mailbox_task open-task uniqueness: no database is selected.' );
+                'Cannot verify mailbox_task open-task uniqueness: no database is selected.'
+            );
+        }
 
-        $haveTable = self::countValue( $conn->fetchOne(
+        $haveTable = self::countValue($conn->fetchOne(
             'SELECT COUNT(*) FROM information_schema.TABLES'
             . ' WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
-            [ $db, 'mailbox_task' ] ) );
-        if( $haveTable === 0 )
+            [ $db, 'mailbox_task' ]
+        ));
+        if ($haveTable === 0) {
             return;
+        }
 
-        $duplicates = self::countValue( $conn->fetchOne(
+        $duplicates = self::countValue($conn->fetchOne(
             'SELECT COUNT(*) FROM ('
             . ' SELECT username, type FROM mailbox_task'
             . ' WHERE status IN (?, ?) GROUP BY username, type HAVING COUNT(*) > 1'
             . ' ) duplicate_open_tasks',
-            \Entities\MailboxTask::OPEN_STATUSES ) );
-        if( $duplicates !== 0 )
-            throw new \RuntimeException( sprintf(
+            \Entities\MailboxTask::OPEN_STATUSES
+        ));
+        if ($duplicates !== 0) {
+            throw new \RuntimeException(sprintf(
                 'Cannot add mailbox_task_open_unique: found %d duplicate open username/type group(s);'
                 . ' resolve the duplicate PENDING/RUNNING tasks before updating the schema.',
-                $duplicates ) );
+                $duplicates
+            ));
+        }
     }
 
     /**
@@ -147,12 +155,12 @@ class ViMbAdmin_Schema
      *
      * @param string[] $sql
      */
-    private function needsMailboxTaskOwnershipMigration( array $sql ): bool
+    private function needsMailboxTaskOwnershipMigration(array $sql): bool
     {
-        foreach( $sql as $stmt )
-        {
-            if( preg_match( '/\bADD\s+(?:COLUMN\s+)?`?(?:QueueRunner_id|abandoned)`?/i', $stmt ) === 1 )
+        foreach ($sql as $stmt) {
+            if (preg_match('/\bADD\s+(?:COLUMN\s+)?`?(?:QueueRunner_id|abandoned)`?/i', $stmt) === 1) {
                 return true;
+            }
         }
         return false;
     }
@@ -161,25 +169,34 @@ class ViMbAdmin_Schema
     {
         $conn = $this->_em->getConnection();
         $db = $conn->getDatabase();
-        if( $db === null || $db === '' )
+        if ($db === null || $db === '') {
             throw new \RuntimeException(
-                'Cannot verify mailbox-task ownership migration: no database is selected.' );
-        $haveTable = self::countValue( $conn->fetchOne(
+                'Cannot verify mailbox-task ownership migration: no database is selected.'
+            );
+        }
+        $haveTable = self::countValue($conn->fetchOne(
             'SELECT COUNT(*) FROM information_schema.TABLES'
             . ' WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
-            [ $db, 'mailbox_task' ] ) );
-        if( $haveTable === 0 )
+            [ $db, 'mailbox_task' ]
+        ));
+        if ($haveTable === 0) {
             return;
-        $leases = self::countValue( $conn->fetchOne(
-            'SELECT COUNT(*) FROM queue_runner' ) );
-        $running = self::countValue( $conn->fetchOne(
+        }
+        $leases = self::countValue($conn->fetchOne(
+            'SELECT COUNT(*) FROM queue_runner'
+        ));
+        $running = self::countValue($conn->fetchOne(
             'SELECT COUNT(*) FROM mailbox_task WHERE status = ?',
-            [ \Entities\MailboxTask::STATUS_RUNNING ] ) );
-        if( $leases !== 0 || $running !== 0 )
-            throw new \RuntimeException( sprintf(
+            [ \Entities\MailboxTask::STATUS_RUNNING ]
+        ));
+        if ($leases !== 0 || $running !== 0) {
+            throw new \RuntimeException(sprintf(
                 'Cannot add mailbox-task runner ownership while %d runner lease(s) or %d RUNNING task(s) exist;'
                 . ' quiesce queue runners and let or explicitly reconcile every RUNNING task before updating the schema.',
-                $leases, $running ) );
+                $leases,
+                $running
+            ));
+        }
     }
 
     /**
@@ -203,8 +220,7 @@ class ViMbAdmin_Schema
             'dovecot_last_login' => 'FK_dovecot_last_login_mailbox',
         ];
 
-        try
-        {
+        try {
             // 0) Tiny key/value settings store (ViMbAdmin_Setting): last-queuerun
             //    / last-prune timestamps for the Maintenance tab. Introspection-
             //    GUARDED: emit the CREATE only while the table is actually
@@ -213,45 +229,50 @@ class ViMbAdmin_Schema
             //    `CREATE TABLE IF NOT EXISTS` would be a no-op at apply time but
             //    would still appear in pendingSql() forever -> perpetual "1
             //    pending".)
-            $haveSetting = self::countValue( $conn->fetchOne(
+            $haveSetting = self::countValue($conn->fetchOne(
                 'SELECT COUNT(*) FROM information_schema.TABLES
                   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?',
-                [ $db, 'setting' ] ) );
-            if( $haveSetting === 0 )
+                [ $db, 'setting' ]
+            ));
+            if ($haveSetting === 0) {
                 $out[] = 'CREATE TABLE `setting` ('
                        . ' `name` VARCHAR(64) NOT NULL,'
                        . ' `value` VARCHAR(255) NULL DEFAULT NULL,'
                        . ' `updated_at` DATETIME NULL DEFAULT NULL,'
                        . ' PRIMARY KEY (`name`)'
                        . ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci';
+            }
 
             // 1) dovecot_quota.username collation must match mailbox.username
             //    (utf8mb3_unicode_ci) or the FK fails with errno 150.
             $coll = $conn->fetchOne(
                 'SELECT COLLATION_NAME FROM information_schema.COLUMNS
                   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
-                [ $db, 'dovecot_quota', 'username' ] );
-            if( $coll !== false && $coll !== null && $coll !== 'utf8mb3_unicode_ci' )
+                [ $db, 'dovecot_quota', 'username' ]
+            );
+            if ($coll !== false && $coll !== null && $coll !== 'utf8mb3_unicode_ci') {
                 $out[] = 'ALTER TABLE `dovecot_quota` MODIFY `username` '
                        . 'VARCHAR(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL';
+            }
 
             // 2) the cascade FKs themselves (only if absent).
-            foreach( $fks as $table => $name )
-            {
-                $have = self::countValue( $conn->fetchOne(
+            foreach ($fks as $table => $name) {
+                $have = self::countValue($conn->fetchOne(
                     'SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
                       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?',
-                    [ $db, $table, $name ] ) );
-                if( $have === 0 )
+                    [ $db, $table, $name ]
+                ));
+                if ($have === 0) {
                     $out[] = sprintf(
                         'ALTER TABLE `%s` ADD CONSTRAINT `%s` '
                         . 'FOREIGN KEY (`username`) REFERENCES `mailbox` (`username`) '
                         . 'ON DELETE CASCADE ON UPDATE CASCADE',
-                        $table, $name );
+                        $table,
+                        $name
+                    );
+                }
             }
-        }
-        catch( \Throwable $e )
-        {
+        } catch (\Throwable $e) {
             // Introspection failed (e.g. a base table not present yet on a
             // brand-new install before schema-tool created it). Skip — the next
             // run picks up the setting table + FKs once introspection works.
@@ -270,51 +291,54 @@ class ViMbAdmin_Schema
      * @return int number of statements executed
      * @throws \Throwable on the first failing statement
      */
-    public function apply( array $sql )
+    public function apply(array $sql)
     {
         $conn = $this->_em->getConnection();
-        $ownershipMigration = $this->needsMailboxTaskOwnershipMigration( $sql );
+        $ownershipMigration = $this->needsMailboxTaskOwnershipMigration($sql);
         $locked = false;
-        try
-        {
-            if( $ownershipMigration )
-            {
+        try {
+            if ($ownershipMigration) {
                 $result = $conn->fetchOne(
                     'SELECT GET_LOCK(?, ?)',
-                    [ ViMbAdmin_QueueRunner::ACQUIRE_LOCK_NAME, ViMbAdmin_QueueRunner::ACQUIRE_LOCK_TIMEOUT ] );
-                if( $result !== 1 && $result !== '1' )
-                    throw new \RuntimeException( 'Could not acquire queue-runner mutex for ownership migration.' );
+                    [ ViMbAdmin_QueueRunner::ACQUIRE_LOCK_NAME, ViMbAdmin_QueueRunner::ACQUIRE_LOCK_TIMEOUT ]
+                );
+                if ($result !== 1 && $result !== '1') {
+                    throw new \RuntimeException('Could not acquire queue-runner mutex for ownership migration.');
+                }
                 $locked = true;
                 $this->assertMailboxTaskOwnershipCanMigrate();
             }
-            $this->assertMailboxTaskOpenUniquenessCanMigrate( $sql );
+            $this->assertMailboxTaskOpenUniquenessCanMigrate($sql);
 
             $done = 0;
-            foreach( $sql as $stmt )
-            {
-                try
-                {
-                    $conn->executeStatement( $stmt );
+            foreach ($sql as $stmt) {
+                try {
+                    $conn->executeStatement($stmt);
                     $done++;
-                }
-                catch( \Throwable $e )
-                {
+                } catch (\Throwable $e) {
                     throw new \RuntimeException(
-                        sprintf( 'schema statement %d/%d failed: %s | SQL: %s',
-                            $done + 1, count( $sql ), $e->getMessage(), $stmt ),
-                        0, $e );
+                        sprintf(
+                            'schema statement %d/%d failed: %s | SQL: %s',
+                            $done + 1,
+                            count($sql),
+                            $e->getMessage(),
+                            $stmt
+                        ),
+                        0,
+                        $e
+                    );
                 }
             }
             return $done;
-        }
-        finally
-        {
-            if( $locked )
-            {
+        } finally {
+            if ($locked) {
                 $released = $conn->fetchOne(
-                    'SELECT RELEASE_LOCK(?)', [ ViMbAdmin_QueueRunner::ACQUIRE_LOCK_NAME ] );
-                if( $released !== 1 && $released !== '1' )
+                    'SELECT RELEASE_LOCK(?)',
+                    [ ViMbAdmin_QueueRunner::ACQUIRE_LOCK_NAME ]
+                );
+                if ($released !== 1 && $released !== '1') {
                     $conn->close();
+                }
             }
         }
     }
@@ -327,18 +351,20 @@ class ViMbAdmin_Schema
      */
     public function recordVersion()
     {
-        if( !class_exists( 'ViMbAdmin_Version' ) || !defined( 'ViMbAdmin_Version::DBVERSION' ) )
+        if (!class_exists('ViMbAdmin_Version') || !defined('ViMbAdmin_Version::DBVERSION')) {
             return false;
+        }
 
         $current = $this->currentVersion();
-        if( $current !== null && (int) $current >= (int) ViMbAdmin_Version::DBVERSION )
+        if ($current !== null && (int) $current >= (int) ViMbAdmin_Version::DBVERSION) {
             return false;
+        }
 
         $row = new \Entities\DatabaseVersion();
-        $row->setVersion( ViMbAdmin_Version::DBVERSION );
-        $row->setName( defined( 'ViMbAdmin_Version::DBVERSION_NAME' ) ? ViMbAdmin_Version::DBVERSION_NAME : '' );
-        $row->setAppliedOn( new \DateTime() );
-        $this->_em->persist( $row );
+        $row->setVersion(ViMbAdmin_Version::DBVERSION);
+        $row->setName(defined('ViMbAdmin_Version::DBVERSION_NAME') ? ViMbAdmin_Version::DBVERSION_NAME : '');
+        $row->setAppliedOn(new \DateTime());
+        $this->_em->persist($row);
         $this->_em->flush();
         return true;
     }
@@ -350,14 +376,12 @@ class ViMbAdmin_Schema
      */
     public function currentVersion()
     {
-        try
-        {
+        try {
             $v = $this->_em->createQuery(
-                'SELECT MAX(d.version) FROM \Entities\DatabaseVersion d' )->getSingleScalarResult();
+                'SELECT MAX(d.version) FROM \Entities\DatabaseVersion d'
+            )->getSingleScalarResult();
             return $v === null ? null : (int) $v;
-        }
-        catch( \Throwable $e )
-        {
+        } catch (\Throwable $e) {
             return null; // table may not exist yet on a fresh install
         }
     }
@@ -369,7 +393,7 @@ class ViMbAdmin_Schema
      */
     public function codeVersion()
     {
-        return ( class_exists( 'ViMbAdmin_Version' ) && defined( 'ViMbAdmin_Version::DBVERSION' ) )
+        return (class_exists('ViMbAdmin_Version') && defined('ViMbAdmin_Version::DBVERSION'))
             ? (int) ViMbAdmin_Version::DBVERSION : null;
     }
 
@@ -381,7 +405,7 @@ class ViMbAdmin_Schema
     public function migrate()
     {
         $sql = $this->pendingSql();
-        $applied = count( $sql ) ? $this->apply( $sql ) : 0;
+        $applied = count($sql) ? $this->apply($sql) : 0;
         $this->recordVersion();
         return [
             'applied'    => $applied,

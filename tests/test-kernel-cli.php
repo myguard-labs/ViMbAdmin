@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: the native CLI dispatcher and MCP token-list command (WALL #2,
  * docs/ZF1-REMOVAL.md). No application resource or database is booted.
@@ -65,10 +66,20 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 
 final class CliTestSession implements SessionStorage
 {
-    public function has(string $key): bool { return false; }
-    public function get(string $key): mixed { return null; }
-    public function set(string $key, mixed $value): void {}
-    public function remove(string $key): void {}
+    public function has(string $key): bool
+    {
+        return false;
+    }
+    public function get(string $key): mixed
+    {
+        return null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+    }
+    public function remove(string $key): void
+    {
+    }
 }
 
 /** @implements \Doctrine\Persistence\ObjectRepository<\Entities\McpToken> */
@@ -93,23 +104,34 @@ final class CliMcpTokenRepository implements \Doctrine\Persistence\ObjectReposit
     public function find(mixed $id): ?object
     {
         $this->foundId = $id;
-        if ($this->error !== null) { throw $this->error; }
+        if ($this->error !== null) {
+            throw $this->error;
+        }
         foreach ($this->tokens as $token) {
-            if ($token->getId() === $id) { return $token; }
+            if ($token->getId() === $id) {
+                return $token;
+            }
         }
         return null;
     }
     private function findByName(string $name): ?\Entities\McpToken
     {
         $this->foundName = $name;
-        if ($this->error !== null) { throw $this->error; }
+        if ($this->error !== null) {
+            throw $this->error;
+        }
         foreach ($this->tokens as $token) {
-            if ($token->getName() === $name) { return $token; }
+            if ($token->getName() === $name) {
+                return $token;
+            }
         }
         return null;
     }
     /** @return list<\Entities\McpToken> */
-    public function findAll(): array { return $this->tokens; }
+    public function findAll(): array
+    {
+        return $this->tokens;
+    }
     /** @return list<\Entities\McpToken> */
     public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array
     {
@@ -117,7 +139,7 @@ final class CliMcpTokenRepository implements \Doctrine\Persistence\ObjectReposit
         $this->orderBy = $orderBy;
         $tokens = $this->tokens;
         if ($orderBy === ['id' => 'ASC']) {
-            usort($tokens, static fn(\Entities\McpToken $a, \Entities\McpToken $b): int => $a->getId() <=> $b->getId());
+            usort($tokens, static fn (\Entities\McpToken $a, \Entities\McpToken $b): int => $a->getId() <=> $b->getId());
         }
         return $tokens;
     }
@@ -126,7 +148,10 @@ final class CliMcpTokenRepository implements \Doctrine\Persistence\ObjectReposit
         $name = $criteria['name'] ?? null;
         return is_string($name) ? $this->findByName($name) : null;
     }
-    public function getClassName(): string { return \Entities\McpToken::class; }
+    public function getClassName(): string
+    {
+        return \Entities\McpToken::class;
+    }
 }
 
 final class CliMcpObjectManager
@@ -139,7 +164,9 @@ final class CliMcpObjectManager
     /** @var list<object> */
     public array $removed = [];
     public ?Throwable $writeError = null;
-    public function __construct(public CliMcpTokenRepository $repository) {}
+    public function __construct(public CliMcpTokenRepository $repository)
+    {
+    }
     public function getRepository(string $className): CliMcpTokenRepository
     {
         if ($className !== '\\Entities\\McpToken') {
@@ -150,19 +177,25 @@ final class CliMcpObjectManager
     public function persist(object $object): void
     {
         $this->operations[] = 'persist';
-        if ($this->writeError !== null) { throw $this->writeError; }
+        if ($this->writeError !== null) {
+            throw $this->writeError;
+        }
         $this->persisted[] = $object;
     }
     public function remove(object $object): void
     {
         $this->operations[] = 'remove';
-        if ($this->writeError !== null) { throw $this->writeError; }
+        if ($this->writeError !== null) {
+            throw $this->writeError;
+        }
         $this->removed[] = $object;
     }
     public function flush(): void
     {
         $this->operations[] = 'flush';
-        if ($this->writeError !== null) { throw $this->writeError; }
+        if ($this->writeError !== null) {
+            throw $this->writeError;
+        }
         $this->flushes++;
     }
 }
@@ -170,10 +203,21 @@ final class CliMcpObjectManager
 final class CliTotpAdmin
 {
     /** @param array<string,mixed> $preferences */
-    public function __construct(private string $username, public array $preferences) {}
-    public function getUsername(): string { return $this->username; }
-    public function getPreference(string $key): mixed { return $this->preferences[$key] ?? null; }
-    public function deletePreference(string $key): void { unset($this->preferences[$key]); }
+    public function __construct(private string $username, public array $preferences)
+    {
+    }
+    public function getUsername(): string
+    {
+        return $this->username;
+    }
+    public function getPreference(string $key): mixed
+    {
+        return $this->preferences[$key] ?? null;
+    }
+    public function deletePreference(string $key): void
+    {
+        unset($this->preferences[$key]);
+    }
 }
 
 /** @implements \Doctrine\Persistence\ObjectRepository<object> */
@@ -186,24 +230,40 @@ final class CliTotpAdminRepository implements \Doctrine\Persistence\ObjectReposi
     public bool $findAllCalled = false;
     public ?Throwable $error = null;
     /** @param list<object> $admins */
-    public function __construct(array $admins) { $this->admins = $admins; }
-    public function find(mixed $id): ?object { return null; }
+    public function __construct(array $admins)
+    {
+        $this->admins = $admins;
+    }
+    public function find(mixed $id): ?object
+    {
+        return null;
+    }
     /** @return list<object> */
     public function findAll(): array
     {
         $this->findAllCalled = true;
-        if ($this->error !== null) { throw $this->error; }
+        if ($this->error !== null) {
+            throw $this->error;
+        }
         return $this->admins;
     }
     /** @return list<object> */
     public function findBy(array $criteria, ?array $orderBy = null, ?int $limit = null, ?int $offset = null): array
     {
         $this->criteria = $criteria;
-        if ($this->error !== null) { throw $this->error; }
+        if ($this->error !== null) {
+            throw $this->error;
+        }
         return $this->admins;
     }
-    public function findOneBy(array $criteria): ?object { return null; }
-    public function getClassName(): string { return \Entities\Admin::class; }
+    public function findOneBy(array $criteria): ?object
+    {
+        return null;
+    }
+    public function getClassName(): string
+    {
+        return \Entities\Admin::class;
+    }
 }
 
 final class CliTotpObjectManager implements Doctrine\Persistence\ObjectManager
@@ -211,24 +271,43 @@ final class CliTotpObjectManager implements Doctrine\Persistence\ObjectManager
     /** @var list<string> */
     public array $operations = [];
     public ?Throwable $flushError = null;
-    public function __construct(public CliTotpAdminRepository $repository) {}
+    public function __construct(public CliTotpAdminRepository $repository)
+    {
+    }
     public function getRepository(string $className): CliTotpAdminRepository
     {
         $this->operations[] = 'getRepository';
-        if ($className !== '\\Entities\\Admin') { throw new RuntimeException("unexpected repository {$className}"); }
+        if ($className !== '\\Entities\\Admin') {
+            throw new RuntimeException("unexpected repository {$className}");
+        }
         return $this->repository;
     }
     public function flush(): void
     {
         $this->operations[] = 'flush';
-        if ($this->flushError !== null) { throw $this->flushError; }
+        if ($this->flushError !== null) {
+            throw $this->flushError;
+        }
     }
-    public function find(string $className, mixed $id): ?object { return null; }
-    public function persist(object $object): void {}
-    public function remove(object $object): void {}
-    public function clear(): void {}
-    public function detach(object $object): void {}
-    public function refresh(object $object): void {}
+    public function find(string $className, mixed $id): ?object
+    {
+        return null;
+    }
+    public function persist(object $object): void
+    {
+    }
+    public function remove(object $object): void
+    {
+    }
+    public function clear(): void
+    {
+    }
+    public function detach(object $object): void
+    {
+    }
+    public function refresh(object $object): void
+    {
+    }
     public function getClassMetadata(string $className): Doctrine\Persistence\Mapping\ClassMetadata
     {
         throw new LogicException('TOTP reset test does not query metadata.');
@@ -237,17 +316,30 @@ final class CliTotpObjectManager implements Doctrine\Persistence\ObjectManager
     {
         throw new LogicException('TOTP reset test does not query metadata.');
     }
-    public function initializeObject(object $obj): void {}
-    public function isUninitializedObject(mixed $value): bool { return false; }
-    public function contains(object $object): bool { return false; }
+    public function initializeObject(object $obj): void
+    {
+    }
+    public function isUninitializedObject(mixed $value): bool
+    {
+        return false;
+    }
+    public function contains(object $object): bool
+    {
+        return false;
+    }
 }
 
 final class CliTestResources
 {
     /** @param array<string,mixed> $options */
-    public function __construct(private object $entityManager, private array $options = []) {}
+    public function __construct(private object $entityManager, private array $options = [])
+    {
+    }
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
     public function getResource(string $name): object
     {
         if ($name !== 'doctrine2') {
@@ -262,19 +354,34 @@ function cliContainer(object $entityManager, array $options = []): Container
 {
     return new Container(
         new CliTestResources($entityManager, $options),
-        new Auth(new CliTestSession(), static fn(int $id): null => null),
+        new Auth(new CliTestSession(), static fn (int $id): null => null),
     );
 }
 
 final class CliQueueObjectManager implements Doctrine\Persistence\ObjectManager
 {
-    public function find(string $className, mixed $id): ?object { return null; }
-    public function persist(object $object): void {}
-    public function remove(object $object): void {}
-    public function clear(): void {}
-    public function detach(object $object): void {}
-    public function refresh(object $object): void {}
-    public function flush(): void {}
+    public function find(string $className, mixed $id): ?object
+    {
+        return null;
+    }
+    public function persist(object $object): void
+    {
+    }
+    public function remove(object $object): void
+    {
+    }
+    public function clear(): void
+    {
+    }
+    public function detach(object $object): void
+    {
+    }
+    public function refresh(object $object): void
+    {
+    }
+    public function flush(): void
+    {
+    }
     public function getRepository(string $className): Doctrine\Persistence\ObjectRepository
     {
         throw new LogicException('Queue command test does not query repositories directly.');
@@ -287,9 +394,17 @@ final class CliQueueObjectManager implements Doctrine\Persistence\ObjectManager
     {
         throw new LogicException('Queue command test does not query metadata.');
     }
-    public function initializeObject(object $obj): void {}
-    public function isUninitializedObject(mixed $value): bool { return false; }
-    public function contains(object $object): bool { return false; }
+    public function initializeObject(object $obj): void
+    {
+    }
+    public function isUninitializedObject(mixed $value): bool
+    {
+        return false;
+    }
+    public function contains(object $object): bool
+    {
+        return false;
+    }
 }
 
 /** @param list<int|Throwable> $results
@@ -387,10 +502,13 @@ final class TestKernelCliHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelCliHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestKernelCliHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestKernelCliHarnessState::$count++; }
+    if (!$ok) {
+        TestKernelCliHarnessState::$count++;
+    }
 }
 
 echo "== native CLI dispatcher ==\n";
@@ -409,14 +527,14 @@ $expected = [
 foreach ($expected as $name) {
     check("canHandle({$name}) true", $kernel->canHandle($name));
 }
-check('canHandle(unknown) false',        !$kernel->canHandle('foo.bar'));
-check('canHandle(empty) false',          !$kernel->canHandle(''));
+check('canHandle(unknown) false', !$kernel->canHandle('foo.bar'));
+check('canHandle(empty) false', !$kernel->canHandle(''));
 
 $got = $kernel->commands();
 sort($got);
 $want = $expected;
 sort($want);
-check('commands() == registered set',    $got === $want);
+check('commands() == registered set', $got === $want);
 
 $instructionFiles = [
     __DIR__ . '/../README.md',
@@ -449,9 +567,9 @@ foreach (array_keys($documentedActions) as $action) {
 }
 
 $cmd = new QueueRunCommand();
-check('QueueRunCommand name',            $cmd->name() === 'queue.cli-run');
+check('QueueRunCommand name', $cmd->name() === 'queue.cli-run');
 $implemented = class_implements($cmd) ?: [];
-check('CliCommand contract',             in_array(CliCommand::class, $implemented, true));
+check('CliCommand contract', in_array(CliCommand::class, $implemented, true));
 
 echo "== queue run command ==\n";
 
@@ -534,21 +652,30 @@ check('invalid username input prints usage before repository access', $status ==
 $repository = new CliTotpAdminRepository([]);
 $repository->error = new RuntimeException('admin lookup failed');
 $lookupErrorPropagated = false;
-try { runResetTotp(new CliTotpObjectManager($repository), ['all' => true]); }
-catch (RuntimeException $e) { $lookupErrorPropagated = $e->getMessage() === 'admin lookup failed'; }
+try {
+    runResetTotp(new CliTotpObjectManager($repository), ['all' => true]);
+} catch (RuntimeException $e) {
+    $lookupErrorPropagated = $e->getMessage() === 'admin lookup failed';
+}
 check('admin lookup errors propagate without flushing', $lookupErrorPropagated);
 
 $enabled = new CliTotpAdmin('flush@example.com', [ViMbAdmin_TwoFactor::PREF_SECRET => 'secret']);
 $entityManager = new CliTotpObjectManager(new CliTotpAdminRepository([$enabled]));
 $entityManager->flushError = new RuntimeException('admin flush failed');
 $flushErrorPropagated = false;
-try { runResetTotp($entityManager, ['all' => true]); }
-catch (RuntimeException $e) { $flushErrorPropagated = $e->getMessage() === 'admin flush failed'; }
+try {
+    runResetTotp($entityManager, ['all' => true]);
+} catch (RuntimeException $e) {
+    $flushErrorPropagated = $e->getMessage() === 'admin flush failed';
+}
 check('flush errors propagate after the reset mutation', $flushErrorPropagated && $enabled->preferences === [] && $entityManager->operations === ['getRepository', 'flush']);
 
 $resetBoundaryRejected = false;
-try { runResetTotp(new stdClass(), ['all' => true]); }
-catch (LogicException $e) { $resetBoundaryRejected = $e->getMessage() === 'TOTP reset requires a Doctrine object manager.'; }
+try {
+    runResetTotp(new stdClass(), ['all' => true]);
+} catch (LogicException $e) {
+    $resetBoundaryRejected = $e->getMessage() === 'TOTP reset requires a Doctrine object manager.';
+}
 check('TOTP reset rejects non-Doctrine entity-manager resources locally', $resetBoundaryRejected);
 
 echo "== MCP token list command ==\n";

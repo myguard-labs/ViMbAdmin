@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -56,21 +57,21 @@
  * @param string|int $format
  * @return string
  */
-function smarty_modifier_ossDate( $string, $format = "d/m/Y" )
+function smarty_modifier_ossDate($string, $format = "d/m/Y")
 {
-    $date = new DateTime( $string );
-    if( !$format )
+    $date = new DateTime($string);
+    if (!$format) {
         $format = "d/m/Y";
+    }
 
-    if( !is_numeric( $format ) )
-        return $date->format( $format );
+    if (!is_numeric($format)) {
+        return $date->format($format);
+    }
 
     // Numeric strings are array keys in OSS_Date; only canonical integer
     // strings (for example "3", but not "03" or "3.0") select a format code.
-    $formatCode = is_int( $format ) || (string)(int)$format === $format ? (int)$format : 0;
-    $phpFormat  = OSS_Date::getPhpFormat( $formatCode );
+    $formatCode = is_int($format) || (string)(int)$format === $format ? (int)$format : 0;
+    $phpFormat  = OSS_Date::getPhpFormat($formatCode);
 
-    return $date->format( is_string( $phpFormat ) ? $phpFormat : "d/m/Y" );
+    return $date->format(is_string($phpFormat) ? $phpFormat : "d/m/Y");
 }
-
-?>

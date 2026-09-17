@@ -33,21 +33,48 @@ final class WorkflowSession implements SessionStorage
 {
     /** @var array<string,mixed> */
     private array $data = ['csrfToken' => 'workflow-csrf'];
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->get($key); }
-    public function __set(string $key, mixed $value): void { $this->set($key, $value); }
-    public function __isset(string $key): bool { return $this->has($key); }
-    public function __unset(string $key): void { $this->remove($key); }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->get($key);
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->set($key, $value);
+    }
+    public function __isset(string $key): bool
+    {
+        return $this->has($key);
+    }
+    public function __unset(string $key): void
+    {
+        $this->remove($key);
+    }
 }
 
 final class WorkflowView
 {
     /** @var array<string,mixed> */
     private array $values = [];
-    public function __set(string $key, mixed $value): void { $this->values[$key] = $value; }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->values[$key] = $value;
+    }
     public function render(string $script): string
     {
         $form = $this->values['formHtml'] ?? null;
@@ -64,63 +91,98 @@ final class WorkflowTransport implements TransportInterface
         $this->messages[] = $message;
         return new SentMessage($message, $envelope ?? Envelope::create($message));
     }
-    public function __toString(): string { return 'workflow-spy'; }
+    public function __toString(): string
+    {
+        return 'workflow-spy';
+    }
 }
 
 final class WorkflowAdminRepository extends \Repositories\Admin
 {
-    public function __construct(private WorkflowHarness $harness) {}
+    public function __construct(private WorkflowHarness $harness)
+    {
+    }
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): object
     {
         return $id === 1 || $id === '1' ? $this->harness->actor : $this->harness->target;
     }
-    public function findOneBy(array $criteria, ?array $orderBy = null): object { return $this->harness->actor; }
-    public function getCount(): int { return $this->harness->setup ? 0 : 1; }
+    public function findOneBy(array $criteria, ?array $orderBy = null): object
+    {
+        return $this->harness->actor;
+    }
+    public function getCount(): int
+    {
+        return $this->harness->setup ? 0 : 1;
+    }
 }
 
 final class WorkflowDomainRepository extends \Repositories\Domain
 {
-    public function __construct(private WorkflowHarness $harness) {}
+    public function __construct(private WorkflowHarness $harness)
+    {
+    }
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
     {
         return $id === 1 || $id === '1' ? $this->harness->domain : null;
     }
-    public function loadForAdminAsArray($admin, $onlyNames = false): array { return [1 => 'example.test']; }
+    public function loadForAdminAsArray($admin, $onlyNames = false): array
+    {
+        return [1 => 'example.test'];
+    }
 }
 
 final class WorkflowMailboxRepository extends \Repositories\Mailbox
 {
-    public function __construct(private WorkflowHarness $harness) {}
+    public function __construct(private WorkflowHarness $harness)
+    {
+    }
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): object
     {
         return $this->harness->mailbox;
     }
-    public function isUnique($email): bool { return true; }
+    public function isUnique($email): bool
+    {
+        return true;
+    }
 }
 
 final class WorkflowAliasRepository extends \Repositories\Alias
 {
-    public function __construct(private WorkflowHarness $harness) {}
+    public function __construct(private WorkflowHarness $harness)
+    {
+    }
     public function find(mixed $id, LockMode|int|null $lockMode = null, ?int $lockVersion = null): object
     {
         return $this->harness->alias;
     }
-    public function findOneBy(array $criteria, ?array $orderBy = null): ?object { return null; }
+    public function findOneBy(array $criteria, ?array $orderBy = null): ?object
+    {
+        return null;
+    }
 }
 
 final class WorkflowAdmin extends \Entities\Admin
 {
-    public function _getPreferences(): array { return array_values($this->getPreferences()->toArray()); }
+    public function _getPreferences(): array
+    {
+        return array_values($this->getPreferences()->toArray());
+    }
 }
 
 final class WorkflowMailbox extends \Entities\Mailbox
 {
-    public function _getPreferences(): array { return array_values($this->getPreferences()->toArray()); }
+    public function _getPreferences(): array
+    {
+        return array_values($this->getPreferences()->toArray());
+    }
 }
 
 final class WorkflowAlias extends \Entities\Alias
 {
-    public function _getPreferences(): array { return array_values($this->getPreferences()->toArray()); }
+    public function _getPreferences(): array
+    {
+        return array_values($this->getPreferences()->toArray());
+    }
 }
 
 // Persistence, session storage, view rendering, and transport use test doubles.
@@ -131,8 +193,14 @@ final class WorkflowPersistence extends \Doctrine\ORM\UnitOfWork
     /** @var list<object> */
     public array $persisted = [];
     public int $flushes = 0;
-    public function persist(object $object): void { $this->persisted[] = $object; }
-    public function commit(): void { $this->flushes++; }
+    public function persist(object $object): void
+    {
+        $this->persisted[] = $object;
+    }
+    public function commit(): void
+    {
+        $this->flushes++;
+    }
 }
 
 final class WorkflowRepositoryFactory implements \Doctrine\ORM\Repository\RepositoryFactory
@@ -215,9 +283,14 @@ final class WorkflowHarness
             ],
         ];
         $resources = new class ($this, new WorkflowView()) {
-            public function __construct(private WorkflowHarness $harness, private WorkflowView $view) {}
+            public function __construct(private WorkflowHarness $harness, private WorkflowView $view)
+            {
+            }
             /** @return array<string,mixed> */
-            public function getOptions(): array { return $this->harness->options; }
+            public function getOptions(): array
+            {
+                return $this->harness->options;
+            }
             public function getResource(string $name): mixed
             {
                 return match ($name) {
@@ -228,8 +301,10 @@ final class WorkflowHarness
                 };
             }
         };
-        $auth = new Auth($this->session, fn(int $id): object => $this->actor);
-        if (!$setup && !$guest) { $auth->establish($this->actor); }
+        $auth = new Auth($this->session, fn (int $id): object => $this->actor);
+        if (!$setup && !$guest) {
+            $auth->establish($this->actor);
+        }
         $this->container = new Container($resources, $auth);
         $mailer = new Mailer([]);
         (new ReflectionProperty(Mailer::class, 'transport'))->setValue($mailer, $this->transport);

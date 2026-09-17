@@ -11,15 +11,15 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'archive')]
 class Archive
 {
-    const STATUS_PENDING_ARCHIVE = "PENDING_ARCHIVE";
-    const STATUS_ARCHIVING       = "ARCHIVING";
-    const STATUS_ARCHIVED        = "ARCHIVED";
-    const STATUS_PENDING_RESTORE = "PENDING_RESTORE";
-    const STATUS_RESTORING       = "RESTORING";
-    const STATUS_RESTORED        = "RESTORED";
-    const STATUS_PENDING_DELETE  = "PENDING_DELETE";
-    const STATUS_DELETING        = "DELETING";
-    const STATUS_DELETED         = "DELETED";
+    public const STATUS_PENDING_ARCHIVE = "PENDING_ARCHIVE";
+    public const STATUS_ARCHIVING       = "ARCHIVING";
+    public const STATUS_ARCHIVED        = "ARCHIVED";
+    public const STATUS_PENDING_RESTORE = "PENDING_RESTORE";
+    public const STATUS_RESTORING       = "RESTORING";
+    public const STATUS_RESTORED        = "RESTORED";
+    public const STATUS_PENDING_DELETE  = "PENDING_DELETE";
+    public const STATUS_DELETING        = "DELETING";
+    public const STATUS_DELETED         = "DELETED";
 
     /** @var array<string, string> */
     public static $ARCHIVE_STATUS = [
@@ -32,7 +32,7 @@ class Archive
         self::STATUS_PENDING_DELETE   => "Pending Delete",
         self::STATUS_DELETING         => "Deleting",
         self::STATUS_DELETED          => "Deleted"
-        
+
     ];
 
     /**
@@ -156,7 +156,7 @@ class Archive
     public function setUsername($username)
     {
         $this->username = $username;
-    
+
         return $this;
     }
 
@@ -190,7 +190,7 @@ class Archive
     public function setStatus($status)
     {
         $this->status = $status;
-    
+
         return $this;
     }
 
@@ -213,7 +213,7 @@ class Archive
     public function setArchivedAt($archivedAt)
     {
         $this->archived_at = $archivedAt;
-    
+
         return $this;
     }
 
@@ -236,7 +236,7 @@ class Archive
     public function setStatusChangedAt($statusChangedAt)
     {
         $this->status_changed_at = $statusChangedAt;
-    
+
         return $this;
     }
 
@@ -259,7 +259,7 @@ class Archive
     public function setHomedirServer($homedirServer)
     {
         $this->homedir_server = $homedirServer;
-    
+
         return $this;
     }
 
@@ -282,7 +282,7 @@ class Archive
     public function setHomedirFile($homedirFile)
     {
         $this->homedir_file = $homedirFile;
-    
+
         return $this;
     }
 
@@ -305,7 +305,7 @@ class Archive
     public function setHomedirOrigSize($homedirOrigSize)
     {
         $this->homedir_orig_size = $homedirOrigSize;
-    
+
         return $this;
     }
 
@@ -328,7 +328,7 @@ class Archive
     public function setHomedirSize($homedirSize)
     {
         $this->homedir_size = $homedirSize;
-    
+
         return $this;
     }
 
@@ -351,7 +351,7 @@ class Archive
     public function setMaildirServer($maildirServer)
     {
         $this->maildir_server = $maildirServer;
-    
+
         return $this;
     }
 
@@ -374,7 +374,7 @@ class Archive
     public function setMaildirFile($maildirFile)
     {
         $this->maildir_file = $maildirFile;
-    
+
         return $this;
     }
 
@@ -397,7 +397,7 @@ class Archive
     public function setMaildirOrigSize($maildirOrigSize)
     {
         $this->maildir_orig_size = $maildirOrigSize;
-    
+
         return $this;
     }
 
@@ -420,7 +420,7 @@ class Archive
     public function setMaildirSize($maildirSize)
     {
         $this->maildir_size = $maildirSize;
-    
+
         return $this;
     }
 
@@ -443,7 +443,7 @@ class Archive
     public function setData($data)
     {
         $this->data = $data;
-    
+
         return $this;
     }
 
@@ -499,7 +499,7 @@ class Archive
     public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
-    
+
         return $this;
     }
 
@@ -533,7 +533,7 @@ class Archive
     public function setArchivedBy(?\Entities\Admin $archivedBy = null)
     {
         $this->ArchivedBy = $archivedBy;
-    
+
         return $this;
     }
 

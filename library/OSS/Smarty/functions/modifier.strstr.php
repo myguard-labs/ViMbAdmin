@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -56,7 +57,7 @@
  * @param string $haystack Needle to find
  * @return string|false
  */
-function smarty_modifier_strstr($string,$haystack)
+function smarty_modifier_strstr($string, $haystack)
 {
-    return strstr( $string, $haystack );
+    return strstr($string, $haystack);
 }

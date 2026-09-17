@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -45,37 +46,37 @@
  * @license    http://www.opensolutions.ie/licenses/new-bsd New BSD License
  */
 
-    /**
-     * Function to generate a currency string from a string, int or float
-     *
-     * parameters:
-     * 'value' string, int, float, default 0.00
-     * 'currency' string, default '&euro;'
-     *
-     * @category   OSS
-     * @package    OSS_Smarty
-     * @subpackage Functions
-     * 
-     * @param array{value?: int|float|numeric-string, currency?: string} $params
-     * @param \Smarty\Smarty $smarty A reference to the Smarty template object
-     * @return string
-     */
-    function smarty_function_currency( $params, &$smarty )
-    {
-        $value = $params['value'] ?? 0;
-        $currency = $params['currency'] ?? '&euro;';
+/**
+ * Function to generate a currency string from a string, int or float
+ *
+ * parameters:
+ * 'value' string, int, float, default 0.00
+ * 'currency' string, default '&euro;'
+ *
+ * @category   OSS
+ * @package    OSS_Smarty
+ * @subpackage Functions
+ *
+ * @param array{value?: int|float|numeric-string, currency?: string} $params
+ * @param \Smarty\Smarty $smarty A reference to the Smarty template object
+ * @return string
+ */
+function smarty_function_currency($params, &$smarty)
+{
+    $value = $params['value'] ?? 0;
+    $currency = $params['currency'] ?? '&euro;';
 
-        // Keep the native abs() contract for callers outside Smarty's numeric
-        // parameter shape: non-numeric strings remain rejected with TypeError.
-        if( is_string( $value ) )
-        {
-            if( !is_numeric( $value ) )
-                throw new TypeError( 'Currency value must be numeric' );
-
-            $value += 0;
+    // Keep the native abs() contract for callers outside Smarty's numeric
+    // parameter shape: non-numeric strings remain rejected with TypeError.
+    if (is_string($value)) {
+        if (!is_numeric($value)) {
+            throw new TypeError('Currency value must be numeric');
         }
 
-        $absoluteValue = abs( $value );
-
-        return ( $value < 0 ? '-' : '' ) . $currency . sprintf( "%.2f", $absoluteValue );
+        $value += 0;
     }
+
+    $absoluteValue = abs($value);
+
+    return ($value < 0 ? '-' : '') . $currency . sprintf("%.2f", $absoluteValue);
+}

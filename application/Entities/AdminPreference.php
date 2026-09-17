@@ -70,7 +70,7 @@ class AdminPreference
     public function setAttribute($attribute)
     {
         $this->attribute = $attribute;
-    
+
         return $this;
     }
 
@@ -93,7 +93,7 @@ class AdminPreference
     public function setIx($ix)
     {
         $this->ix = $ix;
-    
+
         return $this;
     }
 
@@ -116,7 +116,7 @@ class AdminPreference
     public function setOp($op)
     {
         $this->op = $op;
-    
+
         return $this;
     }
 
@@ -139,7 +139,7 @@ class AdminPreference
     public function setValue($value)
     {
         $this->value = $value;
-    
+
         return $this;
     }
 
@@ -162,7 +162,7 @@ class AdminPreference
     public function setExpire($expire)
     {
         $this->expire = $expire;
-    
+
         return $this;
     }
 
@@ -195,7 +195,7 @@ class AdminPreference
     public function setPreferences(?\Entities\Admin $preferences = null)
     {
         $this->Preferences = $preferences;
-    
+
         return $this;
     }
 
@@ -225,7 +225,7 @@ class AdminPreference
     public function setAdmin(?\Entities\Admin $admin = null)
     {
         $this->Admin = $admin;
-    
+
         return $this;
     }
 

@@ -41,7 +41,6 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class LogController extends AbstractController
 {
-
     /**
      * GET /log and /log/index — the auth-gated landing forwards to the list
      * (the native equivalent of the ZF1 indexAction `_forward('list')`).
@@ -246,7 +245,7 @@ final class LogController extends AbstractController
             'admin',                           // Admin
             $domainScoped ? null : 'domain',   // Domain (hidden while domain-scoped)
             'timestamp',                       // Occurred At
-        ], static fn(?string $c): bool => $c !== null));
+        ], static fn (?string $c): bool => $c !== null));
 
         return ($columns[$index] ?? '') ?: 'timestamp';
     }
@@ -276,18 +275,28 @@ final class LogController extends AbstractController
 
     private static function booleanValue(mixed $value, string $name): bool
     {
-        if (is_bool($value)) return $value;
-        if (is_int($value) && ($value === 0 || $value === 1)) return $value === 1;
-        if (is_string($value) && ($value === '0' || $value === '1')) return $value === '1';
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) && ($value === 0 || $value === 1)) {
+            return $value === 1;
+        }
+        if (is_string($value) && ($value === '0' || $value === '1')) {
+            return $value === '1';
+        }
         throw new \TypeError($name . ' must be boolean');
     }
 
     private static function positiveId(mixed $value, string $name): int
     {
-        if (is_int($value) && $value > 0) return $value;
+        if (is_int($value) && $value > 0) {
+            return $value;
+        }
         if (is_string($value) && preg_match('/^[1-9][0-9]*$/D', $value) === 1) {
             $id = filter_var($value, FILTER_VALIDATE_INT);
-            if ($id !== false && $id > 0) return $id;
+            if ($id !== false && $id > 0) {
+                return $id;
+            }
         }
         throw new \TypeError($name . ' must be a positive integer');
     }

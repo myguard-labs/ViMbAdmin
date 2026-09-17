@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -45,29 +46,29 @@
  * @license    http://www.opensolutions.ie/licenses/new-bsd New BSD License
  */
 
-    /**
-     * Function to generate a custom date string using date( 'format', strtotime( 'offset', now ) )
-     *
-     * parameters:
-     * 'format' string, default 'Y-m-d'
-     * 'offset' string, default 'now'
-     * 'now' string, default time()
-     *
-     * @category   OSS
-     * @package    OSS_Smarty
-     * @subpackage Functions
-     *
-     * @param array{format?: string, offset?: string, now?: int|numeric-string} $params
-     * @param \Smarty\Smarty $smarty A reference to the Smarty template object
-     * @return string
-     */
-    function smarty_function_customdate( $params, &$smarty )
-    {
-        $format = isset( $params['format'] ) ? $params['format'] : 'Y-m-d';
-        $offset = isset( $params['offset'] ) ? $params['offset'] : 'now';
-        $now = isset( $params['now'] ) ? (int)$params['now'] : time();
-        
-        $timestamp = strtotime( $offset, $now );
+/**
+ * Function to generate a custom date string using date( 'format', strtotime( 'offset', now ) )
+ *
+ * parameters:
+ * 'format' string, default 'Y-m-d'
+ * 'offset' string, default 'now'
+ * 'now' string, default time()
+ *
+ * @category   OSS
+ * @package    OSS_Smarty
+ * @subpackage Functions
+ *
+ * @param array{format?: string, offset?: string, now?: int|numeric-string} $params
+ * @param \Smarty\Smarty $smarty A reference to the Smarty template object
+ * @return string
+ */
+function smarty_function_customdate($params, &$smarty)
+{
+    $format = isset($params['format']) ? $params['format'] : 'Y-m-d';
+    $offset = isset($params['offset']) ? $params['offset'] : 'now';
+    $now = isset($params['now']) ? (int)$params['now'] : time();
 
-        return date( $format, $timestamp === false ? 0 : $timestamp );
-    }
+    $timestamp = strtotime($offset, $now);
+
+    return date($format, $timestamp === false ? 0 : $timestamp);
+}

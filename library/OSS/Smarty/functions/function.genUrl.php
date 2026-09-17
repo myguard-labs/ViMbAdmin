@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -45,39 +46,42 @@
  * @license    http://www.opensolutions.ie/licenses/new-bsd New BSD License
  */
 
-    /**
-     * Function to generate a Zend Controller URL from Smarty templates.
-     *
-     * The URL is made up of parameters as supplied in the $params associative array.
-     * 'module', 'controller' and 'action' are special parameters which indicate the module,
-     * controller and action to call. Any other parameters are added as additional name / value
-     * pairs.
-     *
-     * Calls OSS_Utils::genUrl()
-     *
-     * @category   OSS
-     * @package    OSS_Smarty
-     * @subpackage Functions
-     *
-     * @param array{controller?: string|false, action?: string|false, module?: string|false, ...<string, mixed>} $params An array of the parameters to make up the URL
-     * @param \Smarty\Smarty $smarty A reference to the Smarty object
-     * @return string
-     */
-    function smarty_function_genUrl( $params, &$smarty )
-    {
-        if( !isset( $params['controller'] ) )
-            $params['controller'] = false;
-
-        if( !isset( $params['action'] ) )
-            $params['action'] = false;
-
-        if( !isset( $params['module'] ) || $params['module'] == 'default' )
-            $params['module'] = false;
-
-        $p = $params;
-        unset( $p['controller'] );
-        unset( $p['action'] );
-        unset( $p['module'] );
-
-        return OSS_Utils::genUrl( $params['controller'], $params['action'], $params['module'], $p );
+/**
+ * Function to generate a Zend Controller URL from Smarty templates.
+ *
+ * The URL is made up of parameters as supplied in the $params associative array.
+ * 'module', 'controller' and 'action' are special parameters which indicate the module,
+ * controller and action to call. Any other parameters are added as additional name / value
+ * pairs.
+ *
+ * Calls OSS_Utils::genUrl()
+ *
+ * @category   OSS
+ * @package    OSS_Smarty
+ * @subpackage Functions
+ *
+ * @param array{controller?: string|false, action?: string|false, module?: string|false, ...<string, mixed>} $params An array of the parameters to make up the URL
+ * @param \Smarty\Smarty $smarty A reference to the Smarty object
+ * @return string
+ */
+function smarty_function_genUrl($params, &$smarty)
+{
+    if (!isset($params['controller'])) {
+        $params['controller'] = false;
     }
+
+    if (!isset($params['action'])) {
+        $params['action'] = false;
+    }
+
+    if (!isset($params['module']) || $params['module'] == 'default') {
+        $params['module'] = false;
+    }
+
+    $p = $params;
+    unset($p['controller']);
+    unset($p['action']);
+    unset($p['module']);
+
+    return OSS_Utils::genUrl($params['controller'], $params['action'], $params['module'], $p);
+}

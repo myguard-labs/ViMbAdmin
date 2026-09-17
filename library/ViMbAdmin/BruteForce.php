@@ -1,4 +1,5 @@
 <?php
+
 /**
  * ViMbAdmin brute-force login protection.
  *
@@ -43,49 +44,59 @@ class ViMbAdmin_BruteForce
     private const REAP_INTERVAL_SECONDS = 60;
 
     /** @return array<string,mixed> */
-    private static function stringMap( mixed $value, string $name ): array
+    private static function stringMap(mixed $value, string $name): array
     {
-        if( !is_array( $value ) )
-            throw new LogicException( $name . ' must be an array' );
-        foreach( $value as $key => $_item )
-            if( !is_string( $key ) )
-                throw new LogicException( $name . ' must use string keys' );
-        return $value;
-    }
-
-    private static function boolValue( mixed $value, string $name ): bool
-    {
-        if( $value === true || $value === 1 || $value === '1' ) return true;
-        if( $value === false || $value === 0 || $value === '' || $value === '0' ) return false;
-        throw new LogicException( $name . ' must be boolean' );
-    }
-
-    private static function stringValue( mixed $value, string $name ): string
-    {
-        if( !is_string( $value ) )
-            throw new LogicException( $name . ' must be a string' );
-        return $value;
-    }
-
-    private static function intValue( mixed $value, string $name, int $minimum = 0 ): int
-    {
-        if( is_string( $value ) && preg_match( '/^[0-9]+$/D', $value ) ) {
-            $normalized = ltrim( $value, '0' );
-            $value = filter_var( $normalized === '' ? '0' : $normalized, FILTER_VALIDATE_INT );
+        if (!is_array($value)) {
+            throw new LogicException($name . ' must be an array');
         }
-        if( !is_int( $value ) || $value < $minimum )
-            throw new LogicException( $name . ' must be a non-negative integer' );
+        foreach ($value as $key => $_item) {
+            if (!is_string($key)) {
+                throw new LogicException($name . ' must use string keys');
+            }
+        }
+        return $value;
+    }
+
+    private static function boolValue(mixed $value, string $name): bool
+    {
+        if ($value === true || $value === 1 || $value === '1') {
+            return true;
+        }
+        if ($value === false || $value === 0 || $value === '' || $value === '0') {
+            return false;
+        }
+        throw new LogicException($name . ' must be boolean');
+    }
+
+    private static function stringValue(mixed $value, string $name): string
+    {
+        if (!is_string($value)) {
+            throw new LogicException($name . ' must be a string');
+        }
+        return $value;
+    }
+
+    private static function intValue(mixed $value, string $name, int $minimum = 0): int
+    {
+        if (is_string($value) && preg_match('/^[0-9]+$/D', $value)) {
+            $normalized = ltrim($value, '0');
+            $value = filter_var($normalized === '' ? '0' : $normalized, FILTER_VALIDATE_INT);
+        }
+        if (!is_int($value) || $value < $minimum) {
+            throw new LogicException($name . ' must be a non-negative integer');
+        }
         return $value;
     }
 
     /** @return list<string> */
-    private static function stringList( mixed $value, string $name ): array
+    private static function stringList(mixed $value, string $name): array
     {
-        $values = is_array( $value ) ? $value : [ $value ];
+        $values = is_array($value) ? $value : [ $value ];
         $result = [];
-        foreach( $values as $item ) {
-            if( !is_string( $item ) )
-                throw new LogicException( $name . ' must contain strings' );
+        foreach ($values as $item) {
+            if (!is_string($item)) {
+                throw new LogicException($name . ' must contain strings');
+            }
             $result[] = $item;
         }
         return $result;
@@ -117,49 +128,64 @@ class ViMbAdmin_BruteForce
      * @param mixed $em   Unused (kept for call-site compatibility).
      * @param array<string, mixed> $opts [bruteforce] options from application.ini.
      */
-    public function __construct( $em = null, array $opts = [] )
+    public function __construct($em = null, array $opts = [])
     {
         // $em is accepted only for call-site compatibility with the historic
         // (EntityManager-backed) signature; this file-state implementation does
         // not use it. Explicitly discard so it isn't flagged as dead.
-        unset( $em );
+        unset($em);
 
-        $opts = self::stringMap( $opts, 'bruteforce options' );
-        if( isset( $opts['enabled'] ) )      $this->_enabled = self::boolValue( $opts['enabled'], 'bruteforce.enabled' );
-        if( isset( $opts['max_attempts'] ) ) $this->_max     = self::intValue( $opts['max_attempts'], 'bruteforce.max_attempts', 1 );
-        if( isset( $opts['window'] ) )       $this->_window  = self::intValue( $opts['window'], 'bruteforce.window' );
-        if( isset( $opts['lockout'] ) )      $this->_lockout = self::intValue( $opts['lockout'], 'bruteforce.lockout' );
+        $opts = self::stringMap($opts, 'bruteforce options');
+        if (isset($opts['enabled'])) {
+            $this->_enabled = self::boolValue($opts['enabled'], 'bruteforce.enabled');
+        }
+        if (isset($opts['max_attempts'])) {
+            $this->_max     = self::intValue($opts['max_attempts'], 'bruteforce.max_attempts', 1);
+        }
+        if (isset($opts['window'])) {
+            $this->_window  = self::intValue($opts['window'], 'bruteforce.window');
+        }
+        if (isset($opts['lockout'])) {
+            $this->_lockout = self::intValue($opts['lockout'], 'bruteforce.lockout');
+        }
 
-        $statedir = isset( $opts['statedir'] ) ? $opts['statedir'] : null;
-        if( $statedir !== null && !is_string( $statedir ) )
-            throw new LogicException( 'bruteforce.statedir must be a string' );
+        $statedir = isset($opts['statedir']) ? $opts['statedir'] : null;
+        if ($statedir !== null && !is_string($statedir)) {
+            throw new LogicException('bruteforce.statedir must be a string');
+        }
         $this->_statedir = $statedir !== null && $statedir !== ''
-            ? rtrim( $statedir, '/' )
+            ? rtrim($statedir, '/')
             : sys_get_temp_dir() . '/vimbadmin-bruteforce';
 
-        if( isset( $opts['ipv4_prefix'] ) ) {
-            $this->_v4prefix = self::intValue( $opts['ipv4_prefix'], 'bruteforce.ipv4_prefix' );
-            if( $this->_v4prefix < 8 || $this->_v4prefix > 32 )
-                throw new LogicException( 'bruteforce.ipv4_prefix must be between 8 and 32' );
+        if (isset($opts['ipv4_prefix'])) {
+            $this->_v4prefix = self::intValue($opts['ipv4_prefix'], 'bruteforce.ipv4_prefix');
+            if ($this->_v4prefix < 8 || $this->_v4prefix > 32) {
+                throw new LogicException('bruteforce.ipv4_prefix must be between 8 and 32');
+            }
         }
-        if( isset( $opts['ipv6_prefix'] ) ) {
-            $this->_v6prefix = self::intValue( $opts['ipv6_prefix'], 'bruteforce.ipv6_prefix' );
-            if( $this->_v6prefix < 16 || $this->_v6prefix > 128 )
-                throw new LogicException( 'bruteforce.ipv6_prefix must be between 16 and 128' );
+        if (isset($opts['ipv6_prefix'])) {
+            $this->_v6prefix = self::intValue($opts['ipv6_prefix'], 'bruteforce.ipv6_prefix');
+            if ($this->_v6prefix < 16 || $this->_v6prefix > 128) {
+                throw new LogicException('bruteforce.ipv6_prefix must be between 16 and 128');
+            }
         }
-        if( isset( $opts['max_entries'] ) )
-            $this->_maxEntries = self::intValue( $opts['max_entries'], 'bruteforce.max_entries', 64 );
+        if (isset($opts['max_entries'])) {
+            $this->_maxEntries = self::intValue($opts['max_entries'], 'bruteforce.max_entries', 64);
+        }
 
-        if( isset( $opts['whitelist'] ) )
-            $this->_whitelist = self::stringList( $opts['whitelist'], 'bruteforce.whitelist' );
+        if (isset($opts['whitelist'])) {
+            $this->_whitelist = self::stringList($opts['whitelist'], 'bruteforce.whitelist');
+        }
 
         // Trusted-proxy policy for resolving the real client IP (see [trustedproxy]).
-        if( isset( $opts['trustedproxy'] ) ) {
-            $proxy = self::stringMap( $opts['trustedproxy'], 'bruteforce.trustedproxy' );
-            if( isset( $proxy['mode'] ) )
-                $this->_proxyMode = self::stringValue( $proxy['mode'], 'bruteforce.trustedproxy.mode' );
-            if( isset( $proxy['proxies'] ) )
-                $this->_proxies = self::stringList( $proxy['proxies'], 'bruteforce.trustedproxy.proxies' );
+        if (isset($opts['trustedproxy'])) {
+            $proxy = self::stringMap($opts['trustedproxy'], 'bruteforce.trustedproxy');
+            if (isset($proxy['mode'])) {
+                $this->_proxyMode = self::stringValue($proxy['mode'], 'bruteforce.trustedproxy.mode');
+            }
+            if (isset($proxy['proxies'])) {
+                $this->_proxies = self::stringList($proxy['proxies'], 'bruteforce.trustedproxy.proxies');
+            }
         }
     }
 
@@ -174,24 +200,27 @@ class ViMbAdmin_BruteForce
      * @param mixed $request
      * @return void
      */
-    public function assertNotLocked( $request )
+    public function assertNotLocked($request)
     {
-        if( !$this->_enabled )
+        if (!$this->_enabled) {
             return;
+        }
 
-        $ip = $this->_ip( $request );
-        if( $this->_isWhitelisted( $ip ) )
+        $ip = $this->_ip($request);
+        if ($this->_isWhitelisted($ip)) {
             return;
+        }
 
         $rec = $this->_withLock(
             $ip,
-            function() use ( $ip ): array { return $this->_load( $ip ); },
+            function () use ($ip): array {
+                return $this->_load($ip);
+            },
             false
         );
-        if( $rec['locked_until'] > time() )
-        {
-            header( 'HTTP/1.1 429 Too Many Requests' );
-            header( 'Retry-After: ' . max( 1, $rec['locked_until'] - time() ) );
+        if ($rec['locked_until'] > time()) {
+            header('HTTP/1.1 429 Too Many Requests');
+            header('Retry-After: ' . max(1, $rec['locked_until'] - time()));
             echo 'Too many failed login attempts. Try again later.';
             exit;
         }
@@ -209,22 +238,23 @@ class ViMbAdmin_BruteForce
      * @throws RuntimeException when state cannot be persisted or locked
      * @return void
      */
-    public function record( $username, $request )
+    public function record($username, $request)
     {
-        if( !$this->_enabled )
+        if (!$this->_enabled) {
             return;
+        }
 
-        $ip = $this->_ip( $request );
-        if( $this->_isWhitelisted( $ip ) )
+        $ip = $this->_ip($request);
+        if ($this->_isWhitelisted($ip)) {
             return;
+        }
 
         $this->_maybeReapStale();
-        $this->_withLock( $ip, function() use ( $ip ): void {
-            $rec = $this->_load( $ip );
+        $this->_withLock($ip, function () use ($ip): void {
+            $rec = $this->_load($ip);
 
             // reset the counter if the window has elapsed since the first hit
-            if( $rec['first'] === 0 || ( time() - $rec['first'] ) > $this->_window )
-            {
+            if ($rec['first'] === 0 || (time() - $rec['first']) > $this->_window) {
                 $rec['first']    = time();
                 $rec['attempts'] = 0;
             }
@@ -232,11 +262,12 @@ class ViMbAdmin_BruteForce
             $rec['attempts']++;
             $rec['last'] = time();
 
-            if( $rec['attempts'] >= $this->_max )
+            if ($rec['attempts'] >= $this->_max) {
                 $rec['locked_until'] = time() + $this->_lockout;
+            }
 
-            $this->_save( $ip, $rec );
-        } );
+            $this->_save($ip, $rec);
+        });
     }
 
     /**
@@ -247,16 +278,18 @@ class ViMbAdmin_BruteForce
      * @throws RuntimeException when state cannot be removed or locked
      * @return void
      */
-    public function clear( $username, $request )
+    public function clear($username, $request)
     {
-        if( !$this->_enabled )
+        if (!$this->_enabled) {
             return;
-        $ip = $this->_ip( $request );
-        if( $this->_isWhitelisted( $ip ) )
+        }
+        $ip = $this->_ip($request);
+        if ($this->_isWhitelisted($ip)) {
             return;
-        $this->_withLock( $ip, function() use ( $ip ): void {
-            $this->_delete( $ip );
-        } );
+        }
+        $this->_withLock($ip, function () use ($ip): void {
+            $this->_delete($ip);
+        });
     }
 
     /**
@@ -266,16 +299,20 @@ class ViMbAdmin_BruteForce
      * @throws RuntimeException when state cannot be read or locked
      * @return bool
      */
-    public function isLocked( $request )
+    public function isLocked($request)
     {
-        if( !$this->_enabled )
+        if (!$this->_enabled) {
             return false;
-        $ip = $this->_ip( $request );
-        if( $this->_isWhitelisted( $ip ) )
+        }
+        $ip = $this->_ip($request);
+        if ($this->_isWhitelisted($ip)) {
             return false;
+        }
         $rec = $this->_withLock(
             $ip,
-            function() use ( $ip ): array { return $this->_load( $ip ); },
+            function () use ($ip): array {
+                return $this->_load($ip);
+            },
             false
         );
         return $rec['locked_until'] > time();
@@ -287,11 +324,11 @@ class ViMbAdmin_BruteForce
      * @param string $ip
      * @return string
      */
-    private function _file( $ip )
+    private function _file($ip)
     {
         // Hash the network key so the filename is filesystem-safe and doesn't
         // leak the raw address in a directory listing.
-        return $this->_statedir . '/' . hash( 'sha256', $this->_key( $ip ) ) . '.json';
+        return $this->_statedir . '/' . hash('sha256', $this->_key($ip)) . '.json';
     }
 
     /**
@@ -305,46 +342,53 @@ class ViMbAdmin_BruteForce
      * @param string $ip
      * @return string
      */
-    private function _key( $ip )
+    private function _key($ip)
     {
-        $packed = @inet_pton( $ip );
-        if( !is_string( $packed ) )
+        $packed = @inet_pton($ip);
+        if (!is_string($packed)) {
             return 'raw:' . $ip;
+        }
 
         // An IPv4-mapped address (::ffff:a.b.c.d) is an IPv4 client wearing a
         // 16-byte representation. Masked at the IPv6 width it collapses to
         // ::/64, which would put every such client in one shared bucket and let
         // any one of them lock out all the others. Unwrap to the 4-byte form so
         // it is keyed as the IPv4 address it actually is.
-        if( strlen( $packed ) === 16 && strncmp( $packed, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12 ) === 0 )
-            $packed = substr( $packed, 12 );
+        if (strlen($packed) === 16 && strncmp($packed, "\0\0\0\0\0\0\0\0\0\0\xff\xff", 12) === 0) {
+            $packed = substr($packed, 12);
+        }
 
-        $bits = strlen( $packed ) === 4 ? $this->_v4prefix : $this->_v6prefix;
-        $full = strlen( $packed ) * 8;
-        if( $bits > $full )
+        $bits = strlen($packed) === 4 ? $this->_v4prefix : $this->_v6prefix;
+        $full = strlen($packed) * 8;
+        if ($bits > $full) {
             $bits = $full;
+        }
 
-        $bytes = intdiv( $bits, 8 );
+        $bytes = intdiv($bits, 8);
         $rem   = $bits % 8;
-        $masked = substr( $packed, 0, $bytes );
-        if( $rem !== 0 )
-            $masked .= chr( ord( $packed[$bytes] ) & ( 0xff << ( 8 - $rem ) & 0xff ) );
-        $masked = str_pad( $masked, strlen( $packed ), "\0" );
+        $masked = substr($packed, 0, $bytes);
+        if ($rem !== 0) {
+            $masked .= chr(ord($packed[$bytes]) & (0xff << (8 - $rem) & 0xff));
+        }
+        $masked = str_pad($masked, strlen($packed), "\0");
 
-        $network = @inet_ntop( $masked );
-        if( !is_string( $network ) )
+        $network = @inet_ntop($masked);
+        if (!is_string($network)) {
             return 'raw:' . $ip;
+        }
         return $network . '/' . $bits;
     }
 
     /** @return void */
     private function _ensureDir()
     {
-        if( !is_string( $this->_statedir ) )
-            throw new LogicException( 'bruteforce state directory is not configured' );
-        if( !is_dir( $this->_statedir )
-            && ( !@mkdir( $this->_statedir, 0750, true ) && !is_dir( $this->_statedir ) ) )
-            throw new RuntimeException( 'bruteforce state persistence unavailable' );
+        if (!is_string($this->_statedir)) {
+            throw new LogicException('bruteforce state directory is not configured');
+        }
+        if (!is_dir($this->_statedir)
+            && (!@mkdir($this->_statedir, 0750, true) && !is_dir($this->_statedir))) {
+            throw new RuntimeException('bruteforce state persistence unavailable');
+        }
     }
 
     /**
@@ -368,10 +412,10 @@ class ViMbAdmin_BruteForce
      * @param string $ip
      * @return string
      */
-    private function _lockFile( $ip )
+    private function _lockFile($ip)
     {
         return $this->_statedir . '/.lock.'
-            . substr( hash( 'sha256', $this->_key( $ip ) ), 0, 2 );
+            . substr(hash('sha256', $this->_key($ip)), 0, 2);
     }
 
     /**
@@ -397,32 +441,31 @@ class ViMbAdmin_BruteForce
      * @param bool $exclusive
      * @return T
      */
-    private function _withLock( $ip, callable $operation, $exclusive = true )
+    private function _withLock($ip, callable $operation, $exclusive = true)
     {
         $this->_ensureDir();
-        $handle = @fopen( $this->_lockFile( $ip ), 'c' );
-        if( $handle === false )
-            throw new RuntimeException( 'bruteforce state persistence unavailable' );
+        $handle = @fopen($this->_lockFile($ip), 'c');
+        if ($handle === false) {
+            throw new RuntimeException('bruteforce state persistence unavailable');
+        }
 
-        try
-        {
-            $mode = ( $exclusive ? LOCK_EX : LOCK_SH ) | LOCK_NB;
-            $deadline = hrtime( true ) + self::LOCK_TIMEOUT_NANOSECONDS;
+        try {
+            $mode = ($exclusive ? LOCK_EX : LOCK_SH) | LOCK_NB;
+            $deadline = hrtime(true) + self::LOCK_TIMEOUT_NANOSECONDS;
             $backoff = self::LOCK_RETRY_MICROSECONDS;
-            while( !@flock( $handle, $mode ) )
-            {
-                if( hrtime( true ) >= $deadline )
-                    throw new RuntimeException( 'bruteforce state persistence unavailable' );
-                usleep( $backoff );
-                if( $backoff < self::LOCK_MAX_RETRY_MICROSECONDS )
+            while (!@flock($handle, $mode)) {
+                if (hrtime(true) >= $deadline) {
+                    throw new RuntimeException('bruteforce state persistence unavailable');
+                }
+                usleep($backoff);
+                if ($backoff < self::LOCK_MAX_RETRY_MICROSECONDS) {
                     $backoff *= 2;
+                }
             }
             return $operation();
-        }
-        finally
-        {
-            @flock( $handle, LOCK_UN );
-            fclose( $handle );
+        } finally {
+            @flock($handle, LOCK_UN);
+            fclose($handle);
         }
     }
 
@@ -430,21 +473,21 @@ class ViMbAdmin_BruteForce
      * @param string $ip
      * @return array{attempts:int, first:int, last:int, locked_until:int}
      */
-    private function _load( $ip )
+    private function _load($ip)
     {
         $default = [ 'attempts' => 0, 'first' => 0, 'last' => 0, 'locked_until' => 0 ];
 
-        $f = $this->_file( $ip );
-        if( file_exists( $f ) )
-        {
-            $json = @file_get_contents( $f );
-            if( !is_string( $json ) )
-                throw new RuntimeException( 'bruteforce state persistence unavailable' );
-            $d = json_decode( $json, true );
-            if( is_array( $d ) ) {
-                foreach( $default as $key => $_zero ) {
-                    if( !isset( $d[$key] ) || !is_int( $d[$key] ) || $d[$key] < 0 ) {
-                        throw new LogicException( 'bruteforce state is corrupt' );
+        $f = $this->_file($ip);
+        if (file_exists($f)) {
+            $json = @file_get_contents($f);
+            if (!is_string($json)) {
+                throw new RuntimeException('bruteforce state persistence unavailable');
+            }
+            $d = json_decode($json, true);
+            if (is_array($d)) {
+                foreach ($default as $key => $_zero) {
+                    if (!isset($d[$key]) || !is_int($d[$key]) || $d[$key] < 0) {
+                        throw new LogicException('bruteforce state is corrupt');
                     }
                 }
                 $attempts = $d['attempts'];
@@ -453,7 +496,7 @@ class ViMbAdmin_BruteForce
                 $lockedUntil = $d['locked_until'];
                 return [ 'attempts' => $attempts, 'first' => $first, 'last' => $last, 'locked_until' => $lockedUntil ];
             }
-            throw new LogicException( 'bruteforce state is corrupt' );
+            throw new LogicException('bruteforce state is corrupt');
         }
         return $default;
     }
@@ -463,38 +506,39 @@ class ViMbAdmin_BruteForce
      * @param array{attempts:int, first:int, last:int, locked_until:int} $rec
      * @return void
      */
-    private function _save( $ip, array $rec )
+    private function _save($ip, array $rec)
     {
         $this->_ensureDir();
-        $f   = $this->_file( $ip );
+        $f   = $this->_file($ip);
         $tmp = $f . '.' . getmypid() . '.tmp';
-        $encoded = json_encode( $rec );
-        if( !is_string( $encoded ) )
-            throw new RuntimeException( 'bruteforce state persistence unavailable' );
+        $encoded = json_encode($rec);
+        if (!is_string($encoded)) {
+            throw new RuntimeException('bruteforce state persistence unavailable');
+        }
 
         // Whether this write ADDS a prefix decides how fast the directory can
         // grow, and the durable growth counter is the only thing that can call
         // a sweep in ahead of the routine interval.
-        $isNew = !file_exists( $f );
+        $isNew = !file_exists($f);
 
-        try
-        {
+        try {
             // $tmp is a fresh, private per-pid path never shared with another
             // writer, so LOCK_EX buys nothing here -- only the final rename()
             // needs to be atomic, and it already is.
-            if( @file_put_contents( $tmp, $encoded ) !== strlen( $encoded ) )
-                throw new RuntimeException( 'bruteforce state persistence unavailable' );
-            if( !@rename( $tmp, $f ) )
-                throw new RuntimeException( 'bruteforce state persistence unavailable' );
-            if( $isNew )
+            if (@file_put_contents($tmp, $encoded) !== strlen($encoded)) {
+                throw new RuntimeException('bruteforce state persistence unavailable');
+            }
+            if (!@rename($tmp, $f)) {
+                throw new RuntimeException('bruteforce state persistence unavailable');
+            }
+            if ($isNew) {
                 $this->_notePrefixCreated();
-        }
-        finally
-        {
+            }
+        } finally {
             // @unlink() already reports absence via its own suppressed return;
             // the successful rename() above already removed $tmp in the common
             // case, so this is just best-effort cleanup after a failed write.
-            @unlink( $tmp );
+            @unlink($tmp);
         }
     }
 
@@ -502,13 +546,12 @@ class ViMbAdmin_BruteForce
      * @param string $ip
      * @return void
      */
-    private function _delete( $ip )
+    private function _delete($ip)
     {
-        $file = $this->_file( $ip );
-        if( file_exists( $file ) && !@unlink( $file ) )
-        {
-            error_log( 'ViMbAdmin_BruteForce: could not clear state file ' . $file );
-            throw new RuntimeException( 'bruteforce state persistence unavailable' );
+        $file = $this->_file($ip);
+        if (file_exists($file) && !@unlink($file)) {
+            error_log('ViMbAdmin_BruteForce: could not clear state file ' . $file);
+            throw new RuntimeException('bruteforce state persistence unavailable');
         }
     }
 
@@ -529,24 +572,23 @@ class ViMbAdmin_BruteForce
      */
     private function _notePrefixCreated()
     {
-        $handle = @fopen( $this->_statedir . '/.reap-growth', 'c+' );
-        if( $handle === false )
+        $handle = @fopen($this->_statedir . '/.reap-growth', 'c+');
+        if ($handle === false) {
             return;
-        try
-        {
-            if( !@flock( $handle, LOCK_EX | LOCK_NB ) )
-                return;
-            $raw = trim( (string) @stream_get_contents( $handle ) );
-            $count = preg_match( '/^[0-9]{1,18}$/D', $raw ) === 1 ? (int) $raw + 1 : 1;
-            if( @ftruncate( $handle, 0 ) ) {
-                @rewind( $handle );
-                @fwrite( $handle, (string) $count );
-            }
-            @flock( $handle, LOCK_UN );
         }
-        finally
-        {
-            fclose( $handle );
+        try {
+            if (!@flock($handle, LOCK_EX | LOCK_NB)) {
+                return;
+            }
+            $raw = trim((string) @stream_get_contents($handle));
+            $count = preg_match('/^[0-9]{1,18}$/D', $raw) === 1 ? (int) $raw + 1 : 1;
+            if (@ftruncate($handle, 0)) {
+                @rewind($handle);
+                @fwrite($handle, (string) $count);
+            }
+            @flock($handle, LOCK_UN);
+        } finally {
+            fclose($handle);
         }
     }
 
@@ -559,17 +601,18 @@ class ViMbAdmin_BruteForce
     private function _readPrefixGrowth(): int
     {
         $path = $this->_statedir . '/.reap-growth';
-        clearstatcache( true, $path );
-        $raw = @file_get_contents( $path );
-        if( !is_string( $raw ) || preg_match( '/^[0-9]{1,18}$/D', trim( $raw ) ) !== 1 )
+        clearstatcache(true, $path);
+        $raw = @file_get_contents($path);
+        if (!is_string($raw) || preg_match('/^[0-9]{1,18}$/D', trim($raw)) !== 1) {
             return 0;
-        return (int) trim( $raw );
+        }
+        return (int) trim($raw);
     }
 
     /** @return void */
     private function _clearPrefixGrowth()
     {
-        @unlink( $this->_statedir . '/.reap-growth' );
+        @unlink($this->_statedir . '/.reap-growth');
     }
 
     /**
@@ -588,33 +631,30 @@ class ViMbAdmin_BruteForce
      */
     private function _maybeReapStale()
     {
-        try
-        {
+        try {
             $this->_ensureDir();
-        }
-        catch( RuntimeException )
-        {
+        } catch (RuntimeException) {
             // Fail closed happens in the caller's own state write, which takes
             // the lock and re-runs _ensureDir().
             return;
         }
 
-        $handle = @fopen( $this->_statedir . '/.reap-lock', 'c' );
-        if( $handle === false )
+        $handle = @fopen($this->_statedir . '/.reap-lock', 'c');
+        if ($handle === false) {
             return;
-        try
-        {
-            if( !@flock( $handle, LOCK_EX | LOCK_NB ) )
+        }
+        try {
+            if (!@flock($handle, LOCK_EX | LOCK_NB)) {
                 return;
-            try
-            {
+            }
+            try {
                 // One readdir pass is O(N) even with the name cursor, so it
                 // is amortised over time rather than paid on every failed
                 // login: .reap-stamp's mtime records the last sweep.
                 $now = time();
                 $stamp = $this->_statedir . '/.reap-stamp';
-                clearstatcache( true, $stamp );
-                $last = @filemtime( $stamp );
+                clearstatcache(true, $stamp);
+                $last = @filemtime($stamp);
                 // A missing stamp means "never swept" and is always due; a
                 // stamp in the future (clock step) is likewise treated as due.
                 //
@@ -632,41 +672,38 @@ class ViMbAdmin_BruteForce
                 // marker file is written by a sweep that ended still above the
                 // cap and removed by one that got under it.
                 $overflowFlag = $this->_statedir . '/.reap-overflow';
-                clearstatcache( true, $overflowFlag );
-                $overCap = @is_file( $overflowFlag );
+                clearstatcache(true, $overflowFlag);
+                $overCap = @is_file($overflowFlag);
                 // A burst of NEW prefixes is the only growth record() can
                 // cause, so once it could plausibly have filled the cap, sweep
                 // now rather than waiting for the next interval.
                 $grown = $this->_readPrefixGrowth() >= $this->_maxEntries;
-                if( !$overCap && !$grown && is_int( $last ) && $last <= $now
-                    && ( $now - $last ) < self::REAP_INTERVAL_SECONDS )
+                if (!$overCap && !$grown && is_int($last) && $last <= $now
+                    && ($now - $last) < self::REAP_INTERVAL_SECONDS) {
                     return;
-                if( @touch( $stamp, $now ) )
-                    @chmod( $stamp, 0640 );
+                }
+                if (@touch($stamp, $now)) {
+                    @chmod($stamp, 0640);
+                }
                 $this->_clearPrefixGrowth();
-                if( $this->_reapStale( $now ) )
+                if ($this->_reapStale($now)) {
                     // Still above the cap AND this sweep evicted something, so
                     // another one will get further: mark the directory so the
                     // next failed login sweeps again instead of waiting out the
                     // interval. A sweep that could evict nothing does not set
                     // this -- see _evictOverflow().
-                    @touch( $overflowFlag );
-                elseif( $overCap )
-                    @unlink( $overflowFlag );
-            }
-            catch( RuntimeException )
-            {
+                    @touch($overflowFlag);
+                } elseif ($overCap) {
+                    @unlink($overflowFlag);
+                }
+            } catch (RuntimeException) {
                 // Cleanup is opportunistic; the following state write
                 // independently acquires the state lock and still fails closed.
+            } finally {
+                @flock($handle, LOCK_UN);
             }
-            finally
-            {
-                @flock( $handle, LOCK_UN );
-            }
-        }
-        finally
-        {
-            fclose( $handle );
+        } finally {
+            fclose($handle);
         }
     }
 
@@ -685,22 +722,25 @@ class ViMbAdmin_BruteForce
      *              this sweep, so the caller can re-arm without waiting out the
      *              reap interval.
      */
-    private function _reapStale( int $now ): bool
+    private function _reapStale(int $now): bool
     {
-        $directoryStat = @lstat( $this->_statedir );
-        if( !is_array( $directoryStat ) || !isset( $directoryStat['mode'] )
-            || !is_int( $directoryStat['mode'] ) || ( $directoryStat['mode'] & 0170000 ) !== 0040000 )
+        $directoryStat = @lstat($this->_statedir);
+        if (!is_array($directoryStat) || !isset($directoryStat['mode'])
+            || !is_int($directoryStat['mode']) || ($directoryStat['mode'] & 0170000) !== 0040000) {
             return false;
+        }
 
         $cursorPath = $this->_statedir . '/.reap-cursor';
         $cursor = '';
-        $rawCursor = @file_get_contents( $cursorPath );
-        if( is_string( $rawCursor ) && preg_match( '/^[a-f0-9]{64}\n$/D', $rawCursor ) === 1 )
-            $cursor = trim( $rawCursor );
+        $rawCursor = @file_get_contents($cursorPath);
+        if (is_string($rawCursor) && preg_match('/^[a-f0-9]{64}\n$/D', $rawCursor) === 1) {
+            $cursor = trim($rawCursor);
+        }
 
-        $handle = @opendir( $this->_statedir );
-        if( $handle === false )
+        $handle = @opendir($this->_statedir);
+        if ($handle === false) {
             return false;
+        }
 
         // One readdir pass; keep only the smallest REAP_SCAN_LIMIT names that
         // sort strictly after the cursor, plus a genuinely oldest-first sample
@@ -711,12 +751,11 @@ class ViMbAdmin_BruteForce
         $total = 0;
         $sample = [];
         $sampleMax = null;
-        try
-        {
-            while( ( $entry = readdir( $handle ) ) !== false )
-            {
-                if( preg_match( '/^([a-f0-9]{64})\.json$/D', $entry, $matches ) !== 1 )
+        try {
+            while (($entry = readdir($handle)) !== false) {
+                if (preg_match('/^([a-f0-9]{64})\.json$/D', $entry, $matches) !== 1) {
                     continue;
+                }
                 $total++;
                 $name = $matches[1];
 
@@ -728,63 +767,65 @@ class ViMbAdmin_BruteForce
                 // Otherwise rotating ~max_entries prefixes flushes your own
                 // lockout, which is the throttle bypass this whole item exists
                 // to close.
-                $candidate = $this->_evictionCandidate( $this->_statedir . '/' . $entry, $now );
-                if( $candidate !== null ) {
-                    if( count( $sample ) < self::EVICT_SAMPLE_LIMIT ) {
+                $candidate = $this->_evictionCandidate($this->_statedir . '/' . $entry, $now);
+                if ($candidate !== null) {
+                    if (count($sample) < self::EVICT_SAMPLE_LIMIT) {
                         $sample[$entry] = $candidate;
-                        if( $sampleMax === null || $candidate > $sampleMax )
+                        if ($sampleMax === null || $candidate > $sampleMax) {
                             $sampleMax = $candidate;
-                    }
-                    elseif( $sampleMax === null || $candidate < $sampleMax ) {
-                        asort( $sample, SORT_NUMERIC );
-                        array_pop( $sample );
+                        }
+                    } elseif ($sampleMax === null || $candidate < $sampleMax) {
+                        asort($sample, SORT_NUMERIC);
+                        array_pop($sample);
                         $sample[$entry] = $candidate;
-                        $sampleMax = max( $sample );
+                        $sampleMax = max($sample);
                     }
                 }
-                if( $cursor !== '' && strcmp( $name, $cursor ) <= 0 )
+                if ($cursor !== '' && strcmp($name, $cursor) <= 0) {
                     continue;
+                }
                 // Keep the REAP_SCAN_LIMIT smallest names above the cursor.
                 // Once the window is full, most entries cannot make the cut, so
                 // compare against the current maximum before paying for a sort
                 // -- this runs once per directory entry on the failed-login path.
-                if( count( $window ) < self::REAP_SCAN_LIMIT ) {
+                if (count($window) < self::REAP_SCAN_LIMIT) {
                     $window[] = $name;
                     continue;
                 }
-                if( !$windowSorted ) {
-                    sort( $window, SORT_STRING );
+                if (!$windowSorted) {
+                    sort($window, SORT_STRING);
                     $windowSorted = true;
                 }
-                if( strcmp( $name, (string) end( $window ) ) >= 0 )
+                if (strcmp($name, (string) end($window)) >= 0) {
                     continue;
-                array_pop( $window );
+                }
+                array_pop($window);
                 $window[] = $name;
-                sort( $window, SORT_STRING );
+                sort($window, SORT_STRING);
+            }
+        } finally {
+            closedir($handle);
+        }
+        sort($window, SORT_STRING);
+        $window = array_slice($window, 0, self::REAP_SCAN_LIMIT);
+
+        $cutoff = $now - max($this->_window, $this->_lockout);
+        $removed = 0;
+        foreach ($window as $name) {
+            if ($this->_reapFile($this->_statedir . '/' . $name . '.json', $cutoff)) {
+                $removed++;
             }
         }
-        finally
-        {
-            closedir( $handle );
-        }
-        sort( $window, SORT_STRING );
-        $window = array_slice( $window, 0, self::REAP_SCAN_LIMIT );
-
-        $cutoff = $now - max( $this->_window, $this->_lockout );
-        $removed = 0;
-        foreach( $window as $name )
-            if( $this->_reapFile( $this->_statedir . '/' . $name . '.json', $cutoff ) )
-                $removed++;
 
         // A pass that reached the end of the key space starts over next time.
-        $next = count( $window ) < self::REAP_SCAN_LIMIT ? '' : (string) end( $window );
-        $this->_saveReapCursor( $cursorPath, $next );
+        $next = count($window) < self::REAP_SCAN_LIMIT ? '' : (string) end($window);
+        $this->_saveReapCursor($cursorPath, $next);
 
         // Hard cap: stale-only reaping cannot bound a directory an attacker
         // refreshes faster than max(window, lockout). Once the cap is exceeded,
         // evict the least-recently-touched sampled entries as well, so the
         // directory (and therefore every scan over it) stays bounded.
-        return $this->_evictOverflow( $total - $removed, $sample, $now );
+        return $this->_evictOverflow($total - $removed, $sample, $now);
     }
 
     /**
@@ -807,27 +848,32 @@ class ViMbAdmin_BruteForce
      *
      * @return int|null mtime to order by, or null when the record is live
      */
-    private function _evictionCandidate( string $path, int $now ): ?int
+    private function _evictionCandidate(string $path, int $now): ?int
     {
-        $stat = @lstat( $path );
-        if( !is_array( $stat ) || !isset( $stat['mode'], $stat['mtime'] )
-            || !is_int( $stat['mode'] ) || !is_int( $stat['mtime'] )
-            || ( $stat['mode'] & 0170000 ) !== 0100000 )
+        $stat = @lstat($path);
+        if (!is_array($stat) || !isset($stat['mode'], $stat['mtime'])
+            || !is_int($stat['mode']) || !is_int($stat['mtime'])
+            || ($stat['mode'] & 0170000) !== 0100000) {
             return null;
+        }
 
-        $json = @file_get_contents( $path );
-        $record = is_string( $json ) ? json_decode( $json, true ) : null;
-        if( !is_array( $record ) )
+        $json = @file_get_contents($path);
+        $record = is_string($json) ? json_decode($json, true) : null;
+        if (!is_array($record)) {
             // Malformed state is not a live lockout, and _load() would refuse
             // it anyway; let the cap reclaim it.
             return $stat['mtime'];
+        }
 
-        foreach( [ 'attempts', 'first', 'last', 'locked_until' ] as $key )
-            if( !isset( $record[$key] ) || !is_int( $record[$key] ) || $record[$key] < 0 )
+        foreach ([ 'attempts', 'first', 'last', 'locked_until' ] as $key) {
+            if (!isset($record[$key]) || !is_int($record[$key]) || $record[$key] < 0) {
                 return $stat['mtime'];
+            }
+        }
 
-        if( $record['locked_until'] > $now )
-            return null;                       // active lockout: never evict
+        if ($record['locked_until'] > $now) {
+            return null;
+        }                       // active lockout: never evict
 
         return $stat['mtime'];
     }
@@ -849,31 +895,34 @@ class ViMbAdmin_BruteForce
      * @param array<string,int> $sample basename => mtime, evictable only
      * @return bool true when another sweep would make further progress
      */
-    private function _evictOverflow( int $remaining, array $sample, int $now ): bool
+    private function _evictOverflow(int $remaining, array $sample, int $now): bool
     {
         $overflow = $remaining - $this->_maxEntries;
-        if( $overflow <= 0 )
+        if ($overflow <= 0) {
             return false;
-        if( $sample === [] )
+        }
+        if ($sample === []) {
             // Over cap with nothing evictable: no sweep can improve this, so
             // do not re-arm.
             return false;
+        }
 
-        asort( $sample, SORT_NUMERIC );
+        asort($sample, SORT_NUMERIC);
 
         $evicted = 0;
-        foreach( array_keys( $sample ) as $entry ) {
-            if( $overflow <= 0 )
+        foreach (array_keys($sample) as $entry) {
+            if ($overflow <= 0) {
                 return false;
+            }
             $path = $this->_statedir . '/' . $entry;
-            $before = @lstat( $path );
-            clearstatcache( true, $path );
-            $after = @lstat( $path );
+            $before = @lstat($path);
+            clearstatcache(true, $path);
+            $after = @lstat($path);
             // Re-check liveness under the same stat pair: a source can have
             // become locked between the readdir sample and this deletion.
-            if( $this->_isStableRegularFile( $before, $after )
-                && $this->_evictionCandidate( $path, $now ) !== null
-                && @unlink( $path ) ) {
+            if ($this->_isStableRegularFile($before, $after)
+                && $this->_evictionCandidate($path, $now) !== null
+                && @unlink($path)) {
                 $overflow--;
                 $evicted++;
             }
@@ -882,51 +931,57 @@ class ViMbAdmin_BruteForce
         return $overflow > 0 && $evicted > 0;
     }
 
-    private function _saveReapCursor( string $path, string $cursor ): void
+    private function _saveReapCursor(string $path, string $cursor): void
     {
         $tmp = $path . '.' . getmypid() . '.tmp';
         $value = $cursor . "\n";
         // $tmp is a fresh, private per-pid path: LOCK_EX is redundant, the
         // atomic rename() below is what makes the update safe to observe.
-        if( @file_put_contents( $tmp, $value ) !== strlen( $value ) || !@rename( $tmp, $path ) )
-        {
-            @unlink( $tmp );
-            throw new RuntimeException( 'bruteforce state persistence unavailable' );
+        if (@file_put_contents($tmp, $value) !== strlen($value) || !@rename($tmp, $path)) {
+            @unlink($tmp);
+            throw new RuntimeException('bruteforce state persistence unavailable');
         }
     }
 
-    private function _reapFile( string $path, int $cutoff ): bool
+    private function _reapFile(string $path, int $cutoff): bool
     {
-        $before = @lstat( $path );
-        if( !$this->_isStableRegularFile( $before, $before ) )
+        $before = @lstat($path);
+        if (!$this->_isStableRegularFile($before, $before)) {
             return false;
-        $json = @file_get_contents( $path );
-        $record = is_string( $json ) ? json_decode( $json, true ) : null;
-        if( !is_array( $record ) || !$this->_isStaleRecord( $record, $cutoff ) )
+        }
+        $json = @file_get_contents($path);
+        $record = is_string($json) ? json_decode($json, true) : null;
+        if (!is_array($record) || !$this->_isStaleRecord($record, $cutoff)) {
             return false;
-        clearstatcache( true, $path );
-        $after = @lstat( $path );
-        return $this->_isStableRegularFile( $before, $after ) && @unlink( $path );
+        }
+        clearstatcache(true, $path);
+        $after = @lstat($path);
+        return $this->_isStableRegularFile($before, $after) && @unlink($path);
     }
 
-    private function _isStableRegularFile( mixed $before, mixed $after ): bool
+    private function _isStableRegularFile(mixed $before, mixed $after): bool
     {
-        if( !is_array( $before ) || !is_array( $after ) )
+        if (!is_array($before) || !is_array($after)) {
             return false;
-        foreach( [ 'mode', 'dev', 'ino' ] as $key )
-            if( !isset( $before[$key], $after[$key] ) || !is_int( $before[$key] )
-                || !is_int( $after[$key] ) || $before[$key] !== $after[$key] )
+        }
+        foreach ([ 'mode', 'dev', 'ino' ] as $key) {
+            if (!isset($before[$key], $after[$key]) || !is_int($before[$key])
+                || !is_int($after[$key]) || $before[$key] !== $after[$key]) {
                 return false;
-        return ( $before['mode'] & 0170000 ) === 0100000;
+            }
+        }
+        return ($before['mode'] & 0170000) === 0100000;
     }
 
     /** @param array<mixed> $record */
-    private function _isStaleRecord( array $record, int $cutoff ): bool
+    private function _isStaleRecord(array $record, int $cutoff): bool
     {
-        foreach( [ 'attempts', 'first', 'last', 'locked_until' ] as $key )
-            if( !isset( $record[$key] ) || !is_int( $record[$key] ) || $record[$key] < 0 )
+        foreach ([ 'attempts', 'first', 'last', 'locked_until' ] as $key) {
+            if (!isset($record[$key]) || !is_int($record[$key]) || $record[$key] < 0) {
                 return false;
-        return max( $record['first'], $record['last'], $record['locked_until'] ) < $cutoff;
+            }
+        }
+        return max($record['first'], $record['last'], $record['locked_until']) < $cutoff;
     }
 
     // ---- helpers -------------------------------------------------------
@@ -935,22 +990,22 @@ class ViMbAdmin_BruteForce
      * @param mixed $request
      * @return string
      */
-    private function _ip( $request )
+    private function _ip($request)
     {
         // Resolve the real client IP per the trusted-proxy policy (default
         // 'auto': peel X-Forwarded-For only when the direct peer is a private
         // proxy). See ViMbAdmin_Net::clientIp.
-        return ViMbAdmin_Net::clientIp( self::stringMap( $_SERVER, 'server parameters' ), $this->_proxyMode, $this->_proxies );
+        return ViMbAdmin_Net::clientIp(self::stringMap($_SERVER, 'server parameters'), $this->_proxyMode, $this->_proxies);
     }
 
     /**
      * @param string $ip
      * @return bool
      */
-    private function _isWhitelisted( $ip )
+    private function _isWhitelisted($ip)
     {
         // Shared IP/CIDR matching (see ViMbAdmin_Net) so the brute-force
         // whitelist, the MCP allowlist and the queue trigger all agree.
-        return ViMbAdmin_Net::ipInList( $ip, implode( ' ', $this->_whitelist ) );
+        return ViMbAdmin_Net::ipInList($ip, implode(' ', $this->_whitelist));
     }
 }

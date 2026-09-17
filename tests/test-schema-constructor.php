@@ -1,4 +1,5 @@
 <?php
+
 /** Focused constructor contract tests for the legacy schema helper. */
 
 namespace ViMbAdmin\Tests;
@@ -72,7 +73,7 @@ schemaConstructorCheck(
     schemaStoredEntityManager($schema) === $entityManager,
 );
 
-$decorator = new class($entityManager) extends EntityManagerDecorator {};
+$decorator = new class ($entityManager) extends EntityManagerDecorator {};
 $decoratedSchema = new ViMbAdmin_Schema($decorator);
 schemaConstructorCheck(
     'accepts an entity-manager decorator at the interface boundary',

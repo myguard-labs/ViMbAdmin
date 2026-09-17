@@ -22,7 +22,7 @@ function resolveBundleV(): string
     }
 
     if (count($matches) > 1) {
-        $bundleNames = array_map(static fn(string $path): string => basename($path), $matches);
+        $bundleNames = array_map(static fn (string $path): string => basename($path), $matches);
         throw new RuntimeException('Ambiguous bundle name; multiple matches found: ' . implode(', ', $bundleNames));
     }
 

@@ -19,23 +19,54 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class AuthMailboxPasswordSession implements SessionStorage
 {
     /** @param array<string, mixed> $data */
-    public function __construct(private array $data = []) {}
+    public function __construct(private array $data = [])
+    {
+    }
 
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
-    public function __get(string $key): mixed { return $this->get($key); }
-    public function __set(string $key, mixed $value): void { $this->set($key, $value); }
-    public function __isset(string $key): bool { return $this->has($key); }
-    public function __unset(string $key): void { $this->remove($key); }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->get($key);
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->set($key, $value);
+    }
+    public function __isset(string $key): bool
+    {
+        return $this->has($key);
+    }
+    public function __unset(string $key): void
+    {
+        $this->remove($key);
+    }
 }
 
 #[AllowDynamicProperties]
 final class AuthMailboxPasswordView
 {
-    public function __set(string $key, mixed $value): void {}
-    public function render(string $script): string { return 'rendered:' . $script; }
+    public function __set(string $key, mixed $value): void
+    {
+    }
+    public function render(string $script): string
+    {
+        return 'rendered:' . $script;
+    }
 }
 
 final class AuthMailboxPasswordRepository extends \Repositories\Mailbox
@@ -72,7 +103,8 @@ final class AuthMailboxPasswordBootstrap
         private AuthMailboxPasswordSession $session,
         private AuthMailboxPasswordView $view,
         private array $options,
-    ) {}
+    ) {
+    }
 
     public function getResource(string $name): mixed
     {
@@ -85,7 +117,10 @@ final class AuthMailboxPasswordBootstrap
     }
 
     /** @return array<string, mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
 }
 
 final class AuthMailboxPasswordState
@@ -96,7 +131,9 @@ final class AuthMailboxPasswordState
 function authMailboxPasswordCheck(string $label, bool $ok): void
 {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { AuthMailboxPasswordState::$failures++; }
+    if (!$ok) {
+        AuthMailboxPasswordState::$failures++;
+    }
 }
 
 /**
@@ -108,8 +145,7 @@ function authMailboxPasswordRun(
     string $stateDirectory,
     int $maxAttempts = 5,
     ?string $demoAccount = null,
-): array
-{
+): array {
     $options = [
         'defaults' => ['mailbox' => [
             'min_password_length' => 8,
@@ -152,7 +188,7 @@ function authMailboxPasswordRun(
         $options,
     );
     $controller = new AuthController(
-        new Container($bootstrap, new Auth($session, static fn(int $id): ?object => null)),
+        new Container($bootstrap, new Auth($session, static fn (int $id): ?object => null)),
         new RouteMatch('auth', 'change-password', AuthController::class, 'changePasswordAction', []),
     );
 
@@ -234,7 +270,7 @@ $temporaryRoot = sys_get_temp_dir() . '/vimbadmin-auth-mailbox-password-' . bin2
 if (!mkdir($temporaryRoot, 0700)) {
     throw new RuntimeException('Could not create mailbox password test directory');
 }
-register_shutdown_function(static function() use ($temporaryRoot): void {
+register_shutdown_function(static function () use ($temporaryRoot): void {
     authMailboxPasswordRemoveTree($temporaryRoot);
 });
 
@@ -268,40 +304,60 @@ $generic = [[
     'level' => 'error',
     'isHtml' => false,
 ]];
-authMailboxPasswordCheck('wrong credential uses the generic failure',
-    $wrong['status'] === 200 && $wrong['flashes'] === $generic);
-authMailboxPasswordCheck('wrong credential performs no update or flush',
-    $wrong['flushes'] === 0 && $wrong['mailbox']->requiredPassword() === $storedHash);
+authMailboxPasswordCheck(
+    'wrong credential uses the generic failure',
+    $wrong['status'] === 200 && $wrong['flashes'] === $generic
+);
+authMailboxPasswordCheck(
+    'wrong credential performs no update or flush',
+    $wrong['flushes'] === 0 && $wrong['mailbox']->requiredPassword() === $storedHash
+);
 $wrongBruteForceState = authMailboxPasswordState($wrongState, $_SERVER['REMOTE_ADDR']);
-authMailboxPasswordCheck('wrong credential records one compatible source-IP attempt',
+authMailboxPasswordCheck(
+    'wrong credential records one compatible source-IP attempt',
     $wrongBruteForceState !== null && $wrongBruteForceState['attempts'] === 1
         && $wrongBruteForceState['first'] > 0 && $wrongBruteForceState['last'] > 0
-        && $wrongBruteForceState['locked_until'] === 0);
-authMailboxPasswordCheck('null stored credential uses the identical generic failure',
-    $missing['status'] === 200 && $missing['flashes'] === $generic);
-authMailboxPasswordCheck('null stored credential performs no update or flush',
-    $missing['flushes'] === 0 && $missing['mailbox']->getPassword() === null);
-authMailboxPasswordCheck('correct credential alone updates and flushes once',
+        && $wrongBruteForceState['locked_until'] === 0
+);
+authMailboxPasswordCheck(
+    'null stored credential uses the identical generic failure',
+    $missing['status'] === 200 && $missing['flashes'] === $generic
+);
+authMailboxPasswordCheck(
+    'null stored credential performs no update or flush',
+    $missing['flushes'] === 0 && $missing['mailbox']->getPassword() === null
+);
+authMailboxPasswordCheck(
+    'correct credential alone updates and flushes once',
     $correct['status'] === 302 && $correct['flushes'] === 1
         && $correct['location'] === '/auth/change-password'
-        && $correct['mailbox']->requiredPassword() !== $storedHash);
-authMailboxPasswordCheck('successful update preserves configured hashing semantics',
-    \OSS_Auth_Password::verify('new-password-456', $correct['mailbox']->requiredPassword(), $options));
+        && $correct['mailbox']->requiredPassword() !== $storedHash
+);
+authMailboxPasswordCheck(
+    'successful update preserves configured hashing semantics',
+    \OSS_Auth_Password::verify('new-password-456', $correct['mailbox']->requiredPassword(), $options)
+);
 $retainedState = authMailboxPasswordState($correctState, $_SERVER['REMOTE_ADDR']);
-authMailboxPasswordCheck('mailbox success cannot clear shared administrator-login failure state',
-    $retainedState !== null && $retainedState['attempts'] === 1 && $retainedState['locked_until'] === 0);
+authMailboxPasswordCheck(
+    'mailbox success cannot clear shared administrator-login failure state',
+    $retainedState !== null && $retainedState['attempts'] === 1 && $retainedState['locked_until'] === 0
+);
 
 $demoFailure = [[
     'text' => 'Password changes are disabled for the demo account.',
     'level' => 'error',
     'isHtml' => false,
 ]];
-authMailboxPasswordCheck('demo-account refusal remains authoritative',
+authMailboxPasswordCheck(
+    'demo-account refusal remains authoritative',
     $demo['status'] === 302 && $demo['location'] === '/auth/change-password'
         && $demo['flashes'] === $demoFailure && $demo['flushes'] === 0
-        && $demo['mailbox']->requiredPassword() === $storedHash);
-authMailboxPasswordCheck('demo-account refusal does not consume a credential attempt',
-    authMailboxPasswordState($demoState, $_SERVER['REMOTE_ADDR']) === null);
+        && $demo['mailbox']->requiredPassword() === $storedHash
+);
+authMailboxPasswordCheck(
+    'demo-account refusal does not consume a credential attempt',
+    authMailboxPasswordState($demoState, $_SERVER['REMOTE_ADDR']) === null
+);
 
 $lockoutState = $temporaryRoot . '/lockout';
 $lookupMarker = $temporaryRoot . '/lookups';
@@ -321,12 +377,16 @@ $workerStatus = proc_close($process);
 $lookups = is_file($lookupMarker) ? file($lookupMarker, FILE_IGNORE_NEW_LINES) : [];
 $lockedState = authMailboxPasswordState($lockoutState, $_SERVER['REMOTE_ADDR']);
 
-authMailboxPasswordCheck('configured max_attempts locks on the second invalid POST',
-    $lockedState !== null && $lockedState['attempts'] === 2 && $lockedState['locked_until'] > time());
-authMailboxPasswordCheck('max_attempts + 1 is rejected before mailbox password lookup',
+authMailboxPasswordCheck(
+    'configured max_attempts locks on the second invalid POST',
+    $lockedState !== null && $lockedState['attempts'] === 2 && $lockedState['locked_until'] > time()
+);
+authMailboxPasswordCheck(
+    'max_attempts + 1 is rejected before mailbox password lookup',
     $workerStatus === 0 && $workerError === ''
         && $workerOutput === 'Too many failed login attempts. Try again later.'
-        && $lookups === ['lookup', 'lookup']);
+        && $lookups === ['lookup', 'lookup']
+);
 
 echo AuthMailboxPasswordState::$failures === 0
     ? "\nALL PASSED\n"

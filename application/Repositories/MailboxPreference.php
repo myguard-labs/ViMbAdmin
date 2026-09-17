@@ -35,8 +35,8 @@ class MailboxPreference extends EntityRepository
      * Cache key for loadPrefrencesValuesByAttribyte() - defined so we can clear the cache if we add / edit / delete additional info
      * @var string Cache key for loadPrefrenceValuesByAttribute() - defined so we can clear the cache if we add / edit / delete additional info
      */
-    const VALUES_CACHE_KEY = 'ViMbAdmin_Plugin_AdditionalInfo_autocomplete';
-    
+    public const VALUES_CACHE_KEY = 'ViMbAdmin_Plugin_AdditionalInfo_autocomplete';
+
     /**
      * Loads preferene values by attribute.
      *
@@ -47,36 +47,37 @@ class MailboxPreference extends EntityRepository
      * @param \Entities\Admin $admin Admin who request the list
      * @return list<string>
      */
-    public function loadPrefrenceValuesByAttribute( $attribute, $admin )
+    public function loadPrefrenceValuesByAttribute($attribute, $admin)
     {
-        $qb = $this->preferenceValueQuery( $attribute, $admin );
+        $qb = $this->preferenceValueQuery($attribute, $admin);
 
         $data = $qb->getQuery()
-            ->enableResultCache( 3600, self::VALUES_CACHE_KEY . '_' . $admin->getId() . '_' . $attribute )
+            ->enableResultCache(3600, self::VALUES_CACHE_KEY . '_' . $admin->getId() . '_' . $attribute)
             ->getScalarResult();
 
         return self::uniquePreferenceValues(self::requiredPreferenceValueRows($data));
     }
 
-    private function preferenceValueQuery( string $attribute, \Entities\Admin $admin ): \Doctrine\ORM\QueryBuilder
+    private function preferenceValueQuery(string $attribute, \Entities\Admin $admin): \Doctrine\ORM\QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-                ->select( 'mp.value' )
-                ->from( '\\Entities\\MailboxPreference', 'mp' )
-                ->where( 'mp.attribute = :attr' )
-                ->setParameter( 'attr', $attribute );
+                ->select('mp.value')
+                ->from('\\Entities\\MailboxPreference', 'mp')
+                ->where('mp.attribute = :attr')
+                ->setParameter('attr', $attribute);
 
         // Non-super admins are scoped to their own domains. NB: use andWhere +
         // a distinct named param — the old code called where() again (which
         // REPLACES the attribute filter) and reused ?1, so it returned every
         // attribute's values across all domains. Join matches the other repos
         // (d.Admins / d2a), not the stale d.DomainToAdmin / d2a.Admin.
-        if( !$admin->isSuper() )
-            $qb->join( 'mp.Mailbox', 'm' )
-                ->join( 'm.Domain', 'd' )
-                ->join( 'd.Admins', 'd2a' )
-                ->andWhere( 'd2a = :admin' )
-                ->setParameter( 'admin', $admin );
+        if (!$admin->isSuper()) {
+            $qb->join('mp.Mailbox', 'm')
+                ->join('m.Domain', 'd')
+                ->join('d.Admins', 'd2a')
+                ->andWhere('d2a = :admin')
+                ->setParameter('admin', $admin);
+        }
 
         return $qb;
     }
@@ -85,14 +86,16 @@ class MailboxPreference extends EntityRepository
      * @param array<int,array{value:string}> $data
      * @return list<string>
      */
-    private static function uniquePreferenceValues( array $data ): array
+    private static function uniquePreferenceValues(array $data): array
     {
         $values = [];
-        foreach( $data as $value )
-            if( !in_array( $value['value'], $values ) )
+        foreach ($data as $value) {
+            if (!in_array($value['value'], $values)) {
                 $values[] = $value['value'];
-        
+            }
+        }
+
         return $values;
     }
-    
+
 }

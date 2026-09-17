@@ -24,7 +24,9 @@ require __DIR__ . '/support/bruteforce-state-path.php';
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 $statedir = sys_get_temp_dir() . '/vimbadmin-bruteforce-micro-' . bin2hex(random_bytes(6));
@@ -53,8 +55,10 @@ echo "== bruteforce state persistence micro-cleanup ==\n";
 // ---- missing state file behaves as before ------------------------------ //
 $check('no state file exists yet', !file_exists($stateFile));
 $default = $load->invoke($bruteForce, $ip);
-$check('_load() with no file returns the zero-valued default record',
-    $default === ['attempts' => 0, 'first' => 0, 'last' => 0, 'locked_until' => 0]);
+$check(
+    '_load() with no file returns the zero-valued default record',
+    $default === ['attempts' => 0, 'first' => 0, 'last' => 0, 'locked_until' => 0]
+);
 
 $deleteThrew = false;
 try {
@@ -81,8 +85,10 @@ $check('_save() overwrite round-trips the new record', $load->invoke($bruteForce
 // ---- _delete() removes an existing state file --------------------------- //
 $delete->invoke($bruteForce, $ip);
 $check('_delete() removes an existing state file', !file_exists($stateFile));
-$check('_load() after _delete() returns the zero-valued default again',
-    $load->invoke($bruteForce, $ip) === ['attempts' => 0, 'first' => 0, 'last' => 0, 'locked_until' => 0]);
+$check(
+    '_load() after _delete() returns the zero-valued default again',
+    $load->invoke($bruteForce, $ip) === ['attempts' => 0, 'first' => 0, 'last' => 0, 'locked_until' => 0]
+);
 
 // ---- a corrupt state file still throws LogicException, unchanged ------- //
 file_put_contents($stateFile, 'not json');
@@ -92,8 +98,10 @@ try {
 } catch (Throwable $e) {
     $corruptThrew = $e::class;
 }
-$check('_load() on a corrupt file still throws LogicException',
-    $corruptThrew === LogicException::class);
+$check(
+    '_load() on a corrupt file still throws LogicException',
+    $corruptThrew === LogicException::class
+);
 
 @unlink($stateFile);
 // GLOB_NOSORT has no bearing here; plain glob() does not return dotfiles, and

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Smoke test: the native Smarty view (WALL #2, docs/ZF1-REMOVAL.md).
  *
@@ -59,12 +60,18 @@ final class SmartyViewTestState
     public static int $failures = 0;
 }
 
-function smartyViewCheck(string $label, callable $fn): void {
-    try { $fn(); echo "OK   $label\n"; }
-    catch (\Throwable $e) { SmartyViewTestState::$failures++; printf("FAIL %s :: %s: %s\n", $label, get_class($e), $e->getMessage()); }
+function smartyViewCheck(string $label, callable $fn): void
+{
+    try {
+        $fn();
+        echo "OK   $label\n";
+    } catch (\Throwable $e) {
+        SmartyViewTestState::$failures++;
+        printf("FAIL %s :: %s: %s\n", $label, get_class($e), $e->getMessage());
+    }
 }
 
-$mk = fn() => new SmartyView(['templates' => $tmp . '/tpl', 'compiled' => $tmp . '/compile']);
+$mk = fn () => new SmartyView(['templates' => $tmp . '/tpl', 'compiled' => $tmp . '/compile']);
 
 smartyViewCheck('magic __set + render a template', function () use ($mk) {
     $v = $mk();

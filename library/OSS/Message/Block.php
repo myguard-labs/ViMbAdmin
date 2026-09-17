@@ -2,26 +2,26 @@
 
 /**
  * A class to encapsulate messages to be displayed on the webpages.
- * 
+ *
  * These are the main required elements for this:
- * 
+ *
  * 1. The OSS/Message.php class (this file)
  * 2. The OSS/Smarty/functions/function.OSS_Message.php (to display the message on the view)
  * 3. The relevant CSS classes in public/css/oss.css
- * 
+ *
  * To use this, add a message to the view as follows:
- * 
+ *
  * public function exampleAction() {
  *     $this->view->ossAddMessage( new OSS_Message( 'This is a info message!', OSS_Message::INFO ) );
  * }
- * 
+ *
  * Multiple messages can be added of different kinds (INFO, ALERT, etc).
  *
  * Then to display these messages in your view (Smarty template) just include the following
  * text (i.e. Smarty function):
- * 
+ *
  * {OSS_Message}
- * 
+ *
  */
 /**
  * OSS Framework
@@ -70,15 +70,14 @@
  */
 class OSS_Message_Block extends OSS_Message
 {
-
     /**
      * Elements for the action area
-     * 
+     *
      * @var null|list<mixed>
      */
     private $actions = null;
-    
-    
+
+
     /**
      * Constructor
      *
@@ -88,26 +87,27 @@ class OSS_Message_Block extends OSS_Message
      * @return void
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
      */
-    public function __construct( $message = '', $class = '', $isHTML = true )
+    public function __construct($message = '', $class = '', $isHTML = true)
     {
-        parent::__construct( $message, $class, $isHTML );
-        $this->setType( self::TYPE_BLOCK );
+        parent::__construct($message, $class, $isHTML);
+        $this->setType(self::TYPE_BLOCK);
     }
-    
+
     /**
      * Adding message box
      *
      * @param string $str Action description
      * @return void
      */
-    public function addAction( $str )
+    public function addAction($str)
     {
-        if( $this->actions === null )
+        if ($this->actions === null) {
             $this->actions = [];
+        }
 
         $this->actions[] = $str;
     }
-    
+
     /**
      * Getting messages
      *

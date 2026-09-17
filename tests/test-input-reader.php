@@ -9,7 +9,9 @@ use ViMbAdmin\Kernel\Input\Reader;
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 $error = static function (callable $operation): ?string {
     try {
@@ -30,8 +32,10 @@ foreach ([
     $check("required string preserves {$label}", Reader::requiredString($input, 'Field') === $expected);
 }
 foreach ([null, false, 0, 1.5, [], new stdClass()] as $input) {
-    $check('required string rejects ' . get_debug_type($input),
-        $error(static fn(): string => Reader::requiredString($input, 'Field')) === 'Field must be a string');
+    $check(
+        'required string rejects ' . get_debug_type($input),
+        $error(static fn (): string => Reader::requiredString($input, 'Field')) === 'Field must be a string'
+    );
 }
 
 foreach ([
@@ -47,8 +51,10 @@ foreach ([
     'mixed keys' => ['valid' => 1, 0 => 2],
 ] as $label => $input) {
     $expected = is_array($input) ? 'Config must use string keys' : 'Config must be an array';
-    $check("string-keyed array rejects {$label}",
-        $error(static fn(): array => Reader::stringKeyedArray($input, 'Config')) === $expected);
+    $check(
+        "string-keyed array rejects {$label}",
+        $error(static fn (): array => Reader::stringKeyedArray($input, 'Config')) === $expected
+    );
 }
 
 $options = ['outer' => ['inner' => 'value'], 'null' => null];
@@ -60,13 +66,17 @@ foreach ([
 ] as $label => [$path, $expected]) {
     $check("option preserves {$label}", Reader::option($options, ...$path) === $expected);
 }
-$check('option rejects a scalar intermediate with the historical path error',
-    $error(static fn(): array => Reader::option(['outer' => 'bad'], 'outer', 'inner'))
-        === 'Configuration outer must be an array');
-$check('option rejects a list-shaped root with the historical root error',
-    $error(static fn(): mixed => (new ReflectionMethod(Reader::class, 'option'))
+$check(
+    'option rejects a scalar intermediate with the historical path error',
+    $error(static fn (): array => Reader::option(['outer' => 'bad'], 'outer', 'inner'))
+        === 'Configuration outer must be an array'
+);
+$check(
+    'option rejects a list-shaped root with the historical root error',
+    $error(static fn (): mixed => (new ReflectionMethod(Reader::class, 'option'))
         ->invoke(null, [0 => 'bad'], 'outer'))
-        === 'Configuration root must use string keys');
+        === 'Configuration root must use string keys'
+);
 
 $controllers = [
     'MaintenanceController.php', 'ArchiveController.php', 'DomainController.php', 'AdminController.php',

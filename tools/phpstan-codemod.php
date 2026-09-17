@@ -136,7 +136,9 @@ function gitHead(string $repo): string
         [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
         $pipes,
     );
-    if (!is_resource($process)) { fail("cannot start Git for $repo"); }
+    if (!is_resource($process)) {
+        fail("cannot start Git for $repo");
+    }
     $head = trim((string) stream_get_contents($pipes[1]));
     fclose($pipes[1]);
     fclose($pipes[2]);
@@ -244,8 +246,14 @@ function properties(array $tokens, int $classOpen, int $classClose): array
     $depth = 1;
     for ($i = $classOpen + 1; $i < $classClose; $i++) {
         $text = $tokens[$i]['text'];
-        if ($text === '{') { $depth++; continue; }
-        if ($text === '}') { $depth--; continue; }
+        if ($text === '{') {
+            $depth++;
+            continue;
+        }
+        if ($text === '}') {
+            $depth--;
+            continue;
+        }
         if ($depth !== 1 || !in_array($tokens[$i]['id'], [T_PUBLIC, T_PROTECTED, T_PRIVATE, T_VAR], true)) {
             continue;
         }
@@ -253,30 +261,42 @@ function properties(array $tokens, int $classOpen, int $classClose): array
         while ($end < $classClose && $tokens[$end]['text'] !== ';' && $tokens[$end]['text'] !== '{') {
             $end++;
         }
-        if ($end >= $classClose || $tokens[$end]['text'] !== ';') { continue; }
+        if ($end >= $classClose || $tokens[$end]['text'] !== ';') {
+            continue;
+        }
         $variable = null;
         $variableIndex = null;
         for ($j = $i; $j < $end; $j++) {
-            if ($tokens[$j]['id'] === T_FUNCTION) { $variable = null; break; }
+            if ($tokens[$j]['id'] === T_FUNCTION) {
+                $variable = null;
+                break;
+            }
             if ($tokens[$j]['id'] === T_VARIABLE) {
                 $variable = substr($tokens[$j]['text'], 1);
                 $variableIndex = $j;
                 break;
             }
         }
-        if ($variable === null || $variableIndex === null) { continue; }
+        if ($variable === null || $variableIndex === null) {
+            continue;
+        }
         $nullable = false;
         $type = '';
         for ($j = $i; $j < $variableIndex; $j++) {
-            if ($tokens[$j]['text'] === '?') { $nullable = true; }
+            if ($tokens[$j]['text'] === '?') {
+                $nullable = true;
+            }
             if (in_array($tokens[$j]['id'], [T_STRING, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
                 $type .= $tokens[$j]['text'];
             }
         }
         $initializedNull = false;
         for ($j = $variableIndex + 1; $j < $end; $j++) {
-            if ($tokens[$j]['text'] !== '=') { continue; }
-            for ($j++; $j < $end && insignificant($tokens[$j]); $j++) {}
+            if ($tokens[$j]['text'] !== '=') {
+                continue;
+            }
+            for ($j++; $j < $end && insignificant($tokens[$j]); $j++) {
+            }
             $initializedNull = $j < $end && $tokens[$j]['id'] === T_STRING
                 && strtolower($tokens[$j]['text']) === 'null';
             break;
@@ -300,21 +320,33 @@ function docReturn(array $doc): array
         $positions[] = $position;
         $offset = $position + 7;
     }
-    if (count($positions) !== 1) { return ['reject' => 'doc_return_count']; }
+    if (count($positions) !== 1) {
+        return ['reject' => 'doc_return_count'];
+    }
     $cursor = $positions[0] + 7;
-    while (isset($text[$cursor]) && ($text[$cursor] === ' ' || $text[$cursor] === "\t")) { $cursor++; }
+    while (isset($text[$cursor]) && ($text[$cursor] === ' ' || $text[$cursor] === "\t")) {
+        $cursor++;
+    }
     $start = $cursor;
-    while (isset($text[$cursor]) && !in_array($text[$cursor], [' ', "\t", "\r", "\n", '*'], true)) { $cursor++; }
+    while (isset($text[$cursor]) && !in_array($text[$cursor], [' ', "\t", "\r", "\n", '*'], true)) {
+        $cursor++;
+    }
     $atom = substr($text, $start, $cursor - $start);
     $editEnd = $cursor;
-    while (isset($text[$editEnd]) && ($text[$editEnd] === ' ' || $text[$editEnd] === "\t")) { $editEnd++; }
+    while (isset($text[$editEnd]) && ($text[$editEnd] === ' ' || $text[$editEnd] === "\t")) {
+        $editEnd++;
+    }
     if (!isset($text[$editEnd]) || !in_array($text[$editEnd], ["\r", "\n"], true)) {
         $editEnd = $cursor;
     }
     $restEnd = strpos($text, "\n", $cursor);
     $rest = substr($text, $cursor, ($restEnd === false ? strlen($text) : $restEnd) - $cursor);
-    if ($atom === '' || trim($rest, " \t\r*/") !== '') { return ['reject' => 'doc_return_not_single_atom']; }
-    if (str_contains(strtolower($atom), 'null')) { return ['reject' => 'already_nullable']; }
+    if ($atom === '' || trim($rest, " \t\r*/") !== '') {
+        return ['reject' => 'doc_return_not_single_atom'];
+    }
+    if (str_contains(strtolower($atom), 'null')) {
+        return ['reject' => 'already_nullable'];
+    }
     return [
         'atom' => $atom,
         'start' => $doc['start'] + $start,
@@ -340,7 +372,9 @@ function inspectMethod(string $source, string $method, string $expectedClass, st
     }
     $namespace = '';
     for ($i = 0; $i < count($tokens); $i++) {
-        if ($tokens[$i]['id'] !== T_NAMESPACE) { continue; }
+        if ($tokens[$i]['id'] !== T_NAMESPACE) {
+            continue;
+        }
         for ($j = $i + 1; $j < count($tokens) && !in_array($tokens[$j]['text'], [';', '{'], true); $j++) {
             if (in_array($tokens[$j]['id'], [T_STRING, T_NAME_QUALIFIED], true)
                 || $tokens[$j]['id'] === T_NS_SEPARATOR) {
@@ -352,16 +386,28 @@ function inspectMethod(string $source, string $method, string $expectedClass, st
     $className = null;
     $classOpen = $classClose = null;
     for ($i = 0; $i < count($tokens); $i++) {
-        if ($tokens[$i]['id'] !== T_CLASS) { continue; }
+        if ($tokens[$i]['id'] !== T_CLASS) {
+            continue;
+        }
         for ($j = $i + 1; $j < count($tokens); $j++) {
-            if ($tokens[$j]['id'] === T_STRING) { $className = $tokens[$j]['text']; }
-            if ($tokens[$j]['text'] === '{') { $classOpen = $j; break; }
+            if ($tokens[$j]['id'] === T_STRING) {
+                $className = $tokens[$j]['text'];
+            }
+            if ($tokens[$j]['text'] === '{') {
+                $classOpen = $j;
+                break;
+            }
         }
         if ($classOpen !== null) {
             $depth = 1;
             for ($j = $classOpen + 1; $j < count($tokens); $j++) {
-                if ($tokens[$j]['text'] === '{') { $depth++; }
-                if ($tokens[$j]['text'] === '}' && --$depth === 0) { $classClose = $j; break; }
+                if ($tokens[$j]['text'] === '{') {
+                    $depth++;
+                }
+                if ($tokens[$j]['text'] === '}' && --$depth === 0) {
+                    $classClose = $j;
+                    break;
+                }
             }
             break;
         }
@@ -375,29 +421,54 @@ function inspectMethod(string $source, string $method, string $expectedClass, st
     $propertyMap = properties($tokens, $classOpen, $classClose);
     $depth = 1;
     for ($i = $classOpen + 1; $i < $classClose; $i++) {
-        if ($tokens[$i]['text'] === '{') { $depth++; continue; }
-        if ($tokens[$i]['text'] === '}') { $depth--; continue; }
-        if ($depth !== 1 || $tokens[$i]['id'] !== T_FUNCTION) { continue; }
+        if ($tokens[$i]['text'] === '{') {
+            $depth++;
+            continue;
+        }
+        if ($tokens[$i]['text'] === '}') {
+            $depth--;
+            continue;
+        }
+        if ($depth !== 1 || $tokens[$i]['id'] !== T_FUNCTION) {
+            continue;
+        }
         $nameIndex = null;
         for ($j = $i + 1; $j < $classClose; $j++) {
-            if ($tokens[$j]['id'] === T_STRING) { $nameIndex = $j; break; }
-            if ($tokens[$j]['text'] === '(') { break; }
+            if ($tokens[$j]['id'] === T_STRING) {
+                $nameIndex = $j;
+                break;
+            }
+            if ($tokens[$j]['text'] === '(') {
+                break;
+            }
         }
-        if ($nameIndex === null || $tokens[$nameIndex]['text'] !== $method) { continue; }
+        if ($nameIndex === null || $tokens[$nameIndex]['text'] !== $method) {
+            continue;
+        }
         $openParen = $nameIndex + 1;
-        while ($tokens[$openParen]['text'] !== '(') { $openParen++; }
+        while ($tokens[$openParen]['text'] !== '(') {
+            $openParen++;
+        }
         $parenDepth = 1;
         for ($closeParen = $openParen + 1; $closeParen < $classClose; $closeParen++) {
-            if ($tokens[$closeParen]['text'] === '(') { $parenDepth++; }
-            if ($tokens[$closeParen]['text'] === ')' && --$parenDepth === 0) { break; }
+            if ($tokens[$closeParen]['text'] === '(') {
+                $parenDepth++;
+            }
+            if ($tokens[$closeParen]['text'] === ')' && --$parenDepth === 0) {
+                break;
+            }
         }
         for ($j = $openParen + 1; $j < $closeParen; $j++) {
-            if (!insignificant($tokens[$j])) { return ['reject' => 'method_has_parameters']; }
+            if (!insignificant($tokens[$j])) {
+                return ['reject' => 'method_has_parameters'];
+            }
         }
         $bodyOpen = $closeParen + 1;
         $native = [];
         while ($bodyOpen < $classClose && $tokens[$bodyOpen]['text'] !== '{') {
-            if (!insignificant($tokens[$bodyOpen])) { $native[] = $tokens[$bodyOpen]; }
+            if (!insignificant($tokens[$bodyOpen])) {
+                $native[] = $tokens[$bodyOpen];
+            }
             $bodyOpen++;
         }
         if ($native !== [] && $native[0]['text'] === ':' && !in_array('?', array_column($native, 'text'), true)
@@ -406,12 +477,18 @@ function inspectMethod(string $source, string $method, string $expectedClass, st
         }
         $bodyDepth = 1;
         for ($bodyClose = $bodyOpen + 1; $bodyClose < $classClose; $bodyClose++) {
-            if ($tokens[$bodyClose]['text'] === '{') { $bodyDepth++; }
-            if ($tokens[$bodyClose]['text'] === '}' && --$bodyDepth === 0) { break; }
+            if ($tokens[$bodyClose]['text'] === '{') {
+                $bodyDepth++;
+            }
+            if ($tokens[$bodyClose]['text'] === '}' && --$bodyDepth === 0) {
+                break;
+            }
         }
         $meaningful = [];
         for ($j = $bodyOpen + 1; $j < $bodyClose; $j++) {
-            if (!insignificant($tokens[$j])) { $meaningful[] = $tokens[$j]; }
+            if (!insignificant($tokens[$j])) {
+                $meaningful[] = $tokens[$j];
+            }
         }
         $exact = count($meaningful) === 5
             && $meaningful[0]['id'] === T_RETURN
@@ -419,7 +496,9 @@ function inspectMethod(string $source, string $method, string $expectedClass, st
             && $meaningful[2]['id'] === T_OBJECT_OPERATOR
             && $meaningful[3]['id'] === T_STRING
             && $meaningful[4]['text'] === ';';
-        if (!$exact) { return ['reject' => 'getter_body_not_exact']; }
+        if (!$exact) {
+            return ['reject' => 'getter_body_not_exact'];
+        }
         $property = $meaningful[3]['text'];
         if (!isset($propertyMap[$property]) || !$propertyMap[$property]['nullable']
             || !$propertyMap[$property]['null'] || strtolower($propertyMap[$property]['type']) === 'mixed') {
@@ -427,12 +506,21 @@ function inspectMethod(string $source, string $method, string $expectedClass, st
         }
         $doc = null;
         for ($j = $i - 1; $j > $classOpen; $j--) {
-            if ($tokens[$j]['id'] === T_DOC_COMMENT) { $doc = $tokens[$j]; break; }
-            if (in_array($tokens[$j]['text'], [';', '}'], true)) { break; }
+            if ($tokens[$j]['id'] === T_DOC_COMMENT) {
+                $doc = $tokens[$j];
+                break;
+            }
+            if (in_array($tokens[$j]['text'], [';', '}'], true)) {
+                break;
+            }
         }
-        if ($doc === null) { return ['reject' => 'missing_method_doc']; }
+        if ($doc === null) {
+            return ['reject' => 'missing_method_doc'];
+        }
         $return = docReturn($doc);
-        if (isset($return['reject'])) { return $return; }
+        if (isset($return['reject'])) {
+            return $return;
+        }
         if (normalizeAtom($return['atom']) !== normalizeAtom($expectedAtom)) {
             return ['reject' => 'doc_atom_diagnostic_mismatch'];
         }
@@ -484,7 +572,9 @@ function atomicWrite(array $contents, array $expectedHashes = []): void
             }
             $temps[$file] = $temp;
             $original = file_get_contents($file);
-            if ($original === false) { throw new RuntimeException("cannot back up $file"); }
+            if ($original === false) {
+                throw new RuntimeException("cannot back up $file");
+            }
             $backups[$file] = $original;
         }
         foreach ($expectedHashes as $file => $expectedSha) {
@@ -495,7 +585,9 @@ function atomicWrite(array $contents, array $expectedHashes = []): void
         }
         $written = [];
         foreach ($temps as $file => $temp) {
-            if (!rename($temp, $file)) { throw new RuntimeException("cannot replace $file"); }
+            if (!rename($temp, $file)) {
+                throw new RuntimeException("cannot replace $file");
+            }
             $written[] = $file;
         }
     } catch (Throwable $error) {
@@ -504,7 +596,11 @@ function atomicWrite(array $contents, array $expectedHashes = []): void
                 file_put_contents($file, $content);
             }
         }
-        foreach ($temps as $temp) { if (is_file($temp)) { unlink($temp); } }
+        foreach ($temps as $temp) {
+            if (is_file($temp)) {
+                unlink($temp);
+            }
+        }
         fail('atomic write failed: ' . $error->getMessage(), 1);
     }
 }
@@ -515,20 +611,31 @@ const PROPOSAL_CLASSIFICATIONS = ['mechanical_safe', 'manual_review', 'reject'];
 
 final class PhpstanCodemodSymbolScope
 {
-    public function __construct(public ?string $className, public ?string $methodName) {}
+    public function __construct(public ?string $className, public ?string $methodName)
+    {
+    }
 }
 
 /** @return array<string,mixed> */
 function jsonObject(string $file, string $label): array
 {
     $raw = file_get_contents($file);
-    if ($raw === false) { fail("cannot read $label: $file"); }
-    try { $value = json_decode($raw, true, flags: JSON_THROW_ON_ERROR); }
-    catch (JsonException) { fail("malformed $label JSON"); }
-    if (!is_array($value) || array_is_list($value)) { fail("$label must be a JSON object"); }
+    if ($raw === false) {
+        fail("cannot read $label: $file");
+    }
+    try {
+        $value = json_decode($raw, true, flags: JSON_THROW_ON_ERROR);
+    } catch (JsonException) {
+        fail("malformed $label JSON");
+    }
+    if (!is_array($value) || array_is_list($value)) {
+        fail("$label must be a JSON object");
+    }
     $result = [];
     foreach ($value as $key => $item) {
-        if (!is_string($key)) { fail("$label object keys must be strings"); }
+        if (!is_string($key)) {
+            fail("$label object keys must be strings");
+        }
         $result[$key] = $item;
     }
     return $result;
@@ -537,10 +644,14 @@ function jsonObject(string $file, string $label): array
 /** @return array<string,mixed> */
 function stringMap(mixed $value, string $label): array
 {
-    if (!is_array($value) || array_is_list($value)) { fail("$label must be an object"); }
+    if (!is_array($value) || array_is_list($value)) {
+        fail("$label must be an object");
+    }
     $result = [];
     foreach ($value as $key => $item) {
-        if (!is_string($key)) { fail("$label keys must be strings"); }
+        if (!is_string($key)) {
+            fail("$label keys must be strings");
+        }
         $result[$key] = $item;
     }
     return $result;
@@ -550,9 +661,14 @@ function relativeFile(string $repo, string $path): ?string
 {
     $normalized = str_replace('\\', '/', $path);
     $repoNormalized = rtrim(str_replace('\\', '/', $repo), '/');
-    if (str_starts_with($normalized, '/workspace/')) { $normalized = substr($normalized, 11); }
-    elseif (str_starts_with($normalized, $repoNormalized . '/')) { $normalized = substr($normalized, strlen($repoNormalized) + 1); }
-    if ($normalized === '' || str_starts_with($normalized, '/') || str_contains($normalized, '../')) { return null; }
+    if (str_starts_with($normalized, '/workspace/')) {
+        $normalized = substr($normalized, 11);
+    } elseif (str_starts_with($normalized, $repoNormalized . '/')) {
+        $normalized = substr($normalized, strlen($repoNormalized) + 1);
+    }
+    if ($normalized === '' || str_starts_with($normalized, '/') || str_contains($normalized, '../')) {
+        return null;
+    }
     return $normalized;
 }
 
@@ -570,7 +686,9 @@ function diagnosticPath(string $repo, string $rawPath): array
         $analysisContext = $match[2];
     }
     $path = relativeFile($repo, $physicalPath);
-    if ($path === null) { fail('invalid PHPStan diagnostic path'); }
+    if ($path === null) {
+        fail('invalid PHPStan diagnostic path');
+    }
     return ['path' => $path, 'analysis_context' => $analysisContext];
 }
 
@@ -579,13 +697,19 @@ function diagnosticSymbol(string $source, int $line, string $message): array
 {
     $messageClass = $messageMethod = null;
     if (preg_match('/(?:Method|Call to method) ([A-Za-z0-9_\\\\]+)::([A-Za-z_][A-Za-z0-9_]*)/', $message, $match)) {
-        $messageClass = $match[1]; $messageMethod = $match[2];
+        $messageClass = $match[1];
+        $messageMethod = $match[2];
     }
-    try { $tokens = tokenSpans($source); }
-    catch (ParseError) { return ['class' => $messageClass, 'method' => $messageMethod, 'symbol_start' => null, 'symbol_end' => null]; }
+    try {
+        $tokens = tokenSpans($source);
+    } catch (ParseError) {
+        return ['class' => $messageClass, 'method' => $messageMethod, 'symbol_start' => null, 'symbol_end' => null];
+    }
     $namespace = '';
     foreach ($tokens as $index => $token) {
-        if ($token['id'] !== T_NAMESPACE) { continue; }
+        if ($token['id'] !== T_NAMESPACE) {
+            continue;
+        }
         for ($i = $index + 1; isset($tokens[$i]) && !in_array($tokens[$i]['text'], [';', '{'], true); $i++) {
             if (in_array($tokens[$i]['id'], [T_STRING, T_NAME_QUALIFIED], true) || $tokens[$i]['id'] === T_NS_SEPARATOR) {
                 $namespace .= $tokens[$i]['text'];
@@ -599,26 +723,41 @@ function diagnosticSymbol(string $source, int $line, string $message): array
     $pendingMethod = null;
     $stack = [];
     foreach ($tokens as $index => $token) {
-        if ($token['line'] > $line) { break; }
+        if ($token['line'] > $line) {
+            break;
+        }
         if ($token['id'] === T_CLASS) {
             for ($i = $index + 1; isset($tokens[$i]); $i++) {
                 if ($tokens[$i]['id'] === T_STRING) {
                     $pendingClass = $namespace === '' ? $tokens[$i]['text'] : $namespace . '\\' . $tokens[$i]['text'];
                     break;
                 }
-                if ($tokens[$i]['text'] === '{') { break; }
+                if ($tokens[$i]['text'] === '{') {
+                    break;
+                }
             }
         }
         if ($token['id'] === T_FUNCTION) {
             for ($i = $index + 1; isset($tokens[$i]); $i++) {
-                if ($tokens[$i]['id'] === T_STRING) { $pendingMethod = $tokens[$i]['text']; break; }
-                if ($tokens[$i]['text'] === '(') { break; }
+                if ($tokens[$i]['id'] === T_STRING) {
+                    $pendingMethod = $tokens[$i]['text'];
+                    break;
+                }
+                if ($tokens[$i]['text'] === '(') {
+                    break;
+                }
             }
         }
         if ($token['text'] === '{') {
             $stack[] = new PhpstanCodemodSymbolScope($class, $method);
-            if ($pendingClass !== null) { $class = $pendingClass; $pendingClass = null; $method = null; }
-            elseif ($pendingMethod !== null) { $method = $pendingMethod; $pendingMethod = null; }
+            if ($pendingClass !== null) {
+                $class = $pendingClass;
+                $pendingClass = null;
+                $method = null;
+            } elseif ($pendingMethod !== null) {
+                $method = $pendingMethod;
+                $pendingMethod = null;
+            }
         } elseif ($token['text'] === '}' && $stack !== []) {
             $scope = array_pop($stack);
             $class = $scope->className;
@@ -638,35 +777,65 @@ function diagnosticSymbol(string $source, int $line, string $message): array
                         $pendingSearchClass = $namespace === '' ? $tokens[$i]['text'] : $namespace . '\\' . $tokens[$i]['text'];
                         break;
                     }
-                    if ($tokens[$i]['text'] === '{') { break; }
+                    if ($tokens[$i]['text'] === '{') {
+                        break;
+                    }
                 }
             }
             if ($token['text'] === '{') {
                 $searchStack[] = new PhpstanCodemodSymbolScope($searchClass, null);
-                if ($pendingSearchClass !== null) { $searchClass = $pendingSearchClass; $pendingSearchClass = null; }
+                if ($pendingSearchClass !== null) {
+                    $searchClass = $pendingSearchClass;
+                    $pendingSearchClass = null;
+                }
             } elseif ($token['text'] === '}' && $searchStack !== []) {
                 $searchClass = array_pop($searchStack)->className;
             }
-            if ($token['id'] !== T_FUNCTION) { continue; }
-            if ($resolvedClass !== null && ltrim($resolvedClass, '\\') !== $searchClass) { continue; }
+            if ($token['id'] !== T_FUNCTION) {
+                continue;
+            }
+            if ($resolvedClass !== null && ltrim($resolvedClass, '\\') !== $searchClass) {
+                continue;
+            }
             $nameIndex = null;
             for ($i = $index + 1; isset($tokens[$i]); $i++) {
-                if ($tokens[$i]['id'] === T_STRING) { $nameIndex = $i; break; }
-                if ($tokens[$i]['text'] === '(') { break; }
+                if ($tokens[$i]['id'] === T_STRING) {
+                    $nameIndex = $i;
+                    break;
+                }
+                if ($tokens[$i]['text'] === '(') {
+                    break;
+                }
             }
-            if ($nameIndex === null || $tokens[$nameIndex]['text'] !== $resolvedMethod) { continue; }
+            if ($nameIndex === null || $tokens[$nameIndex]['text'] !== $resolvedMethod) {
+                continue;
+            }
             $symbolStart = $token['start'];
             for ($i = $index - 1; $i >= 0; $i--) {
-                if ($tokens[$i]['id'] === T_DOC_COMMENT) { $symbolStart = $tokens[$i]['start']; break; }
-                if (!insignificant($tokens[$i]) && !in_array($tokens[$i]['id'], [T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_FINAL, T_ABSTRACT], true)) { break; }
+                if ($tokens[$i]['id'] === T_DOC_COMMENT) {
+                    $symbolStart = $tokens[$i]['start'];
+                    break;
+                }
+                if (!insignificant($tokens[$i]) && !in_array($tokens[$i]['id'], [T_PUBLIC, T_PROTECTED, T_PRIVATE, T_STATIC, T_FINAL, T_ABSTRACT], true)) {
+                    break;
+                }
             }
             $open = null;
-            for ($i = $nameIndex; isset($tokens[$i]); $i++) { if ($tokens[$i]['text'] === '{') { $open = $i; break; } }
+            for ($i = $nameIndex; isset($tokens[$i]); $i++) {
+                if ($tokens[$i]['text'] === '{') {
+                    $open = $i;
+                    break;
+                }
+            }
             if ($open !== null) {
                 $depth = 1;
                 for ($i = $open + 1; isset($tokens[$i]); $i++) {
-                    if ($tokens[$i]['text'] === '{') { $depth++; }
-                    elseif ($tokens[$i]['text'] === '}' && --$depth === 0) { $symbolEnd = $tokens[$i]['start'] + 1; break; }
+                    if ($tokens[$i]['text'] === '{') {
+                        $depth++;
+                    } elseif ($tokens[$i]['text'] === '}' && --$depth === 0) {
+                        $symbolEnd = $tokens[$i]['start'] + 1;
+                        break;
+                    }
                 }
             }
             break;
@@ -681,12 +850,16 @@ function phpFiles(string $repo): array
     $files = [];
     foreach (['application', 'library', 'src', 'tests'] as $root) {
         $directory = $repo . '/' . $root;
-        if (!is_dir($directory)) { continue; }
+        if (!is_dir($directory)) {
+            continue;
+        }
         $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS));
         foreach ($iterator as $file) {
             if ($file instanceof SplFileInfo && $file->isFile() && !$file->isLink() && $file->getExtension() === 'php') {
                 $relative = substr($file->getPathname(), strlen($repo) + 1);
-                if (preg_match('#(?:^|/)(?:vendor|cache|generated|proxies?)(?:/|$)#i', $relative)) { continue; }
+                if (preg_match('#(?:^|/)(?:vendor|cache|generated|proxies?)(?:/|$)#i', $relative)) {
+                    continue;
+                }
                 $files[] = $relative;
             }
         }
@@ -698,25 +871,37 @@ function phpFiles(string $repo): array
 /** @return array{callers:list<array{path:string,line:int,file_sha:string}>,tests:list<array{path:string,file_sha:string}>,complete:bool} */
 function relevantLocations(string $repo, ?string $class, ?string $method, string $ownPath): array
 {
-    if ($method === null) { return ['callers' => [], 'tests' => [], 'complete' => false]; }
+    if ($method === null) {
+        return ['callers' => [], 'tests' => [], 'complete' => false];
+    }
     $callers = $tests = [];
     foreach (phpFiles($repo) as $path) {
-        if ($path === $ownPath) { continue; }
+        if ($path === $ownPath) {
+            continue;
+        }
         $source = file_get_contents($repo . '/' . $path);
-        if ($source === false || (!str_contains($source, $method) && ($class === null || !str_contains($source, basename(str_replace('\\', '/', $class)))))) { continue; }
+        if ($source === false || (!str_contains($source, $method) && ($class === null || !str_contains($source, basename(str_replace('\\', '/', $class)))))) {
+            continue;
+        }
         $lines = explode("\n", $source);
         $sha = hash_file('sha256', $repo . '/' . $path);
         foreach ($lines as $number => $text) {
             $methodCall = preg_match('/(?:->|::)\s*' . preg_quote($method, '/') . '\s*\(/', $text) === 1;
-            if ($methodCall && count($callers) < 20 && is_string($sha)) { $callers[] = ['path' => $path, 'line' => $number + 1, 'file_sha' => $sha]; }
+            if ($methodCall && count($callers) < 20 && is_string($sha)) {
+                $callers[] = ['path' => $path, 'line' => $number + 1, 'file_sha' => $sha];
+            }
             if (str_starts_with($path, 'tests/') && (str_contains($text, $method)
                 || ($class !== null && str_contains($text, basename(str_replace('\\', '/', $class)))))) {
-                if (is_string($sha)) { $tests[$path] = ['path' => $path, 'file_sha' => $sha]; }
+                if (is_string($sha)) {
+                    $tests[$path] = ['path' => $path, 'file_sha' => $sha];
+                }
             }
         }
     }
     $uniqueCallers = [];
-    foreach ($callers as $caller) { $uniqueCallers[$caller['path'] . ':' . $caller['line']] = $caller; }
+    foreach ($callers as $caller) {
+        $uniqueCallers[$caller['path'] . ':' . $caller['line']] = $caller;
+    }
     return ['callers' => array_values($uniqueCallers), 'tests' => array_slice(array_values($tests), 0, 20), 'complete' => false];
 }
 
@@ -734,7 +919,9 @@ function packetRule(string $path, string $identifier, string $message, ?string $
 {
     $needle = strtolower($path . ' ' . $message . ' ' . ($method ?? ''));
     $security = preg_match('/(?:admin|auth|password|secret|token|permission|privilege|super|getsuper|role|account|mcp|access[_ ]control|session|crypt|csrf|nonce|credential|signingkey|privatekey|apikey|encryptionkey)/', $needle) === 1;
-    if ($security) { return ['rule' => 'security_contract', 'reject_reason' => 'security_contract_sensitive', 'sensitive' => true]; }
+    if ($security) {
+        return ['rule' => 'security_contract', 'reject_reason' => 'security_contract_sensitive', 'sensitive' => true];
+    }
     if ($method !== null && preg_match('/(?:status|type)label$/i', $method)) {
         return ['rule' => 'computed_getter', 'reject_reason' => 'computed_runtime_contract', 'sensitive' => true];
     }
@@ -756,13 +943,19 @@ function canonicalHash(array $value): string
 function canonicalValue(mixed $value): mixed
 {
     if (!is_array($value)) {
-        if (is_object($value) || is_resource($value)) { fail('non-JSON value cannot be hashed'); }
+        if (is_object($value) || is_resource($value)) {
+            fail('non-JSON value cannot be hashed');
+        }
         return $value;
     }
-    if (array_is_list($value)) { return array_map('canonicalValue', $value); }
+    if (array_is_list($value)) {
+        return array_map('canonicalValue', $value);
+    }
     $result = [];
     foreach ($value as $key => $item) {
-        if (!is_string($key)) { fail('canonical object keys must be strings'); }
+        if (!is_string($key)) {
+            fail('canonical object keys must be strings');
+        }
         $result[$key] = canonicalValue($item);
     }
     ksort($result, SORT_STRING);
@@ -778,17 +971,23 @@ function emitPackets(string $repo, string $head, string $baselineSha, string $in
     }
     $grouped = [];
     foreach ($phpstan['files'] as $rawPath => $file) {
-        if (!is_string($rawPath)) { fail('malformed PHPStan file path'); }
+        if (!is_string($rawPath)) {
+            fail('malformed PHPStan file path');
+        }
         $pathInfo = diagnosticPath($repo, $rawPath);
         $path = $pathInfo['path'];
-        if (!is_array($file) || !is_array($file['messages'] ?? null)) { fail('malformed PHPStan file record'); }
+        if (!is_array($file) || !is_array($file['messages'] ?? null)) {
+            fail('malformed PHPStan file record');
+        }
         foreach ($file['messages'] as $message) {
             if (!is_array($message) || !is_int($message['line'] ?? null) || ($message['line'] ?? 0) < 1
                 || !is_string($message['identifier'] ?? null) || !is_string($message['message'] ?? null)) {
                 fail('malformed PHPStan diagnostic');
             }
             $key = implode("\0", [$path, $pathInfo['analysis_context'] ?? '', (string) $message['line'], $message['identifier'], $message['message']]);
-            if (!isset($grouped[$key])) { $grouped[$key] = ['path' => $path, 'analysis_context' => $pathInfo['analysis_context'], 'line' => $message['line'], 'id' => $message['identifier'], 'message' => $message['message'], 'count' => 0]; }
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = ['path' => $path, 'analysis_context' => $pathInfo['analysis_context'], 'line' => $message['line'], 'id' => $message['identifier'], 'message' => $message['message'], 'count' => 0];
+            }
             $grouped[$key]['count']++;
         }
     }
@@ -802,14 +1001,18 @@ function emitPackets(string $repo, string $head, string $baselineSha, string $in
         }
         $source = file_get_contents($resolved);
         $fileSha = hash_file('sha256', $resolved);
-        if ($source === false || $fileSha === false) { fail('cannot read diagnostic source'); }
+        if ($source === false || $fileSha === false) {
+            fail('cannot read diagnostic source');
+        }
         $symbol = diagnosticSymbol($source, $diagnostic['line'], $diagnostic['message']);
         $locations = relevantLocations($repo, $symbol['class'], $symbol['method'], $diagnostic['path']);
         $sourceLines = explode("\n", $source);
         $first = max(1, $diagnostic['line'] - 2);
         $last = min(count($sourceLines), $diagnostic['line'] + 2);
         $context = [];
-        for ($line = $first; $line <= $last; $line++) { $context[] = $line . ':' . $sourceLines[$line - 1]; }
+        for ($line = $first; $line <= $last; $line++) {
+            $context[] = $line . ':' . $sourceLines[$line - 1];
+        }
         $strictDoc = strictDocCandidate($source, $diagnostic['id'], $diagnostic['message'], $symbol['class'], $symbol['method']);
         $rule = packetRule($diagnostic['path'], $diagnostic['id'], $diagnostic['message'], $symbol['method'], $strictDoc);
         $identityData = [
@@ -836,8 +1039,13 @@ function emitPackets(string $repo, string $head, string $baselineSha, string $in
     }
     $diagnostics = array_sum(array_column($packets, 'count'));
     $contexts = [];
-    foreach ($packets as $packet) { if (is_string($packet['analysis_context'])) { $contexts[$packet['analysis_context']] = true; } }
-    $analysisContexts = array_keys($contexts); sort($analysisContexts, SORT_STRING);
+    foreach ($packets as $packet) {
+        if (is_string($packet['analysis_context'])) {
+            $contexts[$packet['analysis_context']] = true;
+        }
+    }
+    $analysisContexts = array_keys($contexts);
+    sort($analysisContexts, SORT_STRING);
     echo json_encode([
         'schema_version' => PACKET_SCHEMA,
         'meta' => ['head' => $head, 'baseline_sha' => $baselineSha, 'packet_count' => count($packets),
@@ -851,7 +1059,9 @@ function emitPackets(string $repo, string $head, string $baselineSha, string $in
 function parsePacketAllow(string $allow): array
 {
     $at = strrpos($allow, '@');
-    if ($at === false) { fail('invalid packet allowlist entry'); }
+    if ($at === false) {
+        fail('invalid packet allowlist entry');
+    }
     $identity = substr($allow, 0, $at);
     $hash = substr($allow, $at + 1);
     if (!preg_match('/^[a-f0-9]{64}$/', $identity) || !preg_match('/^[a-f0-9]{64}$/', $hash)) {
@@ -868,8 +1078,13 @@ function parsePacketAllow(string $allow): array
 function validateProposal(string $repo, array $proposal, array $packet): array
 {
     $fields = ['proposal_hash', 'packet_identity', 'packet_hash', 'classification', 'path', 'file_sha', 'confidence', 'rationale', 'required_tests', 'edits'];
-    $keys = array_keys($proposal); sort($keys); $expected = $fields; sort($expected);
-    if ($keys !== $expected) { return ['reject' => 'malformed_proposal_schema']; }
+    $keys = array_keys($proposal);
+    sort($keys);
+    $expected = $fields;
+    sort($expected);
+    if ($keys !== $expected) {
+        return ['reject' => 'malformed_proposal_schema'];
+    }
     if (!is_string($proposal['proposal_hash']) || !preg_match('/^[a-f0-9]{64}$/', $proposal['proposal_hash'])
         || !is_string($proposal['packet_identity']) || !is_string($proposal['packet_hash'])
         || !is_string($proposal['classification']) || !in_array($proposal['classification'], PROPOSAL_CLASSIFICATIONS, true)
@@ -877,16 +1092,25 @@ function validateProposal(string $repo, array $proposal, array $packet): array
         || (!is_float($proposal['confidence']) && !is_int($proposal['confidence']))
         || !is_string($proposal['rationale']) || trim($proposal['rationale']) === ''
         || !is_array($proposal['required_tests']) || $proposal['required_tests'] === [] || !array_is_list($proposal['required_tests'])
-        || array_filter($proposal['required_tests'], static fn(mixed $test): bool => !is_string($test) || trim($test) === '') !== []
+        || array_filter($proposal['required_tests'], static fn (mixed $test): bool => !is_string($test) || trim($test) === '') !== []
         || !is_array($proposal['edits']) || !array_is_list($proposal['edits'])) {
         return ['reject' => 'malformed_proposal_schema'];
     }
-    $proposalCopy = $proposal; unset($proposalCopy['proposal_hash']);
-    if (!hash_equals($proposal['proposal_hash'], canonicalHash(['schema_version' => PROPOSAL_SCHEMA, ...$proposalCopy]))) { return ['reject' => 'proposal_hash_drift']; }
-    if ($proposal['classification'] !== 'mechanical_safe') { return ['reject' => 'classification_not_applicable']; }
-    if ((float) $proposal['confidence'] !== 1.0) { return ['reject' => 'low_confidence']; }
+    $proposalCopy = $proposal;
+    unset($proposalCopy['proposal_hash']);
+    if (!hash_equals($proposal['proposal_hash'], canonicalHash(['schema_version' => PROPOSAL_SCHEMA, ...$proposalCopy]))) {
+        return ['reject' => 'proposal_hash_drift'];
+    }
+    if ($proposal['classification'] !== 'mechanical_safe') {
+        return ['reject' => 'classification_not_applicable'];
+    }
+    if ((float) $proposal['confidence'] !== 1.0) {
+        return ['reject' => 'low_confidence'];
+    }
     foreach ($proposal['required_tests'] as $test) {
-        if (!is_string($test)) { return ['reject' => 'malformed_proposal_schema']; }
+        if (!is_string($test)) {
+            return ['reject' => 'malformed_proposal_schema'];
+        }
         $testPath = $repo . '/' . $test;
         $resolvedTest = realpath($testPath);
         if (!str_starts_with($test, 'tests/') || !str_ends_with($test, '.php') || str_contains($test, '..')
@@ -904,9 +1128,14 @@ function validateProposal(string $repo, array $proposal, array $packet): array
     if ($proposal['path'] !== ($packet['path'] ?? '') || $proposal['file_sha'] !== ($packet['file_sha'] ?? '')) {
         return ['reject' => 'file_hash_drift'];
     }
-    if (count($proposal['edits']) !== 1 || !is_array($proposal['edits'][0]) || array_is_list($proposal['edits'][0])) { return ['reject' => 'ambiguous_or_multiedit']; }
+    if (count($proposal['edits']) !== 1 || !is_array($proposal['edits'][0]) || array_is_list($proposal['edits'][0])) {
+        return ['reject' => 'ambiguous_or_multiedit'];
+    }
     $edit = stringMap($proposal['edits'][0], 'edit');
-    $editFields = ['edit_kind', 'start', 'end', 'old', 'new']; $editKeys = array_keys($edit); sort($editKeys); sort($editFields);
+    $editFields = ['edit_kind', 'start', 'end', 'old', 'new'];
+    $editKeys = array_keys($edit);
+    sort($editKeys);
+    sort($editFields);
     if ($editKeys !== $editFields || !is_int($edit['start']) || !is_int($edit['end']) || $edit['start'] < 0 || $edit['end'] <= $edit['start']
         || $edit['edit_kind'] !== 'doc_return_atom' || !is_string($edit['old']) || $edit['old'] === ''
         || !is_string($edit['new']) || $edit['new'] !== $edit['old'] . '|null' || str_contains($edit['new'], "\0")) {
@@ -914,12 +1143,22 @@ function validateProposal(string $repo, array $proposal, array $packet): array
     }
     $candidate = $repo . '/' . $proposal['path'];
     $resolved = realpath($candidate);
-    if ($resolved === false || !str_starts_with($resolved, $repo . DIRECTORY_SEPARATOR) || is_link($candidate)) { return ['reject' => 'path_rejected']; }
+    if ($resolved === false || !str_starts_with($resolved, $repo . DIRECTORY_SEPARATOR) || is_link($candidate)) {
+        return ['reject' => 'path_rejected'];
+    }
     $sha = hash_file('sha256', $resolved);
     $source = file_get_contents($resolved);
-    if ($sha === false || $source === false || !hash_equals($proposal['file_sha'], $sha)) { return ['reject' => 'file_hash_drift']; }
-    if (substr($source, $edit['start'], $edit['end'] - $edit['start']) !== $edit['old']) { return ['reject' => 'span_drift']; }
-    try { $tokens = tokenSpans($source); } catch (ParseError) { return ['reject' => 'source_parse_error']; }
+    if ($sha === false || $source === false || !hash_equals($proposal['file_sha'], $sha)) {
+        return ['reject' => 'file_hash_drift'];
+    }
+    if (substr($source, $edit['start'], $edit['end'] - $edit['start']) !== $edit['old']) {
+        return ['reject' => 'span_drift'];
+    }
+    try {
+        $tokens = tokenSpans($source);
+    } catch (ParseError) {
+        return ['reject' => 'source_parse_error'];
+    }
     $insideDoc = false;
     foreach ($tokens as $token) {
         $end = $token['start'] + strlen($token['text']);
@@ -930,7 +1169,9 @@ function validateProposal(string $repo, array $proposal, array $packet): array
             break;
         }
     }
-    if (!$insideDoc) { return ['reject' => 'runtime_control_edit']; }
+    if (!$insideDoc) {
+        return ['reject' => 'runtime_control_edit'];
+    }
     if (($packet['id'] ?? '') !== 'return.type'
         || !is_string($packet['message'] ?? null)
         || !preg_match('/ should return ([A-Za-z0-9_\\\\]+) but returns \1\|null\.$/', $packet['message'], $returnMatch)
@@ -948,18 +1189,24 @@ function validateProposal(string $repo, array $proposal, array $packet): array
 function pauseBeforeProposalWrite(): void
 {
     $base = getenv('PHPSTAN_CODEMOD_TEST_PAUSE');
-    if ($base === false || $base === '') { return; }
+    if ($base === false || $base === '') {
+        return;
+    }
     $directory = realpath(dirname($base));
     if ($directory !== sys_get_temp_dir() || !str_starts_with(basename($base), 'vimbadmin-codemod-')) {
         fail('invalid test pause path');
     }
     $ready = $base . '.ready';
     $handle = @fopen($ready, 'x');
-    if ($handle === false) { fail('cannot create test pause signal'); }
+    if ($handle === false) {
+        fail('cannot create test pause signal');
+    }
     fclose($handle);
     $deadline = microtime(true) + 5.0;
     while (!is_file($base . '.continue')) {
-        if (microtime(true) >= $deadline) { fail('test pause timed out'); }
+        if (microtime(true) >= $deadline) {
+            fail('test pause timed out');
+        }
         usleep(10_000);
     }
 }
@@ -970,11 +1217,15 @@ function pauseBeforeProposalWrite(): void
  */
 function processProposals(string $repo, string $head, string $baselineSha, array $options): void
 {
-    if ($options['packet_file'] === null || $options['proposal_file'] === null) { fail('proposal files required'); }
+    if ($options['packet_file'] === null || $options['proposal_file'] === null) {
+        fail('proposal files required');
+    }
     $packetDocument = jsonObject($options['packet_file'], 'packet');
     $proposalDocument = jsonObject($options['proposal_file'], 'proposal');
-    $packetDocumentKeys = array_keys($packetDocument); sort($packetDocumentKeys);
-    $proposalDocumentKeys = array_keys($proposalDocument); sort($proposalDocumentKeys);
+    $packetDocumentKeys = array_keys($packetDocument);
+    sort($packetDocumentKeys);
+    $proposalDocumentKeys = array_keys($proposalDocument);
+    sort($proposalDocumentKeys);
     if ($packetDocumentKeys !== ['meta', 'packets', 'schema_version']
         || ($packetDocument['schema_version'] ?? '') !== PACKET_SCHEMA || !is_array($packetDocument['meta'] ?? null)
         || !is_array($packetDocument['packets'] ?? null) || !array_is_list($packetDocument['packets'])
@@ -984,14 +1235,17 @@ function processProposals(string $repo, string $head, string $baselineSha, array
         fail('malformed packet or proposal document');
     }
     $meta = stringMap($packetDocument['meta'], 'packet meta');
-    $metaKeys = array_keys($meta); sort($metaKeys);
+    $metaKeys = array_keys($meta);
+    sort($metaKeys);
     if ($metaKeys !== ['analysis_contexts', 'baseline_sha', 'diagnostics', 'head', 'packet_count']
         || !is_int($meta['packet_count']) || !is_int($meta['diagnostics'])
         || !is_array($meta['analysis_contexts']) || !array_is_list($meta['analysis_contexts'])
-        || array_filter($meta['analysis_contexts'], static fn(mixed $context): bool => !is_string($context)) !== []
+        || array_filter($meta['analysis_contexts'], static fn (mixed $context): bool => !is_string($context)) !== []
         || $meta['packet_count'] !== count($packetDocument['packets'])
         || ($meta['head'] ?? '') !== $head || ($meta['baseline_sha'] ?? '') !== $baselineSha
-        || $head !== $options['head']) { fail('head or baseline drift'); }
+        || $head !== $options['head']) {
+        fail('head or baseline drift');
+    }
     $packetFields = ['identity', 'head', 'baseline_sha', 'path', 'analysis_context', 'line', 'class', 'method', 'symbol_start', 'symbol_end',
         'id', 'message', 'count', 'context', 'file_sha', 'callers', 'tests', 'discovery_complete', 'rule',
         'reject_reason', 'security_contract_sensitive', 'packet_hash'];
@@ -999,9 +1253,14 @@ function processProposals(string $repo, string $head, string $baselineSha, array
     $packets = [];
     foreach ($packetDocument['packets'] as $packetValue) {
         $packet = stringMap($packetValue, 'packet');
-        $keys = array_keys($packet); sort($keys);
-        if ($keys !== $packetFields || !is_string($packet['identity'])) { fail('malformed packet schema'); }
-        if (isset($packets[$packet['identity']])) { fail('ambiguous packet identity'); }
+        $keys = array_keys($packet);
+        sort($keys);
+        if ($keys !== $packetFields || !is_string($packet['identity'])) {
+            fail('malformed packet schema');
+        }
+        if (isset($packets[$packet['identity']])) {
+            fail('ambiguous packet identity');
+        }
         if (!is_string($packet['head']) || !is_string($packet['baseline_sha']) || !is_string($packet['path'])
             || (!is_string($packet['analysis_context']) && $packet['analysis_context'] !== null)
             || !is_int($packet['line']) || $packet['line'] < 1 || (!is_string($packet['class']) && $packet['class'] !== null)
@@ -1015,9 +1274,14 @@ function processProposals(string $repo, string $head, string $baselineSha, array
             fail('malformed packet schema');
         }
         $hash = $packet['packet_hash'] ?? null;
-        $copy = $packet; unset($copy['packet_hash']);
-        if (!is_string($hash) || !hash_equals($hash, canonicalHash(['schema_version' => PACKET_SCHEMA, ...$copy]))) { fail('packet hash drift'); }
-        if ($packet['head'] !== $head || $packet['baseline_sha'] !== $baselineSha) { fail('packet head or baseline drift'); }
+        $copy = $packet;
+        unset($copy['packet_hash']);
+        if (!is_string($hash) || !hash_equals($hash, canonicalHash(['schema_version' => PACKET_SCHEMA, ...$copy]))) {
+            fail('packet hash drift');
+        }
+        if ($packet['head'] !== $head || $packet['baseline_sha'] !== $baselineSha) {
+            fail('packet head or baseline drift');
+        }
         $identityData = [
             'schema_version' => PACKET_SCHEMA, 'head' => $packet['head'], 'baseline_sha' => $packet['baseline_sha'],
             'path' => $packet['path'], 'analysis_context' => $packet['analysis_context'],
@@ -1026,74 +1290,123 @@ function processProposals(string $repo, string $head, string $baselineSha, array
             'method' => $packet['method'], 'symbol_start' => $packet['symbol_start'], 'symbol_end' => $packet['symbol_end'],
             'context' => $packet['context'],
         ];
-        if (!hash_equals($packet['identity'], canonicalHash($identityData))) { fail('packet identity drift'); }
+        if (!hash_equals($packet['identity'], canonicalHash($identityData))) {
+            fail('packet identity drift');
+        }
         $candidate = $repo . '/' . $packet['path'];
         $resolved = realpath($candidate);
         $source = $resolved === false ? false : file_get_contents($resolved);
         $sha = $resolved === false ? false : hash_file('sha256', $resolved);
         if ($resolved === false || !str_starts_with($resolved, $repo . DIRECTORY_SEPARATOR) || is_link($candidate)
-            || $source === false || $sha === false || !hash_equals($packet['file_sha'], $sha)) { fail('packet file hash drift'); }
+            || $source === false || $sha === false || !hash_equals($packet['file_sha'], $sha)) {
+            fail('packet file hash drift');
+        }
         $symbol = diagnosticSymbol($source, $packet['line'], $packet['message']);
         if ($symbol['class'] !== $packet['class'] || $symbol['method'] !== $packet['method']
             || $symbol['symbol_start'] !== $packet['symbol_start'] || $symbol['symbol_end'] !== $packet['symbol_end']) {
             fail('packet symbol drift');
         }
-        $lines = explode("\n", $source); $context = [];
-        for ($line = max(1, $packet['line'] - 2); $line <= min(count($lines), $packet['line'] + 2); $line++) { $context[] = $line . ':' . $lines[$line - 1]; }
-        if ($context !== $packet['context']) { fail('packet context drift'); }
+        $lines = explode("\n", $source);
+        $context = [];
+        for ($line = max(1, $packet['line'] - 2); $line <= min(count($lines), $packet['line'] + 2); $line++) {
+            $context[] = $line . ':' . $lines[$line - 1];
+        }
+        if ($context !== $packet['context']) {
+            fail('packet context drift');
+        }
         $strictDoc = strictDocCandidate($source, $packet['id'], $packet['message'], $packet['class'], $packet['method']);
         $rule = packetRule($packet['path'], $packet['id'], $packet['message'], $packet['method'], $strictDoc);
         if ($rule['rule'] !== $packet['rule'] || $rule['reject_reason'] !== $packet['reject_reason']
-            || $rule['sensitive'] !== $packet['security_contract_sensitive']) { fail('packet policy drift'); }
+            || $rule['sensitive'] !== $packet['security_contract_sensitive']) {
+            fail('packet policy drift');
+        }
         foreach (array_merge($packet['callers'], $packet['tests']) as $location) {
             if (!is_array($location) || !is_string($location['path'] ?? null) || !is_string($location['file_sha'] ?? null)
-                || hash_file('sha256', $repo . '/' . $location['path']) !== $location['file_sha']) { fail('packet evidence hash drift'); }
+                || hash_file('sha256', $repo . '/' . $location['path']) !== $location['file_sha']) {
+                fail('packet evidence hash drift');
+            }
         }
         $packets[$packet['identity']] = $packet;
     }
     $packetDiagnostics = 0;
     $packetContexts = [];
     foreach ($packets as $packet) {
-        if (!is_int($packet['count'] ?? null)) { fail('packet count drift'); }
+        if (!is_int($packet['count'] ?? null)) {
+            fail('packet count drift');
+        }
         $packetDiagnostics += $packet['count'];
-        if (is_string($packet['analysis_context'] ?? null)) { $packetContexts[$packet['analysis_context']] = true; }
+        if (is_string($packet['analysis_context'] ?? null)) {
+            $packetContexts[$packet['analysis_context']] = true;
+        }
     }
-    $expectedContexts = array_keys($packetContexts); sort($expectedContexts, SORT_STRING);
+    $expectedContexts = array_keys($packetContexts);
+    sort($expectedContexts, SORT_STRING);
     if ($meta['diagnostics'] !== $packetDiagnostics || $meta['analysis_contexts'] !== $expectedContexts) {
         fail('packet diagnostic or context count drift');
     }
     $allows = [];
     foreach ($options['packet_allows'] as $raw) {
         $allow = parsePacketAllow($raw);
-        if (isset($allows[$allow['identity']])) { fail('duplicate packet allowlist identity'); }
+        if (isset($allows[$allow['identity']])) {
+            fail('duplicate packet allowlist identity');
+        }
         $allows[$allow['identity']] = $allow['hash'];
     }
     $records = [];
     $writes = [];
-    $diagnostics = 0; $files = [];
+    $diagnostics = 0;
+    $files = [];
     foreach ($proposalDocument['proposals'] as $proposalValue) {
         $proposal = is_array($proposalValue) && !array_is_list($proposalValue) ? stringMap($proposalValue, 'proposal') : [];
         $identity = is_string($proposal['packet_identity'] ?? null) ? $proposal['packet_identity'] : '';
         $packet = $packets[$identity] ?? null;
         $reject = '';
-        if ($packet === null) { $reject = 'unmatched_packet'; }
-        elseif (!is_string($packet['packet_hash'] ?? null) || !is_int($packet['count'] ?? null)) { fail('stored packet shape drift'); }
-        elseif (!isset($allows[$identity]) || !hash_equals($allows[$identity], $packet['packet_hash'])) { $reject = 'nonallowlisted_packet'; }
-        else {
+        if ($packet === null) {
+            $reject = 'unmatched_packet';
+        } elseif (!is_string($packet['packet_hash'] ?? null) || !is_int($packet['count'] ?? null)) {
+            fail('stored packet shape drift');
+        } elseif (!isset($allows[$identity]) || !hash_equals($allows[$identity], $packet['packet_hash'])) {
+            $reject = 'nonallowlisted_packet';
+        } else {
             $validated = validateProposal($repo, $proposal, $packet);
-            if (isset($validated['reject'])) { $reject = $validated['reject']; }
-            else { $writes[] = $validated; $files[$validated['file']] = true; $diagnostics += $packet['count']; }
+            if (isset($validated['reject'])) {
+                $reject = $validated['reject'];
+            } else {
+                $writes[] = $validated;
+                $files[$validated['file']] = true;
+                $diagnostics += $packet['count'];
+            }
         }
         $records[] = ['packet_identity' => $identity, 'status' => $reject === '' ? ($options['proposal_apply'] ? 'applied' : 'eligible') : 'rejected', 'reject_reason' => $reject];
     }
-    $eligible = count($writes); $rejected = count($records) - $eligible;
-    if (count($writes) > 1) { $rejected = count($records); $eligible = 0; foreach ($records as &$record) { $record['status'] = 'rejected'; $record['reject_reason'] = 'multi_proposal_batch'; } unset($record); }
-    if (count($files) > 1) { $rejected = count($records); $eligible = 0; foreach ($records as &$record) { $record['status'] = 'rejected'; $record['reject_reason'] = 'multifile_batch'; } unset($record); }
+    $eligible = count($writes);
+    $rejected = count($records) - $eligible;
+    if (count($writes) > 1) {
+        $rejected = count($records);
+        $eligible = 0;
+        foreach ($records as &$record) {
+            $record['status'] = 'rejected';
+            $record['reject_reason'] = 'multi_proposal_batch';
+        } unset($record);
+    }
+    if (count($files) > 1) {
+        $rejected = count($records);
+        $eligible = 0;
+        foreach ($records as &$record) {
+            $record['status'] = 'rejected';
+            $record['reject_reason'] = 'multifile_batch';
+        } unset($record);
+    }
     $ok = $rejected === 0 && $eligible === $options['sites'] && $diagnostics === $options['diagnostics'];
     $result = ['schema_version' => PROPOSAL_SCHEMA, 'meta' => ['head' => $head, 'baseline_sha' => $baselineSha, 'mode' => $options['proposal_apply'] ? 'apply' : 'dry-run', 'eligible_sites' => $eligible, 'diagnostics' => $diagnostics, 'rejected' => $rejected], 'records' => $records];
-    if (!$ok) { echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n"; fail('proposal preconditions failed; no files changed', 1); }
+    if (!$ok) {
+        echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
+        fail('proposal preconditions failed; no files changed', 1);
+    }
     if ($options['proposal_apply']) {
-        if (gitHead($repo) !== $options['head']) { fail('HEAD changed before proposal write'); }
+        if (gitHead($repo) !== $options['head']) {
+            fail('HEAD changed before proposal write');
+        }
         pauseBeforeProposalWrite();
         $write = $writes[0];
         $source = file_get_contents($write['file']);
@@ -1113,7 +1426,9 @@ function processProposals(string $repo, string $head, string $baselineSha, array
 function nextSignificantIndex(array $tokens, int $index): ?int
 {
     for ($i = $index + 1, $count = count($tokens); $i < $count; $i++) {
-        if (!insignificant($tokens[$i])) { return $i; }
+        if (!insignificant($tokens[$i])) {
+            return $i;
+        }
     }
     return null;
 }
@@ -1122,7 +1437,9 @@ function nextSignificantIndex(array $tokens, int $index): ?int
 function previousSignificantIndex(array $tokens, int $index): ?int
 {
     for ($i = $index - 1; $i >= 0; $i--) {
-        if (!insignificant($tokens[$i])) { return $i; }
+        if (!insignificant($tokens[$i])) {
+            return $i;
+        }
     }
     return null;
 }
@@ -1131,7 +1448,7 @@ function harnessStateClass(string $path): string
 {
     $stem = preg_replace('/\.php$/', '', basename($path)) ?? '';
     $parts = preg_split('/[^A-Za-z0-9]+/', $stem, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-    $class = implode('', array_map(static fn(string $part): string => ucfirst(strtolower($part)), $parts));
+    $class = implode('', array_map(static fn (string $part): string => ucfirst(strtolower($part)), $parts));
     return $class . 'HarnessState';
 }
 
@@ -1140,7 +1457,9 @@ function harnessStateClass(string $path): string
  */
 function inspectHarnessCounter(string $source, string $variable, string $stateClass): array
 {
-    if (str_contains($source, $stateClass)) { return ['reject' => 'state_class_collision']; }
+    if (str_contains($source, $stateClass)) {
+        return ['reject' => 'state_class_collision'];
+    }
     $tokens = tokenSpans($source);
     $depths = [];
     $functionScopes = [];
@@ -1150,7 +1469,9 @@ function inspectHarnessCounter(string $source, string $variable, string $stateCl
     foreach ($tokens as $index => $token) {
         $depths[$index] = $depth;
         $functionScopes[$index] = $functionDepths !== [];
-        if ($token['id'] === T_FUNCTION) { $pendingFunction = true; }
+        if ($token['id'] === T_FUNCTION) {
+            $pendingFunction = true;
+        }
         if (($token['id'] === null && $token['text'] === '{')
             || $token['id'] === T_CURLY_OPEN || $token['id'] === T_DOLLAR_OPEN_CURLY_BRACES) {
             $depth++;
@@ -1159,13 +1480,19 @@ function inspectHarnessCounter(string $source, string $variable, string $stateCl
                 $pendingFunction = false;
             }
         }
-        if ($token['id'] === null && $token['text'] === ';' && $pendingFunction) { $pendingFunction = false; }
+        if ($token['id'] === null && $token['text'] === ';' && $pendingFunction) {
+            $pendingFunction = false;
+        }
         if ($token['id'] === null && $token['text'] === '}') {
-            if ($functionDepths !== [] && end($functionDepths) === $depth) { array_pop($functionDepths); }
+            if ($functionDepths !== [] && end($functionDepths) === $depth) {
+                array_pop($functionDepths);
+            }
             $depth--;
         }
     }
-    if ($depth !== 0) { return ['reject' => 'unbalanced_source']; }
+    if ($depth !== 0) {
+        return ['reject' => 'unbalanced_source'];
+    }
 
     $name = '$' . $variable;
     $initializers = [];
@@ -1263,8 +1590,12 @@ function inspectHarnessCounter(string $source, string $variable, string $stateCl
         }
     }
 
-    if (count($initializers) !== 1) { return ['reject' => 'counter_initializer_not_exact']; }
-    if ($increments === 0) { return ['reject' => 'counter_increment_missing']; }
+    if (count($initializers) !== 1) {
+        return ['reject' => 'counter_initializer_not_exact'];
+    }
+    if ($increments === 0) {
+        return ['reject' => 'counter_increment_missing'];
+    }
     [$startIndex, $endIndex] = $initializers[0];
     $old = substr(
         $source,
@@ -1278,11 +1609,13 @@ function inspectHarnessCounter(string $source, string $variable, string $stateCl
         'end' => $tokens[$endIndex]['start'] + 1,
         'new' => $new,
     ];
-    usort($edits, static fn(array $a, array $b): int => $b['start'] <=> $a['start']);
+    usort($edits, static fn (array $a, array $b): int => $b['start'] <=> $a['start']);
     $transformed = $source;
     $lastStart = strlen($source) + 1;
     foreach ($edits as $edit) {
-        if ($edit['end'] > $lastStart) { return ['reject' => 'counter_edit_overlap']; }
+        if ($edit['end'] > $lastStart) {
+            return ['reject' => 'counter_edit_overlap'];
+        }
         $transformed = substr($transformed, 0, $edit['start']) . $edit['new'] . substr($transformed, $edit['end']);
         $lastStart = $edit['start'];
     }
@@ -1312,8 +1645,10 @@ function harnessDiagnostic(array $entry): bool
 function processHarnessCounters(string $repo, string $head, string $baselineSha, array $entries, array $options): void
 {
     $parsedAllows = array_map('parseAllow', $options['allows']);
-    $siteKeys = array_map(static fn(array $allow): string => $allow['path'] . ':' . $allow['method'], $parsedAllows);
-    if (count($siteKeys) !== count(array_unique($siteKeys))) { fail('duplicate allowlist site'); }
+    $siteKeys = array_map(static fn (array $allow): string => $allow['path'] . ':' . $allow['method'], $parsedAllows);
+    if (count($siteKeys) !== count(array_unique($siteKeys))) {
+        fail('duplicate allowlist site');
+    }
     $records = [];
     $writes = [];
     $diagnosticCount = 0;
@@ -1325,23 +1660,29 @@ function processHarnessCounters(string $repo, string $head, string $baselineSha,
         $inside = $resolved !== false && str_starts_with($resolved, $repo . DIRECTORY_SEPARATOR);
         $file = $inside ? $resolved : $candidate;
         $fileSha = $inside && !is_link($candidate) && is_file($file) ? hash_file('sha256', $file) : false;
-        if ($fileSha === false) { $fileSha = ''; }
+        if ($fileSha === false) {
+            $fileSha = '';
+        }
         $record = array_fill_keys(FIELDS, '');
         $record = array_merge($record, [
             'head' => $head, 'baseline_sha' => $baselineSha, 'path' => $path,
             'method' => $variable, 'property' => 'count', 'id' => 'test-harness-static-counter',
             'count' => 0, 'status' => 'rejected', 'file_sha' => $fileSha,
         ]);
-        if ($head !== $options['head']) { $record['reject_reason'] = 'head_drift'; $records[] = $record; continue; }
+        if ($head !== $options['head']) {
+            $record['reject_reason'] = 'head_drift';
+            $records[] = $record;
+            continue;
+        }
         if (!str_starts_with($path, 'tests/') || $fileSha === '' || !hash_equals($allow['sha'], $fileSha)) {
             $record['reject_reason'] = $fileSha === '' || !hash_equals($allow['sha'], $fileSha)
                 ? 'file_hash_drift' : 'counter_path_not_test';
             $records[] = $record;
             continue;
         }
-        $matches = array_values(array_filter($entries, static fn(array $entry): bool =>
+        $matches = array_values(array_filter($entries, static fn (array $entry): bool =>
             $entry['path'] === $path && harnessDiagnostic($entry)));
-        $postIncrementCount = array_sum(array_map(static fn(array $entry): int =>
+        $postIncrementCount = array_sum(array_map(static fn (array $entry): int =>
             $entry['id'] === 'postInc.type' ? $entry['count'] : 0, $matches));
         $count = array_sum(array_column($matches, 'count'));
         $record['count'] = $count;
@@ -1351,7 +1692,11 @@ function processHarnessCounters(string $repo, string $head, string $baselineSha,
             continue;
         }
         $source = file_get_contents($file);
-        if ($source === false) { $record['reject_reason'] = 'file_unreadable'; $records[] = $record; continue; }
+        if ($source === false) {
+            $record['reject_reason'] = 'file_unreadable';
+            $records[] = $record;
+            continue;
+        }
         $stateClass = harnessStateClass($path);
         $inspection = inspectHarnessCounter($source, $variable, $stateClass);
         if (isset($inspection['reject'])) {
@@ -1384,13 +1729,17 @@ function processHarnessCounters(string $repo, string $head, string $baselineSha,
     if ($options['apply']) {
         if ($rejected !== 0 || $eligible !== $options['sites'] || $diagnosticCount !== $options['diagnostics']) {
             foreach ($records as &$record) {
-                if ($record['status'] === 'applied') { $record['status'] = 'eligible'; }
+                if ($record['status'] === 'applied') {
+                    $record['status'] = 'eligible';
+                }
             }
             unset($record);
             emit($records, $meta, $options['format']);
             fail('apply preconditions failed; no files changed');
         }
-        if (gitHead($repo) !== $options['head']) { fail('HEAD changed before write'); }
+        if (gitHead($repo) !== $options['head']) {
+            fail('HEAD changed before write');
+        }
         $contents = [];
         $expected = [];
         foreach ($writes as $file => $write) {
@@ -1405,16 +1754,24 @@ function processHarnessCounters(string $repo, string $head, string $baselineSha,
 
 $options = options($argv);
 $repo = realpath($options['repo']);
-if ($repo === false) { fail('repository does not exist'); }
+if ($repo === false) {
+    fail('repository does not exist');
+}
 $head = gitHead($repo);
 $baseline = $repo . '/phpstan-baseline.neon';
 $baselineSha = is_file($baseline) ? hash_file('sha256', $baseline) : false;
-if ($baselineSha === false) { fail('phpstan-baseline.neon is required'); }
+if ($baselineSha === false) {
+    fail('phpstan-baseline.neon is required');
+}
 if ($options['packet_input'] !== null) {
-    if ($head !== $options['head']) { fail('head_drift'); }
+    if ($head !== $options['head']) {
+        fail('head_drift');
+    }
     emitPackets($repo, $head, $baselineSha, $options['packet_input']);
 }
-if ($options['packet_file'] !== null) { processProposals($repo, $head, $baselineSha, $options); }
+if ($options['packet_file'] !== null) {
+    processProposals($repo, $head, $baselineSha, $options);
+}
 $entries = baselineEntries($baseline);
 if ($options['family'] === 'test-harness-static-counter') {
     processHarnessCounters($repo, $head, $baselineSha, $entries, $options);
@@ -1424,7 +1781,7 @@ $records = [];
 $edits = [];
 $diagnosticCount = 0;
 $parsedAllows = array_map('parseAllow', $options['allows']);
-$siteKeys = array_map(static fn(array $allow): string => $allow['path'] . ':' . $allow['method'], $parsedAllows);
+$siteKeys = array_map(static fn (array $allow): string => $allow['path'] . ':' . $allow['method'], $parsedAllows);
 if (count($siteKeys) !== count(array_unique($siteKeys))) {
     fail('duplicate allowlist site');
 }
@@ -1434,7 +1791,9 @@ foreach ($parsedAllows as $allow) {
     $insideRepo = $resolvedFile !== false && str_starts_with($resolvedFile, $repo . DIRECTORY_SEPARATOR);
     $file = $insideRepo ? $resolvedFile : $candidateFile;
     $fileSha = $insideRepo && !is_link($candidateFile) && is_file($file) ? hash_file('sha256', $file) : false;
-    if ($fileSha === false) { $fileSha = ''; }
+    if ($fileSha === false) {
+        $fileSha = '';
+    }
     $record = array_fill_keys(FIELDS, '');
     $record = array_merge($record, [
         'head' => $head, 'baseline_sha' => $baselineSha, 'path' => $allow['path'],
@@ -1451,7 +1810,7 @@ foreach ($parsedAllows as $allow) {
         $records[] = $record;
         continue;
     }
-    $matches = array_values(array_filter($entries, static fn(array $entry): bool =>
+    $matches = array_values(array_filter($entries, static fn (array $entry): bool =>
         $entry['path'] === $allow['path'] && $entry['id'] === 'return.type'
         && $entry['method'] === $allow['method']));
     if (count($matches) !== 1) {
@@ -1494,7 +1853,7 @@ foreach ($parsedAllows as $allow) {
     ];
     $diagnosticCount += $entry['count'];
 }
-$eligible = array_sum(array_map(static fn(array $record): int => in_array($record['status'], ['eligible', 'applied'], true) ? 1 : 0, $records));
+$eligible = array_sum(array_map(static fn (array $record): int => in_array($record['status'], ['eligible', 'applied'], true) ? 1 : 0, $records));
 $rejected = count($records) - $eligible;
 $meta = [
     'head' => $head, 'baseline_sha' => $baselineSha, 'mode' => $options['apply'] ? 'apply' : 'dry-run',
@@ -1503,26 +1862,35 @@ $meta = [
 if ($options['apply']) {
     if ($rejected !== 0 || $eligible !== $options['sites'] || $diagnosticCount !== $options['diagnostics']) {
         foreach ($records as &$record) {
-            if ($record['status'] === 'applied') { $record['status'] = 'eligible'; }
+            if ($record['status'] === 'applied') {
+                $record['status'] = 'eligible';
+            }
         }
         unset($record);
         emit($records, $meta, $options['format']);
         fail('apply preconditions failed; no files changed');
     }
-    if (gitHead($repo) !== $options['head']) { fail('HEAD changed before write'); }
+    if (gitHead($repo) !== $options['head']) {
+        fail('HEAD changed before write');
+    }
     $contents = [];
     foreach ($edits as $file => $fileEdits) {
         $expected = null;
         foreach ($parsedAllows as $allow) {
-            if ($repo . '/' . $allow['path'] === $file) { $expected = $allow['sha']; break; }
+            if ($repo . '/' . $allow['path'] === $file) {
+                $expected = $allow['sha'];
+                break;
+            }
         }
         $currentSha = hash_file('sha256', $file);
         if ($expected === null || $currentSha === false || !hash_equals($expected, $currentSha)) {
             fail('file changed before write: ' . substr($file, strlen($repo) + 1));
         }
         $content = file_get_contents($file);
-        if ($content === false) { fail("cannot reread $file"); }
-        usort($fileEdits, static fn(array $a, array $b): int => $b['start'] <=> $a['start']);
+        if ($content === false) {
+            fail("cannot reread $file");
+        }
+        usort($fileEdits, static fn (array $a, array $b): int => $b['start'] <=> $a['start']);
         foreach ($fileEdits as $edit) {
             $content = substr($content, 0, $edit['start']) . $edit['new'] . substr($content, $edit['end']);
         }

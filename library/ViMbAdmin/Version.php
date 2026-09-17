@@ -55,18 +55,18 @@ final class ViMbAdmin_Version
      * DBVERSION is independent — bump it ONLY when the schema (entity mappings)
      * changes, not on every release.
      */
-    const VERSION = '4.0.0';
+    public const VERSION = '4.0.0';
 
     /** Native UI workflow compatibility; see docs/NATIVE-WORKFLOWS-1.md. */
-    const NATIVE_WORKFLOW_CONTRACT = 'native-workflows/1';
+    public const NATIVE_WORKFLOW_CONTRACT = 'native-workflows/1';
 
     /**
      * Upstream GitHub repository (owner/repo) for the Maintenance update checks.
      */
-    const GITHUB_REPO = 'eilandert/ViMbAdmin';
+    public const GITHUB_REPO = 'eilandert/ViMbAdmin';
 
     /** Default branch the running code is built from (commits-behind check). */
-    const GITHUB_BRANCH = 'master';
+    public const GITHUB_BRANCH = 'master';
 
     /**
      * Version milestone
@@ -74,12 +74,12 @@ final class ViMbAdmin_Version
      * The version milestone is used to publicly identify the running version
      * and should therefore not include the patch level.
      */
-    const MILESTONE = '4.0';
+    public const MILESTONE = '4.0';
 
     /**
      * Database schema version
      */
-    const DBVERSION = 4;
+    public const DBVERSION = 4;
 
     /**
      * Database schema version name
@@ -102,7 +102,7 @@ final class ViMbAdmin_Version
      *     queue.autoprune.days — application.ini).
      * Standalone SQL mirror: contrib/migrations/2026-06-fork-schema.sql.
      */
-    const DBVERSION_NAME = 'ViMbAdmin fork schema (queue, MCP, Dovecot dicts, cascade FKs, archive autoprune, setting KV)';
+    public const DBVERSION_NAME = 'ViMbAdmin fork schema (queue, MCP, Dovecot dicts, cascade FKs, archive autoprune, setting KV)';
 
     /**
      * The latest stable version Zend Framework available
@@ -129,9 +129,9 @@ final class ViMbAdmin_Version
      *                           and +1 if $version is newer.
      *
      */
-    public static function compareVersion( $version )
+    public static function compareVersion($version)
     {
-        return version_compare( $version, self::VERSION );
+        return version_compare($version, self::VERSION);
     }
 
     /**
@@ -149,69 +149,67 @@ final class ViMbAdmin_Version
      * @param string|null $root  Test seam. Null uses the real application root.
      * @return string|null
      */
-    public static function gitCommit( $root = null )
+    public static function gitCommit($root = null)
     {
-        $useCache = ( $root === null );
+        $useCache = ($root === null);
         // Return cached result (includes the case where we cached null).
-        if( $useCache && self::$_gitCommitCache !== false )
+        if ($useCache && self::$_gitCommitCache !== false) {
             return self::$_gitCommitCache;
+        }
 
         // Dev fallback: a real .git in the tree (the image strips it).
-        if( $root === null )
-            $root = dirname( dirname( __DIR__ ) );      // .../ (app root)
+        if ($root === null) {
+            $root = dirname(dirname(__DIR__));
+        }      // .../ (app root)
         // NOTE: the marker lives at the app ROOT, NOT under var/ -- var/ is a
         // writable volume at runtime and would shadow a baked-in file.
         $marker = $root . '/GIT_COMMIT';
-        if( is_readable( $marker ) )
-        {
-            $sha = trim( (string) file_get_contents( $marker ) );
-            if( preg_match( '/^[0-9a-f]{7,40}$/i', $sha ) )
-            {
-                if( $useCache )
+        if (is_readable($marker)) {
+            $sha = trim((string) file_get_contents($marker));
+            if (preg_match('/^[0-9a-f]{7,40}$/i', $sha)) {
+                if ($useCache) {
                     self::$_gitCommitCache = $sha;
+                }
                 return $sha;
             }
         }
         $head = $root . '/.git/HEAD';
-        if( is_readable( $head ) )
-        {
-            $ref = trim( (string) file_get_contents( $head ) );
-            if( strpos( $ref, 'ref:' ) === 0 )
-            {
-                $refPath = trim( substr( $ref, 4 ) );
+        if (is_readable($head)) {
+            $ref = trim((string) file_get_contents($head));
+            if (strpos($ref, 'ref:') === 0) {
+                $refPath = trim(substr($ref, 4));
                 // CWE-22 hardening: constrain the ref path to reject directory traversal.
                 // Only allow refs/ prefix with alphanumerics, dots, slashes, hyphens, underscores.
-                if( !preg_match( '~^refs/[A-Za-z0-9._/-]+$~', $refPath )
-                    || strpos( $refPath, '..' ) !== false )
-                {
-                    if( $useCache )
+                if (!preg_match('~^refs/[A-Za-z0-9._/-]+$~', $refPath)
+                    || strpos($refPath, '..') !== false) {
+                    if ($useCache) {
                         self::$_gitCommitCache = null;
+                    }
                     return null;
                 }
                 $path = $root . '/.git/' . $refPath;
-                if( is_readable( $path ) )
-                {
+                if (is_readable($path)) {
                     // Readable is not well-formed: a corrupt ref file must not
                     // be returned, and must not be memoized for the process
                     // lifetime, as a commit SHA.
-                    $sha = trim( (string) file_get_contents( $path ) );
-                    if( preg_match( '/^[0-9a-f]{40}$/i', $sha ) )
-                    {
-                        if( $useCache )
+                    $sha = trim((string) file_get_contents($path));
+                    if (preg_match('/^[0-9a-f]{40}$/i', $sha)) {
+                        if ($useCache) {
                             self::$_gitCommitCache = $sha;
+                        }
                         return $sha;
                     }
                 }
-            }
-            elseif( preg_match( '/^[0-9a-f]{40}$/i', $ref ) )
-            {
-                if( $useCache )
+            } elseif (preg_match('/^[0-9a-f]{40}$/i', $ref)) {
+                if ($useCache) {
                     self::$_gitCommitCache = $ref;
+                }
                 return $ref;
             }
         }
-        if( $useCache )
+        if ($useCache) {
             self::$_gitCommitCache = null;
+        }
         return null;
     }
 
@@ -222,16 +220,16 @@ final class ViMbAdmin_Version
      */
     public static function gitCommitShort()
     {
-        return self::_shortCommit( self::gitCommit() );
+        return self::_shortCommit(self::gitCommit());
     }
 
     /**
      * @param string|null $commit
      * @return string|null
      */
-    private static function _shortCommit( $commit )
+    private static function _shortCommit($commit)
     {
-        return $commit ? substr( $commit, 0, 12 ) : null;
+        return $commit ? substr($commit, 0, 12) : null;
     }
 
     /**
@@ -242,34 +240,36 @@ final class ViMbAdmin_Version
      * @param string $path  e.g. "releases/latest"
      * @return array<array-key, mixed>|null
      */
-    private static function _github( $path )
+    private static function _github($path)
     {
         $url = 'https://api.github.com/repos/' . self::GITHUB_REPO . '/' . $path;
-        $ctx = stream_context_create( [ 'http' => [
+        $ctx = stream_context_create([ 'http' => [
             'method'        => 'GET',
             'timeout'       => 6,
             'ignore_errors' => true,
             'header'        => "Accept: application/vnd.github+json\r\n"
                              . 'User-Agent: ViMbAdmin/' . self::VERSION . "\r\n",
-        ] ] );
+        ] ]);
 
         // Retry once on a transient failure (network blip, a momentary non-2xx)
         // so a single hiccup doesn't surface a scary "couldn't reach GitHub".
-        for( $attempt = 0; $attempt < 2; $attempt++ )
-        {
-            if( $attempt > 0 )
-                usleep( 400000 );   // 0.4s backoff before the single retry
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            if ($attempt > 0) {
+                usleep(400000);
+            }   // 0.4s backoff before the single retry
 
-            $body = @file_get_contents( $url, false, $ctx );
-            if( $body === false )
+            $body = @file_get_contents($url, false, $ctx);
+            if ($body === false) {
                 continue;
+            }
 
             $json = self::_decodeGithubResponse(
                 $body,
                 $http_response_header
             );
-            if( $json !== null )
+            if ($json !== null) {
                 return $json;
+            }
         }
 
         return null;
@@ -283,20 +283,21 @@ final class ViMbAdmin_Version
      * @param list<string> $headers
      * @return array<array-key, mixed>|null
      */
-    private static function _decodeGithubResponse( $body, array $headers )
+    private static function _decodeGithubResponse($body, array $headers)
     {
-        if( !isset( $headers[0] )
-            || !preg_match( '#\s(\d{3})\s#', $headers[0], $m )
-            || (int) $m[1] < 200 || (int) $m[1] >= 300 )
+        if (!isset($headers[0])
+            || !preg_match('#\s(\d{3})\s#', $headers[0], $m)
+            || (int) $m[1] < 200 || (int) $m[1] >= 300) {
             return null;
+        }
 
-        $json = json_decode( $body, true );
-        return is_array( $json ) ? $json : null;
+        $json = json_decode($body, true);
+        return is_array($json) ? $json : null;
     }
 
-    private static function _nonEmptyString( mixed $value ): ?string
+    private static function _nonEmptyString(mixed $value): ?string
     {
-        return is_string( $value ) && $value !== '' ? $value : null;
+        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**
@@ -307,18 +308,20 @@ final class ViMbAdmin_Version
      */
     public static function latestRelease()
     {
-        $rel = self::_github( 'releases/latest' );
-        if( is_array( $rel ) ) {
-            $tag = self::_nonEmptyString( $rel['tag_name'] ?? null );
-            if( $tag !== null )
+        $rel = self::_github('releases/latest');
+        if (is_array($rel)) {
+            $tag = self::_nonEmptyString($rel['tag_name'] ?? null);
+            if ($tag !== null) {
                 return $tag;
+            }
         }
 
-        $tags = self::_github( 'tags' );
-        if( is_array( $tags ) && isset( $tags[0] ) && is_array( $tags[0] ) ) {
-            $tag = self::_nonEmptyString( $tags[0]['name'] ?? null );
-            if( $tag !== null )
+        $tags = self::_github('tags');
+        if (is_array($tags) && isset($tags[0]) && is_array($tags[0])) {
+            $tag = self::_nonEmptyString($tags[0]['name'] ?? null);
+            if ($tag !== null) {
                 return $tag;
+            }
         }
 
         return null;
@@ -331,11 +334,12 @@ final class ViMbAdmin_Version
      */
     public static function latestCommit()
     {
-        $c = self::_github( 'commits/' . self::GITHUB_BRANCH );
-        if( is_array( $c ) ) {
-            $sha = self::_nonEmptyString( $c['sha'] ?? null );
-            if( $sha !== null )
+        $c = self::_github('commits/' . self::GITHUB_BRANCH);
+        if (is_array($c)) {
+            $sha = self::_nonEmptyString($c['sha'] ?? null);
+            if ($sha !== null) {
                 return $sha;
+            }
         }
         return null;
     }
@@ -349,10 +353,11 @@ final class ViMbAdmin_Version
     public static function releaseUpdateAvailable()
     {
         $tag = self::latestRelease();
-        if( $tag === null )
+        if ($tag === null) {
             return null;
-        $remote = ltrim( $tag, 'vV' );
-        return version_compare( $remote, self::VERSION, '>' ) ? $tag : false;
+        }
+        $remote = ltrim($tag, 'vV');
+        return version_compare($remote, self::VERSION, '>') ? $tag : false;
     }
 
     /**
@@ -366,11 +371,13 @@ final class ViMbAdmin_Version
     public static function commitUpdateAvailable()
     {
         $local = self::gitCommit();
-        if( $local === null )
+        if ($local === null) {
             return null;
+        }
         $remote = self::latestCommit();
-        if( $remote === null )
+        if ($remote === null) {
             return null;
-        return ( strcasecmp( $local, $remote ) !== 0 ) ? substr( $remote, 0, 12 ) : false;
+        }
+        return (strcasecmp($local, $remote) !== 0) ? substr($remote, 0, 12) : false;
     }
 }

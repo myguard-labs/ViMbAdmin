@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin\Kernel\Plugin\FormPluginHost + the AccessPermissions
  * native mailbox-form extension (Phase 4f of docs/ZF1-REMOVAL.md).
@@ -18,7 +19,9 @@ require __DIR__ . '/../vendor/autoload.php';
 spl_autoload_register(static function (string $class): void {
     if (str_starts_with($class, 'Entities\\')) {
         $file = __DIR__ . '/../application/Entities/' . str_replace('\\', '/', substr($class, 9)) . '.php';
-        if (is_file($file)) { require $file; }
+        if (is_file($file)) {
+            require $file;
+        }
     }
 });
 
@@ -34,10 +37,13 @@ final class TestKernelFormPluginHostHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelFormPluginHostHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestKernelFormPluginHostHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestKernelFormPluginHostHarnessState::$count++; }
+    if (!$ok) {
+        TestKernelFormPluginHostHarnessState::$count++;
+    }
 }
 
 // ===================== Part A: FormPluginHost ========================== //
@@ -93,19 +99,19 @@ $options = ['vimbadmin_plugins' => [
 $host = new FormPluginHost($options, $dir);
 
 check('host keeps only extension, enabled', $host->extensionCount() === 1);
-check('host ctor passed options',           ($GLOBALS['ext_opts'] ?? null) === $options);
+check('host ctor passed options', ($GLOBALS['ext_opts'] ?? null) === $options);
 
 $fields = $host->fields(null, $options);
-check('fields() collects extension field',  count($fields) === 1 && $fields[0]->name === 'x');
-check('fields() receives merged options',    ($GLOBALS['ext_field_opts'] ?? null) === $options);
-check('validate() surfaces the error',      $host->validate(['x' => 0], $options) === 'x required');
-check('validate() handles null boundary',    $host->validate(['x' => null], $options) === 'x required');
-check('validate() passes when satisfied',   $host->validate(['x' => 1], $options) === null);
-check('validate() receives merged options',  ($GLOBALS['ext_validate_opts'] ?? null) === $options);
+check('fields() collects extension field', count($fields) === 1 && $fields[0]->name === 'x');
+check('fields() receives merged options', ($GLOBALS['ext_field_opts'] ?? null) === $options);
+check('validate() surfaces the error', $host->validate(['x' => 0], $options) === 'x required');
+check('validate() handles null boundary', $host->validate(['x' => null], $options) === 'x required');
+check('validate() passes when satisfied', $host->validate(['x' => 1], $options) === null);
+check('validate() receives merged options', ($GLOBALS['ext_validate_opts'] ?? null) === $options);
 
 $mb = new \Entities\Mailbox();
 $host->apply($mb, ['x' => 1], $options);
-check('apply() ran the writeback',          $mb->getName() === 'EXT');
+check('apply() ran the writeback', $mb->getName() === 'EXT');
 check('apply() receives options and null EM', ($GLOBALS['ext_apply_opts'] ?? null) === $options && array_key_exists('ext_apply_em', $GLOBALS) && $GLOBALS['ext_apply_em'] === null);
 
 try {
@@ -131,7 +137,10 @@ try {
 }
 check('malformed form-plugin configuration fails before loading', $badFormOptionsRejected);
 
-@unlink("$dir/Ext.php"); @unlink("$dir/Plain.php"); @unlink("$dir/Off.php"); @rmdir($dir);
+@unlink("$dir/Ext.php");
+@unlink("$dir/Plain.php");
+@unlink("$dir/Off.php");
+@rmdir($dir);
 
 // ============ Part B: AccessPermissions native adapter ================= //
 require __DIR__ . '/../library/OSS/Plugin/Observer.php';
@@ -157,9 +166,18 @@ final class DirectoryEntryEntityManagerDouble extends \Doctrine\ORM\Decorator\En
         parent::__construct(new \Doctrine\ORM\EntityManager($connection, $config));
     }
 
-    public function persist(object $entity): void { $this->persisted[] = $entity; }
-    public function remove(object $entity): void { $this->removed[] = $entity; }
-    public function flush(): void { $this->flushes++; }
+    public function persist(object $entity): void
+    {
+        $this->persisted[] = $entity;
+    }
+    public function remove(object $entity): void
+    {
+        $this->removed[] = $entity;
+    }
+    public function flush(): void
+    {
+        $this->flushes++;
+    }
 }
 
 final class DirectoryEntryMailboxContext implements ViMbAdmin_Plugin_MailboxContext
@@ -171,15 +189,33 @@ final class DirectoryEntryMailboxContext implements ViMbAdmin_Plugin_MailboxCont
         private \Entities\Admin $admin,
         private \Entities\Domain $domain,
         private \Entities\Mailbox $mailbox,
-    ) {}
+    ) {
+    }
 
     /** @return array<string, mixed> */
-    public function getOptions(): array { return $this->options; }
-    public function getD2EM(): DirectoryEntryEntityManagerDouble { return $this->entityManager; }
-    public function getAdmin(): \Entities\Admin { return $this->admin; }
-    public function getDomain(): \Entities\Domain { return $this->domain; }
-    public function getMailbox(): \Entities\Mailbox { return $this->mailbox; }
-    public function addMessage(mixed $message, mixed $class = null, mixed $type = null): void {}
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
+    public function getD2EM(): DirectoryEntryEntityManagerDouble
+    {
+        return $this->entityManager;
+    }
+    public function getAdmin(): \Entities\Admin
+    {
+        return $this->admin;
+    }
+    public function getDomain(): \Entities\Domain
+    {
+        return $this->domain;
+    }
+    public function getMailbox(): \Entities\Mailbox
+    {
+        return $this->mailbox;
+    }
+    public function addMessage(mixed $message, mixed $class = null, mixed $type = null): void
+    {
+    }
 }
 
 $opts = ['vimbadmin_plugins' => ['AccessPermissions' => ['type' => ['SMTP' => 'SMTP', 'IMAP' => 'IMAP', 'POP3' => 'POP3', 'SIEVE' => 'SIEVE']]]];
@@ -187,16 +223,16 @@ $ap = new ViMbAdminPlugin_AccessPermissions((object) ['getOptions' => null]);
 
 // add: master + 4 type checkboxes, all unchecked
 $addFields = $ap->nativeMailboxFields(null, $opts);
-check('AP add: master + 4 type fields',     count($addFields) === 5);
-check('AP add: first is the master',        $addFields[0]->name === 'plugin_accessPermissions' && $addFields[0]->value() === false);
-check('AP add: a type field exists',        $addFields[1]->name === 'plugin_accessPermission_SMTP');
+check('AP add: master + 4 type fields', count($addFields) === 5);
+check('AP add: first is the master', $addFields[0]->name === 'plugin_accessPermissions' && $addFields[0]->value() === false);
+check('AP add: a type field exists', $addFields[1]->name === 'plugin_accessPermission_SMTP');
 
 // Custom configuration order and labels are preserved by the form adapter.
 $customFields = $ap->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AccessPermissions' => ['type' => [
     'SIEVE' => 'Manage filters',
     'SMTP'  => 'Send mail',
 ]]]]);
-check('AP add: configured type order preserved', array_map(static fn($field) => $field->name, $customFields) === [
+check('AP add: configured type order preserved', array_map(static fn ($field) => $field->name, $customFields) === [
     'plugin_accessPermissions',
     'plugin_accessPermission_SIEVE',
     'plugin_accessPermission_SMTP',
@@ -207,24 +243,28 @@ check('AP add: configured type label preserved', $customFields[1]->label === 'Ma
 $mbE = new \Entities\Mailbox();
 $mbE->setAccessRestriction('SMTP,IMAP');
 $ef = [];
-foreach ($ap->nativeMailboxFields($mbE, $opts) as $f) { $ef[$f->name] = $f->value(); }
-check('AP edit: master pre-checked',        $ef['plugin_accessPermissions'] === true);
-check('AP edit: SMTP pre-checked',          $ef['plugin_accessPermission_SMTP'] === true);
-check('AP edit: IMAP pre-checked',          $ef['plugin_accessPermission_IMAP'] === true);
-check('AP edit: POP3 NOT checked',          $ef['plugin_accessPermission_POP3'] === false);
+foreach ($ap->nativeMailboxFields($mbE, $opts) as $f) {
+    $ef[$f->name] = $f->value();
+}
+check('AP edit: master pre-checked', $ef['plugin_accessPermissions'] === true);
+check('AP edit: SMTP pre-checked', $ef['plugin_accessPermission_SMTP'] === true);
+check('AP edit: IMAP pre-checked', $ef['plugin_accessPermission_IMAP'] === true);
+check('AP edit: POP3 NOT checked', $ef['plugin_accessPermission_POP3'] === false);
 
 // edit: an 'ALL' mailbox leaves the master unchecked
 $mbAll = new \Entities\Mailbox();
 $mbAll->setAccessRestriction('ALL');
 $af = [];
-foreach ($ap->nativeMailboxFields($mbAll, $opts) as $f) { $af[$f->name] = $f->value(); }
-check('AP edit ALL: master unchecked',      $af['plugin_accessPermissions'] === false);
+foreach ($ap->nativeMailboxFields($mbAll, $opts) as $f) {
+    $af[$f->name] = $f->value();
+}
+check('AP edit ALL: master unchecked', $af['plugin_accessPermissions'] === false);
 
 // validate: master checked, nothing selected -> error; otherwise null
-check('AP validate: master+none -> error',  $ap->nativeMailboxValidate(['plugin_accessPermissions' => 1], $opts) !== null);
-check('AP validate: master+SMTP -> ok',     $ap->nativeMailboxValidate(['plugin_accessPermissions' => 1, 'plugin_accessPermission_SMTP' => 1], $opts) === null);
-check('AP validate: master off -> ok',      $ap->nativeMailboxValidate([], $opts) === null);
-check('AP validate: service alone -> ok',   $ap->nativeMailboxValidate(['plugin_accessPermission_IMAP' => 1], $opts) === null);
+check('AP validate: master+none -> error', $ap->nativeMailboxValidate(['plugin_accessPermissions' => 1], $opts) !== null);
+check('AP validate: master+SMTP -> ok', $ap->nativeMailboxValidate(['plugin_accessPermissions' => 1, 'plugin_accessPermission_SMTP' => 1], $opts) === null);
+check('AP validate: master off -> ok', $ap->nativeMailboxValidate([], $opts) === null);
+check('AP validate: service alone -> ok', $ap->nativeMailboxValidate(['plugin_accessPermission_IMAP' => 1], $opts) === null);
 
 // apply: writeback to accessRestriction
 $m1 = new \Entities\Mailbox();
@@ -233,15 +273,15 @@ check('AP apply: restricted = "SMTP,POP3"', $m1->getAccessRestriction() === 'SMT
 
 $m2 = new \Entities\Mailbox();
 $ap->nativeMailboxApply($m2, [], $opts);
-check('AP apply: unchecked -> ALL',         $m2->getAccessRestriction() === 'ALL');
+check('AP apply: unchecked -> ALL', $m2->getAccessRestriction() === 'ALL');
 
 $m3 = new \Entities\Mailbox();
 $ap->nativeMailboxApply($m3, ['plugin_accessPermissions' => 1], $opts);
-check('AP apply: checked+none -> ALL',      $m3->getAccessRestriction() === 'ALL');
+check('AP apply: checked+none -> ALL', $m3->getAccessRestriction() === 'ALL');
 
 $m4 = new \Entities\Mailbox();
 $ap->nativeMailboxApply($m4, ['plugin_accessPermission_IMAP' => 1], $opts);
-check('AP apply: service alone restricts',  $m4->getAccessRestriction() === 'IMAP');
+check('AP apply: service alone restricts', $m4->getAccessRestriction() === 'IMAP');
 
 // ============ Part C: AdditionalInfo native adapter =================== //
 require __DIR__ . '/../src/Kernel/Form/Validators.php';
@@ -276,23 +316,26 @@ $ai = new ViMbAdminPlugin_AdditionalInfo((object) ['getOptions' => null]);
 
 // add: one text field built from the configured element
 $aiFields = $ai->nativeMailboxFields(null, $aiOpts);
-check('AI add: one field from config',       count($aiFields) === 1);
-check('AI add: field name is prefixed',      $aiFields[0]->name === 'plugin_additionalInfo_ext_no');
-check('AI add: label from config',           $aiFields[0]->label === 'Ext No.');
+check('AI add: one field from config', count($aiFields) === 1);
+check('AI add: field name is prefixed', $aiFields[0]->name === 'plugin_additionalInfo_ext_no');
+check('AI add: label from config', $aiFields[0]->label === 'Ext No.');
 
 // the field's rules: required + Digits
 $f = $aiFields[0];
-$f->setValue('');     check('AI rule: empty fails (required)', $f->validate() !== null);
-$f->setValue('abc');  check('AI rule: non-digits fail',        $f->validate() !== null);
-$f->setValue('1234'); check('AI rule: digits pass',            $f->validate() === null);
+$f->setValue('');
+check('AI rule: empty fails (required)', $f->validate() !== null);
+$f->setValue('abc');
+check('AI rule: non-digits fail', $f->validate() !== null);
+$f->setValue('1234');
+check('AI rule: digits pass', $f->validate() === null);
 
 // no cross-field validation
-check('AI validate: always null',            $ai->nativeMailboxValidate(['plugin_additionalInfo_ext_no' => '1234'], $aiOpts) === null);
+check('AI validate: always null', $ai->nativeMailboxValidate(['plugin_additionalInfo_ext_no' => '1234'], $aiOpts) === null);
 
 // no configured elements -> no fields
-check('AI add: no elements -> empty',        $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AdditionalInfo' => []]]) === []);
-check('AI add: missing config -> empty',      $ai->nativeMailboxFields(null, []) === []);
-check('AI add: malformed plugin -> empty',   $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AdditionalInfo' => 'bad']]) === []);
+check('AI add: no elements -> empty', $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AdditionalInfo' => []]]) === []);
+check('AI add: missing config -> empty', $ai->nativeMailboxFields(null, []) === []);
+check('AI add: malformed plugin -> empty', $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AdditionalInfo' => 'bad']]) === []);
 check('AI add: malformed elements -> empty', $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['AdditionalInfo' => ['elements' => 'bad']]]) === []);
 
 // Malformed entries are ignored, while a malformed options block keeps the
@@ -301,7 +344,7 @@ $aiMalformedFields = $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['Ad
     'ignored' => 'bad',
     'fallback' => ['options' => 'bad'],
 ]]]]);
-check('AI add: malformed entry ignored',     count($aiMalformedFields) === 1);
+check('AI add: malformed entry ignored', count($aiMalformedFields) === 1);
 check('AI add: malformed options fallback', $aiMalformedFields[0]->name === 'plugin_additionalInfo_fallback'
     && $aiMalformedFields[0]->label === 'fallback');
 $aiMalformedFields[0]->setValue('anything');
@@ -322,7 +365,7 @@ $aiLengthFields = $ai->nativeMailboxFields(null, ['vimbadmin_plugins' => ['Addit
 $aiLengthFields[0]->setValue('ab');
 check('AI rule: StringLength minimum enforced', $aiLengthFields[0]->validate() !== null);
 $aiLengthFields[0]->setValue('abc');
-check('AI rule: unknown validator skipped',     $aiLengthFields[0]->validate() === null);
+check('AI rule: unknown validator skipped', $aiLengthFields[0]->validate() === null);
 
 // apply: only configured and submitted keys become xpiInfo preferences.
 $aiMailbox = new AdditionalInfoMailboxDouble();
@@ -330,8 +373,8 @@ $ai->nativeMailboxApply($aiMailbox, [
     'plugin_additionalInfo_ext_no' => '4321',
     'plugin_additionalInfo_unconfigured' => 'ignored',
 ], $aiOpts);
-check('AI apply: configured value saved',       $aiMailbox->getPreference('xpiInfo.ext_no') === '4321');
-check('AI apply: unconfigured value ignored',   $aiMailbox->getPreference('xpiInfo.unconfigured') === false);
+check('AI apply: configured value saved', $aiMailbox->getPreference('xpiInfo.ext_no') === '4321');
+check('AI apply: unconfigured value ignored', $aiMailbox->getPreference('xpiInfo.unconfigured') === false);
 $ai->nativeMailboxApply($aiMailbox, [], $aiOpts);
 check('AI apply: missing value preserves preference', $aiMailbox->getPreference('xpiInfo.ext_no') === '4321');
 $aiArrayRejected = false;
@@ -354,12 +397,14 @@ $de = new ViMbAdminPlugin_DirectoryEntry((object) ['getOptions' => null]);
 
 $deFields = $de->nativeMailboxFields(null, $deOpts);
 $byName   = [];
-foreach ($deFields as $f) { $byName[$f->name] = $f; }
-check('DE add: many fields built',           count($deFields) >= 20);
-check('DE add: disabled CarLicense dropped',  !isset($byName['plugin_directoryEntry_CarLicense']));
-check('DE add: O defaults to orgname',        $byName['plugin_directoryEntry_O']->value() === 'Acme Corp');
+foreach ($deFields as $f) {
+    $byName[$f->name] = $f;
+}
+check('DE add: many fields built', count($deFields) >= 20);
+check('DE add: disabled CarLicense dropped', !isset($byName['plugin_directoryEntry_CarLicense']));
+check('DE add: O defaults to orgname', $byName['plugin_directoryEntry_O']->value() === 'Acme Corp');
 check('DE add: HomePostalAddress is textarea', $byName['plugin_directoryEntry_HomePostalAddress']->type === 'textarea');
-check('DE validate: always null',            $de->nativeMailboxValidate([], $deOpts) === null);
+check('DE validate: always null', $de->nativeMailboxValidate([], $deOpts) === null);
 
 // apply: creates + persists a DirectoryEntry, sets mail + the mapped attributes
 $deEm = new DirectoryEntryEntityManagerDouble();
@@ -373,15 +418,15 @@ $de->nativeMailboxApply($mbD, [
 ], $deOpts, $deEm);
 
 $dent = $mbD->getDirectoryEntry();
-check('DE apply: entity created + linked',    $dent instanceof \Entities\DirectoryEntry && $dent->getMailbox() === $mbD);
+check('DE apply: entity created + linked', $dent instanceof \Entities\DirectoryEntry && $dent->getMailbox() === $mbD);
 if (!$dent instanceof \Entities\DirectoryEntry) {
     throw new \LogicException('DirectoryEntry plugin did not link the created entity');
 }
-check('DE apply: persisted via em',           in_array($dent, $deEm->persisted, true));
-check('DE apply: mail = username',            $dent->getMail() === 'dir@example.com');
-check('DE apply: GivenName written',          $dent->getGivenName() === 'Ada');
+check('DE apply: persisted via em', in_array($dent, $deEm->persisted, true));
+check('DE apply: mail = username', $dent->getMail() === 'dir@example.com');
+check('DE apply: GivenName written', $dent->getGivenName() === 'Ada');
 check('DE apply: JpegPhoto keeps scalar bytes', $dent->getJpegPhoto() === 'jpeg-binary');
-check('DE apply: Sn written',                 $dent->getSn() === 'Lovelace');
+check('DE apply: Sn written', $dent->getSn() === 'Lovelace');
 
 $unnamedDirectoryMailbox = new \Entities\Mailbox();
 $unnamedDirectoryEm = new DirectoryEntryEntityManagerDouble();
@@ -391,14 +436,20 @@ try {
 } catch (\LogicException $e) {
     $unnamedDirectoryError = $e->getMessage();
 }
-check('DE apply rejects a null mailbox username',
-    $unnamedDirectoryError === 'Mailbox username cannot be null.');
-check('DE username failure precedes entity linking and persistence',
+check(
+    'DE apply rejects a null mailbox username',
+    $unnamedDirectoryError === 'Mailbox username cannot be null.'
+);
+check(
+    'DE username failure precedes entity linking and persistence',
     $unnamedDirectoryMailbox->getDirectoryEntry() === null
-        && $unnamedDirectoryEm->persisted === []);
+        && $unnamedDirectoryEm->persisted === []
+);
 
 $editFields = [];
-foreach ($de->nativeMailboxFields($mbD, $deOpts) as $f) { $editFields[$f->name] = $f; }
+foreach ($de->nativeMailboxFields($mbD, $deOpts) as $f) {
+    $editFields[$f->name] = $f;
+}
 check('DE edit: JpegPhoto prefilled from scalar bytes', $editFields['plugin_directoryEntry_JpegPhoto']->value() === 'jpeg-binary');
 
 $purgeEm = new DirectoryEntryEntityManagerDouble();
@@ -410,7 +461,7 @@ $purgeMailbox->setDirectoryEntry($purgeEntry);
 $purgeCtx = new DirectoryEntryMailboxContext($deOpts, $purgeEm, new \Entities\Admin(), new \Entities\Domain(), $purgeMailbox);
 $de->mailbox_purge_preFlush($purgeCtx, null);
 check('DE purge: removes linked directory entry', in_array($purgeEntry, $purgeEm->removed, true));
-check('DE purge: flushes after remove',           $purgeEm->flushes === 1);
+check('DE purge: flushes after remove', $purgeEm->flushes === 1);
 
 echo "\n";
 if ($failures === 0) {

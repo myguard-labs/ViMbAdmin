@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -42,9 +43,6 @@
  * @copyright  Copyright (c) 2007 - 2012, Open Source Solutions Limited, Dublin, Ireland
  * @license    http://www.opensolutions.ie/licenses/new-bsd New BSD License
  */
-class OSS_Exception extends Exception 
+class OSS_Exception extends Exception
 {
-
 }
-
-

@@ -15,7 +15,8 @@ $check = static function (string $label, bool $condition) use (&$failures): void
 echo "== DataTable minimum-search browser contract ==\n";
 
 $helper = file_get_contents(__DIR__ . '/../public/js/990-vimbadmin.js');
-$check('shared transport suppresses short nonempty server requests with feedback',
+$check(
+    'shared transport suppresses short nonempty server requests with feedback',
     is_string($helper)
         && str_contains($helper, 'searchLength > 0 && searchLength < minimum')
         && preg_match('/recordsFiltered\s*:\s*0\s*,/', $helper) === 1
@@ -24,10 +25,13 @@ $check('shared transport suppresses short nonempty server requests with feedback
         && str_contains($helper, "'Invalid JSON response'")
         && str_contains($helper, "xhr.readyState === 4")
         && str_contains($helper, "'Ajax error'")
-        && !str_contains($helper, 'error: function() { callback( emptyResult ); }'));
-$check('shared transport counts Unicode code points like the server',
+        && !str_contains($helper, 'error: function() { callback( emptyResult ); }')
+);
+$check(
+    'shared transport counts Unicode code points like the server',
     is_string($helper)
-        && str_contains($helper, "replace(/[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]/g, '_').length"));
+        && str_contains($helper, "replace(/[\\uD800-\\uDBFF][\\uDC00-\\uDFFF]/g, '_').length")
+);
 
 try {
     $bundleFile = resolveBundleV();
@@ -37,12 +41,14 @@ try {
     $bundle = null;
 }
 
-$check('production minified bundle exposes the shared transport',
+$check(
+    'production minified bundle exposes the shared transport',
     is_string($bundle)
         && str_contains($bundle, 'function vmDataTableServerData(')
         && str_contains($bundle, 'vmDataTableLogAjaxError(api,1,"Invalid JSON response")')
         && str_contains($bundle, 'vmDataTableLogAjaxError(api,7,"Ajax error")')
-        && !str_contains($bundle, 'error:function(){callback(emptyResult)}'));
+        && !str_contains($bundle, 'error:function(){callback(emptyResult)}')
+);
 
 $lists = [
     'alias' => ['controller' => 'AliasController', 'resolver' => 'dataTableMinimumSearchLength()', 'fn' => 'vmAliasServerData'],

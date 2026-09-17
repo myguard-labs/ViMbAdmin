@@ -11,7 +11,9 @@ final class McpAuthEntityManager
 {
     public int $flushes = 0;
 
-    public function __construct(private Repositories\McpToken $repository) {}
+    public function __construct(private Repositories\McpToken $repository)
+    {
+    }
 
     public function getRepository(string $class): Repositories\McpToken
     {
@@ -30,8 +32,10 @@ final class McpAuthEntityManager
 /** @return Repositories\McpToken */
 function mcpAuthRepository(?Entities\McpToken $token): Repositories\McpToken
 {
-    return new class($token) extends Repositories\McpToken {
-        public function __construct(private ?Entities\McpToken $token) {}
+    return new class ($token) extends Repositories\McpToken {
+        public function __construct(private ?Entities\McpToken $token)
+        {
+        }
         public function findByHash($hash): ?Entities\McpToken
         {
             return $this->token;
@@ -119,9 +123,12 @@ $missingHash = (new Entities\McpToken())
     ->setName('malformed-row')
     ->setScope('read')
     ->setCreated(new DateTime());
-mcpAuthDenied('token row with a missing hash is denied without a type error',
+mcpAuthDenied(
+    'token row with a missing hash is denied without a type error',
     mcpAuth(new McpAuthEntityManager(mcpAuthRepository($missingHash))),
-    ['HTTP_AUTHORIZATION' => "Bearer {$raw}", 'REMOTE_ADDR' => '203.0.113.5'], 401);
+    ['HTTP_AUTHORIZATION' => "Bearer {$raw}", 'REMOTE_ADDR' => '203.0.113.5'],
+    401
+);
 
 $revoked = mcpAuthToken($raw);
 $revoked->setRevoked(true);

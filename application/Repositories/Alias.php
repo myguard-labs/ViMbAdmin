@@ -64,32 +64,34 @@ class Alias extends EntityRepository
      * @param bool              $ima     If set to true, then it include and where address equals to goto.
      * @return \Entities\Alias[]
      */
-    public function loadForMailbox( $mailbox, $admin, $ima = false )
+    public function loadForMailbox($mailbox, $admin, $ima = false)
     {
         $username = $mailbox->requiredUsername();
         $qb = $this->getEntityManager()->createQueryBuilder()
-                ->select( 'a' )
-                ->from( '\\Entities\\Alias', 'a' )
-                ->where( 'a.goto = ?1' )
-                ->setParameter( 1, $username );
+                ->select('a')
+                ->from('\\Entities\\Alias', 'a')
+                ->where('a.goto = ?1')
+                ->setParameter(1, $username);
 
-        if( !$ima )
-            $qb->andWhere( 'a.address != a.goto' );
+        if (!$ima) {
+            $qb->andWhere('a.address != a.goto');
+        }
 
         // $admin === null is trusted system context (CLI / queue runner): no
         // per-admin domain scoping, same as a super-admin. Guard the null
         // before calling isSuper() or the queue delete crashes with
         // "Call to a member function isSuper() on null".
-        if( $admin !== null && !$admin->isSuper() )
-        {
-            $qb->leftJoin( 'a.Domain', 'd' )
-                ->leftJoin( 'd.Admins', 'd2a' )
-                ->andWhere( 'd2a = :admin' )
-                ->setParameter( 'admin', $admin );
+        if ($admin !== null && !$admin->isSuper()) {
+            $qb->leftJoin('a.Domain', 'd')
+                ->leftJoin('d.Admins', 'd2a')
+                ->andWhere('d2a = :admin')
+                ->setParameter('admin', $admin);
         }
 
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $qb->getQuery()->getResult(), \Entities\Alias::class, 'Alias mailbox query'
+            $qb->getQuery()->getResult(),
+            \Entities\Alias::class,
+            'Alias mailbox query'
         );
     }
 
@@ -104,12 +106,12 @@ class Alias extends EntityRepository
      * @param \Entities\Admin|null $admin Admin for checking privileges, or null for a trusted system context.
      * @return \Entities\Alias[]
      */
-    public function loadWithMailbox( $mailbox, $admin )
+    public function loadWithMailbox($mailbox, $admin)
     {
         $username = $mailbox->requiredUsername();
         $qb = $this->getEntityManager()->createQueryBuilder();
-        $qb->select( 'a' )
-            ->from( '\\Entities\\Alias', 'a' )
+        $qb->select('a')
+            ->from('\\Entities\\Alias', 'a')
             ->where($qb->expr()->andX(
                 'a.address != a.goto',
                 'a.goto != ?1',
@@ -119,22 +121,23 @@ class Alias extends EntityRepository
                     'a.goto like ?4'
                 )
             ))
-            ->setParameter( 1, $username )
-            ->setParameter( 2, '%,' . $username . ',%')
-            ->setParameter( 3, '%,' . $username)
-            ->setParameter( 4, $username . ',%');
+            ->setParameter(1, $username)
+            ->setParameter(2, '%,' . $username . ',%')
+            ->setParameter(3, '%,' . $username)
+            ->setParameter(4, $username . ',%');
 
         // null admin = trusted system context (queue runner); no scoping.
-        if( $admin !== null && !$admin->isSuper() )
-        {
-            $qb->leftJoin( 'a.Domain', 'd' )
-                ->leftJoin( 'd.Admins', 'd2a' )
-                ->andWhere( 'd2a = :admin' )
-                ->setParameter( 'admin', $admin );
+        if ($admin !== null && !$admin->isSuper()) {
+            $qb->leftJoin('a.Domain', 'd')
+                ->leftJoin('d.Admins', 'd2a')
+                ->andWhere('d2a = :admin')
+                ->setParameter('admin', $admin);
         }
 
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $qb->getQuery()->getResult(), \Entities\Alias::class, 'Alias mailbox-membership query'
+            $qb->getQuery()->getResult(),
+            \Entities\Alias::class,
+            'Alias mailbox-membership query'
         );
     }
 
@@ -151,31 +154,34 @@ class Alias extends EntityRepository
      * @param bool             $ima    Include mailbox aliases flag.
      * @return array<int,array{id:int|string,address:string,goto:string,active:bool,domain:string}>
      */
-    public function loadForAliasList( $admin, $domain = null, $ima = false )
+    public function loadForAliasList($admin, $domain = null, $ima = false)
     {
         return self::requiredAliasListRows(
-            $this->aliasListQuery( $admin, $domain, $ima )->getQuery()->getArrayResult()
+            $this->aliasListQuery($admin, $domain, $ima)->getQuery()->getArrayResult()
         );
     }
 
-    private function aliasListQuery( \Entities\Admin $admin, \Entities\Domain|int|null $domain, bool $ima ): \Doctrine\ORM\QueryBuilder
+    private function aliasListQuery(\Entities\Admin $admin, \Entities\Domain|int|null $domain, bool $ima): \Doctrine\ORM\QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'a.id as id , a.address as address, a.goto as goto, a.active as active, d.domain as domain' )
-            ->from( '\\Entities\\Alias', 'a' )
-            ->join( 'a.Domain', 'd' );
+            ->select('a.id as id , a.address as address, a.goto as goto, a.active as active, d.domain as domain')
+            ->from('\\Entities\\Alias', 'a')
+            ->join('a.Domain', 'd');
 
-        if( !$admin->isSuper() )
-            $qb->join( 'd.Admins', 'd2a' )
-                ->where( 'd2a = ?1' )
-                ->setParameter( 1, $admin );
+        if (!$admin->isSuper()) {
+            $qb->join('d.Admins', 'd2a')
+                ->where('d2a = ?1')
+                ->setParameter(1, $admin);
+        }
 
-        if( $domain )
-            $qb->andWhere( 'a.Domain = ?2' )
-                ->setParameter( 2, $domain );
+        if ($domain) {
+            $qb->andWhere('a.Domain = ?2')
+                ->setParameter(2, $domain);
+        }
 
-        if( !$ima )
-            $qb->andWhere( "a.address != a.goto" );
+        if (!$ima) {
+            $qb->andWhere("a.address != a.goto");
+        }
 
         return $qb;
     }
@@ -192,48 +198,52 @@ class Alias extends EntityRepository
      * @param \Entities\Domain|null $domain
      * @return array{rows: array<int,array{id:int|string,address:string,goto:string,active:bool,domain:string}>, total: int, filtered: int}
      */
-    public function pagedForAliasList( $admin, $domain, bool $ima, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length )
+    public function pagedForAliasList($admin, $domain, bool $ima, string $search, bool $contains, string $sortField, string $sortDir, int $start, int $length)
     {
-        $base = function() use ( $admin, $domain, $ima ): \Doctrine\ORM\QueryBuilder {
+        $base = function () use ($admin, $domain, $ima): \Doctrine\ORM\QueryBuilder {
             $qb = $this->getEntityManager()->createQueryBuilder()
-                ->from( '\\Entities\\Alias', 'a' )
-                ->join( 'a.Domain', 'd' );
+                ->from('\\Entities\\Alias', 'a')
+                ->join('a.Domain', 'd');
 
-            if( !$admin->isSuper() )
-                $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+            if (!$admin->isSuper()) {
+                $qb->join('d.Admins', 'd2a')->andWhere('d2a = :admin')->setParameter('admin', $admin);
+            }
 
-            if( $domain )
-                $qb->andWhere( 'a.Domain = :domain' )->setParameter( 'domain', $domain );
+            if ($domain) {
+                $qb->andWhere('a.Domain = :domain')->setParameter('domain', $domain);
+            }
 
-            if( !$ima )
-                $qb->andWhere( 'a.address != a.goto' );
+            if (!$ima) {
+                $qb->andWhere('a.address != a.goto');
+            }
 
             return $qb;
         };
 
-        $applySearch = function( \Doctrine\ORM\QueryBuilder $qb ) use ( $search, $contains ): \Doctrine\ORM\QueryBuilder {
-            if( $search !== '' )
-                $qb->andWhere( '( a.address LIKE :s OR a.goto LIKE :s OR d.domain LIKE :s )' )
-                   ->setParameter( 's', DataTableQuery::likePattern( $search, $contains ) );
+        $applySearch = function (\Doctrine\ORM\QueryBuilder $qb) use ($search, $contains): \Doctrine\ORM\QueryBuilder {
+            if ($search !== '') {
+                $qb->andWhere('( a.address LIKE :s OR a.goto LIKE :s OR d.domain LIKE :s )')
+                   ->setParameter('s', DataTableQuery::likePattern($search, $contains));
+            }
             return $qb;
         };
 
         // Unfiltered total stable per scope (ima changes it) -> cache briefly.
-        $scopeKey = 'vimb_total_al_' . $admin->getId() . '_' . ( $domain ? $domain->requiredId() : 0 ) . '_' . (int) $ima;
-        $total    = (int) $base()->select( 'COUNT(DISTINCT a.id)' )->getQuery()
-            ->enableResultCache( 30, $scopeKey )->getSingleScalarResult();
+        $scopeKey = 'vimb_total_al_' . $admin->getId() . '_' . ($domain ? $domain->requiredId() : 0) . '_' . (int) $ima;
+        $total    = (int) $base()->select('COUNT(DISTINCT a.id)')->getQuery()
+            ->enableResultCache(30, $scopeKey)->getSingleScalarResult();
         $filtered = $search === ''
             ? $total
-            : (int) $applySearch( $base() )->select( 'COUNT(DISTINCT a.id)' )->getQuery()->getSingleScalarResult();
+            : (int) $applySearch($base())->select('COUNT(DISTINCT a.id)')->getQuery()->getSingleScalarResult();
 
         $sortMap = [ 'address' => 'a.address', 'domain' => 'd.domain', 'active' => 'a.active', 'goto' => 'a.goto' ];
         $orderBy = $sortMap[ $sortField ] ?? 'a.address';
 
-        $rows = self::requiredAliasListRows($applySearch( $base() )
-            ->select( 'a.id as id, a.address as address, a.goto as goto, a.active as active, d.domain as domain' )
-            ->orderBy( $orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC' )
-            ->setFirstResult( max( 0, $start ) )
-            ->setMaxResults( max( 1, $length ) )
+        $rows = self::requiredAliasListRows($applySearch($base())
+            ->select('a.id as id, a.address as address, a.goto as goto, a.active as active, d.domain as domain')
+            ->orderBy($orderBy, $sortDir === 'DESC' ? 'DESC' : 'ASC')
+            ->setFirstResult(max(0, $start))
+            ->setMaxResults(max(1, $length))
             ->getQuery()->getArrayResult());
 
         return [ 'rows' => $rows, 'total' => $total, 'filtered' => $filtered ];
@@ -253,35 +263,38 @@ class Alias extends EntityRepository
      * @param bool                     $ima
      * @return array<int,array{id:int|string,address:string,goto:string,active:bool,domain:string}>
      */
-    public function filterForAliasList( $filter, $admin, $domain = null, $ima = false )
+    public function filterForAliasList($filter, $admin, $domain = null, $ima = false)
     {
         return self::requiredAliasListRows(
-            $this->filteredAliasListQuery( $filter, $admin, $domain, $ima )->getQuery()->getArrayResult()
+            $this->filteredAliasListQuery($filter, $admin, $domain, $ima)->getQuery()->getArrayResult()
         );
     }
 
-    private function filteredAliasListQuery( mixed $filter, \Entities\Admin $admin, \Entities\Domain|int|null $domain, bool $ima ): \Doctrine\ORM\QueryBuilder
+    private function filteredAliasListQuery(mixed $filter, \Entities\Admin $admin, \Entities\Domain|int|null $domain, bool $ima): \Doctrine\ORM\QueryBuilder
     {
-        $filter  = str_replace( "'", "", self::requiredAliasFilter($filter) );
-        $pattern = ( strpos( $filter, '*' ) === 0 )
-            ? '%' . addcslashes( substr( $filter, 1 ), '%_\\' ) . '%'
-            : addcslashes( $filter, '%_\\' ) . '%';
+        $filter  = str_replace("'", "", self::requiredAliasFilter($filter));
+        $pattern = (strpos($filter, '*') === 0)
+            ? '%' . addcslashes(substr($filter, 1), '%_\\') . '%'
+            : addcslashes($filter, '%_\\') . '%';
 
         $qb = $this->getEntityManager()->createQueryBuilder()
-            ->select( 'a.id as id , a.address as address, a.goto as goto, a.active as active, d.domain as domain' )
-            ->from( '\\Entities\\Alias', 'a' )
-            ->join( 'a.Domain', 'd' )
-            ->where( '( a.goto LIKE :s OR a.address LIKE :s OR d.domain LIKE :s )' )
-            ->setParameter( 's', $pattern );
+            ->select('a.id as id , a.address as address, a.goto as goto, a.active as active, d.domain as domain')
+            ->from('\\Entities\\Alias', 'a')
+            ->join('a.Domain', 'd')
+            ->where('( a.goto LIKE :s OR a.address LIKE :s OR d.domain LIKE :s )')
+            ->setParameter('s', $pattern);
 
-        if( !$admin->isSuper() )
-            $qb->join( 'd.Admins', 'd2a' )->andWhere( 'd2a = :admin' )->setParameter( 'admin', $admin );
+        if (!$admin->isSuper()) {
+            $qb->join('d.Admins', 'd2a')->andWhere('d2a = :admin')->setParameter('admin', $admin);
+        }
 
-        if( $domain )
-            $qb->andWhere( 'a.Domain = :domain' )->setParameter( 'domain', $domain );
+        if ($domain) {
+            $qb->andWhere('a.Domain = :domain')->setParameter('domain', $domain);
+        }
 
-        if( !$ima )
-            $qb->andWhere( 'a.address != a.goto' );
+        if (!$ima) {
+            $qb->andWhere('a.address != a.goto');
+        }
 
         return $qb;
     }

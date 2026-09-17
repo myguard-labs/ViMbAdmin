@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Regression smoke test: Doctrine ORM 3 cache wiring.
  *
@@ -38,8 +39,9 @@ final class TestCacheBootstrapHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestCacheBootstrapHarnessState::$count;
-function cacheBootstrapCheck(string $label, callable $fn): void {
+$failures = & TestCacheBootstrapHarnessState::$count;
+function cacheBootstrapCheck(string $label, callable $fn): void
+{
 
     try {
         $fn();
@@ -51,7 +53,8 @@ function cacheBootstrapCheck(string $label, callable $fn): void {
 }
 
 /** PSR-6 round-trip helper (replaces the old Doctrine save/fetch). */
-function psr6RoundTrip(\Psr\Cache\CacheItemPoolInterface $pool, string $key, string $val): void {
+function psr6RoundTrip(\Psr\Cache\CacheItemPoolInterface $pool, string $key, string $val): void
+{
     $item = $pool->getItem($key);
     $item->set($val);
     $pool->save($item);

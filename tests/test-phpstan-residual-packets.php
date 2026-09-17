@@ -12,7 +12,9 @@ function residualCheck(string $name, bool $ok): void
 {
     ResidualPacketTestState::$checks++;
     echo ($ok ? 'ok ' : 'FAIL ') . $name . "\n";
-    if (!$ok) { ResidualPacketTestState::$failures++; }
+    if (!$ok) {
+        ResidualPacketTestState::$failures++;
+    }
 }
 
 /**
@@ -23,10 +25,13 @@ function residualRun(array $command): array
 {
     $pipes = [];
     $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
-    if (!is_resource($process)) { throw new RuntimeException('cannot start process'); }
+    if (!is_resource($process)) {
+        throw new RuntimeException('cannot start process');
+    }
     $out = (string) stream_get_contents($pipes[1]);
     $err = (string) stream_get_contents($pipes[2]);
-    fclose($pipes[1]); fclose($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
     return ['code' => proc_close($process), 'out' => trim($out), 'err' => trim($err)];
 }
 
@@ -40,10 +45,14 @@ function writeJson(string $path, array $value): void
 function decodedMap(string $value): array
 {
     $result = json_decode($value, true, flags: JSON_THROW_ON_ERROR);
-    if (!is_array($result) || array_is_list($result)) { throw new RuntimeException('JSON result is not an object'); }
+    if (!is_array($result) || array_is_list($result)) {
+        throw new RuntimeException('JSON result is not an object');
+    }
     $mapped = [];
     foreach ($result as $key => $item) {
-        if (!is_string($key)) { throw new RuntimeException('JSON object key is not a string'); }
+        if (!is_string($key)) {
+            throw new RuntimeException('JSON object key is not a string');
+        }
         $mapped[$key] = $item;
     }
     return $mapped;
@@ -52,11 +61,15 @@ function decodedMap(string $value): array
 /** @return list<array{path:string,file_sha:string,line?:int}> */
 function decodedEvidence(mixed $values): array
 {
-    if (!is_array($values) || !array_is_list($values)) { throw new RuntimeException('malformed evidence list'); }
+    if (!is_array($values) || !array_is_list($values)) {
+        throw new RuntimeException('malformed evidence list');
+    }
     $result = [];
     foreach ($values as $item) {
         if (!is_array($item) || !is_string($item['path'] ?? null) || !is_string($item['file_sha'] ?? null)
-            || (isset($item['line']) && !is_int($item['line']))) { throw new RuntimeException('malformed evidence'); }
+            || (isset($item['line']) && !is_int($item['line']))) {
+            throw new RuntimeException('malformed evidence');
+        }
         $row = isset($item['line'])
             ? ['path' => $item['path'], 'line' => $item['line'], 'file_sha' => $item['file_sha']]
             : ['path' => $item['path'], 'file_sha' => $item['file_sha']];
@@ -75,7 +88,7 @@ function decodedPacketDocument(string $value): array
         || !is_string($meta['head'] ?? null) || !is_string($meta['baseline_sha'] ?? null)
         || !is_int($meta['packet_count'] ?? null) || !is_int($meta['diagnostics'] ?? null)
         || !is_array($meta['analysis_contexts'] ?? null) || !array_is_list($meta['analysis_contexts'])
-        || array_filter($meta['analysis_contexts'], static fn(mixed $context): bool => !is_string($context)) !== []
+        || array_filter($meta['analysis_contexts'], static fn (mixed $context): bool => !is_string($context)) !== []
         || !is_array($packetValues) || !array_is_list($packetValues)) {
         throw new RuntimeException('malformed packet document');
     }
@@ -93,7 +106,7 @@ function decodedPacketDocument(string $value): array
                 && (($packet['symbol_start'] ?? null) !== null || ($packet['symbol_end'] ?? null) !== null))
             || !is_string($packet['id'] ?? null) || !is_string($packet['message'] ?? null)
             || !is_int($packet['count'] ?? null) || !is_array($packet['context'] ?? null)
-            || !array_is_list($packet['context']) || array_filter($packet['context'], static fn(mixed $line): bool => !is_string($line)) !== []
+            || !array_is_list($packet['context']) || array_filter($packet['context'], static fn (mixed $line): bool => !is_string($line)) !== []
             || !is_string($packet['file_sha'] ?? null) || !is_array($packet['callers'] ?? null)
             || !array_is_list($packet['callers']) || !is_array($packet['tests'] ?? null) || !array_is_list($packet['tests'])
             || !is_bool($packet['discovery_complete'] ?? null) || !is_string($packet['rule'] ?? null)
@@ -102,7 +115,9 @@ function decodedPacketDocument(string $value): array
         }
         $context = [];
         foreach ($packet['context'] as $contextLine) {
-            if (!is_string($contextLine)) { throw new RuntimeException('malformed context'); }
+            if (!is_string($contextLine)) {
+                throw new RuntimeException('malformed context');
+            }
             $context[] = $contextLine;
         }
         $class = is_string($packet['class']) ? $packet['class'] : null;
@@ -124,7 +139,9 @@ function decodedPacketDocument(string $value): array
     }
     $analysisContexts = [];
     foreach ($meta['analysis_contexts'] as $analysisContext) {
-        if (!is_string($analysisContext)) { throw new RuntimeException('malformed analysis context'); }
+        if (!is_string($analysisContext)) {
+            throw new RuntimeException('malformed analysis context');
+        }
         $analysisContexts[] = $analysisContext;
     }
     return ['schema_version' => $document['schema_version'], 'meta' => [
@@ -141,11 +158,17 @@ function residualCanonicalHash(array $value): string
 
 function residualCanonicalValue(mixed $value): mixed
 {
-    if (!is_array($value)) { return $value; }
-    if (array_is_list($value)) { return array_map('residualCanonicalValue', $value); }
+    if (!is_array($value)) {
+        return $value;
+    }
+    if (array_is_list($value)) {
+        return array_map('residualCanonicalValue', $value);
+    }
     $result = [];
     foreach ($value as $key => $item) {
-        if (!is_string($key)) { throw new RuntimeException('non-string canonical key'); }
+        if (!is_string($key)) {
+            throw new RuntimeException('non-string canonical key');
+        }
         $result[$key] = residualCanonicalValue($item);
     }
     ksort($result, SORT_STRING);
@@ -169,7 +192,9 @@ function signedProposal(array $proposal): array
  */
 function signedProposalDocument(array $document): array
 {
-    foreach ($document['proposals'] as &$proposal) { $proposal = signedProposal($proposal); }
+    foreach ($document['proposals'] as &$proposal) {
+        $proposal = signedProposal($proposal);
+    }
     unset($proposal);
     return $document;
 }
@@ -177,11 +202,15 @@ function signedProposalDocument(array $document): array
 /** @param array{code:int,out:string,err:string} $run */
 function rejection(array $run): string
 {
-    if ($run['out'] === '') { return ''; }
+    if ($run['out'] === '') {
+        return '';
+    }
     $result = decodedMap($run['out']);
     $records = $result['records'] ?? null;
     if (!is_array($records) || !array_is_list($records) || !is_array($records[0] ?? null)
-        || !is_string($records[0]['reject_reason'] ?? null)) { return ''; }
+        || !is_string($records[0]['reject_reason'] ?? null)) {
+        return '';
+    }
     return $records[0]['reject_reason'];
 }
 
@@ -189,7 +218,9 @@ function eligibleSites(string $output): int
 {
     $result = decodedMap($output);
     $meta = $result['meta'] ?? null;
-    if (!is_array($meta) || !is_int($meta['eligible_sites'] ?? null)) { return -1; }
+    if (!is_array($meta) || !is_int($meta['eligible_sites'] ?? null)) {
+        return -1;
+    }
     return $meta['eligible_sites'];
 }
 
@@ -244,25 +275,37 @@ function runToctouControl(
     $signal = sys_get_temp_dir() . '/vimbadmin-codemod-' . bin2hex(random_bytes(8));
     putenv('PHPSTAN_CODEMOD_TEST_PAUSE=' . $signal);
     $pipes = [];
-    $process = proc_open([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' . $head,
+    $process = proc_open(
+        [PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' . $head,
         '--packet-file=' . $packetFile, '--proposal-file=' . $proposalFile, '--allow-packet=' . $allow,
         '--expect-sites=1', '--expect-diagnostics=2', '--apply-proposals'],
-        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+        $pipes
+    );
     putenv('PHPSTAN_CODEMOD_TEST_PAUSE');
-    if (!is_resource($process)) { throw new RuntimeException('cannot start TOCTOU control'); }
+    if (!is_resource($process)) {
+        throw new RuntimeException('cannot start TOCTOU control');
+    }
     $deadline = microtime(true) + 5.0;
-    while (!is_file($signal . '.ready') && microtime(true) < $deadline) { usleep(10_000); }
-    if (!is_file($signal . '.ready')) { throw new RuntimeException('TOCTOU ready signal missing'); }
+    while (!is_file($signal . '.ready') && microtime(true) < $deadline) {
+        usleep(10_000);
+    }
+    if (!is_file($signal . '.ready')) {
+        throw new RuntimeException('TOCTOU ready signal missing');
+    }
     file_put_contents($sourceFile, "\n// external drift\n", FILE_APPEND);
     file_put_contents($signal . '.continue', "continue\n");
     $out = (string) stream_get_contents($pipes[1]);
     $err = (string) stream_get_contents($pipes[2]);
-    fclose($pipes[1]); fclose($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
     return ['code' => proc_close($process), 'out' => trim($out), 'err' => trim($err), 'signal' => $signal];
 }
 
 $tool = realpath(__DIR__ . '/../tools/phpstan-codemod.php');
-if ($tool === false) { throw new RuntimeException('tool missing'); }
+if ($tool === false) {
+    throw new RuntimeException('tool missing');
+}
 $repo = sys_get_temp_dir() . '/vimbadmin-residual-test-' . bin2hex(random_bytes(6));
 mkdir($repo . '/application/Entities', 0777, true);
 mkdir($repo . '/application/Traits', 0777, true);
@@ -358,7 +401,8 @@ $phpstan = ['totals' => ['errors' => 0, 'file_errors' => 12], 'files' => [
         ['message' => 'Method Entities\\ConsumerB::getValue() should return string but returns string|null.', 'line' => 7, 'ignorable' => true, 'identifier' => 'return.type'],
     ]],
 ]];
-$phpstanFile = $repo . '/phpstan.json'; writeJson($phpstanFile, $phpstan);
+$phpstanFile = $repo . '/phpstan.json';
+writeJson($phpstanFile, $phpstan);
 $packetRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' . $head, '--packets=' . $phpstanFile]);
 $packetDocument = decodedPacketDocument($packetRun['out']);
 $packets = $packetDocument['packets'] ?? [];
@@ -378,7 +422,9 @@ residualCheck('callers and tests are deterministic and hash-bound', ($packets[0]
     && ($packets[0]['callers'][0]['line'] ?? -1) === 2 && preg_match('/^[a-f0-9]{64}$/', (string) ($packets[0]['callers'][0]['file_sha'] ?? '')) === 1
     && ($packets[0]['tests'][0]['path'] ?? '') === 'tests/test-fixture.php' && ($packets[0]['discovery_complete'] ?? true) === false);
 $byMethod = [];
-foreach ($packets as $packet) { $byMethod[(string) ($packet['class'] ?? '') . '::' . (string) ($packet['method'] ?? '')] = $packet; }
+foreach ($packets as $packet) {
+    $byMethod[(string) ($packet['class'] ?? '') . '::' . (string) ($packet['method'] ?? '')] = $packet;
+}
 $safe = $byMethod['Entities\\Fixture::getValue'];
 $otherSafe = $byMethod['Entities\\Other::getValue'];
 residualCheck('safe doc diagnostic is proposal-eligible', $safe['rule'] === 'doc_comment_candidate'
@@ -402,11 +448,15 @@ residualCheck('trait contexts bind the same physical hash fail-closed', $traitA[
     && $traitA['file_sha'] === $traitB['file_sha'] && $traitA['symbol_start'] === null && $traitB['symbol_start'] === null
     && $traitA['reject_reason'] === 'manual_semantic_review' && $traitB['security_contract_sensitive'] === true);
 
-$packetFile = $repo . '/packets.json'; writeJson($packetFile, $packetDocument);
+$packetFile = $repo . '/packets.json';
+writeJson($packetFile, $packetDocument);
 $source = (string) file_get_contents($fixturePath);
 $docStart = strpos($source, '/** @return string */');
-if ($docStart === false) { throw new RuntimeException('doc fixture missing'); }
-$start = $docStart + strlen('/** @return '); $end = $start + strlen('string');
+if ($docStart === false) {
+    throw new RuntimeException('doc fixture missing');
+}
+$start = $docStart + strlen('/** @return ');
+$end = $start + strlen('string');
 $safeProposal = makeResidualProposal($safe, 'application/Entities/Fixture.php', $safe['file_sha'], $start, $end);
 $proposalFile = $repo . '/proposal.json';
 $proposalDocument = ['schema_version' => 'phpstan-residual-proposals/v1', 'proposals' => [$safeProposal]];
@@ -417,7 +467,9 @@ residualCheck('valid proposal dry-run is eligible', $validated['code'] === 0
 $shuffledPacketDocument = $packetDocument;
 $caller = $shuffledPacketDocument['packets'][0]['callers'][0];
 $callerLine = $caller['line'] ?? null;
-if (!is_int($callerLine)) { throw new RuntimeException('caller line missing'); }
+if (!is_int($callerLine)) {
+    throw new RuntimeException('caller line missing');
+}
 $shuffledPacketDocument['packets'][0]['callers'][0] = ['file_sha' => $caller['file_sha'], 'line' => $callerLine, 'path' => $caller['path']];
 writeJson($repo . '/shuffled-packets.json', $shuffledPacketDocument);
 writeJson($proposalFile, $proposalDocument);
@@ -431,7 +483,8 @@ $proposalTsv = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head
 residualCheck('proposal mode rejects TSV output', $proposalTsv['code'] !== 0);
 $before = hash_file('sha256', $fixturePath);
 
-$malformedFile = $repo . '/malformed.json'; file_put_contents($malformedFile, '{');
+$malformedFile = $repo . '/malformed.json';
+file_put_contents($malformedFile, '{');
 $malformed = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' . $head, '--packets=' . $malformedFile]);
 residualCheck('malformed PHPStan JSON rejected', $malformed['code'] !== 0);
 $malformedContext = ['files' => [
@@ -445,14 +498,18 @@ $malformedContextRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--exp
     '--packets=' . $repo . '/malformed-context.json']);
 residualCheck('malformed analysis-context suffix rejected', $malformedContextRun['code'] !== 0
     && str_contains($malformedContextRun['err'], 'malformed PHPStan analysis-context path'));
-$badSchema = $proposalDocument; $badSchema['proposals'][0]['unexpected'] = true;
+$badSchema = $proposalDocument;
+$badSchema['proposals'][0]['unexpected'] = true;
 residualCheck('malformed proposal schema rejected without writes', runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $badSchema)['code'] !== 0 && hash_file('sha256', $fixturePath) === $before);
-$badPacket = $packetDocument; $badPacket['packets'][0]['packet_hash'] = str_repeat('0', 64); writeJson($repo . '/bad-packets.json', $badPacket);
+$badPacket = $packetDocument;
+$badPacket['packets'][0]['packet_hash'] = str_repeat('0', 64);
+writeJson($repo . '/bad-packets.json', $badPacket);
 $badPacketRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' . $head,
     '--packet-file=' . $repo . '/bad-packets.json', '--proposal-file=' . $proposalFile,
     '--allow-packet=' . $safe['identity'] . '@' . $safe['packet_hash'], '--expect-sites=1', '--expect-diagnostics=2']);
 residualCheck('packet hash drift rejected', $badPacketRun['code'] !== 0);
-$proposalHash = $proposalDocument; $proposalHash['proposals'][0]['proposal_hash'] = str_repeat('0', 64);
+$proposalHash = $proposalDocument;
+$proposalHash['proposals'][0]['proposal_hash'] = str_repeat('0', 64);
 $proposalHashRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $proposalHash);
 residualCheck('proposal hash drift rejected', $proposalHashRun['code'] !== 0 && rejection($proposalHashRun) === 'proposal_hash_drift');
 $headRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' . str_repeat('0', 40),
@@ -465,13 +522,18 @@ $nonallow = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' 
     '--packet-file=' . $packetFile, '--proposal-file=' . $proposalFile,
     '--allow-packet=' . $otherSafe['identity'] . '@' . $otherSafe['packet_hash'], '--expect-sites=1', '--expect-diagnostics=2']);
 residualCheck('nonallowlisted packet rejected', $nonallow['code'] !== 0);
-$low = $proposalDocument; $low['proposals'][0]['confidence'] = 0.5; $low = signedProposalDocument($low);
+$low = $proposalDocument;
+$low['proposals'][0]['confidence'] = 0.5;
+$low = signedProposalDocument($low);
 $lowRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $low);
 residualCheck('low-confidence proposal rejected', $lowRun['code'] !== 0 && rejection($lowRun) === 'low_confidence');
-$noTests = $proposalDocument; $noTests['proposals'][0]['required_tests'] = []; $noTests = signedProposalDocument($noTests);
+$noTests = $proposalDocument;
+$noTests['proposals'][0]['required_tests'] = [];
+$noTests = signedProposalDocument($noTests);
 $noTestsRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $noTests);
 residualCheck('empty required-test evidence rejected', $noTestsRun['code'] !== 0 && rejection($noTestsRun) === 'malformed_proposal_schema');
-$badTestPath = $proposalDocument; $badTestPath['proposals'][0]['required_tests'] = ['application/Entities/Fixture.php'];
+$badTestPath = $proposalDocument;
+$badTestPath['proposals'][0]['required_tests'] = ['application/Entities/Fixture.php'];
 $badTestPath = signedProposalDocument($badTestPath);
 $badTestPathRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $badTestPath);
 residualCheck('required test must be existing repo test PHP', $badTestPathRun['code'] !== 0
@@ -485,11 +547,14 @@ $sensitiveRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-hea
 residualCheck('security-contract proposal rejected', $sensitiveRun['code'] !== 0);
 $policyPacketDocument = $packetDocument;
 foreach ($policyPacketDocument['packets'] as &$policyPacket) {
-    if ($policyPacket['method'] !== 'getPassword') { continue; }
+    if ($policyPacket['method'] !== 'getPassword') {
+        continue;
+    }
     $policyPacket['rule'] = 'doc_comment_candidate';
     $policyPacket['reject_reason'] = '';
     $policyPacket['security_contract_sensitive'] = false;
-    $policyHashInput = $policyPacket; unset($policyHashInput['packet_hash']);
+    $policyHashInput = $policyPacket;
+    unset($policyHashInput['packet_hash']);
     $policyPacket['packet_hash'] = residualCanonicalHash(['schema_version' => 'phpstan-residual-packets/v1', ...$policyHashInput]);
 }
 unset($policyPacket);
@@ -501,7 +566,8 @@ $policyRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head='
 residualCheck('model cannot override tool-derived security policy', $policyRun['code'] !== 0 && str_contains($policyRun['err'], 'packet policy drift'));
 $evidencePacketDocument = $packetDocument;
 $evidencePacketDocument['packets'][0]['callers'][0]['file_sha'] = str_repeat('0', 64);
-$evidenceHashInput = $evidencePacketDocument['packets'][0]; unset($evidenceHashInput['packet_hash']);
+$evidenceHashInput = $evidencePacketDocument['packets'][0];
+unset($evidenceHashInput['packet_hash']);
 $evidencePacketDocument['packets'][0]['packet_hash'] = residualCanonicalHash(['schema_version' => 'phpstan-residual-packets/v1', ...$evidenceHashInput]);
 writeJson($repo . '/evidence-drift-packets.json', $evidencePacketDocument);
 writeJson($proposalFile, $proposalDocument);
@@ -510,7 +576,9 @@ $evidenceRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head
     '--allow-packet=' . $safe['identity'] . '@' . $evidencePacketDocument['packets'][0]['packet_hash'],
     '--expect-sites=1', '--expect-diagnostics=2']);
 residualCheck('caller evidence hash drift rejected', $evidenceRun['code'] !== 0 && str_contains($evidenceRun['err'], 'packet evidence hash drift'));
-$ambiguousPackets = $packetDocument; $ambiguousPackets['packets'][] = $safe; writeJson($repo . '/ambiguous-packets.json', $ambiguousPackets);
+$ambiguousPackets = $packetDocument;
+$ambiguousPackets['packets'][] = $safe;
+writeJson($repo . '/ambiguous-packets.json', $ambiguousPackets);
 $ambiguousRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--expect-head=' . $head,
     '--packet-file=' . $repo . '/ambiguous-packets.json', '--proposal-file=' . $proposalFile,
     '--allow-packet=' . $safe['identity'] . '@' . $safe['packet_hash'], '--expect-sites=1', '--expect-diagnostics=2']);
@@ -522,21 +590,32 @@ $span['proposals'][0]['edits'][0] = ['edit_kind' => $spanEdit['edit_kind'], 'sta
 $span = signedProposalDocument($span);
 $spanRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $span);
 residualCheck('span drift rejected', $spanRun['code'] !== 0 && rejection($spanRun) === 'span_drift');
-$multiedit = $proposalDocument; $multiedit['proposals'][0]['edits'][] = $multiedit['proposals'][0]['edits'][0]; $multiedit = signedProposalDocument($multiedit);
+$multiedit = $proposalDocument;
+$multiedit['proposals'][0]['edits'][] = $multiedit['proposals'][0]['edits'][0];
+$multiedit = signedProposalDocument($multiedit);
 $multieditRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $multiedit);
 residualCheck('multiple edits rejected', $multieditRun['code'] !== 0 && rejection($multieditRun) === 'ambiguous_or_multiedit');
-$runtime = $proposalDocument; $runtimeStart = strpos($source, 'return $this->value');
-if ($runtimeStart === false) { throw new RuntimeException('runtime fixture missing'); }
-$runtime['proposals'][0]['edits'] = [['edit_kind' => 'doc_return_atom', 'start' => $runtimeStart, 'end' => $runtimeStart + 6, 'old' => 'return', 'new' => 'return|null']]; $runtime = signedProposalDocument($runtime);
+$runtime = $proposalDocument;
+$runtimeStart = strpos($source, 'return $this->value');
+if ($runtimeStart === false) {
+    throw new RuntimeException('runtime fixture missing');
+}
+$runtime['proposals'][0]['edits'] = [['edit_kind' => 'doc_return_atom', 'start' => $runtimeStart, 'end' => $runtimeStart + 6, 'old' => 'return', 'new' => 'return|null']];
+$runtime = signedProposalDocument($runtime);
 $runtimeRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $runtime);
 residualCheck('high-confidence malicious runtime replacement rejected', $runtimeRun['code'] !== 0 && rejection($runtimeRun) === 'runtime_control_edit');
-$unmatched = $proposalDocument; $unmatched['proposals'][0]['packet_identity'] = str_repeat('f', 64); $unmatched = signedProposalDocument($unmatched);
+$unmatched = $proposalDocument;
+$unmatched['proposals'][0]['packet_identity'] = str_repeat('f', 64);
+$unmatched = signedProposalDocument($unmatched);
 $unmatchedRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $unmatched);
 residualCheck('unmatched packet rejected', $unmatchedRun['code'] !== 0 && rejection($unmatchedRun) === 'unmatched_packet');
-$manual = $proposalDocument; $manual['proposals'][0]['classification'] = 'manual_review'; $manual = signedProposalDocument($manual);
+$manual = $proposalDocument;
+$manual['proposals'][0]['classification'] = 'manual_review';
+$manual = signedProposalDocument($manual);
 $manualRun = runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $manual);
 residualCheck('non-safe classification rejected', $manualRun['code'] !== 0 && rejection($manualRun) === 'classification_not_applicable');
-$extra = $proposalDocument; $extra['proposals'][] = $unmatched['proposals'][0];
+$extra = $proposalDocument;
+$extra['proposals'][] = $unmatched['proposals'][0];
 residualCheck('one-extra proposal rejects atomic batch', runProposalFixture($tool, $repo, $head, $packetFile, $proposalFile, $safe, $extra)['code'] !== 0 && hash_file('sha256', $fixturePath) === $before);
 $duplicateProposalDocument = ['schema_version' => 'phpstan-residual-proposals/v1', 'proposals' => [$safeProposal, $safeProposal]];
 writeJson($proposalFile, $duplicateProposalDocument);
@@ -546,8 +625,11 @@ $duplicateProposalRun = residualRun([PHP_BINARY, $tool, '--repo=' . $repo, '--ex
 residualCheck('multiple same-file proposals rejected atomically', $duplicateProposalRun['code'] !== 0
     && hash_file('sha256', $fixturePath) === $before && str_contains($duplicateProposalRun['out'], 'multi_proposal_batch'));
 
-$otherSource = (string) file_get_contents($otherPath); $otherDoc = strpos($otherSource, '/** @return string */');
-if ($otherDoc === false) { throw new RuntimeException('other doc missing'); }
+$otherSource = (string) file_get_contents($otherPath);
+$otherDoc = strpos($otherSource, '/** @return string */');
+if ($otherDoc === false) {
+    throw new RuntimeException('other doc missing');
+}
 $otherProposal = makeResidualProposal($otherSafe, 'application/Entities/Other.php', $otherSafe['file_sha'], $otherDoc + 12, $otherDoc + 18);
 $multiFileDoc = ['schema_version' => 'phpstan-residual-proposals/v1', 'proposals' => [$safeProposal, $otherProposal]];
 writeJson($proposalFile, $multiFileDoc);
@@ -559,8 +641,15 @@ residualCheck('multifile batch rejected atomically', $multiFileRun['code'] !== 0
     && hash_file('sha256', $fixturePath) === $before && hash_file('sha256', $otherPath) === $otherSafe['file_sha']);
 
 writeJson($proposalFile, $proposalDocument);
-$toctou = runToctouControl($tool, $repo, $head, $packetFile, $proposalFile,
-    $safe['identity'] . '@' . $safe['packet_hash'], $fixturePath);
+$toctou = runToctouControl(
+    $tool,
+    $repo,
+    $head,
+    $packetFile,
+    $proposalFile,
+    $safe['identity'] . '@' . $safe['packet_hash'],
+    $fixturePath
+);
 residualCheck('TOCTOU mutation is observed red before atomic replace', $toctou['code'] !== 0
     && str_contains($toctou['err'], 'proposal source changed before write')
     && !str_contains((string) file_get_contents($fixturePath), '/** @return string|null */'));

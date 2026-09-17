@@ -121,22 +121,18 @@ trait OSS_Doctrine2_WithPreferences
      * @param boolean $includeExpired default false If true, include preferences even if they have expired. Default: false
      * @return TPreference|false If the named preference is not defined, returns FALSE; otherwise it returns the preference entity
      */
-    public function loadPreference( $attribute, $index = 0, $includeExpired = false )
+    public function loadPreference($attribute, $index = 0, $includeExpired = false)
     {
-        foreach( $this->_getPreferences() as $pref )
-        {
-            if( $this->_requiredPreferenceAttribute($pref->getAttribute()) == $attribute
-                && $this->_requiredPreferenceIndex($pref->getIx()) == $index )
-            {
-                if( !$includeExpired )
-                {
-                    if( $pref->getExpire() == 0 || $pref->getExpire() > time() )
+        foreach ($this->_getPreferences() as $pref) {
+            if ($this->_requiredPreferenceAttribute($pref->getAttribute()) == $attribute
+                && $this->_requiredPreferenceIndex($pref->getIx()) == $index) {
+                if (!$includeExpired) {
+                    if ($pref->getExpire() == 0 || $pref->getExpire() > time()) {
                         return $pref;
-                    else
+                    } else {
                         return false;
-                }
-                else
-                {
+                    }
+                } else {
                     return $pref;
                 }
             }
@@ -157,9 +153,9 @@ trait OSS_Doctrine2_WithPreferences
      * @return boolean|string If the named preference is not defined or has expired, returns FALSE; otherwise it returns the preference
      * @see getPreference()
      */
-    public function hasPreference( $attribute, $index = 0, $includeExpired = false )
+    public function hasPreference($attribute, $index = 0, $includeExpired = false)
     {
-        return $this->getPreference( $attribute, $index, $includeExpired );
+        return $this->getPreference($attribute, $index, $includeExpired);
     }
 
     /**
@@ -173,15 +169,14 @@ trait OSS_Doctrine2_WithPreferences
      * @param boolean $includeExpired default false If true, include preferences even if they have expired. Default: false
      * @return boolean|string If the named preference is not defined or has expired, returns FALSE; otherwise it returns the preference
      */
-    public function getPreference( $attribute, $index = 0, $includeExpired = false )
+    public function getPreference($attribute, $index = 0, $includeExpired = false)
     {
-        foreach( $this->_getPreferences() as $pref )
-        {
-            if( $this->_requiredPreferenceAttribute($pref->getAttribute()) == $attribute
-                && $this->_requiredPreferenceIndex($pref->getIx()) == $index )
-            {
-                if( !$includeExpired && $pref->getExpire() != 0 && $pref->getExpire() < time() )
+        foreach ($this->_getPreferences() as $pref) {
+            if ($this->_requiredPreferenceAttribute($pref->getAttribute()) == $attribute
+                && $this->_requiredPreferenceIndex($pref->getIx()) == $index) {
+                if (!$includeExpired && $pref->getExpire() != 0 && $pref->getExpire() < time()) {
                     return false;
+                }
 
                 return $this->_requiredPreferenceValue($pref->getValue());
             }
@@ -200,29 +195,28 @@ trait OSS_Doctrine2_WithPreferences
      * @param int $index default 0 If an indexed preference, set a specific index number. Default 0.
      * @return $this An instance of this object for fluid interfaces.
      */
-    public function setPreference( $attribute, $value, $operator = '=', $expires = 0, $index = 0 )
+    public function setPreference($attribute, $value, $operator = '=', $expires = 0, $index = 0)
     {
-        $pref = $this->loadPreference( $attribute, $index );
+        $pref = $this->loadPreference($attribute, $index);
 
-        if( $pref )
-        {
-            $pref->setValue( $value );
-            $pref->setOp( $operator );
-            $pref->setExpire( $expires );
-            $pref->setIx( $index );
+        if ($pref) {
+            $pref->setValue($value);
+            $pref->setOp($operator);
+            $pref->setExpire($expires);
+            $pref->setIx($index);
 
             return $this;
         }
 
-        $pref = $this->_createPreferenceEntity( $this );
-        $pref->setAttribute( $attribute );
-        $pref->setOp( $operator );
-        $pref->setValue( $value );
-        $pref->setExpire( $expires );
-        $pref->setIx( $index );
+        $pref = $this->_createPreferenceEntity($this);
+        $pref->setAttribute($attribute);
+        $pref->setOp($operator);
+        $pref->setValue($value);
+        $pref->setExpire($expires);
+        $pref->setIx($index);
 
         $em = $this->_getPreferenceEntityManager();
-        $em->persist( $pref );
+        $em->persist($pref);
         return $this;
     }
 
@@ -306,51 +300,48 @@ trait OSS_Doctrine2_WithPreferences
      * @return $this An instance of this object for fluid interfaces.
      * @throws OSS_Doctrine2_WithPreferences_IndexLimitException If $max is set and limit exceeded
      */
-    public function addIndexedPreference( $attribute, $value, $operator = '=', $expires = 0, $max = 0 )
+    public function addIndexedPreference($attribute, $value, $operator = '=', $expires = 0, $max = 0)
     {
         // what's the current highest index and how many is there?
-        $highest = -1; $count = 0;
+        $highest = -1;
+        $count = 0;
 
-        foreach( $this->getPreferences() as $pref )
-        {
+        foreach ($this->getPreferences() as $pref) {
             $preferenceAttribute = $this->_requiredPreferenceAttribute($pref->getAttribute());
-            if( $preferenceAttribute == $attribute && $pref->getOp() == $operator )
-            {
+            if ($preferenceAttribute == $attribute && $pref->getOp() == $operator) {
                 ++$count;
                 $preferenceIndex = $this->_requiredPreferenceIndex($pref->getIx());
-                if( $preferenceIndex > $highest )
+                if ($preferenceIndex > $highest) {
                     $highest = $preferenceIndex;
+                }
             }
         }
 
-        if( $max != 0 && $count >= $max )
-            throw new \OSS_Doctrine2_WithPreferences_IndexLimitException( 'Requested maximum number of indexed preferences reached' );
+        if ($max != 0 && $count >= $max) {
+            throw new \OSS_Doctrine2_WithPreferences_IndexLimitException('Requested maximum number of indexed preferences reached');
+        }
 
         $em = $this->_getPreferenceEntityManager();
-        if( is_array( $value ) )
-        {
-            foreach( $value as $v )
-            {
-                $pref = $this->_createPreferenceEntity( $this );
-                $pref->setAttribute( $attribute );
-                $pref->setOp( $operator );
-                $pref->setValue( $v );
-                $pref->setExpire( $expires );
-                $pref->setIx( ++$highest );
+        if (is_array($value)) {
+            foreach ($value as $v) {
+                $pref = $this->_createPreferenceEntity($this);
+                $pref->setAttribute($attribute);
+                $pref->setOp($operator);
+                $pref->setValue($v);
+                $pref->setExpire($expires);
+                $pref->setIx(++$highest);
 
-                $em->persist( $pref );
+                $em->persist($pref);
             }
-        }
-        else
-        {
-            $pref = $this->_createPreferenceEntity( $this );
-            $pref->setAttribute( $attribute );
-            $pref->setOp( $operator );
-            $pref->setValue( $value );
-            $pref->setExpire( $expires );
-            $pref->setIx( ++$highest );
+        } else {
+            $pref = $this->_createPreferenceEntity($this);
+            $pref->setAttribute($attribute);
+            $pref->setOp($operator);
+            $pref->setValue($value);
+            $pref->setExpire($expires);
+            $pref->setIx(++$highest);
 
-            $em->persist( $pref );
+            $em->persist($pref);
         }
 
         return $this;
@@ -368,25 +359,25 @@ trait OSS_Doctrine2_WithPreferences
      * @param string $attribute default null Limit it to the specified attributes, null means all attributes
      * @return int The number of preferences deleted
      */
-    public function cleanExpiredPreferences( $asOf = null, $attribute = null )
+    public function cleanExpiredPreferences($asOf = null, $attribute = null)
     {
         $count = 0;
 
-        if( $asOf === null )
+        if ($asOf === null) {
             $asOf = time();
+        }
 
         $em = $this->_getPreferenceEntityManager();
-        foreach( $this->_getPreferences() as $pref )
-        {
-            if( $attribute !== null
-                && $this->_requiredPreferenceAttribute($pref->getAttribute()) != $attribute )
+        foreach ($this->_getPreferences() as $pref) {
+            if ($attribute !== null
+                && $this->_requiredPreferenceAttribute($pref->getAttribute()) != $attribute) {
                 continue;
+            }
 
-            if( $pref->getExpire() != 0 && $pref->getExpire() < $asOf )
-            {
+            if ($pref->getExpire() != 0 && $pref->getExpire() < $asOf) {
                 $count++;
-                $this->getPreferences()->removeElement( $pref );
-                $em->remove( $pref );
+                $this->getPreferences()->removeElement($pref);
+                $em->remove($pref);
             }
         }
 
@@ -402,20 +393,17 @@ trait OSS_Doctrine2_WithPreferences
      * @param int $index default null If an indexed preference then delete a specific index, if null then delete all
      * @return int The number of preferences deleted
      */
-    public function deletePreference( $attribute, $index = null )
+    public function deletePreference($attribute, $index = null)
     {
         $count = 0;
 
         $em = $this->_getPreferenceEntityManager();
-        foreach( $this->_getPreferences() as $pref )
-        {
-            if( $this->_requiredPreferenceAttribute($pref->getAttribute()) == $attribute )
-            {
-                if( $index === null || $this->_requiredPreferenceIndex($pref->getIx()) == $index )
-                {
+        foreach ($this->_getPreferences() as $pref) {
+            if ($this->_requiredPreferenceAttribute($pref->getAttribute()) == $attribute) {
+                if ($index === null || $this->_requiredPreferenceIndex($pref->getIx()) == $index) {
                     $count++;
-                    $this->getPreferences()->removeElement( $pref );
-                    $em->remove( $pref );
+                    $this->getPreferences()->removeElement($pref);
+                    $em->remove($pref);
                 }
             }
         }
@@ -433,11 +421,12 @@ trait OSS_Doctrine2_WithPreferences
     {
         $em = $this->_getPreferenceEntityManager();
 
-        $count = $em->createQuery( "DELETE \\Entities\\UserPreference up WHERE up.User = ?1" )
-            ->setParameter( 1, $this )
+        $count = $em->createQuery("DELETE \\Entities\\UserPreference up WHERE up.User = ?1")
+            ->setParameter(1, $this)
             ->execute();
-        if( !is_int( $count ) )
-            throw new \UnexpectedValueException( 'Preference deletion count is malformed' );
+        if (!is_int($count)) {
+            throw new \UnexpectedValueException('Preference deletion count is malformed');
+        }
         return $count;
     }
 
@@ -463,7 +452,7 @@ trait OSS_Doctrine2_WithPreferences
      * @param boolean $ignoreExpired If set to false, include expired preferences
      * @return boolean|array False if no such preference(s) exist, otherwise an array.
      */
-    public function getIndexedPreference( $attribute, $withIndex = false, $ignoreExpired = true )
+    public function getIndexedPreference($attribute, $withIndex = false, $ignoreExpired = true)
     {
         return $this->_getIndexedPreference($attribute, $withIndex, $ignoreExpired);
     }
@@ -478,30 +467,31 @@ trait OSS_Doctrine2_WithPreferences
     {
         $values = [];
 
-        foreach( $this->getPreferences() as $pref )
-        {
+        foreach ($this->getPreferences() as $pref) {
             $preferenceAttribute = $this->_requiredPreferenceAttribute($pref->getAttribute());
-            if( $preferenceAttribute == $attribute )
-            {
-                if( !$ignoreExpired && $pref->getExpire() != 0 && $pref->getExpire() < time() )
+            if ($preferenceAttribute == $attribute) {
+                if (!$ignoreExpired && $pref->getExpire() != 0 && $pref->getExpire() < time()) {
                     continue;
+                }
 
                 $preferenceIndex = $this->_requiredPreferenceIndex($pref->getIx());
                 $preferenceValue = $this->_requiredPreferenceValue($pref->getValue());
-                if( $withIndex )
+                if ($withIndex) {
                     $values[ $preferenceIndex ] = [
                         'p_index' => $preferenceIndex,
                         'p_value' => $preferenceValue,
                     ];
-                else
+                } else {
                     $values[ $preferenceIndex ] = $preferenceValue;
+                }
             }
         }
 
-        if( $values === [] )
+        if ($values === []) {
             return false;
+        }
 
-        ksort( $values, SORT_NUMERIC );
+        ksort($values, SORT_NUMERIC);
         return $values;
     }
 
@@ -542,7 +532,7 @@ trait OSS_Doctrine2_WithPreferences
      * @param boolean $ignoreExpired If set to false, include expired preferences
      * @return boolean|array False if no such preference(s) exist, otherwise an array.
      */
-    public function getAssocPreference( $attribute, $index = null, $ignoreExpired = true )
+    public function getAssocPreference($attribute, $index = null, $ignoreExpired = true)
     {
         return $this->_getAssocPreference($attribute, $index, $ignoreExpired);
     }
@@ -557,39 +547,38 @@ trait OSS_Doctrine2_WithPreferences
     {
         $values = [];
 
-        foreach( $this->_getPreferences() as $pref )
-        {
+        foreach ($this->_getPreferences() as $pref) {
             $preferenceAttribute = $this->_requiredPreferenceAttribute($pref->getAttribute());
-            if( strpos( $preferenceAttribute, $attribute ) === 0 )
-            {
+            if (strpos($preferenceAttribute, $attribute) === 0) {
                 $preferenceIndex = $this->_requiredPreferenceIndex($pref->getIx());
-                if( $index === null || $preferenceIndex == $index )
-                {
-                    if( !$ignoreExpired && $pref->getExpire() != 0 && $pref->getExpire() < time() )
+                if ($index === null || $preferenceIndex == $index) {
+                    if (!$ignoreExpired && $pref->getExpire() != 0 && $pref->getExpire() < time()) {
                         continue;
+                    }
 
                     $key = null;
-                    if( strpos( $preferenceAttribute, "." ) !== false )
-                        $key = substr( $preferenceAttribute, strlen( $attribute )+1 );
+                    if (strpos($preferenceAttribute, ".") !== false) {
+                        $key = substr($preferenceAttribute, strlen($attribute) + 1);
+                    }
 
                     $preferenceValue = $this->_requiredPreferenceValue($pref->getValue());
-                    if( $key )
-                    {
+                    if ($key) {
                         $key = "{$preferenceIndex}.{$key}";
                         $values = $this->_processKey(
                             $values,
                             $key,
                             $preferenceValue
                         );
-                    }
-                    else
+                    } else {
                         $values[ $preferenceIndex ] = $preferenceValue;
+                    }
                 }
             }
         }
 
-        if( $values === [] )
+        if ($values === []) {
             return false;
+        }
 
         return $values;
     }
@@ -603,21 +592,18 @@ trait OSS_Doctrine2_WithPreferences
      * @param int $index default null If an indexed preference then delete a specific index, if null then delete all
      * @return int The number of preferences deleted
      */
-    public function deleteAssocPreference( $attribute, $index = null )
+    public function deleteAssocPreference($attribute, $index = null)
     {
         $cnt = 0;
 
         $em = $this->_getPreferenceEntityManager();
-        foreach( $this->_getPreferences() as $pref )
-        {
+        foreach ($this->_getPreferences() as $pref) {
             $preferenceAttribute = $this->_requiredPreferenceAttribute($pref->getAttribute());
-            if( strpos( $preferenceAttribute, $attribute ) === 0 )
-            {
+            if (strpos($preferenceAttribute, $attribute) === 0) {
                 $preferenceIndex = $this->_requiredPreferenceIndex($pref->getIx());
-                if( $index === null || $preferenceIndex == $index)
-                {
-                    $this->getPreferences()->removeElement( $pref );
-                    $em->remove( $pref );
+                if ($index === null || $preferenceIndex == $index) {
+                    $this->getPreferences()->removeElement($pref);
+                    $em->remove($pref);
                     $cnt++;
                 }
             }
@@ -636,9 +622,8 @@ trait OSS_Doctrine2_WithPreferences
     private function _getFullClassname()
     {
         $this->_className = get_called_class();
-        if( strpos( $this->_className, "__CG__" ) !== false )
-        {
-            $this->_className = substr( $this->_className, strpos( $this->_className, "__CG__" ) + 6 );
+        if (strpos($this->_className, "__CG__") !== false) {
+            $this->_className = substr($this->_className, strpos($this->_className, "__CG__") + 6);
         }
         return $this->_className;
     }
@@ -653,7 +638,7 @@ trait OSS_Doctrine2_WithPreferences
      */
     private function _getShortClassname()
     {
-        return substr( $this->_className, strrpos( $this->_className, '\\' ) + 1 );
+        return substr($this->_className, strrpos($this->_className, '\\') + 1);
     }
 
     /**
@@ -665,17 +650,16 @@ trait OSS_Doctrine2_WithPreferences
      * @param $this|null $owner
      * @return TPreference
      */
-    private function _createPreferenceEntity( $owner = null )
+    private function _createPreferenceEntity($owner = null)
     {
         $this->_getFullClassname();
         $prefClass = $this->_getPreferenceEntityClassname();
         $pref = new $prefClass();
 
-        if( $owner != null )
-        {
+        if ($owner != null) {
             $setEntity = 'set' . $this->_getShortClassname();
-            $pref->$setEntity( $owner );
-            $owner->addPreference( $pref );
+            $pref->$setEntity($owner);
+            $owner->addPreference($pref);
         }
 
         return $pref;
@@ -694,11 +678,13 @@ trait OSS_Doctrine2_WithPreferences
     {
         $query = sprintf(
             "SELECT p FROM %sPreference p WHERE p.%s = %d",
-            $this->_getFullClassname(), $this->_getShortClassname(), $this->getId()
+            $this->_getFullClassname(),
+            $this->_getShortClassname(),
+            $this->getId()
         );
 
         return $this->_validatedPreferenceResults(
-            $this->_getPreferenceEntityManager()->createQuery( $query )->getResult()
+            $this->_getPreferenceEntityManager()->createQuery($query)->getResult()
         );
     }
 
@@ -724,47 +710,43 @@ trait OSS_Doctrine2_WithPreferences
      */
     protected function _processPreferenceKey($config, $key, $value)
     {
-        if( strpos( $key, "." ) !== false)
-        {
-            $pieces = explode( ".", $key, 2 );
-            if( strlen( $pieces[0] ) && strlen( $pieces[1] ) )
-            {
-                if( !isset( $config[ $pieces[0] ] ) )
-                {
-                    if( $pieces[0] === '0' && !empty( $config ) )
+        if (strpos($key, ".") !== false) {
+            $pieces = explode(".", $key, 2);
+            if (strlen($pieces[0]) && strlen($pieces[1])) {
+                if (!isset($config[ $pieces[0] ])) {
+                    if ($pieces[0] === '0' && !empty($config)) {
                         $config = [$pieces[0] => $config];
-                    else
+                    } else {
                         $config[ $pieces[0] ] = [];
+                    }
+                } elseif (!is_array($config[$pieces[0]])) {
+                    throw new \UnexpectedValueException("Cannot create preference sub-key '{$pieces[0]}' over a scalar");
                 }
-                elseif( !is_array( $config[$pieces[0]] ) )
-                    throw new \UnexpectedValueException( "Cannot create preference sub-key '{$pieces[0]}' over a scalar" );
                 $nested = $config[ $pieces[0] ];
-                if( !is_array( $nested ) )
-                    throw new \UnexpectedValueException( "Cannot create preference sub-key '{$pieces[0]}' over a scalar" );
-                $config[ $pieces[0] ] = $this->_processKey( $nested, $pieces[1], $value );
-            }
-            else
-            {
+                if (!is_array($nested)) {
+                    throw new \UnexpectedValueException("Cannot create preference sub-key '{$pieces[0]}' over a scalar");
+                }
+                $config[ $pieces[0] ] = $this->_processKey($nested, $pieces[1], $value);
+            } else {
                 //die("Invalid key '$key'");
             }
-        }
-        else
-        {
+        } else {
             $config[$key] = $value;
         }
         return $config;
     }
 
     /** @return list<TPreference> */
-    private function _validatedPreferenceResults( mixed $result ): array
+    private function _validatedPreferenceResults(mixed $result): array
     {
-        if( !is_array( $result ) || !array_is_list( $result ) )
-            throw new \UnexpectedValueException( 'Preference query result is malformed' );
+        if (!is_array($result) || !array_is_list($result)) {
+            throw new \UnexpectedValueException('Preference query result is malformed');
+        }
         $expected = $this->_getPreferenceEntityClassname();
-        foreach( $result as $preference )
-        {
-            if( !is_object( $preference ) || !is_a( $preference, $expected ) )
-                throw new \UnexpectedValueException( 'Preference query result contains an invalid entity' );
+        foreach ($result as $preference) {
+            if (!is_object($preference) || !is_a($preference, $expected)) {
+                throw new \UnexpectedValueException('Preference query result contains an invalid entity');
+            }
         }
         return $result;
     }

@@ -42,10 +42,10 @@ try {
     http_response_code(400);
     exit('Invalid fixture request');
 }
-$rows = array_map(static fn(string $name): array => ['name' => $scope . '-' . $name], ['Alpha', 'Beta', 'Delta', 'Gamma']);
+$rows = array_map(static fn (string $name): array => ['name' => $scope . '-' . $name], ['Alpha', 'Beta', 'Delta', 'Gamma']);
 $total = count($rows);
 if ($query->searchTerm !== '') {
-    $rows = array_values(array_filter($rows, static fn(array $row): bool => $query->contains
+    $rows = array_values(array_filter($rows, static fn (array $row): bool => $query->contains
         ? str_contains($row['name'], $query->searchTerm)
         : str_starts_with($row['name'], $query->searchTerm)));
 }

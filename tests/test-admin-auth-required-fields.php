@@ -105,82 +105,140 @@ adminAuthCheck(
         && $authMatcher->invoke(null, $initialized, 'wrong horse', $options) === null,
 );
 
-adminAuthCheck('required string preserves exact input',
-    adminAuthControllerHelper('requiredString', '', 'Field') === '');
-adminAuthCheck('required string rejects non-string input',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper('requiredString', [], 'Field'))
-        === 'Field must be a string');
-adminAuthCheck('optional string defaults only when absent',
+adminAuthCheck(
+    'required string preserves exact input',
+    adminAuthControllerHelper('requiredString', '', 'Field') === ''
+);
+adminAuthCheck(
+    'required string rejects non-string input',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper('requiredString', [], 'Field'))
+        === 'Field must be a string'
+);
+adminAuthCheck(
+    'optional string defaults only when absent',
     adminAuthControllerHelper('stringOrDefault', null, 'fallback', 'Field') === 'fallback'
-        && adminAuthControllerHelper('stringOrDefault', '0', 'fallback', 'Field') === '0');
-adminAuthCheck('optional string rejects a present wrong type',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper('stringOrDefault', false, '', 'Field'))
-        === 'Field must be a string');
-adminAuthCheck('application redirect preserves only internal paths',
+        && adminAuthControllerHelper('stringOrDefault', '0', 'fallback', 'Field') === '0'
+);
+adminAuthCheck(
+    'optional string rejects a present wrong type',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper('stringOrDefault', false, '', 'Field'))
+        === 'Field must be a string'
+);
+adminAuthCheck(
+    'application redirect preserves only internal paths',
     adminAuthControllerHelper('applicationPathOrDefault', 'mailbox/list', '') === 'mailbox/list'
-        && adminAuthControllerHelper('applicationPathOrDefault', '', 'fallback') === '');
-adminAuthCheck('application redirect rejects external and control-character targets',
+        && adminAuthControllerHelper('applicationPathOrDefault', '', 'fallback') === ''
+);
+adminAuthCheck(
+    'application redirect rejects external and control-character targets',
     adminAuthControllerHelper('applicationPathOrDefault', 'https://example.test', '') === ''
-        && adminAuthControllerHelper('applicationPathOrDefault', "mailbox\r\nX-Test: yes", '') === '');
-adminAuthCheck('positive integer accepts int and canonical decimal string',
+        && adminAuthControllerHelper('applicationPathOrDefault', "mailbox\r\nX-Test: yes", '') === ''
+);
+adminAuthCheck(
+    'positive integer accepts int and canonical decimal string',
     adminAuthControllerHelper('integerOrNull', 7) === 7
-        && adminAuthControllerHelper('integerOrNull', '7') === 7);
-adminAuthCheck('positive integer rejects ambiguous and out-of-domain input',
+        && adminAuthControllerHelper('integerOrNull', '7') === 7
+);
+adminAuthCheck(
+    'positive integer rejects ambiguous and out-of-domain input',
     adminAuthControllerHelper('integerOrNull', 0) === null
         && adminAuthControllerHelper('integerOrNull', '01') === null
         && adminAuthControllerHelper('integerOrNull', '1e2') === null
-        && adminAuthControllerHelper('integerOrNull', []) === null);
-adminAuthCheck('string-keyed map preserves valid configuration',
-    adminAuthControllerHelper('stringKeyedArray', ['mode' => 'safe'], 'Config') === ['mode' => 'safe']);
-adminAuthCheck('string-keyed map rejects list-shaped configuration',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper('stringKeyedArray', ['unsafe'], 'Config'))
-        === 'Config must use string keys');
+        && adminAuthControllerHelper('integerOrNull', []) === null
+);
+adminAuthCheck(
+    'string-keyed map preserves valid configuration',
+    adminAuthControllerHelper('stringKeyedArray', ['mode' => 'safe'], 'Config') === ['mode' => 'safe']
+);
+adminAuthCheck(
+    'string-keyed map rejects list-shaped configuration',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper('stringKeyedArray', ['unsafe'], 'Config'))
+        === 'Config must use string keys'
+);
 
 $nested = ['resources' => ['auth' => ['oss' => ['pwhash' => 'crypt:sha512']]]];
-adminAuthCheck('option traversal preserves a nested configured value',
-    adminAuthControllerHelper('option', $nested, 'resources', 'auth', 'oss', 'pwhash') === 'crypt:sha512');
-adminAuthCheck('option traversal preserves an absent value as null',
-    adminAuthControllerHelper('option', $nested, 'resources', 'auth', 'missing') === null);
-adminAuthCheck('option traversal rejects a malformed intermediate node',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper(
-        'option', ['resources' => 'invalid'], 'resources', 'auth', 'oss',
-    )) === 'Configuration resources must be an array');
-adminAuthCheck('option traversal rejects list-shaped intermediate nodes',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper(
-        'option', ['resources' => [['auth' => []]]], 'resources', 'auth', 'oss',
-    )) === 'Configuration resources must use string keys');
-adminAuthCheck('string option preserves configured zero and missing default',
+adminAuthCheck(
+    'option traversal preserves a nested configured value',
+    adminAuthControllerHelper('option', $nested, 'resources', 'auth', 'oss', 'pwhash') === 'crypt:sha512'
+);
+adminAuthCheck(
+    'option traversal preserves an absent value as null',
+    adminAuthControllerHelper('option', $nested, 'resources', 'auth', 'missing') === null
+);
+adminAuthCheck(
+    'option traversal rejects a malformed intermediate node',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper(
+        'option',
+        ['resources' => 'invalid'],
+        'resources',
+        'auth',
+        'oss',
+    )) === 'Configuration resources must be an array'
+);
+adminAuthCheck(
+    'option traversal rejects list-shaped intermediate nodes',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper(
+        'option',
+        ['resources' => [['auth' => []]]],
+        'resources',
+        'auth',
+        'oss',
+    )) === 'Configuration resources must use string keys'
+);
+adminAuthCheck(
+    'string option preserves configured zero and missing default',
     adminAuthControllerHelper('optionString', ['value' => '0'], 'fallback', 'value') === '0'
-        && adminAuthControllerHelper('optionString', [], 'fallback', 'value') === 'fallback');
-adminAuthCheck('integer option accepts INI decimal strings and missing default',
+        && adminAuthControllerHelper('optionString', [], 'fallback', 'value') === 'fallback'
+);
+adminAuthCheck(
+    'integer option accepts INI decimal strings and missing default',
     adminAuthControllerHelper('optionInt', ['value' => '12'], 8, 'value') === 12
-        && adminAuthControllerHelper('optionInt', [], 8, 'value') === 8);
-adminAuthCheck('integer option rejects coercive numeric shapes',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper('optionInt', ['value' => '01x'], 8, 'value'))
-        === 'Configuration value must be a non-negative integer');
-adminAuthCheck('boolean option accepts native INI encodings',
+        && adminAuthControllerHelper('optionInt', [], 8, 'value') === 8
+);
+adminAuthCheck(
+    'integer option rejects coercive numeric shapes',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper('optionInt', ['value' => '01x'], 8, 'value'))
+        === 'Configuration value must be a non-negative integer'
+);
+adminAuthCheck(
+    'boolean option accepts native INI encodings',
     adminAuthControllerHelper('optionBool', ['value' => '1'], false, 'value') === true
-        && adminAuthControllerHelper('optionBool', ['value' => ''], true, 'value') === false);
-adminAuthCheck('boolean option rejects non-boolean strings',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper('optionBool', ['value' => 'yes'], false, 'value'))
-        === 'Configuration value must be boolean');
-adminAuthCheck('password options preserve string and map configuration',
+        && adminAuthControllerHelper('optionBool', ['value' => ''], true, 'value') === false
+);
+adminAuthCheck(
+    'boolean option rejects non-boolean strings',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper('optionBool', ['value' => 'yes'], false, 'value'))
+        === 'Configuration value must be boolean'
+);
+adminAuthCheck(
+    'password options preserve string and map configuration',
     adminAuthControllerHelper('passwordOptions', ['resources' => ['auth' => ['oss' => 'crypt:sha512']]])
         === 'crypt:sha512'
-        && adminAuthControllerHelper('passwordOptions', $nested) === ['pwhash' => 'crypt:sha512']);
-adminAuthCheck('password options reject missing security configuration',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper('passwordOptions', []))
-        === 'Configuration resources.auth.oss must be an array');
-adminAuthCheck('authentication email configuration accepts documented defaults',
-    adminAuthControllerHelper('validateAuthEmailOptions', []) === null);
-adminAuthCheck('authentication email configuration rejects header controls',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper(
-        'validateAuthEmailOptions', ['identity' => ['sitename' => "Site\nBcc: attacker@example.test"]],
-    )) === 'Authentication email configuration contains control characters');
-adminAuthCheck('authentication email configuration rejects unknown formats',
-    adminAuthFailure(static fn(): mixed => adminAuthControllerHelper(
-        'validateAuthEmailOptions', ['resources' => ['auth' => ['oss' => ['email_format' => 'markdown']]]],
-    )) === 'Configuration resources.auth.oss.email_format is invalid');
+        && adminAuthControllerHelper('passwordOptions', $nested) === ['pwhash' => 'crypt:sha512']
+);
+adminAuthCheck(
+    'password options reject missing security configuration',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper('passwordOptions', []))
+        === 'Configuration resources.auth.oss must be an array'
+);
+adminAuthCheck(
+    'authentication email configuration accepts documented defaults',
+    adminAuthControllerHelper('validateAuthEmailOptions', []) === null
+);
+adminAuthCheck(
+    'authentication email configuration rejects header controls',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper(
+        'validateAuthEmailOptions',
+        ['identity' => ['sitename' => "Site\nBcc: attacker@example.test"]],
+    )) === 'Authentication email configuration contains control characters'
+);
+adminAuthCheck(
+    'authentication email configuration rejects unknown formats',
+    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper(
+        'validateAuthEmailOptions',
+        ['resources' => ['auth' => ['oss' => ['email_format' => 'markdown']]]],
+    )) === 'Configuration resources.auth.oss.email_format is invalid'
+);
 
 adminAuthCheck('fixed assertion count', AdminAuthContractState::$checks === 38);
 

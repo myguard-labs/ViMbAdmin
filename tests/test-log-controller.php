@@ -25,31 +25,71 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 final class LogControllerTestStorage implements SessionStorage
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function remove(string $key): void { unset($this->data[$key]); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function remove(string $key): void
+    {
+        unset($this->data[$key]);
+    }
 }
 
 final class LogControllerTestNamespace
 {
     /** @param array<string,mixed> $data */
-    public function __construct(private array $data = []) {}
-    public function __get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function __set(string $key, mixed $value): void { $this->data[$key] = $value; }
-    public function __isset(string $key): bool { return isset($this->data[$key]); }
-    public function __unset(string $key): void { unset($this->data[$key]); }
-    public function get(string $key): mixed { return $this->data[$key] ?? null; }
-    public function has(string $key): bool { return array_key_exists($key, $this->data); }
+    public function __construct(private array $data = [])
+    {
+    }
+    public function __get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->data[$key] = $value;
+    }
+    public function __isset(string $key): bool
+    {
+        return isset($this->data[$key]);
+    }
+    public function __unset(string $key): void
+    {
+        unset($this->data[$key]);
+    }
+    public function get(string $key): mixed
+    {
+        return $this->data[$key] ?? null;
+    }
+    public function has(string $key): bool
+    {
+        return array_key_exists($key, $this->data);
+    }
 }
 
 final class LogControllerTestView
 {
     /** @var array<string,mixed> */
     public array $assigned = [];
-    public function __set(string $key, mixed $value): void { $this->assigned[$key] = $value; }
-    public function render(string $script): string { return $script; }
+    public function __set(string $key, mixed $value): void
+    {
+        $this->assigned[$key] = $value;
+    }
+    public function render(string $script): string
+    {
+        return $script;
+    }
 }
 
 final class LogControllerTestResources
@@ -60,10 +100,14 @@ final class LogControllerTestResources
         private readonly LogControllerTestNamespace $session,
         private readonly LogControllerTestView $view,
         private readonly array $options = [],
-    ) {}
+    ) {
+    }
 
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
     public function getResource(string $name): mixed
     {
         return match ($name) {
@@ -87,9 +131,18 @@ final class LogControllerTestAdmin extends \Entities\Admin
         $this->setActive(true);
     }
 
-    public function getId(): int { return $this->testId; }
-    public function isSuper(): bool { return (bool) $this->getSuper(); }
-    public function canManageDomain(mixed $domain): bool { return $domain === $this->manageableDomain; }
+    public function getId(): int
+    {
+        return $this->testId;
+    }
+    public function isSuper(): bool
+    {
+        return (bool) $this->getSuper();
+    }
+    public function canManageDomain(mixed $domain): bool
+    {
+        return $domain === $this->manageableDomain;
+    }
 }
 
 final class LogControllerTestDomain extends \Entities\Domain
@@ -99,12 +152,17 @@ final class LogControllerTestDomain extends \Entities\Domain
         parent::__construct();
     }
 
-    public function getId(): int { return $this->testId; }
+    public function getId(): int
+    {
+        return $this->testId;
+    }
 }
 
 final class LogControllerTestAdminRepository extends \Repositories\Admin
 {
-    public function __construct(private readonly ?\Entities\Admin $result) {}
+    public function __construct(private readonly ?\Entities\Admin $result)
+    {
+    }
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(
         mixed $id,
@@ -117,7 +175,9 @@ final class LogControllerTestAdminRepository extends \Repositories\Admin
 
 final class LogControllerTestDomainRepository extends \Repositories\Domain
 {
-    public function __construct(private readonly ?\Entities\Domain $result) {}
+    public function __construct(private readonly ?\Entities\Domain $result)
+    {
+    }
     /** @SuppressWarnings("PHPMD.UnusedFormalParameter") */
     public function find(
         mixed $id,
@@ -143,7 +203,8 @@ final class LogControllerTestLogRepository extends \Repositories\Log
         private readonly array $rows = [],
         private readonly ?array $page = null,
         private readonly ?Throwable $error = null,
-    ) {}
+    ) {
+    }
 
     /**
      * @param \Entities\Admin|null $admin
@@ -182,7 +243,9 @@ final class LogControllerTestLogRepository extends \Repositories\Log
 /** @extends EntityRepository<object> */
 final class LogControllerWrongRepository extends EntityRepository
 {
-    public function __construct() {}
+    public function __construct()
+    {
+    }
 }
 
 final class LogControllerTestRepositoryFactory implements RepositoryFactory
@@ -191,7 +254,10 @@ final class LogControllerTestRepositoryFactory implements RepositoryFactory
     private array $repositories;
 
     /** @param array<string,EntityRepository<covariant object>> $repositories */
-    public function __construct(array $repositories) { $this->repositories = $repositories; }
+    public function __construct(array $repositories)
+    {
+        $this->repositories = $repositories;
+    }
 
     /**
      * @template T of object
@@ -261,12 +327,14 @@ function redirectEndsWith(\ViMbAdmin\Kernel\Http\Response $response, string $pat
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { $failures++; }
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 echo "== native log controller boundaries ==\n";
 
-$emptyLoader = static fn(int $id): ?object => null;
+$emptyLoader = static fn (int $id): ?object => null;
 $anonymous = logController(
     new stdClass(),
     new LogControllerTestNamespace(),
@@ -274,13 +342,17 @@ $anonymous = logController(
     new LogControllerTestStorage(),
     $emptyLoader,
 );
-$check('anonymous list redirects to login without touching Doctrine',
-    redirectEndsWith($anonymous->listAction(), '/auth/login'));
+$check(
+    'anonymous list redirects to login without touching Doctrine',
+    redirectEndsWith($anonymous->listAction(), '/auth/login')
+);
 $anonymousDataResponse = $anonymous->listDataAction();
-$check('anonymous list-data returns the JSON expiry contract without touching Doctrine',
+$check(
+    'anonymous list-data returns the JSON expiry contract without touching Doctrine',
     $anonymousDataResponse->status === 401
     && $anonymousDataResponse->contentType === 'application/json; charset=utf-8'
-    && $anonymousDataResponse->body === '{"error":"Authentication required"}');
+    && $anonymousDataResponse->body === '{"error":"Authentication required"}'
+);
 
 $self = new LogControllerTestAdmin(7, false);
 $selfLog = new LogControllerTestLogRepository([['action' => 'login']]);
@@ -290,15 +362,19 @@ $selfController = logController(
     new LogControllerTestNamespace(),
     $selfView,
     new LogControllerTestStorage(['identity' => ['id' => 7]]),
-    static fn(int $id): object => $self,
+    static fn (int $id): object => $self,
     [],
     logClientSideOptions(),
 );
 $selfResponse = $selfController->listAction();
-$check('non-super list remains scoped to the authenticated admin',
-    $selfResponse->body === 'log/list.phtml' && $selfLog->loadCalls === [[$self, null]]);
-$check('inline list rows reach the view unchanged',
-    $selfView->assigned['logs'] === [['action' => 'login']]);
+$check(
+    'non-super list remains scoped to the authenticated admin',
+    $selfResponse->body === 'log/list.phtml' && $selfLog->loadCalls === [[$self, null]]
+);
+$check(
+    'inline list rows reach the view unchanged',
+    $selfView->assigned['logs'] === [['action' => 'login']]
+);
 
 $target = new LogControllerTestAdmin(8, false);
 $super = new LogControllerTestAdmin(1, true);
@@ -309,7 +385,7 @@ $superController = logController(
     new LogControllerTestNamespace(),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
     ['aid' => '8'],
     logClientSideOptions(),
 );
@@ -321,27 +397,33 @@ $deniedController = logController(
     new LogControllerTestNamespace(),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 7]]),
-    static fn(int $id): object => $self,
+    static fn (int $id): object => $self,
     ['aid' => '8'],
 );
-$check('non-super admin cannot select another admin scope',
-    redirectEndsWith($deniedController->listAction(), '/auth/login'));
+$check(
+    'non-super admin cannot select another admin scope',
+    redirectEndsWith($deniedController->listAction(), '/auth/login')
+);
 $deniedDataResponse = $deniedController->listDataAction();
-$check('non-super list-data authorization denial is not session expiry',
+$check(
+    'non-super list-data authorization denial is not session expiry',
     $deniedDataResponse->status === 200
     && $deniedDataResponse->contentType === 'text/html; charset=utf-8'
-    && $deniedDataResponse->body === 'ko');
+    && $deniedDataResponse->body === 'ko'
+);
 
 $missingAdminController = logController(
     logEntityManager(['Entities\\Admin' => new LogControllerTestAdminRepository(null)]),
     new LogControllerTestNamespace(),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
     ['aid' => '999'],
 );
-$check('missing target admin redirects to the admin list',
-    redirectEndsWith($missingAdminController->listAction(), '/admin/list'));
+$check(
+    'missing target admin redirects to the admin list',
+    redirectEndsWith($missingAdminController->listAction(), '/admin/list')
+);
 
 $domain = new LogControllerTestDomain(4);
 $domainAdmin = new LogControllerTestAdmin(7, false, $domain);
@@ -353,13 +435,15 @@ $domainController = logController(
     $domainNamespace,
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 7]]),
-    static fn(int $id): object => $domainAdmin,
+    static fn (int $id): object => $domainAdmin,
     ['did' => '4'],
     logClientSideOptions(),
 );
 $domainController->listAction();
-$check('authorised domain is applied and remembered',
-    $domainLog->loadCalls === [[$domainAdmin, $domain]] && $domainNamespace->get('domain') === $domain);
+$check(
+    'authorised domain is applied and remembered',
+    $domainLog->loadCalls === [[$domainAdmin, $domain]] && $domainNamespace->get('domain') === $domain
+);
 
 $unauthorisedDomain = new LogControllerTestDomain(5);
 $unauthorisedController = logController(
@@ -370,11 +454,13 @@ $unauthorisedController = logController(
     new LogControllerTestNamespace(),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 7]]),
-    static fn(int $id): object => $domainAdmin,
+    static fn (int $id): object => $domainAdmin,
     ['did' => '5'],
 );
-$check('non-super admin cannot select an unauthorised domain',
-    redirectEndsWith($unauthorisedController->listAction(), '/auth/login'));
+$check(
+    'non-super admin cannot select an unauthorised domain',
+    redirectEndsWith($unauthorisedController->listAction(), '/auth/login')
+);
 
 $missingDomainLog = new LogControllerTestLogRepository();
 $missingDomainNamespace = new LogControllerTestNamespace();
@@ -386,13 +472,15 @@ $missingDomainController = logController(
     $missingDomainNamespace,
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
     ['did' => '404'],
     logClientSideOptions(),
 );
 $missingDomainController->listAction();
-$check('missing domain leaves the list unfiltered and is not remembered',
-    $missingDomainLog->loadCalls === [[null, null]] && !$missingDomainNamespace->has('domain'));
+$check(
+    'missing domain leaves the list unfiltered and is not remembered',
+    $missingDomainLog->loadCalls === [[null, null]] && !$missingDomainNamespace->has('domain')
+);
 
 $rememberedLog = new LogControllerTestLogRepository();
 $rememberedController = logController(
@@ -400,13 +488,15 @@ $rememberedController = logController(
     new LogControllerTestNamespace(['domain' => $domain]),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
     [],
     logClientSideOptions(),
 );
 $rememberedController->listAction();
-$check('remembered session domain is reused without a repository lookup',
-    $rememberedLog->loadCalls === [[null, $domain]]);
+$check(
+    'remembered session domain is reused without a repository lookup',
+    $rememberedLog->loadCalls === [[null, $domain]]
+);
 
 $unsetNamespace = new LogControllerTestNamespace(['domain' => $domain]);
 $unsetLog = new LogControllerTestLogRepository();
@@ -415,13 +505,15 @@ $unsetController = logController(
     $unsetNamespace,
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
     ['unset' => '1'],
     logClientSideOptions(),
 );
 $unsetController->listAction();
-$check('unset clears the remembered domain before loading',
-    !$unsetNamespace->has('domain') && $unsetLog->loadCalls === [[null, null]]);
+$check(
+    'unset clears the remembered domain before loading',
+    !$unsetNamespace->has('domain') && $unsetLog->loadCalls === [[null, null]]
+);
 
 $pagedLog = new LogControllerTestLogRepository([], [
     'rows' => [['timestamp' => new DateTimeImmutable('2026-08-31 12:34:56'), 'action' => 'edit']],
@@ -440,7 +532,7 @@ $pagedController = logController(
     new LogControllerTestNamespace(['domain' => $domain]),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
 );
 $pagedResponse = $pagedController->listDataAction();
 $pagedBody = json_decode($pagedResponse->body, true);
@@ -452,14 +544,18 @@ $firstPagedRow = $pagedRows[0] ?? null;
 // column and order[0][column] = 3 is the "Occurred At" column -- which is also the
 // index log/js/list.js sets as the initial order in exactly this case. The map
 // must therefore answer 'timestamp' here, not 'domain'.
-$check('list-data preserves scoped pagination and sorting arguments',
-    $pagedLog->pageCalls === [[null, $domain, 'edit', false, 'timestamp', 'DESC', 5, 25]]);
-$check('list-data returns counts and formats timestamps',
+$check(
+    'list-data preserves scoped pagination and sorting arguments',
+    $pagedLog->pageCalls === [[null, $domain, 'edit', false, 'timestamp', 'DESC', 5, 25]]
+);
+$check(
+    'list-data returns counts and formats timestamps',
     is_array($pagedBody)
         && $pagedBody['draw'] === 3
         && $pagedBody['recordsTotal'] === 9
         && is_array($firstPagedRow)
-        && ($firstPagedRow['timestamp'] ?? null) === '2026-08-31 12:34:56');
+        && ($firstPagedRow['timestamp'] ?? null) === '2026-08-31 12:34:56'
+);
 
 // A leading '*' is the contains toggle: the controller must forward the STRIPPED
 // term plus the flag. Passing $q->search here instead of $q->searchTerm would bind
@@ -472,11 +568,13 @@ $starredController = logController(
     new LogControllerTestNamespace(['domain' => $domain]),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
 );
 $starredController->listDataAction();
-$check('list-data forwards the stripped term and the contains flag for a starred search',
-    $starredLog->pageCalls === [[null, $domain, 'acme', true, 'timestamp', 'DESC', 5, 25]]);
+$check(
+    'list-data forwards the stripped term and the contains flag for a starred search',
+    $starredLog->pageCalls === [[null, $domain, 'acme', true, 'timestamp', 'DESC', 5, 25]]
+);
 
 $_GET['search']['value'] = 'abc';
 foreach ([
@@ -496,15 +594,17 @@ foreach ([
         new LogControllerTestNamespace(),
         new LogControllerTestView(),
         new LogControllerTestStorage(['identity' => ['id' => 1]]),
-        static fn(int $id): object => $super,
+        static fn (int $id): object => $super,
         [],
         $options,
     )->listDataAction();
     $expectedStatus = $case === 'default fallback' ? 200 : 400;
-    $check("list-data enforces {$case} search minimum argument",
+    $check(
+        "list-data enforces {$case} search minimum argument",
         $response->status === $expectedStatus
             && ($expectedStatus === 200 || $response->body === 'Search must be empty or at least 4 characters')
-            && ($expectedStatus === 400 ? $shortSearchLog->pageCalls === [] : $shortSearchLog->pageCalls !== []));
+            && ($expectedStatus === 400 ? $shortSearchLog->pageCalls === [] : $shortSearchLog->pageCalls !== [])
+    );
 }
 
 $zeroMinimumLog = new LogControllerTestLogRepository();
@@ -513,12 +613,14 @@ $zeroResponse = logController(
     new LogControllerTestNamespace(),
     new LogControllerTestView(),
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
     [],
     ['defaults' => ['server_side' => ['pagination' => ['min_search_str' => 0]]]],
 )->listDataAction();
-$check('list-data zero minimum explicitly permits short searches',
-    $zeroResponse->status === 200 && ($zeroMinimumLog->pageCalls[0][2] ?? null) === 'abc');
+$check(
+    'list-data zero minimum explicitly permits short searches',
+    $zeroResponse->status === 200 && ($zeroMinimumLog->pageCalls[0][2] ?? null) === 'abc'
+);
 
 $malformedMinimumRejected = false;
 try {
@@ -527,15 +629,17 @@ try {
         new LogControllerTestNamespace(),
         new LogControllerTestView(),
         new LogControllerTestStorage(['identity' => ['id' => 1]]),
-        static fn(int $id): object => $super,
+        static fn (int $id): object => $super,
         [],
         ['defaults' => ['server_side' => ['pagination' => ['min_search_str' => ['4']]]]],
     )->listDataAction();
 } catch (\TypeError $e) {
     $malformedMinimumRejected = $e->getMessage() === 'min_search_str must be a non-negative integer';
 }
-$check('list-data malformed minimum configuration fails closed before repository access',
-    $malformedMinimumRejected);
+$check(
+    'list-data malformed minimum configuration fails closed before repository access',
+    $malformedMinimumRejected
+);
 $_GET = [];
 
 $serverSideLog = new LogControllerTestLogRepository([['action' => 'must-not-load']]);
@@ -545,12 +649,14 @@ logController(
     new LogControllerTestNamespace(),
     $serverSideView,
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
     [],
     ['defaults' => ['server_side' => ['pagination' => ['log' => ['enable' => true]]]]],
 )->listAction();
-$check('server-side list renders without materialising all log rows',
-    $serverSideLog->loadCalls === [] && $serverSideView->assigned['logs'] === []);
+$check(
+    'server-side list renders without materialising all log rows',
+    $serverSideLog->loadCalls === [] && $serverSideView->assigned['logs'] === []
+);
 
 $missingPaginationConfigLog = new LogControllerTestLogRepository([['action' => 'must-not-load']]);
 $missingPaginationConfigView = new LogControllerTestView();
@@ -559,11 +665,13 @@ logController(
     new LogControllerTestNamespace(),
     $missingPaginationConfigView,
     new LogControllerTestStorage(['identity' => ['id' => 1]]),
-    static fn(int $id): object => $super,
+    static fn (int $id): object => $super,
 )->listAction();
-$check('missing log pagination config defaults to server-side list',
+$check(
+    'missing log pagination config defaults to server-side list',
     $missingPaginationConfigLog->loadCalls === []
-    && ($missingPaginationConfigView->assigned['logs'] ?? null) === []);
+    && ($missingPaginationConfigView->assigned['logs'] ?? null) === []
+);
 
 $malformedDomainRejected = false;
 try {
@@ -572,7 +680,7 @@ try {
         new LogControllerTestNamespace(['domain' => 'invalid']),
         new LogControllerTestView(),
         new LogControllerTestStorage(['identity' => ['id' => 1]]),
-        static fn(int $id): object => $super,
+        static fn (int $id): object => $super,
     )->listAction();
 } catch (LogicException $e) {
     $malformedDomainRejected = $e->getMessage() === 'Stored domain has an invalid type';
@@ -586,7 +694,7 @@ try {
         new LogControllerTestNamespace(),
         new LogControllerTestView(),
         new LogControllerTestStorage(['identity' => ['id' => 7]]),
-        static fn(int $id): object => new stdClass(),
+        static fn (int $id): object => new stdClass(),
         [],
         logClientSideOptions(),
     )->listAction();
@@ -602,7 +710,7 @@ try {
         new LogControllerTestNamespace(),
         new LogControllerTestView(),
         new LogControllerTestStorage(['identity' => ['id' => 1]]),
-        static fn(int $id): object => $super,
+        static fn (int $id): object => $super,
         [],
         logClientSideOptions(),
     )->listAction();
@@ -618,7 +726,7 @@ try {
         new LogControllerTestNamespace(),
         new LogControllerTestView(),
         new LogControllerTestStorage(['identity' => ['id' => 1]]),
-        static fn(int $id): object => $super,
+        static fn (int $id): object => $super,
         [],
         logClientSideOptions(),
     )->listAction();
@@ -635,7 +743,7 @@ try {
         new LogControllerTestNamespace(),
         new LogControllerTestView(),
         new LogControllerTestStorage(['identity' => ['id' => 1]]),
-        static fn(int $id): object => $super,
+        static fn (int $id): object => $super,
         [],
         logClientSideOptions(),
     )->listAction();

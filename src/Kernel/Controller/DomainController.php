@@ -146,7 +146,7 @@ final class DomainController extends AbstractController
             '',                          // Backup MX (not sortable)
             'created',                   // Created
             '',                          // controls (not sortable)
-        ], static fn(?string $c): bool => $c !== null));
+        ], static fn (?string $c): bool => $c !== null));
 
         return ($columns[$index] ?? '') ?: 'domain';
     }

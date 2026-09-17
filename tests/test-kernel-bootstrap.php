@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: the framework-free bootstrap's pure pieces (WALL #2,
  * docs/ZF1-REMOVAL.md).
@@ -59,7 +60,9 @@ final class BootstrapObjectManager
 {
     public ?string $requestedClass = null;
 
-    public function __construct(private mixed $repository) {}
+    public function __construct(private mixed $repository)
+    {
+    }
 
     public function getRepository(string $className): mixed
     {
@@ -73,10 +76,13 @@ final class TestKernelBootstrapHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelBootstrapHarnessState::$count;
-function kernelBootstrapCheck(string $label, bool $ok): void {
+$failures = & TestKernelBootstrapHarnessState::$count;
+function kernelBootstrapCheck(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestKernelBootstrapHarnessState::$count++; }
+    if (!$ok) {
+        TestKernelBootstrapHarnessState::$count++;
+    }
 }
 
 function bootstrapAdminLoader(object $manager): callable
@@ -211,11 +217,13 @@ $configureSession->invoke(null, ['resources' => ['session' => [
     'cookie_secure' => false,
     'cookie_samesite' => 'Strict',
 ]]]);
-kernelBootstrapCheck('explicit session cookie overrides are preserved',
+kernelBootstrapCheck(
+    'explicit session cookie overrides are preserved',
     ini_get('session.use_only_cookies') === ''
     && ini_get('session.cookie_httponly') === ''
     && ini_get('session.cookie_secure') === ''
-    && ini_get('session.cookie_samesite') === 'Strict');
+    && ini_get('session.cookie_samesite') === 'Strict'
+);
 foreach ($originalSessionValues as $key => $value) {
     ini_set('session.' . $key, $value);
 }
@@ -228,10 +236,10 @@ $options = ['resources' => ['smarty' => ['skin' => '']], 'footer' => ['hide' => 
 
 $res = new NativeResources($options, $em, $view, $session);
 kernelBootstrapCheck('getResource(doctrine2) returns the EM', $res->getResource('doctrine2') === $em);
-kernelBootstrapCheck('getResource(smarty) returns the view',  $res->getResource('smarty') === $view);
+kernelBootstrapCheck('getResource(smarty) returns the view', $res->getResource('smarty') === $view);
 kernelBootstrapCheck('getResource(namespace) returns session', $res->getResource('namespace') === $session);
-kernelBootstrapCheck('unknown resource returns null',          $res->getResource('mailer') === null);
-kernelBootstrapCheck('getOptions returns the options array',   $res->getOptions() === $options);
+kernelBootstrapCheck('unknown resource returns null', $res->getResource('mailer') === null);
+kernelBootstrapCheck('getOptions returns the options array', $res->getOptions() === $options);
 
 // --- boot-time auth wiring validates the persistence boundary --------------
 $admin = new stdClass();

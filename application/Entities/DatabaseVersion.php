@@ -39,7 +39,7 @@ class DatabaseVersion
     public function setVersion($version)
     {
         $this->version = $version;
-    
+
         return $this;
     }
 
@@ -84,7 +84,7 @@ class DatabaseVersion
     public function setName($name)
     {
         $this->name = $name;
-    
+
         return $this;
     }
 
@@ -107,7 +107,7 @@ class DatabaseVersion
     public function setAppliedOn($appliedOn)
     {
         $this->applied_on = $appliedOn;
-    
+
         return $this;
     }
 

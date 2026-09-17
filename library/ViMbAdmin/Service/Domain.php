@@ -49,8 +49,8 @@ class ViMbAdmin_Service_Domain
     public function toggleActive(\Entities\Domain $domain, \Entities\Admin $actor): bool
     {
         $domainName = $domain->requiredDomainName();
-        $domain->setActive( !$domain->getActive() );
-        $domain->setModified( new \DateTime() );
+        $domain->setActive(!$domain->getActive());
+        $domain->setModified(new \DateTime());
 
         $active = (bool) $domain->getActive();
 
@@ -58,7 +58,7 @@ class ViMbAdmin_Service_Domain
             $actor,
             $domain,
             $active ? \Entities\Log::ACTION_DOMAIN_ACTIVATE : \Entities\Log::ACTION_DOMAIN_DEACTIVATE,
-            "{$actor->getFormattedName()} " . ( $active ? 'activated' : 'deactivated' ) . " domain {$domainName}"
+            "{$actor->getFormattedName()} " . ($active ? 'activated' : 'deactivated') . " domain {$domainName}"
         );
 
         $this->em->flush();
@@ -79,11 +79,12 @@ class ViMbAdmin_Service_Domain
      */
     public function assignAdmin(\Entities\Domain $domain, \Entities\Admin $target, \Entities\Admin $actor): void
     {
-        if( $domain->getAdmins()->contains( $target ) )
-            throw new ViMbAdmin_Service_Exception( 'This admin is already assigned to the domain.' );
+        if ($domain->getAdmins()->contains($target)) {
+            throw new ViMbAdmin_Service_Exception('This admin is already assigned to the domain.');
+        }
 
         $domainName = $domain->requiredDomainName();
-        $target->addDomain( $domain );
+        $target->addDomain($domain);
 
         $this->log(
             $actor,
@@ -103,7 +104,7 @@ class ViMbAdmin_Service_Domain
     public function removeAdmin(\Entities\Domain $domain, \Entities\Admin $target, \Entities\Admin $actor): void
     {
         $domainName = $domain->requiredDomainName();
-        $target->removeDomain( $domain );
+        $target->removeDomain($domain);
 
         $this->log(
             $actor,
@@ -123,11 +124,11 @@ class ViMbAdmin_Service_Domain
      */
     public function purge(\Entities\Domain $domain): void
     {
-        $repository = $this->em->getRepository( '\\Entities\\Domain' );
+        $repository = $this->em->getRepository('\\Entities\\Domain');
         if (!method_exists($repository, 'purge')) {
             throw new \LogicException('Domain repository must implement purge().');
         }
-        $repository->purge( $domain );
+        $repository->purge($domain);
     }
 
     /**
@@ -139,14 +140,14 @@ class ViMbAdmin_Service_Domain
     {
         $domainName = $domain->requiredDomainName();
         if (!$isEdit) {
-            $this->em->persist( $domain );
+            $this->em->persist($domain);
         }
 
         $this->log(
             $actor,
             $domain,
             $isEdit ? \Entities\Log::ACTION_DOMAIN_EDIT : \Entities\Log::ACTION_DOMAIN_ADD,
-            "{$actor->getFormattedName()} " . ( $isEdit ? 'edited' : 'added' ) . " domain {$domainName}"
+            "{$actor->getFormattedName()} " . ($isEdit ? 'edited' : 'added') . " domain {$domainName}"
         );
 
         $this->em->flush();
@@ -160,12 +161,12 @@ class ViMbAdmin_Service_Domain
     private function log(\Entities\Admin $actor, \Entities\Domain $domain, string $action, string $message): void
     {
         $log = new \Entities\Log();
-        $log->setAction( $action );
-        $log->setData( $message );
-        $log->setAdmin( $actor );
-        $log->setDomain( $domain );
-        $log->setTimestamp( new \DateTime() );
+        $log->setAction($action);
+        $log->setData($message);
+        $log->setAdmin($actor);
+        $log->setDomain($domain);
+        $log->setTimestamp(new \DateTime());
 
-        $this->em->persist( $log );
+        $this->em->persist($log);
     }
 }

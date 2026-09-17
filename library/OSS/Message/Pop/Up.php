@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -46,44 +47,44 @@
  */
 class OSS_Message_Pop_Up extends OSS_Message
 {
-
     /**
      * Elements for the action area
-     * 
+     *
      * @var null|list<mixed>
      */
     private $actions = null;
-    
-    
-     /**
-     * Constructor
-     *
-     * @param mixed $message Message to display
-     * @param string $class  Message class
-     * @param bool $isHTML Htmk flag
-     * @return void
-     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
-     */
-    public function __construct( $message = '', $class = '', $isHTML = true )
+
+
+    /**
+    * Constructor
+    *
+    * @param mixed $message Message to display
+    * @param string $class  Message class
+    * @param bool $isHTML Htmk flag
+    * @return void
+    * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
+    */
+    public function __construct($message = '', $class = '', $isHTML = true)
     {
-        parent::__construct( $message, $class, $isHTML );
-        $this->setType( self::TYPE_POP_UP );
+        parent::__construct($message, $class, $isHTML);
+        $this->setType(self::TYPE_POP_UP);
     }
-    
+
     /**
      * Adding message box
      *
      * @param string $str Action description
      * @return void
      */
-    public function addAction( $str )
+    public function addAction($str)
     {
-        if( $this->actions === null )
+        if ($this->actions === null) {
             $this->actions = [];
+        }
 
         $this->actions[] = $str;
     }
-    
+
     /**
      * Getting messages
      *

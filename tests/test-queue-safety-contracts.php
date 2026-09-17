@@ -7,7 +7,9 @@ require __DIR__ . '/../library/ViMbAdmin/Setting.php';
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
-    if (!$ok) $failures++;
+    if (!$ok) {
+        $failures++;
+    }
 };
 
 final class QueueSafetyConnection
@@ -18,22 +20,34 @@ final class QueueSafetyConnection
     public array $calls = [];
 
     /** @param list<int|Throwable> $results */
-    public function __construct(array $results) { $this->results = $results; }
+    public function __construct(array $results)
+    {
+        $this->results = $results;
+    }
     /** @param array<int,mixed> $params */
     public function executeStatement(string $sql, array $params): int
     {
         $this->calls[] = [$sql, $params];
         $result = array_shift($this->results);
-        if ($result instanceof Throwable) throw $result;
-        if (!is_int($result)) throw new RuntimeException('missing fake result');
+        if ($result instanceof Throwable) {
+            throw $result;
+        }
+        if (!is_int($result)) {
+            throw new RuntimeException('missing fake result');
+        }
         return $result;
     }
 }
 
 final class QueueSafetyEntityManager
 {
-    public function __construct(private QueueSafetyConnection $connection) {}
-    public function getConnection(): QueueSafetyConnection { return $this->connection; }
+    public function __construct(private QueueSafetyConnection $connection)
+    {
+    }
+    public function getConnection(): QueueSafetyConnection
+    {
+        return $this->connection;
+    }
 }
 
 echo "== queue safety contracts ==\n";
@@ -42,27 +56,36 @@ $now = new DateTimeImmutable('2026-09-03T08:00:00+00:00');
 $claimTimestamp = new ReflectionMethod(ViMbAdmin_Setting::class, 'claimTimestamp');
 
 $updated = new QueueSafetyConnection([1]);
-$check('an expired timestamp is claimed with one conditional update',
+$check(
+    'an expired timestamp is claimed with one conditional update',
     $claimTimestamp->invoke(null, new QueueSafetyEntityManager($updated), 'gate', $cutoff, $now) === true
     && count($updated->calls) === 1
     && str_contains($updated->calls[0][0], 'CAST(value AS UNSIGNED) < ?')
-    && $updated->calls[0][1] === [(string) $now->getTimestamp(), 'gate', $cutoff->getTimestamp()]);
+    && $updated->calls[0][1] === [(string) $now->getTimestamp(), 'gate', $cutoff->getTimestamp()]
+);
 
 $inserted = new QueueSafetyConnection([0, 1]);
-$check('an absent timestamp is claimed with a race-safe insert-ignore',
+$check(
+    'an absent timestamp is claimed with a race-safe insert-ignore',
     $claimTimestamp->invoke(null, new QueueSafetyEntityManager($inserted), 'gate', $cutoff, $now) === true
     && count($inserted->calls) === 2
-    && str_contains($inserted->calls[1][0], 'INSERT IGNORE'));
+    && str_contains($inserted->calls[1][0], 'INSERT IGNORE')
+);
 
 $lost = new QueueSafetyConnection([0, 0]);
-$check('a concurrent timestamp winner closes the gate',
-    $claimTimestamp->invoke(null, new QueueSafetyEntityManager($lost), 'gate', $cutoff, $now) === false);
+$check(
+    'a concurrent timestamp winner closes the gate',
+    $claimTimestamp->invoke(null, new QueueSafetyEntityManager($lost), 'gate', $cutoff, $now) === false
+);
 
 $propagated = false;
 try {
-    $claimTimestamp->invoke(null,
+    $claimTimestamp->invoke(
+        null,
         new QueueSafetyEntityManager(new QueueSafetyConnection([new RuntimeException('setting unavailable')])),
-        'gate', $cutoff, $now
+        'gate',
+        $cutoff,
+        $now
     );
 } catch (RuntimeException $e) {
     $propagated = $e->getMessage() === 'setting unavailable';

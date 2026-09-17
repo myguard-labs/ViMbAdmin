@@ -15,8 +15,7 @@ function bruteForceWorker(
     string $barrier,
     string $ready,
     string $attempts,
-): void
-{
+): void {
     $_SERVER['REMOTE_ADDR'] = $ip;
     unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 
@@ -191,12 +190,18 @@ $workerResult = bruteForceRunWorkers($stateDirectory, $ip, $syncDirectory, $work
 $stateFile = bruteForceStatePath($stateDirectory, $ip);
 $decoded = is_file($stateFile) ? json_decode((string) file_get_contents($stateFile), true) : null;
 
-bruteForceCheck('all synchronized worker processes complete within the bound',
-    $workerResult['ready'] && $workerResult['successful'] && $workerResult['errors'] === '');
-bruteForceCheck('synchronized processes retain the exact failed-attempt count',
-    is_array($decoded) && ($decoded['attempts'] ?? null) === $workers * $attemptsPerWorker);
-bruteForceCheck('atomic updates preserve the compatible state shape',
-    is_array($decoded) && array_keys($decoded) === ['attempts', 'first', 'last', 'locked_until']);
+bruteForceCheck(
+    'all synchronized worker processes complete within the bound',
+    $workerResult['ready'] && $workerResult['successful'] && $workerResult['errors'] === ''
+);
+bruteForceCheck(
+    'synchronized processes retain the exact failed-attempt count',
+    is_array($decoded) && ($decoded['attempts'] ?? null) === $workers * $attemptsPerWorker
+);
+bruteForceCheck(
+    'atomic updates preserve the compatible state shape',
+    is_array($decoded) && array_keys($decoded) === ['attempts', 'first', 'last', 'locked_until']
+);
 $_SERVER['REMOTE_ADDR'] = '192.0.2.81';
 (new ViMbAdmin_BruteForce(null, ['statedir' => $stateDirectory]))->record('second-source', null);
 $stateEntries = scandir($stateDirectory);
@@ -206,14 +211,14 @@ $stateEntries = scandir($stateDirectory);
 $lockEntries = is_array($stateEntries)
     ? array_values(array_filter(
         $stateEntries,
-        static fn(string $entry): bool => str_starts_with($entry, '.lock'),
+        static fn (string $entry): bool => str_starts_with($entry, '.lock'),
     ))
     : [];
 bruteForceCheck(
     'source addresses use only fixed, bounded lock shard inodes',
     $lockEntries !== [] && $lockEntries === array_values(array_filter(
         $lockEntries,
-        static fn(string $entry): bool => preg_match('/^\.lock\.[0-9a-f]{2}$/D', $entry) === 1,
+        static fn (string $entry): bool => preg_match('/^\.lock\.[0-9a-f]{2}$/D', $entry) === 1,
     )),
 );
 
@@ -222,15 +227,17 @@ if ($lockHolder === false || !flock($lockHolder, LOCK_EX | LOCK_NB)) {
     throw new RuntimeException('could not establish the brute-force lock-contention fixture');
 }
 $lockWaitStarted = hrtime(true);
-$lockDenied = bruteForcePersistenceDenied(static function() use ($stateDirectory): void {
+$lockDenied = bruteForcePersistenceDenied(static function () use ($stateDirectory): void {
     $_SERVER['REMOTE_ADDR'] = '192.0.2.82';
     (new ViMbAdmin_BruteForce(null, ['statedir' => $stateDirectory]))->assertNotLocked(null);
 });
 $lockWait = (hrtime(true) - $lockWaitStarted) / 1_000_000_000;
 flock($lockHolder, LOCK_UN);
 fclose($lockHolder);
-bruteForceCheck('pre-auth lock contention fails closed within a bounded wait',
-    $lockDenied && $lockWait >= 0.9 && $lockWait < 2.5);
+bruteForceCheck(
+    'pre-auth lock contention fails closed within a bounded wait',
+    $lockDenied && $lockWait >= 0.9 && $lockWait < 2.5
+);
 
 $thresholdDirectory = $root . '/threshold';
 $_SERVER['REMOTE_ADDR'] = '192.0.2.78';
@@ -243,14 +250,16 @@ $threshold = new ViMbAdmin_BruteForce(null, [
 $threshold->record('first', null);
 $lockedAfterFirst = $threshold->isLocked(null);
 $threshold->record('second', null);
-bruteForceCheck('the configured threshold still locks on the second attempt',
-    !$lockedAfterFirst && $threshold->isLocked(null));
+bruteForceCheck(
+    'the configured threshold still locks on the second attempt',
+    !$lockedAfterFirst && $threshold->isLocked(null)
+);
 
 $occupied = $root . '/occupied';
 file_put_contents($occupied, 'not a directory');
 $mkdirFailure = new ViMbAdmin_BruteForce(null, ['statedir' => $occupied . '/state']);
 bruteForceCheck('state-directory creation failure denies before authentication', bruteForcePersistenceDenied(
-    static function() use ($mkdirFailure): void {
+    static function () use ($mkdirFailure): void {
         $mkdirFailure->assertNotLocked(null);
     },
 ));
@@ -274,7 +283,7 @@ bruteForceCreateDirectory($deleteState);
 $deleteFailure = new ViMbAdmin_BruteForce(null, ['statedir' => $deleteDirectory]);
 $_SERVER['REMOTE_ADDR'] = $deleteIp;
 bruteForceCheck('state removal failure denies persistence', bruteForcePersistenceDenied(
-    static function() use ($deleteFailure): void {
+    static function () use ($deleteFailure): void {
         $deleteFailure->clear('delete-failure', null);
     },
 ));
@@ -285,7 +294,7 @@ bruteForceCreateDirectory($writeDirectory);
 $writeState = bruteForceStatePath($writeDirectory, $writeIp);
 bruteForceCreateDirectory($writeState . '.' . getmypid() . '.tmp');
 $writeFailure = new ViMbAdmin_BruteForce(null, ['statedir' => $writeDirectory]);
-$writeDenied = bruteForcePersistenceDenied(static function() use ($writeFailure, $writeIp): void {
+$writeDenied = bruteForcePersistenceDenied(static function () use ($writeFailure, $writeIp): void {
     (new ReflectionMethod($writeFailure, '_save'))->invoke($writeFailure, $writeIp, [
         'attempts' => 1,
         'first' => time(),
@@ -301,7 +310,7 @@ $renameIp = '192.0.2.80';
 $renameState = bruteForceStatePath($renameDirectory, $renameIp);
 bruteForceCreateDirectory($renameState);
 $renameFailure = new ViMbAdmin_BruteForce(null, ['statedir' => $renameDirectory]);
-$renameDenied = bruteForcePersistenceDenied(static function() use ($renameFailure, $renameIp): void {
+$renameDenied = bruteForcePersistenceDenied(static function () use ($renameFailure, $renameIp): void {
     (new ReflectionMethod($renameFailure, '_save'))->invoke($renameFailure, $renameIp, [
         'attempts' => 1,
         'first' => time(),
@@ -309,8 +318,10 @@ $renameDenied = bruteForcePersistenceDenied(static function() use ($renameFailur
         'locked_until' => 0,
     ]);
 });
-bruteForceCheck('atomic rename failure denies persistence and removes the temporary file',
-    $renameDenied && !is_file($renameState . '.' . getmypid() . '.tmp'));
+bruteForceCheck(
+    'atomic rename failure denies persistence and removes the temporary file',
+    $renameDenied && !is_file($renameState . '.' . getmypid() . '.tmp')
+);
 
 bruteForceCheck('fixed assertion count', BruteForceAtomicStateAssertions::$checks === 11);
 

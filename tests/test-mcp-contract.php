@@ -13,17 +13,33 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 
 final class McpContractSession implements SessionStorage
 {
-    public function has(string $key): bool { return false; }
-    public function get(string $key): mixed { return null; }
-    public function set(string $key, mixed $value): void {}
-    public function remove(string $key): void {}
+    public function has(string $key): bool
+    {
+        return false;
+    }
+    public function get(string $key): mixed
+    {
+        return null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+    }
+    public function remove(string $key): void
+    {
+    }
 }
 
 final class McpContractResources
 {
     /** @return array<string,mixed> */
-    public function getOptions(): array { return []; }
-    public function getResource(string $name): object { return new stdClass(); }
+    public function getOptions(): array
+    {
+        return [];
+    }
+    public function getResource(string $name): object
+    {
+        return new stdClass();
+    }
 }
 
 function mcpContractController(): McpController
@@ -31,7 +47,7 @@ function mcpContractController(): McpController
     $session = new McpContractSession();
     $container = new Container(
         new McpContractResources(),
-        new Auth($session, static fn(int $id): null => null),
+        new Auth($session, static fn (int $id): null => null),
     );
     return new McpController(
         $container,
@@ -140,17 +156,21 @@ $expected = [
 ];
 $controller = mcpContractController();
 $archiveResult = new ReflectionMethod($controller, '_mailboxArchiveResult');
-mcpContractCheck('duplicate archive requests report an idempotent already-queued result',
+mcpContractCheck(
+    'duplicate archive requests report an idempotent already-queued result',
     $archiveResult->invoke(null, false, 'user@example.test') === [
         'queued' => false,
         'already_queued' => true,
         'username' => 'user@example.test',
-    ]);
-mcpContractCheck('new archive requests retain the existing queued response',
+    ]
+);
+mcpContractCheck(
+    'new archive requests retain the existing queued response',
     $archiveResult->invoke(null, true, 'user@example.test') === [
         'queued' => 'ARCHIVE',
         'username' => 'user@example.test',
-    ]);
+    ]
+);
 $table = (new ReflectionMethod($controller, '_methodTable'))->invoke($controller);
 $actual = [];
 $handlersValid = is_array($table);
@@ -166,14 +186,18 @@ foreach ($expected as $method => $definition) {
         'destructive' => $row['destructive'] ?? null,
     ];
 }
-mcpContractCheck('the complete shipped method set has one authoritative definition',
-    $actual === $expected && is_array($table) && count($table) === count($expected));
+mcpContractCheck(
+    'the complete shipped method set has one authoritative definition',
+    $actual === $expected && is_array($table) && count($table) === count($expected)
+);
 mcpContractCheck('every table row carries its direct dispatch closure', $handlersValid);
 $pingDefinition = (new ReflectionMethod($controller, '_methodDefinition'))->invoke($controller, 'ping');
 $pingHandler = is_array($pingDefinition) ? ($pingDefinition['handler'] ?? null) : null;
 $pingResult = $pingHandler instanceof Closure ? $pingHandler([]) : null;
-mcpContractCheck('dispatch executes the handler obtained directly from the authoritative row',
-    is_array($pingResult) && ($pingResult['pong'] ?? null) === true);
+mcpContractCheck(
+    'dispatch executes the handler obtained directly from the authoritative row',
+    is_array($pingResult) && ($pingResult['pong'] ?? null) === true
+);
 
 $unknownMethod = null;
 try {
@@ -181,49 +205,69 @@ try {
 } catch (ViMbAdmin_Mcp_ProtocolException $error) {
     $unknownMethod = $error->rpcCode();
 }
-mcpContractCheck('unknown methods fail before dispatch, scope or destructive classification',
-    $unknownMethod === -32601);
+mcpContractCheck(
+    'unknown methods fail before dispatch, scope or destructive classification',
+    $unknownMethod === -32601
+);
 
 $valid = ViMbAdmin_Mcp_Request::parse('{"jsonrpc":"2.0","id":"req-7","method":"domains.list","params":{}}');
-mcpContractCheck('valid request objects preserve method, named params and string ids',
-    $valid === ['jsonrpc' => '2.0', 'id' => 'req-7', 'method' => 'domains.list', 'params' => []]);
+mcpContractCheck(
+    'valid request objects preserve method, named params and string ids',
+    $valid === ['jsonrpc' => '2.0', 'id' => 'req-7', 'method' => 'domains.list', 'params' => []]
+);
 $emptyPositional = ViMbAdmin_Mcp_Request::parse('{"jsonrpc":"2.0","id":8,"method":"ping","params":[]}');
-mcpContractCheck('the existing empty positional params compatibility is preserved',
-    $emptyPositional['id'] === 8 && $emptyPositional['params'] === []);
+mcpContractCheck(
+    'the existing empty positional params compatibility is preserved',
+    $emptyPositional['id'] === 8 && $emptyPositional['params'] === []
+);
 
-mcpContractCheck('malformed JSON alone maps to parse error',
-    mcpProtocolFailure('{')['code'] === -32700);
+mcpContractCheck(
+    'malformed JSON alone maps to parse error',
+    mcpProtocolFailure('{')['code'] === -32700
+);
 foreach (['[]', '[{"jsonrpc":"2.0","id":1,"method":"ping"}]', 'null', '7', '{}'] as $request) {
     $failure = mcpProtocolFailure($request);
-    mcpContractCheck("well-formed non-request {$request} maps to invalid request",
-        $failure['code'] === -32600 && $failure['id'] === null && $failure['respond'] === true);
+    mcpContractCheck(
+        "well-formed non-request {$request} maps to invalid request",
+        $failure['code'] === -32600 && $failure['id'] === null && $failure['respond'] === true
+    );
 }
 $wrongVersion = mcpProtocolFailure('{"jsonrpc":"1.0","id":"version-id","method":"ping"}');
-mcpContractCheck('wrong JSON-RPC versions are invalid requests with id correlation',
-    $wrongVersion['code'] === -32600 && $wrongVersion['id'] === 'version-id');
+mcpContractCheck(
+    'wrong JSON-RPC versions are invalid requests with id correlation',
+    $wrongVersion['code'] === -32600 && $wrongVersion['id'] === 'version-id'
+);
 $missingVersion = mcpProtocolFailure('{"id":9,"method":"ping"}');
-mcpContractCheck('missing JSON-RPC versions are invalid requests with id correlation',
-    $missingVersion['code'] === -32600 && $missingVersion['id'] === 9);
+mcpContractCheck(
+    'missing JSON-RPC versions are invalid requests with id correlation',
+    $missingVersion['code'] === -32600 && $missingVersion['id'] === 9
+);
 $invalidMethod = mcpProtocolFailure('{"jsonrpc":"2.0","id":10,"method":[]}');
-mcpContractCheck('non-string method members are invalid requests',
-    $invalidMethod['code'] === -32600 && $invalidMethod['id'] === 10);
+mcpContractCheck(
+    'non-string method members are invalid requests',
+    $invalidMethod['code'] === -32600 && $invalidMethod['id'] === 10
+);
 foreach ([
     '{}' => '{}',
     'wrong version without id' => '{"jsonrpc":"1.0","method":"ping"}',
     'bad method without id' => '{"jsonrpc":"2.0","method":[]}',
 ] as $shape => $request) {
     $invalidMissingId = mcpProtocolFailure($request);
-    mcpContractCheck("{$shape} remains an invalid request response, not a notification",
+    mcpContractCheck(
+        "{$shape} remains an invalid request response, not a notification",
         $invalidMissingId['respond'] === true
             && in_array($invalidMissingId['code'], [-32600, -32602], true)
-            && $invalidMissingId['id'] === null);
+            && $invalidMissingId['id'] === null
+    );
 }
 $invalidObjectResponse = mcpProtocolResponse($controller, mcpProtocolException('{}'));
 $invalidObjectBody = mcpErrorBody($invalidObjectResponse);
-mcpContractCheck('invalid missing-id objects retain an HTTP 200 JSON-RPC envelope',
+mcpContractCheck(
+    'invalid missing-id objects retain an HTTP 200 JSON-RPC envelope',
     $invalidObjectResponse->status === 200
         && $invalidObjectBody['id'] === null
-        && $invalidObjectBody['error']['code'] === -32600);
+        && $invalidObjectBody['error']['code'] === -32600
+);
 foreach ([
     'no params' => '{"jsonrpc":"2.0","method":"ping"}',
     'invalid null params' => '{"jsonrpc":"2.0","method":"ping","params":null}',
@@ -231,11 +275,13 @@ foreach ([
 ] as $shape => $request) {
     $notificationError = mcpProtocolException($request);
     $notificationResponse = mcpProtocolResponse($controller, $notificationError);
-    mcpContractCheck("notification-shaped calls with {$shape} are rejected without a JSON-RPC response",
+    mcpContractCheck(
+        "notification-shaped calls with {$shape} are rejected without a JSON-RPC response",
         $notificationError->rpcCode() === -32600
             && $notificationError->shouldRespond() === false
             && $notificationResponse->status === 400
-            && $notificationResponse->body === '');
+            && $notificationResponse->body === ''
+    );
 }
 foreach ([
     'null' => '{"jsonrpc":"2.0","id":null,"method":"ping"}',
@@ -244,27 +290,37 @@ foreach ([
     'container' => '{"jsonrpc":"2.0","id":[],"method":"ping"}',
 ] as $shape => $request) {
     $invalidId = mcpProtocolFailure($request);
-    mcpContractCheck("{$shape} request ids cannot execute as notifications",
-        $invalidId['code'] === -32600 && $invalidId['id'] === null);
+    mcpContractCheck(
+        "{$shape} request ids cannot execute as notifications",
+        $invalidId['code'] === -32600 && $invalidId['id'] === null
+    );
 }
 foreach (['null', '"domain"', '["example.test"]'] as $params) {
     $failure = mcpProtocolFailure('{"jsonrpc":"2.0","id":11,"method":"domains.list","params":' . $params . '}');
-    mcpContractCheck("parameter shape {$params} maps to invalid params",
-        $failure['code'] === -32602 && $failure['id'] === 11);
+    mcpContractCheck(
+        "parameter shape {$params} maps to invalid params",
+        $failure['code'] === -32602 && $failure['id'] === 11
+    );
 }
 
-mcpContractCheck('canonical identities preserve web trim/lowercase behaviour',
-    ViMbAdmin_Identity::canonical('  User@Example.TEST  ') === 'user@example.test');
-mcpContractCheck('valid exact MCP identities use the same lowercase canonical form',
-    ViMbAdmin_Mcp_Input::identity('User@Example.TEST', 'param "username"', true) === 'user@example.test');
+mcpContractCheck(
+    'canonical identities preserve web trim/lowercase behaviour',
+    ViMbAdmin_Identity::canonical('  User@Example.TEST  ') === 'user@example.test'
+);
+mcpContractCheck(
+    'valid exact MCP identities use the same lowercase canonical form',
+    ViMbAdmin_Mcp_Input::identity('User@Example.TEST', 'param "username"', true) === 'user@example.test'
+);
 $whitespaceRejected = false;
 try {
     ViMbAdmin_Mcp_Input::identity(' user@example.test ', 'param "username"', true);
 } catch (ViMbAdmin_Mcp_Exception $error) {
     $whitespaceRejected = $error->getMessage() === 'param "username" must not contain surrounding whitespace';
 }
-mcpContractCheck('MCP identity parameters reject surrounding whitespace instead of silently retargeting',
-    $whitespaceRejected);
+mcpContractCheck(
+    'MCP identity parameters reject surrounding whitespace instead of silently retargeting',
+    $whitespaceRejected
+);
 foreach (["\u{00A0}", "\u{2003}"] as $unicodeWhitespace) {
     $unicodeRejected = false;
     try {
@@ -286,8 +342,10 @@ try {
 }
 mcpContractCheck('MCP identity parameters reject invalid UTF-8 deterministically', $invalidUtf8Rejected);
 $token = (new Entities\McpToken())->setAllowedDomains(' Example.TEST, OTHER.test ');
-mcpContractCheck('domain authorization shares canonical case and whitespace handling',
-    $token->allowsDomain('EXAMPLE.test') && $token->allowsDomain('other.TEST') && !$token->allowsDomain('outside.test'));
+mcpContractCheck(
+    'domain authorization shares canonical case and whitespace handling',
+    $token->allowsDomain('EXAMPLE.test') && $token->allowsDomain('other.TEST') && !$token->allowsDomain('outside.test')
+);
 
 $invalidParamsResponse = mcpApplicationError(
     $controller,
@@ -301,10 +359,14 @@ $stateResponse = mcpApplicationError(
 );
 $invalidParamsBody = mcpErrorBody($invalidParamsResponse);
 $stateBody = mcpErrorBody($stateResponse);
-mcpContractCheck('parameter-shape failures retain -32602 and their request id',
-    $invalidParamsBody['id'] === 'params-id' && $invalidParamsBody['error']['code'] === -32602);
-mcpContractCheck('domain and state conflicts use the documented server range with id correlation',
-    $stateBody['id'] === 'state-id' && $stateBody['error']['code'] === -32010);
+mcpContractCheck(
+    'parameter-shape failures retain -32602 and their request id',
+    $invalidParamsBody['id'] === 'params-id' && $invalidParamsBody['error']['code'] === -32602
+);
+mcpContractCheck(
+    'domain and state conflicts use the documented server range with id correlation',
+    $stateBody['id'] === 'state-id' && $stateBody['error']['code'] === -32010
+);
 
 echo McpContractState::$failures === 0
     ? "\nALL PASSED\n"

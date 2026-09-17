@@ -39,15 +39,23 @@ final class QueueRunCommand implements CliCommand
         $options = $container->options();
         $max = 5;
         if (array_key_exists('queue', $options)) {
-            if (!is_array($options['queue'])) throw new \TypeError('queue options must be an array');
+            if (!is_array($options['queue'])) {
+                throw new \TypeError('queue options must be an array');
+            }
             if (array_key_exists('runner', $options['queue'])) {
-                if (!is_array($options['queue']['runner'])) throw new \TypeError('queue.runner options must be an array');
+                if (!is_array($options['queue']['runner'])) {
+                    throw new \TypeError('queue.runner options must be an array');
+                }
                 if (array_key_exists('max_per_run', $options['queue']['runner'])) {
                     $rawMax = $options['queue']['runner']['max_per_run'];
-                    if (is_int($rawMax) && $rawMax > 0) $max = $rawMax;
-                    elseif (is_string($rawMax) && preg_match('/^[1-9][0-9]*$/D', $rawMax) === 1
-                        && filter_var($rawMax, FILTER_VALIDATE_INT) !== false) $max = (int) $rawMax;
-                    else throw new \TypeError('max_per_run must be a positive integer');
+                    if (is_int($rawMax) && $rawMax > 0) {
+                        $max = $rawMax;
+                    } elseif (is_string($rawMax) && preg_match('/^[1-9][0-9]*$/D', $rawMax) === 1
+                        && filter_var($rawMax, FILTER_VALIDATE_INT) !== false) {
+                        $max = (int) $rawMax;
+                    } else {
+                        throw new \TypeError('max_per_run must be a positive integer');
+                    }
                 }
             }
         }

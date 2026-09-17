@@ -216,7 +216,7 @@ class Domain
         $this->Preferences = new \Doctrine\Common\Collections\ArrayCollection();
         $this->Archives = new \Doctrine\Common\Collections\ArrayCollection();
     }
-    
+
     /**
      * Set domain
      *
@@ -226,7 +226,7 @@ class Domain
     public function setDomain($domain)
     {
         $this->domain = $domain;
-    
+
         return $this;
     }
 
@@ -259,7 +259,7 @@ class Domain
     public function setDescription($description)
     {
         $this->description = $description;
-    
+
         return $this;
     }
 
@@ -302,7 +302,7 @@ class Domain
     public function setQuota($quota)
     {
         $this->quota = $quota;
-    
+
         return $this;
     }
 
@@ -335,7 +335,7 @@ class Domain
     public function setTransport($transport)
     {
         $this->transport = $transport;
-    
+
         return $this;
     }
 
@@ -358,7 +358,7 @@ class Domain
     public function setBackupmx($backupmx)
     {
         $this->backupmx = $backupmx;
-    
+
         return $this;
     }
 
@@ -381,7 +381,7 @@ class Domain
     public function setActive($active)
     {
         $this->active = $active;
-    
+
         return $this;
     }
 
@@ -404,7 +404,7 @@ class Domain
     public function setHomedir($homedir)
     {
         $this->homedir = $homedir;
-    
+
         return $this;
     }
 
@@ -427,7 +427,7 @@ class Domain
     public function setMaildir($maildir)
     {
         $this->maildir = $maildir;
-    
+
         return $this;
     }
 
@@ -450,7 +450,7 @@ class Domain
     public function setUid($uid)
     {
         $this->uid = $uid;
-    
+
         return $this;
     }
 
@@ -473,7 +473,7 @@ class Domain
     public function setGid($gid)
     {
         $this->gid = $gid;
-    
+
         return $this;
     }
 
@@ -496,7 +496,7 @@ class Domain
     public function setCreated($created)
     {
         $this->created = $created;
-    
+
         return $this;
     }
 
@@ -519,7 +519,7 @@ class Domain
     public function setModified($modified)
     {
         $this->modified = $modified;
-    
+
         return $this;
     }
 
@@ -562,7 +562,7 @@ class Domain
     public function addMailbox(\Entities\Mailbox $mailboxes)
     {
         $this->Mailboxes[] = $mailboxes;
-    
+
         return $this;
     }
 
@@ -586,7 +586,7 @@ class Domain
     public function addAlias(\Entities\Alias $aliases)
     {
         $this->Aliases[] = $aliases;
-    
+
         return $this;
     }
 
@@ -610,7 +610,7 @@ class Domain
     public function addLog(\Entities\Log $logs)
     {
         $this->Logs[] = $logs;
-    
+
         return $this;
     }
 
@@ -644,7 +644,7 @@ class Domain
     public function addAdmin(\Entities\Admin $admins)
     {
         $this->Admins[] = $admins;
-    
+
         return $this;
     }
 
@@ -668,7 +668,7 @@ class Domain
     {
         return $this->Admins;
     }
-   
+
 
 
     /**
@@ -680,7 +680,7 @@ class Domain
     public function setMaxAliases($maxAliases)
     {
         $this->max_aliases = $maxAliases;
-    
+
         return $this;
     }
 
@@ -703,7 +703,7 @@ class Domain
     public function setMaxMailboxes($maxMailboxes)
     {
         $this->max_mailboxes = $maxMailboxes;
-    
+
         return $this;
     }
 
@@ -728,7 +728,7 @@ class Domain
     public function setMaxQuota($maxQuota)
     {
         $this->max_quota = $maxQuota;
-    
+
         return $this;
     }
 
@@ -741,7 +741,7 @@ class Domain
     {
         return $this->max_quota;
     }
-    
+
 
 
     /**
@@ -783,8 +783,9 @@ class Domain
      */
     public function decreaseAliasCount()
     {
-        if( $this->alias_count > 0 )
+        if ($this->alias_count > 0) {
             $this->alias_count -= 1;
+        }
     }
 
 
@@ -828,8 +829,9 @@ class Domain
      */
     public function decreaseMailboxCount()
     {
-        if( $this->mailbox_count > 0 )
+        if ($this->mailbox_count > 0) {
             $this->mailbox_count -= 1;
+        }
     }
 
     /**
@@ -895,7 +897,7 @@ class Domain
     public function addPreference(\Entities\DomainPreference $preferences)
     {
         $this->Preferences[] = $preferences;
-    
+
         return $this;
     }
 
@@ -935,7 +937,7 @@ class Domain
     public function addArchive(\Entities\Archive $archives)
     {
         $this->Archives[] = $archives;
-    
+
         return $this;
     }
 

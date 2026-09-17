@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Smarty plugin
  *
@@ -27,7 +28,7 @@
  * @uses smarty_make_timestamp()
  * @see http://www.smarty.net/forums/viewtopic.php?t=10632
  */
-function smarty_modifier_date_formatter($string, $format=null, $default_date='', $formatter='auto')
+function smarty_modifier_date_formatter($string, $format = null, $default_date = '', $formatter = 'auto')
 {
     if ($format === null) {
         // Smarty 5 removed Smarty::$_DATE_FORMAT.
@@ -55,7 +56,7 @@ function smarty_modifier_date_formatter($string, $format=null, $default_date='',
         return;
     }
 
-    if ($formatter=='strftime'||($formatter=='auto'&&strpos($format,'%')!==false)) {
+    if ($formatter == 'strftime' || ($formatter == 'auto' && strpos($format, '%') !== false)) {
         if (DIRECTORY_SEPARATOR == '\\') {
             $_win_from = ['%D', '%h', '%n', '%r', '%R', '%t', '%T'];
             $_win_to = ['%m/%d/%y', '%b', "\n", '%I:%M:%S %p', '%H:%M', "\t", '%H:%M:%S'];

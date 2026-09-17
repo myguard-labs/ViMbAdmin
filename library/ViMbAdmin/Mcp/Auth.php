@@ -1,4 +1,5 @@
 <?php
+
 /**
  * MCP adapter authentication.
  *
@@ -25,14 +26,16 @@ class ViMbAdmin_Mcp_Auth
      * @param \Doctrine\ORM\EntityManagerInterface $em
      * @param array{mode?: scalar|null, proxies?: string|list<string>} $trustedProxy
      */
-    public function __construct( $em, array $trustedProxy = [] )
+    public function __construct($em, array $trustedProxy = [])
     {
         $this->_em = $em;
-        if( isset( $trustedProxy['mode'] ) )
+        if (isset($trustedProxy['mode'])) {
             $this->_proxyMode = (string) $trustedProxy['mode'];
-        if( isset( $trustedProxy['proxies'] ) )
-            $this->_proxies = is_array( $trustedProxy['proxies'] )
+        }
+        if (isset($trustedProxy['proxies'])) {
+            $this->_proxies = is_array($trustedProxy['proxies'])
                 ? $trustedProxy['proxies'] : [ $trustedProxy['proxies'] ];
+        }
     }
 
     /**
@@ -44,51 +47,55 @@ class ViMbAdmin_Mcp_Auth
      * @return \Entities\McpToken
      * @throws ViMbAdmin_Mcp_Exception
      */
-    public function authenticate( array $server, $scope = 'read' ): \Entities\McpToken
+    public function authenticate(array $server, $scope = 'read'): \Entities\McpToken
     {
-        $raw = $this->_bearer( $server );
-        if( $raw === null )
-            throw new ViMbAdmin_Mcp_Exception( 'missing or malformed Authorization: Bearer header', 401 );
+        $raw = $this->_bearer($server);
+        if ($raw === null) {
+            throw new ViMbAdmin_Mcp_Exception('missing or malformed Authorization: Bearer header', 401);
+        }
 
-        $hash       = hash( 'sha256', $raw );
-        $repository = $this->_em->getRepository( '\\Entities\\McpToken' );
-        if( !$repository instanceof \Repositories\McpToken )
-            throw new \LogicException( 'McpToken entity must use Repositories\\McpToken.' );
-        $token = $repository->findByHash( $hash );
+        $hash       = hash('sha256', $raw);
+        $repository = $this->_em->getRepository('\\Entities\\McpToken');
+        if (!$repository instanceof \Repositories\McpToken) {
+            throw new \LogicException('McpToken entity must use Repositories\\McpToken.');
+        }
+        $token = $repository->findByHash($hash);
 
         // Always execute an equal-length comparison, including repository misses
         // and malformed legacy rows, before deciding whether authentication fails.
         $knownHash = $token?->getTokenHash();
-        $comparableHash = is_string( $knownHash ) && strlen( $knownHash ) === 64
+        $comparableHash = is_string($knownHash) && strlen($knownHash) === 64
             ? $knownHash
-            : str_repeat( '0', 64 );
-        $hashMatches = hash_equals( $comparableHash, $hash );
-        if( $token === null || !is_string( $knownHash ) || !$hashMatches )
-            throw new ViMbAdmin_Mcp_Exception( 'invalid token', 401 );
+            : str_repeat('0', 64);
+        $hashMatches = hash_equals($comparableHash, $hash);
+        if ($token === null || !is_string($knownHash) || !$hashMatches) {
+            throw new ViMbAdmin_Mcp_Exception('invalid token', 401);
+        }
 
-        if( !$token->isActive() )
-            throw new ViMbAdmin_Mcp_Exception( 'token revoked or expired', 403 );
+        if (!$token->isActive()) {
+            throw new ViMbAdmin_Mcp_Exception('token revoked or expired', 403);
+        }
 
-        if( !$token->hasScope( $scope ) )
-            throw new ViMbAdmin_Mcp_Exception( "token lacks required scope '{$scope}'", 403 );
+        if (!$token->hasScope($scope)) {
+            throw new ViMbAdmin_Mcp_Exception("token lacks required scope '{$scope}'", 403);
+        }
 
-        $ip = $this->clientIp( $server );
-        if( !$this->_ipAllowed( $token, $ip ) )
-            throw new ViMbAdmin_Mcp_Exception( "source IP {$ip} not allowed for this token", 403 );
+        $ip = $this->clientIp($server);
+        if (!$this->_ipAllowed($token, $ip)) {
+            throw new ViMbAdmin_Mcp_Exception("source IP {$ip} not allowed for this token", 403);
+        }
 
         // touch last_used_at (best effort), but throttle the write: only
         // persist when the stored value is more than 60s stale, so a token
         // hammering read calls can't turn every request into a DB write.
-        try
-        {
+        try {
             $last = $token->getLastUsedAt();
-            if( $last === null || ( time() - $last->getTimestamp() ) > 60 )
-            {
-                $token->setLastUsedAt( new \DateTime() );
+            if ($last === null || (time() - $last->getTimestamp()) > 60) {
+                $token->setLastUsedAt(new \DateTime());
                 $this->_em->flush();
             }
+        } catch (\Throwable $e) { /* non-fatal */
         }
-        catch( \Throwable $e ) { /* non-fatal */ }
 
         return $token;
     }
@@ -97,24 +104,26 @@ class ViMbAdmin_Mcp_Auth
      * Resolve the client IP per the trusted-proxy policy (default 'auto').
      */
     /** @param array<string,mixed> $server */
-    public function clientIp( array $server ): string
+    public function clientIp(array $server): string
     {
-        return ViMbAdmin_Net::clientIp( $server, $this->_proxyMode, $this->_proxies );
+        return ViMbAdmin_Net::clientIp($server, $this->_proxyMode, $this->_proxies);
     }
 
     // ---- internals -----------------------------------------------------
 
     /** @param array<string,mixed> $server */
-    private function _bearer( array $server ): ?string
+    private function _bearer(array $server): ?string
     {
         $h = null;
-        if( isset( $server['HTTP_AUTHORIZATION'] ) )
+        if (isset($server['HTTP_AUTHORIZATION'])) {
             $h = $server['HTTP_AUTHORIZATION'];
-        elseif( isset( $server['REDIRECT_HTTP_AUTHORIZATION'] ) )
+        } elseif (isset($server['REDIRECT_HTTP_AUTHORIZATION'])) {
             $h = $server['REDIRECT_HTTP_AUTHORIZATION'];
+        }
 
-        if( !is_string( $h ) || !preg_match( '/^\s*Bearer\s+([A-Za-z0-9._\-]+)\s*$/', $h, $m ) )
+        if (!is_string($h) || !preg_match('/^\s*Bearer\s+([A-Za-z0-9._\-]+)\s*$/', $h, $m)) {
             return null;
+        }
 
         return $m[1];
     }
@@ -123,12 +132,13 @@ class ViMbAdmin_Mcp_Auth
      * Empty/null allowlist => any IP (the edge is the gate). Otherwise the IP
      * must match one of the space/comma-separated IP or CIDR entries.
      */
-    private function _ipAllowed( \Entities\McpToken $token, string $ip ): bool
+    private function _ipAllowed(\Entities\McpToken $token, string $ip): bool
     {
-        $list = trim( (string) $token->getAllowedIps() );
-        if( $list === '' )
+        $list = trim((string) $token->getAllowedIps());
+        if ($list === '') {
             return true;
+        }
 
-        return ViMbAdmin_Net::ipInList( $ip, $list );
+        return ViMbAdmin_Net::ipInList($ip, $list);
     }
 }

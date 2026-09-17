@@ -71,7 +71,7 @@ class RememberMe
     public function setUserhash($userhash)
     {
         $this->userhash = $userhash;
-    
+
         return $this;
     }
 
@@ -94,7 +94,7 @@ class RememberMe
     public function setCkey($ckey)
     {
         $this->ckey = $ckey;
-    
+
         return $this;
     }
 
@@ -117,7 +117,7 @@ class RememberMe
     public function setOriginalIp($originalIp)
     {
         $this->original_ip = $originalIp;
-    
+
         return $this;
     }
 
@@ -140,7 +140,7 @@ class RememberMe
     public function setExpires($expires)
     {
         $this->expires = $expires;
-    
+
         return $this;
     }
 
@@ -163,7 +163,7 @@ class RememberMe
     public function setCreated($created)
     {
         $this->created = $created;
-    
+
         return $this;
     }
 
@@ -196,7 +196,7 @@ class RememberMe
     public function setUser(?\Entities\Admin $user = null)
     {
         $this->User = $user;
-    
+
         return $this;
     }
 
@@ -225,7 +225,7 @@ class RememberMe
     public function setLastUsed($lastUsed)
     {
         $this->last_used = $lastUsed;
-    
+
         return $this;
     }
 

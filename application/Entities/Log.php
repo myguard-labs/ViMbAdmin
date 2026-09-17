@@ -12,36 +12,36 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'IX_Log_timestamp', columns: ['timestamp'])]
 class Log
 {
-    const ACTION_ARCHIVE_REQUEST      = 'ARCHIVE_REQUEST';
-    const ACTION_ARCHIVE_RESTORE      = 'ARCHIVE_RESTORE';
-    const ACTION_ARCHIVE_REQUEST_CANCEL = 'ARCHIVE_REQUEST_CANCEL';
-    const ACTION_ARCHIVE_RESTORE_CANCEL = 'ARCHIVE_RESTORE_CANCEL';
-    const ACTION_ARCHIVE_DELETE_CANCEL = 'ARCHIVE_DELETE_CANCEL';
-    const ACTION_DOMAIN_ADD           = 'DOMAIN_ADD';
-    const ACTION_DOMAIN_EDIT          = 'DOMAIN_EDIT';
-    const ACTION_DOMAIN_ACTIVATE      = 'DOMAIN_ACTIVATE';
-    const ACTION_DOMAIN_DEACTIVATE    = 'DOMAIN_DEACTIVATE';
-    const ACTION_MAILBOX_ADD          = 'MAILBOX_ADD';
-    const ACTION_MAILBOX_EDIT         = 'MAILBOX_EDIT';
-    const ACTION_MAILBOX_ACTIVATE     = 'MAILBOX_ACTIVATE';
-    const ACTION_MAILBOX_DEACTIVATE   = 'MAILBOX_DEACTIVATE';
-    const ACTION_MAILBOX_PURGE        = 'MAILBOX_PURGE';
-    const ACTION_MAILBOX_PW_CHANGE    = 'MAILBOX_PW_CHANGE';
-    const ACTION_ALIAS_ADD            = 'ALIAS_ADD';
-    const ACTION_ALIAS_EDIT           = 'ALIAS_EDIT';
-    const ACTION_ALIAS_ACTIVATE       = 'ALIAS_ACTIVATE';
-    const ACTION_ALIAS_DEACTIVATE     = 'ALIAS_DEACTIVATE';
-    const ACTION_ALIAS_DELETE         = 'ALIAS_DELETE';
-    const ACTION_ADMIN_ADD            = 'ADMIN_ADD';
-    const ACTION_ADMIN_ACTIVATE       = 'ADMIN_ACTIVE';
-    const ACTION_ADMIN_DEACTIVATE     = 'ADMIN_DEACTIVE';
-    const ACTION_ADMIN_SUPER          = 'ADMIN_SUPER';
-    const ACTION_ADMIN_NORMAL         = 'ADMIN_NORMAL';
-    const ACTION_ADMIN_PURGE          = 'ADMIN_PURGE';
-    const ACTION_ADMIN_PW_CHANGE      = 'ADMIN_PW_CHANGE';
-    const ACTION_ADMIN_TO_DOMAIN_ADD  = 'ADMIN_TO_DOMAIN_ADD';
-    const ACTION_ADMIN_TO_DOMAIN_REMOVE  = 'ADMIN_TO_DOMAIN_REMOVE';
-    const ACTION_MAINTENANCE          = 'MAINTENANCE';
+    public const ACTION_ARCHIVE_REQUEST      = 'ARCHIVE_REQUEST';
+    public const ACTION_ARCHIVE_RESTORE      = 'ARCHIVE_RESTORE';
+    public const ACTION_ARCHIVE_REQUEST_CANCEL = 'ARCHIVE_REQUEST_CANCEL';
+    public const ACTION_ARCHIVE_RESTORE_CANCEL = 'ARCHIVE_RESTORE_CANCEL';
+    public const ACTION_ARCHIVE_DELETE_CANCEL = 'ARCHIVE_DELETE_CANCEL';
+    public const ACTION_DOMAIN_ADD           = 'DOMAIN_ADD';
+    public const ACTION_DOMAIN_EDIT          = 'DOMAIN_EDIT';
+    public const ACTION_DOMAIN_ACTIVATE      = 'DOMAIN_ACTIVATE';
+    public const ACTION_DOMAIN_DEACTIVATE    = 'DOMAIN_DEACTIVATE';
+    public const ACTION_MAILBOX_ADD          = 'MAILBOX_ADD';
+    public const ACTION_MAILBOX_EDIT         = 'MAILBOX_EDIT';
+    public const ACTION_MAILBOX_ACTIVATE     = 'MAILBOX_ACTIVATE';
+    public const ACTION_MAILBOX_DEACTIVATE   = 'MAILBOX_DEACTIVATE';
+    public const ACTION_MAILBOX_PURGE        = 'MAILBOX_PURGE';
+    public const ACTION_MAILBOX_PW_CHANGE    = 'MAILBOX_PW_CHANGE';
+    public const ACTION_ALIAS_ADD            = 'ALIAS_ADD';
+    public const ACTION_ALIAS_EDIT           = 'ALIAS_EDIT';
+    public const ACTION_ALIAS_ACTIVATE       = 'ALIAS_ACTIVATE';
+    public const ACTION_ALIAS_DEACTIVATE     = 'ALIAS_DEACTIVATE';
+    public const ACTION_ALIAS_DELETE         = 'ALIAS_DELETE';
+    public const ACTION_ADMIN_ADD            = 'ADMIN_ADD';
+    public const ACTION_ADMIN_ACTIVATE       = 'ADMIN_ACTIVE';
+    public const ACTION_ADMIN_DEACTIVATE     = 'ADMIN_DEACTIVE';
+    public const ACTION_ADMIN_SUPER          = 'ADMIN_SUPER';
+    public const ACTION_ADMIN_NORMAL         = 'ADMIN_NORMAL';
+    public const ACTION_ADMIN_PURGE          = 'ADMIN_PURGE';
+    public const ACTION_ADMIN_PW_CHANGE      = 'ADMIN_PW_CHANGE';
+    public const ACTION_ADMIN_TO_DOMAIN_ADD  = 'ADMIN_TO_DOMAIN_ADD';
+    public const ACTION_ADMIN_TO_DOMAIN_REMOVE  = 'ADMIN_TO_DOMAIN_REMOVE';
+    public const ACTION_MAINTENANCE          = 'MAINTENANCE';
     /**
      * @var string $action
      */
@@ -97,7 +97,7 @@ class Log
     public function setAction($action)
     {
         $this->action = $action;
-    
+
         return $this;
     }
 
@@ -120,7 +120,7 @@ class Log
     public function setData($data)
     {
         $this->data = $data;
-    
+
         return $this;
     }
 
@@ -143,7 +143,7 @@ class Log
     public function setTimestamp($timestamp)
     {
         $this->timestamp = $timestamp;
-    
+
         return $this;
     }
 
@@ -176,7 +176,7 @@ class Log
     public function setAdmin(?\Entities\Admin $admin = null)
     {
         $this->Admin = $admin;
-    
+
         return $this;
     }
 
@@ -199,7 +199,7 @@ class Log
     public function setDomain(?\Entities\Domain $domain = null)
     {
         $this->Domain = $domain;
-    
+
         return $this;
     }
 

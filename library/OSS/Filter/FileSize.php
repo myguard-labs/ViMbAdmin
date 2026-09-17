@@ -1,4 +1,5 @@
 <?php
+
 /**
  * OSS Framework
  *
@@ -44,10 +45,10 @@
  */
 class OSS_Filter_FileSize
 {
-    const SIZE_BYTES     = "B";
-    const SIZE_KILOBYTES = "KB";
-    const SIZE_MEGABYTES = "MB";
-    const SIZE_GIGABYTES = "GB";
+    public const SIZE_BYTES     = "B";
+    public const SIZE_KILOBYTES = "KB";
+    public const SIZE_MEGABYTES = "MB";
+    public const SIZE_GIGABYTES = "GB";
 
     /** @var array<string,float> */
     public static $SIZE_MULTIPLIERS = [
@@ -82,42 +83,44 @@ class OSS_Filter_FileSize
      * @return void
      * @throws OSS_Exception If multiplier is not one of $SIZE_MULTIPLIERS KEY.
      */
-    public function __construct( $multiplier = null )
+    public function __construct($multiplier = null)
     {
-        if( $multiplier !== null )
-        	$this->setMultiplier( $multiplier );
+        if ($multiplier !== null) {
+            $this->setMultiplier($multiplier);
+        }
     }
-    
+
 
     /**
-	 * Set the multipler (the value by which integers are multiplied when, for
-	 * example, a text field makes it clear to the user than units are MB rather
-	 * than B).
-	 *
-	 * @param string $multiplier A key from self::$SIZE_MULTIPLIERS
-	 * @throws OSS_Exception
-	 * @return OSS_Filter_FileSize for fluent interfaces
+     * Set the multipler (the value by which integers are multiplied when, for
+     * example, a text field makes it clear to the user than units are MB rather
+     * than B).
+     *
+     * @param string $multiplier A key from self::$SIZE_MULTIPLIERS
+     * @throws OSS_Exception
+     * @return OSS_Filter_FileSize for fluent interfaces
      */
-    public function setMultiplier( $multiplier )
+    public function setMultiplier($multiplier)
     {
-        if( array_key_exists( strtoupper( $multiplier ), self::$SIZE_MULTIPLIERS ) )
-    		$this->_multiplier = strtoupper( $multiplier );
-    	else
-    		throw new OSS_Exception( "Trying to set unknown multiplier for FileSize filter." );
-    	
-    	return $this;
+        if (array_key_exists(strtoupper($multiplier), self::$SIZE_MULTIPLIERS)) {
+            $this->_multiplier = strtoupper($multiplier);
+        } else {
+            throw new OSS_Exception("Trying to set unknown multiplier for FileSize filter.");
+        }
+
+        return $this;
     }
 
     /**
-	 * Get the multipler (the value by which integers are multiplied when, for
-	 * example, a text field makes it clear to the user than units are MB rather
-	 * than B).
-	 *
-	 * @return string A key from self::$SIZE_MULTIPLIERS
+     * Get the multipler (the value by which integers are multiplied when, for
+     * example, a text field makes it clear to the user than units are MB rather
+     * than B).
+     *
+     * @return string A key from self::$SIZE_MULTIPLIERS
      */
     public function getMultiplier()
     {
-    	return $this->_multiplier;
+        return $this->_multiplier;
     }
 
     /**
@@ -134,51 +137,53 @@ class OSS_Filter_FileSize
      * @param int|float|string $value Value to parse as a size in bytes
      * @return int|float|string|false
      */
-    public function filter( $value )
+    public function filter($value)
     {
         $debug = debug_backtrace();
-        
-        foreach( $debug as $info )
-        {
-            if( $info['function'] == "render" )
-            {
-                if( is_numeric( $value ) )
-                    return self::unfilter( $value );
-                else
+
+        foreach ($debug as $info) {
+            if ($info['function'] == "render") {
+                if (is_numeric($value)) {
+                    return self::unfilter($value);
+                } else {
                     return $value;
+                }
             }
         }
-        
-        $value = str_replace( " ", "", (string) $value );
-        
-        if( substr_count( $value, "." ) > 1 )
-            return false;
 
-        $numericValue = preg_replace( "/[^0123456789\.]/", '', (string) $value );
-        
-        if( $numericValue == "" ||  $numericValue == 0 )
-            return 0;
-        
-        $subfix = false;
-        if( strlen( $value ) == strlen( $numericValue ) )
-            $subfix = $this->_multiplier;
-        else if( strlen( $value ) - strlen( $numericValue ) == 2 )
-            $subfix = strtoupper( substr( $value, -2 ) );
-        else if( strlen( $value ) - strlen( $numericValue ) == 1 )
-        {
-            $subfix = strtoupper( substr( $value, -1 ) );
-            if( $subfix != self::SIZE_BYTES )
-                $subfix .= self::SIZE_BYTES;
+        $value = str_replace(" ", "", (string) $value);
+
+        if (substr_count($value, ".") > 1) {
+            return false;
         }
-        else
-            return false;
 
-        
-        if( isset( self::$SIZE_MULTIPLIERS[ $subfix ] ) )
-            $value = (float) $numericValue * self::$SIZE_MULTIPLIERS[ $subfix ];
-        else
+        $numericValue = preg_replace("/[^0123456789\.]/", '', (string) $value);
+
+        if ($numericValue == "" ||  $numericValue == 0) {
+            return 0;
+        }
+
+        $subfix = false;
+        if (strlen($value) == strlen($numericValue)) {
+            $subfix = $this->_multiplier;
+        } elseif (strlen($value) - strlen($numericValue) == 2) {
+            $subfix = strtoupper(substr($value, -2));
+        } elseif (strlen($value) - strlen($numericValue) == 1) {
+            $subfix = strtoupper(substr($value, -1));
+            if ($subfix != self::SIZE_BYTES) {
+                $subfix .= self::SIZE_BYTES;
+            }
+        } else {
             return false;
-        
+        }
+
+
+        if (isset(self::$SIZE_MULTIPLIERS[ $subfix ])) {
+            $value = (float) $numericValue * self::$SIZE_MULTIPLIERS[ $subfix ];
+        } else {
+            return false;
+        }
+
         return $value;
     }
 
@@ -193,29 +198,25 @@ class OSS_Filter_FileSize
      * @param int|float|numeric-string $value Size in bytes
      * @return int|float|string
      */
-    public static function unfilter( $value )
+    public static function unfilter($value)
     {
-        if( !$value )
+        if (!$value) {
             return $value;
+        }
 
-        if( $value / self::$SIZE_MULTIPLIERS[ self::SIZE_KILOBYTES ] < 0.1 )
+        if ($value / self::$SIZE_MULTIPLIERS[ self::SIZE_KILOBYTES ] < 0.1) {
             $value = (float)"{$value}" . self::SIZE_BYTES;
-        elseif( $value / self::$SIZE_MULTIPLIERS[ self::SIZE_KILOBYTES ] >= 0.1 && $value / self::$SIZE_MULTIPLIERS[ self::SIZE_KILOBYTES ] < 900 )
-        {
+        } elseif ($value / self::$SIZE_MULTIPLIERS[ self::SIZE_KILOBYTES ] >= 0.1 && $value / self::$SIZE_MULTIPLIERS[ self::SIZE_KILOBYTES ] < 900) {
             $value = $value / self::$SIZE_MULTIPLIERS[ self::SIZE_KILOBYTES ];
             $value = (float)"{$value}" . self::SIZE_KILOBYTES;
-        }
-        elseif( $value / self::$SIZE_MULTIPLIERS[ self::SIZE_MEGABYTES ] >= 0.1 && $value / self::$SIZE_MULTIPLIERS[ self::SIZE_MEGABYTES ] < 900 )
-        {
+        } elseif ($value / self::$SIZE_MULTIPLIERS[ self::SIZE_MEGABYTES ] >= 0.1 && $value / self::$SIZE_MULTIPLIERS[ self::SIZE_MEGABYTES ] < 900) {
             $value = $value / self::$SIZE_MULTIPLIERS[ self::SIZE_MEGABYTES ];
             $value = (float)"{$value}" . self::SIZE_MEGABYTES;
-        }
-        elseif( $value / self::$SIZE_MULTIPLIERS[ self::SIZE_GIGABYTES ] >= 0.1 && $value / self::$SIZE_MULTIPLIERS[ self::SIZE_GIGABYTES ] < 900 )
-        {
+        } elseif ($value / self::$SIZE_MULTIPLIERS[ self::SIZE_GIGABYTES ] >= 0.1 && $value / self::$SIZE_MULTIPLIERS[ self::SIZE_GIGABYTES ] < 900) {
             $value = $value / self::$SIZE_MULTIPLIERS[ self::SIZE_GIGABYTES ];
             $value = (float)"{$value}" . self::SIZE_GIGABYTES;
         }
-        
+
         return $value;
     }
 

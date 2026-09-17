@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Regression test for the 2026-07-10 audit MAJOR: MCP create abilities must
  * enforce the SAME local_part / hostname shape the web forms enforce, so a
@@ -19,12 +20,14 @@ final class TestMcpInputValidationHarnessState
     public static int $count = 0;
 }
 
-$fail =& TestMcpInputValidationHarnessState::$count;
+$fail = & TestMcpInputValidationHarnessState::$count;
 function check(string $name, bool $ok): void
 {
 
     echo ($ok ? '  ok   ' : '  FAIL ') . $name . "\n";
-    if (!$ok) { TestMcpInputValidationHarnessState::$count++; }
+    if (!$ok) {
+        TestMcpInputValidationHarnessState::$count++;
+    }
 }
 
 $lp = Validators::localPart();

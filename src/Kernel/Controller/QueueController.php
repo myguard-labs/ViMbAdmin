@@ -265,7 +265,8 @@ final class QueueController extends AbstractController
         }
 
         $n = $this->em()->createQuery(
-            'DELETE FROM \\Entities\\MailboxTask t WHERE t.status IN (:done) AND t.abandoned = false')
+            'DELETE FROM \\Entities\\MailboxTask t WHERE t.status IN (:done) AND t.abandoned = false'
+        )
             ->setParameter('done', [
                 \Entities\MailboxTask::STATUS_DONE,
                 \Entities\MailboxTask::STATUS_FAILED,
@@ -339,7 +340,7 @@ final class QueueController extends AbstractController
         }
 
         $runner = new \ViMbAdmin_Service_QueueRunner($this->em(), $this->container->options());
-        $result = $runner->runOne($task, function(?\Throwable $error) use ($task, $admin): void {
+        $result = $runner->runOne($task, function (?\Throwable $error) use ($task, $admin): void {
             if ($error === null) {
                 $task->setStatus(\Entities\MailboxTask::STATUS_DONE);
                 $task->setRunner(null);

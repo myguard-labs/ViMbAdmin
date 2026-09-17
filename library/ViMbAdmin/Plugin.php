@@ -54,12 +54,12 @@ class ViMbAdmin_Plugin
      */
     protected $controller;
 
-    public function __construct( object $controller, string $classname )
+    public function __construct(object $controller, string $classname)
     {
         $this->controller = $controller;
 
         // set the plugin name
-        $this->name = strtolower( substr( $classname, 16 ) );
+        $this->name = strtolower(substr($classname, 16));
     }
 
     /**
@@ -77,17 +77,17 @@ class ViMbAdmin_Plugin
         string $hook,
         object $controllerObject,
         ?array $params = null
-    ): bool
-    {
+    ): bool {
         // typically the update() function will be pretty simple
         $hookfn = "{$controller}_{$action}_{$hook}";
-        if( method_exists( $this, $hookfn ) ) {
-            $result = $this->$hookfn( $controllerObject, $params );
-            if (!is_bool($result))
+        if (method_exists($this, $hookfn)) {
+            $result = $this->$hookfn($controllerObject, $params);
+            if (!is_bool($result)) {
                 throw new \TypeError('Plugin hook must return bool');
+            }
             return $result;
         }
-            
+
         return true;
     }
 
@@ -106,7 +106,7 @@ class ViMbAdmin_Plugin
      * Set the configuration
      * @param array<string,mixed> $config
      */
-    public function setConfig( $config ): static
+    public function setConfig($config): static
     {
         $this->config = $config;
 

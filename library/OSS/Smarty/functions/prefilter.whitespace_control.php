@@ -34,7 +34,7 @@
  * Any combination of the above, say {--tag+} is possible. Any + modifiers are executed before - modifiers, so
  *     "{tag+-}{--tag}" will lead to "{tag}{tag}"
  *
- * NOTE: {tag+} and {tag-+} cause two trailing \n. This is done because PHP itself throws away the first \n. 
+ * NOTE: {tag+} and {tag-+} cause two trailing \n. This is done because PHP itself throws away the first \n.
  * So \n\n in the template will lead to \n in the output
  *
  * @param string $string raw template source
@@ -42,7 +42,8 @@
  * @return string raw template source after whitespace control was applied
  * @author Rodney Rehm
  */
-function smarty_prefilter_whitespace_control($string, \Smarty\Template $template) {
+function smarty_prefilter_whitespace_control($string, \Smarty\Template $template)
+{
     $smarty = $template->getSmarty();
     $ldelim = $smarty->getLeftDelimiter();
     $rdelim = $smarty->getRightDelimiter();

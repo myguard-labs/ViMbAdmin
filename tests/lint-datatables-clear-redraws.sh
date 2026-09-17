@@ -126,14 +126,23 @@ done
 
 # The three list views that carried the removed path must keep existing, or
 # this check would silently pass by scanning nothing where it once scanned
-# something. Assert them, then scan EVERY discovered view JS file -- scoping
-# the scan to those three filenames would let the same dead path return in
-# any other view (archive, log, admin, ...) with the gate still green.
+# something. `-f` as well as `-r`: a directory replacing one of these paths is
+# readable, drops out of `files[]` as a non-file, and would otherwise sail
+# through both the anchor check and the scan.
+# Assert them, then scan EVERY discovered view JS file -- scoping the scan to
+# those three filenames would let the same dead path return in any other view
+# (archive, log, admin, ...) with the gate still green.
+# Known-uncovered, stated so this scope is not read as complete: the scan is
+# bounded to `*.js` under the view root, so a legacy token inside a `.phtml`
+# inline `<script>` block, or in JS outside the view root (`public/js/`, which
+# holds the DataTables integration), is NOT covered here. The `<script>`-scope
+# assertion below does not backstop it -- that one matches clear-call shapes,
+# not these legacy tokens.
 for anchor in \
   application/views/domain/js/list.js \
   application/views/alias/js/list.js \
   application/views/mailbox/js/list.js; do
-  if [ ! -r "$anchor" ]; then
+  if [ ! -f "$anchor" ] || [ ! -r "$anchor" ]; then
     echo "FAIL: expected view JS '$anchor' is missing or unreadable;" >&2
     echo "      cannot judge the obsolete-path tripwire." >&2
     exit 1

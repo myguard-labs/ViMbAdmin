@@ -101,6 +101,23 @@ if [ "${#files[@]}" -eq 0 ]; then
   exit 1
 fi
 
+# The count printed in the OK line is a claim about how much was inspected, so
+# it needs a floor or it is decoration: every way this gate has been caught
+# scanning less than it claims (a directory or symlink at a view path, a view
+# subtree relocated and symlinked back) announced a SMALLER number and still
+# exited 0. Deriving the floor from the tree would re-derive the same wrong
+# number, so it is pinned. Adding a view JS file is a deliberate act and must
+# update this number, exactly like expected_count above.
+min_view_js=9
+if [ "${#files[@]}" -lt "$min_view_js" ]; then
+  echo "FAIL: found ${#files[@]} view JS file(s) under '$views_root'," >&2
+  echo "      expected at least $min_view_js. View JS has gone missing from" >&2
+  echo "      this gate's scope -- a file deleted, or replaced by a" >&2
+  echo "      directory or symlink that 'find -type f' does not return." >&2
+  echo "      A deliberate removal must update min_view_js." >&2
+  exit 1
+fi
+
 # The removed manual-search path must not return under a different declaration
 # or configuration spelling. Match the semantic identifier and route tokens;
 # adjacent identifier/route characters keep harmless longer names out.
@@ -126,9 +143,17 @@ done
 
 # The three list views that carried the removed path must keep existing, or
 # this check would silently pass by scanning nothing where it once scanned
-# something. `-f` as well as `-r`: a directory replacing one of these paths is
-# readable, drops out of `files[]` as a non-file, and would otherwise sail
-# through both the anchor check and the scan.
+# something. The anchor test must reject exactly what `find -type f` rejects,
+# or the two stages disagree about what a file is and the anchor passes while
+# the scan skips it. `-f` alone is not enough in either direction:
+#   - a DIRECTORY at an anchor path is readable, so plain `-r` accepted it
+#     while `-type f` dropped it -- hence `-f`;
+#   - a SYMLINK to a regular file satisfies `-f` (it follows), but `find
+#     -type f` does NOT follow, so the target's content is never scanned --
+#     hence `-h`. A symlinked view file is an ordinary refactor artifact
+#     (shared view tree, vendor relocation), not only an adversarial shape.
+# If symlinked view JS ever becomes legitimate here, the fix is `find -L` at
+# discovery plus a broken-link guard -- never relaxing this test alone.
 # Assert them, then scan EVERY discovered view JS file -- scoping the scan to
 # those three filenames would let the same dead path return in any other view
 # (archive, log, admin, ...) with the gate still green.
@@ -142,8 +167,10 @@ for anchor in \
   application/views/domain/js/list.js \
   application/views/alias/js/list.js \
   application/views/mailbox/js/list.js; do
-  if [ ! -f "$anchor" ] || [ ! -r "$anchor" ]; then
-    echo "FAIL: expected view JS '$anchor' is missing or unreadable;" >&2
+  if [ ! -f "$anchor" ] || [ -h "$anchor" ] || [ ! -r "$anchor" ]; then
+    echo "FAIL: expected view JS '$anchor' is missing, a symlink, or" >&2
+    echo "      unreadable; it must be a real regular file, because" >&2
+    echo "      discovery uses 'find -type f' and would not scan it." >&2
     echo "      cannot judge the obsolete-path tripwire." >&2
     exit 1
   fi

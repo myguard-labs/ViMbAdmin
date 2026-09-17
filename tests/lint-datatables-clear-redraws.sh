@@ -124,11 +124,24 @@ for near_miss in 'const getEntriesNew = () => {};' 'endpoint: "/domain/list-sear
   fi
 done
 
-legacy_hits=()
-for file in \
+# The three list views that carried the removed path must keep existing, or
+# this check would silently pass by scanning nothing where it once scanned
+# something. Assert them, then scan EVERY discovered view JS file -- scoping
+# the scan to those three filenames would let the same dead path return in
+# any other view (archive, log, admin, ...) with the gate still green.
+for anchor in \
   application/views/domain/js/list.js \
   application/views/alias/js/list.js \
   application/views/mailbox/js/list.js; do
+  if [ ! -r "$anchor" ]; then
+    echo "FAIL: expected view JS '$anchor' is missing or unreadable;" >&2
+    echo "      cannot judge the obsolete-path tripwire." >&2
+    exit 1
+  fi
+done
+
+legacy_hits=()
+for file in "${files[@]}"; do
   if grep -qE "$legacy_token_re" "$file"; then
     legacy_hits+=("$file")
   fi

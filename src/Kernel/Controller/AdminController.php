@@ -27,8 +27,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * `preDispatch` super-admin gate (`authorise(true)`) and renders all admins
  * through `admin/list.phtml`. The template's state-changing links (purge, …)
  * carry the per-session CSRF token, which {@see AbstractController::view()} now
- * seeds over the same session key the ZF1 `_assertCsrf()` reads — so those links
- * keep validating against the legacy actions that still serve them.
+ * seeds over the shared session key read by the native action handlers.
  *
  * Migrated: list, add, the ajax toggles, purge, password, domains,
  * remove-domain, assign-domain and two-factor management.
@@ -411,8 +410,7 @@ final class AdminController extends AbstractController
      * through the framework-free ViMbAdmin_Service_Admin::changePassword.
      *
      * Differences from ZF1, both deliberate: the optional "email the new password"
-     * side-feature is dropped (the native kernel has no mailer, as with the
-     * native login's remember-me), and the insufficient-privilege attempt is not
+     * side-feature remains removed, and the insufficient-privilege attempt is not
      * written to the logger (the security behaviour — refuse + redirect — is
      * preserved). An invalid/missing aid is handled natively here (flash +
      * redirect), so the action never falls through to ZF1.

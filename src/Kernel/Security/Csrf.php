@@ -15,7 +15,8 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
  * token compared with hash_equals) and the ZF1 form hash element (form guard) —
  * with one small service over the {@see SessionStorage} port. Because it depends
  * only on that port it is unit-testable with an in-memory session and needs no
- * framework; in production it is given a NativeSessionStorage.
+ * framework; production gives it a MagicPropertyStorage wrapping the current
+ * SessionNamespace.
  *
  * Semantics preserved from _assertCsrf(): a single stable per-session token,
  * generated on first use, validated with a constant-time comparison; an empty

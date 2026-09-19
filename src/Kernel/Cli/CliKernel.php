@@ -18,12 +18,8 @@ use ViMbAdmin\Kernel\Cli\Command\SchemaUpdateCommand;
  * Framework-free CLI dispatcher (WALL #2, docs/ZF1-REMOVAL.md).
  *
  * The CLI counterpart of {@see \ViMbAdmin\Kernel\Http\Kernel}: it owns the map of
- * the `controller.action` names that have been ported off the ZF1 CLI
- * (`bin/vimbtool.php` → the ZF1 application + `OSS_Controller_Router_Cli`) onto
- * native {@see CliCommand}s. `vimbtool.php` asks {@see canHandle()} first and only
- * boots the ZF1 application for a command not yet migrated — the same opt-in,
- * fall-back-to-ZF1 strangler the web kernel used, so the CLI migrates one command
- * at a time with nothing else disturbed.
+ * every supported `controller.action` name as a native {@see CliCommand}.
+ * `vimbtool.php` rejects unregistered names before booting the native container.
  *
  * {@see Bootstrap::boot()} already skips the session under `PHP_SAPI === 'cli'`,
  * so the native resources (config + Doctrine EM) build cleanly with no web
@@ -41,8 +37,7 @@ final class CliKernel
         private readonly string $appPath,
         private readonly string $env,
     ) {
-        // Register each migrated command. An unregistered name falls back to the
-        // ZF1 CLI in vimbtool.php. The whole cli-* tail is now native.
+        // Register every supported command. vimbtool.php rejects other names.
         $registered = [
             new QueueRunCommand(),
             new ResetTotpCommand(),
@@ -79,13 +74,11 @@ final class CliKernel
     /**
      * Build the native resources (config + Doctrine EM; no session under CLI).
      *
-     * Exposed separately from {@see run()} so the entry point can wire the
-     * residual legacy glue some library classes still read (e.g. the entity
-     * preference layer `OSS_Doctrine2_WithPreferences` fetches the EM from the
-     * `d2em` registry) around the booted container — the same split the web entry
-     * point uses. The identity-namespace argument is irrelevant under CLI (no
-     * command authenticates and boot() starts no session for the CLI SAPI), so a
-     * neutral placeholder is passed.
+     * Bootstrap owns the OSS_Runtime compatibility setup. The vimbtool entry
+     * point only boots this kernel and runs the selected command. The identity
+     * namespace argument is irrelevant under CLI (no command authenticates and
+     * boot() starts no session for the CLI SAPI), so a neutral placeholder is
+     * passed.
      */
     public function boot(): Container
     {

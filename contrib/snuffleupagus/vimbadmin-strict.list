@@ -32,8 +32,7 @@ sp.global.secret_key("CHANGE-ME-PER-DEPLOYMENT-000000000000000000000000000000000
 # Harden PHP's userland RNG (rand/mt_rand/shuffle/...) to a CSPRNG.
 sp.harden_random.enable();
 
-# Block XML external entities (Doctrine XML mappings parse trusted files
-# only, but defence in depth for any DOM/SimpleXML use).
+# Block XML external entities as defence in depth for DOM/SimpleXML use.
 @condition extension_loaded("xml");
 sp.xxe_protection.enable();
 @end_condition;

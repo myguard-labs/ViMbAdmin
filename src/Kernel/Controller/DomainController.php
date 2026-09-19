@@ -38,9 +38,8 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * assignment trio (`admins`/`assign-admin`/`remove-admin`) are migrated — the
  * symmetric counterpart of the AdminController domain-assignment trio (#40/#41),
  * over the same already-extracted `ViMbAdmin_Service_Domain` (assignAdmin/
- * removeAdmin), and `purge` (over `Service_Domain::purge`). The remaining actions
- * (index/list-search) stay on ZF1 via the dispatcher fallback. The legacy
- * controller is untouched.
+ * removeAdmin), and `purge` (over `Service_Domain::purge`). Index redirects to
+ * the native list action and search uses the native list-data endpoint.
  *
  * @package ViMbAdmin
  * @subpackage Kernel
@@ -398,10 +397,9 @@ final class DomainController extends AbstractController
     /**
      * GET|POST /domain/add — create a new domain (super admins only).
      *
-     * Add only: an edit via the `/domain/add/did/N` URL returns null so the ZF1
-     * controller still serves that legacy alias; the linked edit URL
-     * (`/domain/edit/did/N`) is served natively by {@see editAction}. The legacy
-     * domain add fires no plugin hooks (no `domain_add_*` listeners exist), so
+     * An edit via the `/domain/add/did/N` compatibility URL redirects to the
+     * native {@see editAction}. The former domain-add implementation fired no
+     * plugin hooks (no `domain_add_*` listeners exist), so
      * nothing is lost by serving it natively. Quota fields are converted to bytes
      * with the SAME OSS_Filter_FileSize the ZF1 form used.
      */
@@ -457,8 +455,8 @@ final class DomainController extends AbstractController
      * only). This is the URL the domain-list edit button links to (the ZF1
      * `editAction` simply forwards to `add`).
      *
-     * A missing/invalid `did` returns null so the ZF1 controller still serves it
-     * (it flashes "Invalid or non-existent domain." and redirects). The domain
+     * A missing/invalid `did` flashes "Invalid or non-existent domain." and
+     * redirects to the native list. The domain
      * name is read-only on edit, so its value is never re-assigned. The quota
      * fields are PREPOPULATED as human strings via `OSS_Filter_FileSize::unfilter()`
      * — the same reverse conversion the ZF1 form did at render time (its FileSize

@@ -52,7 +52,7 @@ function sessionIdentical(mixed $actual, mixed $expected): bool
 
 echo "== native session namespace ==\n";
 
-$_SESSION = ['Application' => [], 'Zend_Auth' => []];
+$_SESSION = ['Application' => [], 'ViMbAdmin_Auth' => []];
 
 $app = new SessionNamespace('Application');
 
@@ -77,24 +77,23 @@ check(
 
 // --- namespaces are isolated ------------------------------------------------
 $app->__set('flashMessages', ['hi']);
-$auth = new SessionNamespace('Zend_Auth');
+$auth = new SessionNamespace('ViMbAdmin_Auth');
 $auth->__set('storage', ['id' => 1, 'username' => 'admin@example.com']);
 check(
-    'Application namespace unaffected by Zend_Auth write',
+    'Application namespace unaffected by ViMbAdmin_Auth write',
     $app->__get('flashMessages') === ['hi']
 );
 check(
-    'Zend_Auth namespace stored separately',
-    sessionHasKey('Zend_Auth', 'storage')
-        && is_array(sessionValue('Zend_Auth', 'storage'))
-        && sessionValue('Zend_Auth', 'storage')['id'] === 1
+    'ViMbAdmin_Auth namespace stored separately',
+    sessionHasKey('ViMbAdmin_Auth', 'storage')
+        && is_array(sessionValue('ViMbAdmin_Auth', 'storage'))
+        && sessionValue('ViMbAdmin_Auth', 'storage')['id'] === 1
         && !sessionHasKey('Application', 'storage')
 );
 
 // --- the integration that matters: wrap in MagicPropertyStorage ------------
-// This is exactly how the Auth bridge will be built once the ZF1 namespace is
-// gone: MagicPropertyStorage(new SessionNamespace('Zend_Auth')).
-$store = new MagicPropertyStorage(new SessionNamespace('Zend_Auth'));
+// This is how Auth storage adapts the current ViMbAdmin_Auth namespace slot.
+$store = new MagicPropertyStorage(new SessionNamespace('ViMbAdmin_Auth'));
 $stored = $store->get('storage');
 check(
     'storage->get sees the magic-property value',
@@ -104,7 +103,7 @@ check('storage->has true for present key', $store->has('storage'));
 $store->set('token', 'abc');
 check(
     'storage->set writes through magic property',
-    sessionValue('Zend_Auth', 'token') === 'abc'
+    sessionValue('ViMbAdmin_Auth', 'token') === 'abc'
 );
 $store->remove('token');
 check('storage->remove clears it', !$store->has('token'));

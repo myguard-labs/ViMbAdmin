@@ -30,7 +30,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  * `prune-expired` / `prune-all` remove autoprune archive backups via the doveadm
  * HTTP API; `scan-orphans` / `backup-orphans` find on-disk maildirs with no
  * mailbox row and enqueue their import; `schema-update` applies pending Doctrine
- * DDL (dry-run by default). Only `cli-schema-update` (CLI) stays on ZF1.
+ * DDL (dry-run by default); the CLI schema-update command is native too.
  *
  * @package ViMbAdmin
  * @subpackage Kernel

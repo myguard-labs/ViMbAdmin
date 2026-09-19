@@ -650,12 +650,10 @@ final class MailboxController extends AbstractController
      * native edit action for compatibility with the former forwarded route.
      *
      * The form is the framework-free {@see Form}: the base mailbox fields plus
-     * any native plugin sections appended by the {@see FormPluginHost} (today the
-     * AccessPermissions access-restriction checkboxes; AdditionalInfo /
-     * DirectoryEntry are not yet adapted to the native contract, so their ZF1
-     * subforms are dropped here — a known, documented gap). The `welcome_email` /
-     * `cc_welcome_email` fields are dropped because the native kernel has no
-     * mailer (consistent with the native login dropping remember-me).
+     * native plugin sections appended by the {@see FormPluginHost}. These include
+     * AccessPermissions, AdditionalInfo, and DirectoryEntry. Settings-email
+     * delivery is native. Create-time welcome email remains intentionally
+     * removed.
      *
      * On POST it validates the base form, then the plugin sections
      * ({@see FormPluginHost::validate}), resolves + authorises the chosen domain,
@@ -797,10 +795,11 @@ final class MailboxController extends AbstractController
      *
      * Native port of the edit path of the ZF1 `MailboxController::addAction`
      * (`editAction` is a `forward('add')`). Only the editable fields are shown —
-     * name, quota, alt_email, plus the plugin sections ({@see FormPluginHost},
-     * AccessPermissions today) prefilled from the entity. The ZF1 edit form drops
-     * local_part / domain / password, so the native form does too (the address,
-     * its domain and the password are not editable here).
+     * name, quota, alt_email, plus the AccessPermissions, AdditionalInfo, and
+     * DirectoryEntry sections from {@see FormPluginHost}. They are prefilled
+     * from the entity. The former edit form drops local_part / domain / password,
+     * so the native form does too (the address, its domain and the password are
+     * not editable here).
      *
      * GET prepopulates from the entity. POST validates the base form + the plugin
      * sections, writes the editable fields back, clamps the quota to the domain
@@ -1072,7 +1071,7 @@ final class MailboxController extends AbstractController
      * mailbox scheme (framework-free {@see \OSS_Auth_Password}) and store it,
      * logging MAILBOX_PW_CHANGE. The ZF1 `mailbox_password_*` notify hooks have no
      * listeners (verified) so they are no-ops and omitted; the opt-in "email the
-     * new password" is dropped (no mailer in the native kernel, like native login).
+     * new password" behavior remains intentionally removed.
      * Password rendered as a visible text field, matching the ZF1 form.
      */
     public function passwordAction(): Response
@@ -1437,7 +1436,7 @@ final class MailboxController extends AbstractController
             },
         ]));
 
-        // Native plugin form sections (AccessPermissions today).
+        // Native AccessPermissions, AdditionalInfo, and DirectoryEntry sections.
         foreach ($formHost->fields(null, $options) as $field) {
             $form->add($field);
         }

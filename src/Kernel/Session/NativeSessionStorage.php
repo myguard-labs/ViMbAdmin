@@ -9,8 +9,7 @@ namespace ViMbAdmin\Kernel\Session;
  *
  * Phase 5 of the ZF1 removal roadmap (docs/ZF1-REMOVAL.md). Keys are namespaced
  * under a single array entry so the kernel's session data does not collide with
- * any other consumer of `$_SESSION` (e.g. the ZF1 session namespaces still in
- * use during the migration). Starting the session is the caller's
+ * other consumers of `$_SESSION`. Starting the session is the caller's
  * responsibility — this class only reads and writes the superglobal.
  *
  * @package ViMbAdmin

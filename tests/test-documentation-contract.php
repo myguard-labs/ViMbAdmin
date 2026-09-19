@@ -110,10 +110,14 @@ $legacyDelegationPattern = '/(?:'
     . ')/i';
 $historicalOrNegatedPattern = '/\b(?:never|does not|no longer|formerly|historical)\b/i';
 $detectDelegation = static function (string $text) use ($legacyDelegationPattern, $historicalOrNegatedPattern): ?string {
-    foreach (preg_split('/[.;]|\R|\s+(?:but|and)\s+/i', $text) ?: [] as $clause) {
-        if (preg_match($legacyDelegationPattern, $clause, $match) === 1
-            && preg_match($historicalOrNegatedPattern, $clause) !== 1) {
-            return trim($match[0]);
+    foreach (preg_split('/[.;]/', $text) ?: [] as $sentence) {
+        $normalized = preg_replace('/\R+(?=\s*(?:to|through|into)\b)/i', ' ', $sentence);
+        $normalized = is_string($normalized) ? $normalized : $sentence;
+        foreach (preg_split('/\s+(?:but|and|while)\s+/i', $normalized) ?: [] as $clause) {
+            if (preg_match($legacyDelegationPattern, $clause, $match) === 1
+                && preg_match($historicalOrNegatedPattern, $clause) !== 1) {
+                return trim($match[0]);
+            }
         }
     }
     return null;
@@ -136,6 +140,9 @@ $delegationCases = [
     'The native router routes requests through the legacy-layout native controller namespace.' => false,
     'The router does not route requests to Zend.' => false,
     'The router never routes requests to Zend or delegates to ZF1.' => false,
+    'The router does not route requests to Zend while forwarding unknown routes to ZF1.' => true,
+    "Unmatched routes are forwarded\nto Zend." => true,
+    "The router does not forward requests\nto Zend." => false,
 ];
 foreach ($delegationCases as $phrase => $expected) {
     $detected = $detectDelegation($phrase) !== null;

@@ -201,7 +201,8 @@ class OSS_Captcha_Image
                 throw new RuntimeException('Unable to write captcha image');
             }
         } finally {
-            imagedestroy($image);
+            // GD objects are freed by refcount since PHP 8.0; no explicit destroy is needed.
+            // https://www.php.net/manual/en/migration80.incompatible.php
         }
     }
 

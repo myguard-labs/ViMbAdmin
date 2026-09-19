@@ -255,9 +255,6 @@ class OSS_String
     */
     public static function normalise($input, $keepSpaces = false)
     {
-        iconv_set_encoding('internal_encoding', 'utf-8');
-        iconv_set_encoding('input_encoding', 'utf-8');
-        iconv_set_encoding('output_encoding', 'utf-8');
 
         /**
         * Special cases

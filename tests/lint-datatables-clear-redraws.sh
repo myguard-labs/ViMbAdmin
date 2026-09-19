@@ -91,30 +91,153 @@ if [ ! -d "$views_root" ]; then
   exit 1
 fi
 
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+# This gate judges an exact set of files, so selection is a stage of its own
+# and gets the same treatment as judgement: one builder, one exit status, one
+# count. Three separate ways of trusting a plausible-looking result have been
+# caught here, all with the same shape -- a stage that reports on work it did
+# not do:
+#
+#   1. A cardinality FLOOR ("at least N files") is not an identity check. It
+#      counts without checking WHICH, so an unreadable subtree dropping N files
+#      and any N unrelated pad files re-derived the same count. A genuine
+#      legacy token in a view file, a chmod-000 subtree, and one pad file read
+#      as "9 files scanned", exit 0. The recorded relative paths below replace
+#      it: the set is pinned exactly, in both directions, which also catches
+#      adding a file (a floor cannot) and never needs a count kept in sync.
+#   2. `find` inside a process substitution cannot report failure. `set -e`
+#      does not apply inside `< <(...)`; the loop's status is `read`'s, so a
+#      permission-denied subtree made `find` exit 2 while the gate printed its
+#      count and exited 0. Selection now redirects to real files, checks the
+#      status, and treats `find` stderr as fatal.
+#   3. A symlinked directory (or a symlinked view *.js) is invisible to
+#      `find -type f` and is not authoritatively rejected the way the anchor
+#      test rejects a symlinked anchor. Rejecting symlinks under the view root
+#      closes that asymmetry rather than leaving it half-guarded.
+#
+# Verified relative paths, sorted. Adding, removing, renaming or relocating a
+# view JS file is a deliberate act and must update this list -- it is never
+# silently absorbed.
+expected_paths=(
+  application/views/admin/js/domains.js
+  application/views/admin/js/list.js
+  application/views/alias/js/list.js
+  application/views/archive/js/list.js
+  application/views/domain/js/admins.js
+  application/views/domain/js/list.js
+  application/views/log/js/list.js
+  application/views/mailbox/js/aliases.js
+  application/views/mailbox/js/list.js
+)
+
+# Emit NUL-separated matches to $2, diagnostics to $3, and return the real
+# pipeline status. Deliberately a function: an inline `find ... | sort` whose
+# status is discarded is exactly the defect shape being fixed here.
+select_nul() {
+  local out="$2" err="$3" rc=0
+  find "$1" -type f -name '*.js' -print0 2>"$err" | sort -z >"$out" || rc=$?
+  return "$rc"
+}
+
+read_nul_into_files() {
+  local line
+  while IFS= read -r -d '' line; do
+    [ -n "$line" ] || continue
+    files+=("$line")
+  done <"$1"
+}
+
 files=()
-while IFS= read -r -d '' file; do
-  files+=("$file")
-done < <(find "$views_root" -type f -name '*.js' -print0 | sort -z)
+if ! select_nul "$views_root" "$tmpdir/find.out" "$tmpdir/find.err"; then
+  echo "FAIL: listing view JS under '$views_root' failed:" >&2
+  sed 's/^/      /' "$tmpdir/find.err" >&2
+  echo "      A partially failed listing would otherwise be reported as a" >&2
+  echo "      smaller -- but still plausible -- scan count." >&2
+  exit 1
+fi
+if [ -s "$tmpdir/find.err" ]; then
+  echo "FAIL: listing view JS under '$views_root' wrote to stderr:" >&2
+  sed 's/^/      /' "$tmpdir/find.err" >&2
+  echo "      cannot judge the obsolete-path tripwire over a partial list." >&2
+  exit 1
+fi
+read_nul_into_files "$tmpdir/find.out"
 
 if [ "${#files[@]}" -eq 0 ]; then
   echo "FAIL: no view JS found under '$views_root'; cannot judge." >&2
   exit 1
 fi
 
-# The count printed in the OK line is a claim about how much was inspected, so
-# it needs a floor or it is decoration: every way this gate has been caught
-# scanning less than it claims (a directory or symlink at a view path, a view
-# subtree relocated and symlinked back) announced a SMALLER number and still
-# exited 0. Deriving the floor from the tree would re-derive the same wrong
-# number, so it is pinned. Adding a view JS file is a deliberate act and must
-# update this number, exactly like expected_count above.
-min_view_js=9
-if [ "${#files[@]}" -lt "$min_view_js" ]; then
-  echo "FAIL: found ${#files[@]} view JS file(s) under '$views_root'," >&2
-  echo "      expected at least $min_view_js. View JS has gone missing from" >&2
-  echo "      this gate's scope -- a file deleted, or replaced by a" >&2
-  echo "      directory or symlink that 'find -type f' does not return." >&2
-  echo "      A deliberate removal must update min_view_js." >&2
+# Direction 1 -- every recorded path must be in the discovered set. This is
+# what the old floor was reaching for, done as identity: a recorded file that
+# `find -type f` did not return has gone missing, been replaced by a
+# directory, been replaced by a symlink, or sits under an unreadable subtree.
+for expected_path in "${expected_paths[@]}"; do
+  found=0
+  for file in "${files[@]}"; do
+    if [ "$file" = "$expected_path" ]; then
+      found=1
+      break
+    fi
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "FAIL: recorded view JS '$expected_path' was not returned by" >&2
+    echo "      discovery ('find -type f -name '*.js'' under '$views_root')." >&2
+    echo "      It is missing, a directory, a symlink, or unreadable -- so it" >&2
+    echo "      would be silently unscanned. cannot judge the obsolete-path" >&2
+    echo "      tripwire over the recorded set." >&2
+    exit 1
+  fi
+done
+
+# Direction 2 -- nothing may enter the scanned set unrecorded. A floor cannot
+# catch an addition; an exact set can, and it keeps the count printed below a
+# claim about a set this gate actually verified.
+unrecorded=()
+for file in "${files[@]}"; do
+  recorded=0
+  for expected_path in "${expected_paths[@]}"; do
+    if [ "$file" = "$expected_path" ]; then
+      recorded=1
+      break
+    fi
+  done
+  if [ "$recorded" -eq 0 ]; then
+    unrecorded+=("$file")
+  fi
+done
+if [ "${#unrecorded[@]}" -gt 0 ]; then
+  echo "FAIL: view JS file(s) under '$views_root' are not in this gate's" >&2
+  echo "      recorded scope:" >&2
+  printf '      %s\n' "${unrecorded[@]}" >&2
+  echo "      Adding a view JS file is a deliberate act: add it to" >&2
+  echo "      expected_paths above, or it is scanned without being covered" >&2
+  echo "      by the recorded scope." >&2
+  exit 1
+fi
+
+# Reject symlinks under the view root. `find -type f` does not follow them, so
+# a symlinked directory or a symlinked *.js contributes files this gate never
+# scans; the anchor test already refuses a symlinked anchor, and leaving the
+# non-anchor half unguarded was the asymmetry. If symlinked view JS ever
+# becomes legitimate here, the fix is `find -L` at discovery plus a broken-link
+# guard -- never dropping this check alone.
+if ! find "$views_root" -type l -print0 >"$tmpdir/links.out" 2>"$tmpdir/links.err"; then
+  echo "FAIL: scanning '$views_root' for symlinks failed:" >&2
+  sed 's/^/      /' "$tmpdir/links.err" >&2
+  exit 1
+fi
+symlinks=()
+while IFS= read -r -d '' line; do
+  [ -n "$line" ] || continue
+  symlinks+=("$line")
+done <"$tmpdir/links.out"
+if [ "${#symlinks[@]}" -gt 0 ]; then
+  echo "FAIL: symlink(s) under '$views_root' would add files this gate" >&2
+  echo "      never scans, because discovery uses 'find -type f':" >&2
+  printf '      %s\n' "${symlinks[@]}" >&2
   exit 1
 fi
 
@@ -215,8 +338,43 @@ fi
 # `<?php echo "<scr"."ipt>"; ?>`) is invisible to the literal-substring
 # prefilter below and is a known, accepted hole in this assertion.
 scope_call_re='vmDataTableApi[[:space:]]*\(|[]A-Za-z0-9_$)]\.clear[[:space:]]*\(|\[[[:space:]]*["'"'"'\`]clear["'"'"'\`][[:space:]]*\][[:space:]]*\('
+
+# `grep -r` exits 1 for "no match" and 2 for "a read error occurred". Discarding
+# both with `|| true` erases the distinction that matters: a non-.js file holding
+# a call-shape <script> under an unreadable subtree passed silently, because the
+# only guard was the `-r` test on files `grep` had already managed to list.
+# Treat 1 as a clean negative and every other non-zero status -- and any stderr
+# -- as a scope-assertion failure, so "nothing matched" is never conflated with
+# "nothing could be read".
+scope_candidates=()
+scope_rc=0
+grep -lZE "$scope_call_re" "$views_root" -r \
+  >"$tmpdir/scope.out" 2>"$tmpdir/scope.err" || scope_rc=$?
+case "$scope_rc" in
+0 | 1) ;;
+*)
+  echo "FAIL: searching '$views_root' for non-.js call shapes failed" >&2
+  echo "      (grep exit $scope_rc):" >&2
+  sed 's/^/      /' "$tmpdir/scope.err" >&2
+  echo "      a read error is not 'no match' -- files under an unreadable" >&2
+  echo "      subtree may hold an inline <script> call site this assertion" >&2
+  echo "      never saw." >&2
+  exit 1
+  ;;
+esac
+if [ -s "$tmpdir/scope.err" ]; then
+  echo "FAIL: searching '$views_root' for non-.js call shapes wrote to" >&2
+  echo "      stderr:" >&2
+  sed 's/^/      /' "$tmpdir/scope.err" >&2
+  exit 1
+fi
+while IFS= read -r -d '' line; do
+  [ -n "$line" ] || continue
+  scope_candidates+=("$line")
+done <"$tmpdir/scope.out"
+
 scope_hits=()
-while IFS= read -r -d '' file; do
+for file in "${scope_candidates[@]}"; do
   case "$file" in
   *.js) continue ;;
   esac
@@ -226,7 +384,7 @@ while IFS= read -r -d '' file; do
   }
   grep -qiF '<script' "$file" || continue
   scope_hits+=("$file")
-done < <(grep -lZE "$scope_call_re" "$views_root" -r 2>/dev/null || true)
+done
 
 if [ "${#scope_hits[@]}" -gt 0 ]; then
   echo "FAIL: non-.js file(s) under '$views_root' now contain a" >&2

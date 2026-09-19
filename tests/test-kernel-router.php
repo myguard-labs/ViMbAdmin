@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Unit test: ViMbAdmin\Kernel\Router (Phase 2 of docs/ZF1-REMOVAL.md).
  *
@@ -23,59 +24,62 @@ final class TestKernelRouterHarnessState
     public static int $count = 0;
 }
 
-$failures =& TestKernelRouterHarnessState::$count;
-function check(string $label, bool $ok): void {
+$failures = & TestKernelRouterHarnessState::$count;
+function check(string $label, bool $ok): void
+{
     echo ($ok ? "  ok   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { TestKernelRouterHarnessState::$count++; }
+    if (!$ok) {
+        TestKernelRouterHarnessState::$count++;
+    }
 }
 
 echo "== ViMbAdmin\\Kernel\\Router::parse ==\n";
 
 $p = Router::parse('');
-check('"" -> index/index/[]',            $p['controller'] === 'index' && $p['action'] === 'index' && $p['params'] === []);
+check('"" -> index/index/[]', $p['controller'] === 'index' && $p['action'] === 'index' && $p['params'] === []);
 $p = Router::parse('/');
-check('"/" -> index/index/[]',           $p['controller'] === 'index' && $p['action'] === 'index' && $p['params'] === []);
+check('"/" -> index/index/[]', $p['controller'] === 'index' && $p['action'] === 'index' && $p['params'] === []);
 $p = Router::parse('/domain');
-check('"/domain" -> domain/index',       $p['controller'] === 'domain' && $p['action'] === 'index');
+check('"/domain" -> domain/index', $p['controller'] === 'domain' && $p['action'] === 'index');
 $p = Router::parse('/domain/list');
-check('"/domain/list" -> domain/list',   $p['controller'] === 'domain' && $p['action'] === 'list' && $p['params'] === []);
+check('"/domain/list" -> domain/list', $p['controller'] === 'domain' && $p['action'] === 'list' && $p['params'] === []);
 $p = Router::parse('/mailbox/edit/id/5');
-check('edit/id/5 -> {id:"5"}',           $p['controller'] === 'mailbox' && $p['action'] === 'edit' && $p['params'] === ['id' => '5']);
+check('edit/id/5 -> {id:"5"}', $p['controller'] === 'mailbox' && $p['action'] === 'edit' && $p['params'] === ['id' => '5']);
 $p = Router::parse('/mailbox/add/did/3/x/y');
-check('two key/value pairs',             $p['params'] === ['did' => '3', 'x' => 'y']);
+check('two key/value pairs', $p['params'] === ['did' => '3', 'x' => 'y']);
 $p = Router::parse('/domain/admins/did');
-check('dangling key -> null',            $p['params'] === ['did' => null]);
+check('dangling key -> null', $p['params'] === ['did' => null]);
 $p = Router::parse('//domain//list//');
-check('empty segments filtered',         $p['controller'] === 'domain' && $p['action'] === 'list' && $p['params'] === []);
+check('empty segments filtered', $p['controller'] === 'domain' && $p['action'] === 'list' && $p['params'] === []);
 $p = Router::parse('/domain/edit/note/hello%20world');
-check('urldecode value',                 $p['params'] === ['note' => 'hello world']);
+check('urldecode value', $p['params'] === ['note' => 'hello world']);
 $p = Router::parse('/Domain/List');
-check('controller/action lower-cased',   $p['controller'] === 'domain' && $p['action'] === 'list');
+check('controller/action lower-cased', $p['controller'] === 'domain' && $p['action'] === 'list');
 
 echo "== inflection (ZF1-compatible) ==\n";
-check('controllerClass two-factor',      Router::controllerClass('two-factor') === 'TwoFactorController');
-check('controllerClass index',           Router::controllerClass('index') === 'IndexController');
-check('controllerClass mailbox',         Router::controllerClass('mailbox') === 'MailboxController');
-check('actionMethod cli-run',            Router::actionMethod('cli-run') === 'cliRunAction');
-check('actionMethod index',              Router::actionMethod('index') === 'indexAction');
+check('controllerClass two-factor', Router::controllerClass('two-factor') === 'TwoFactorController');
+check('controllerClass index', Router::controllerClass('index') === 'IndexController');
+check('controllerClass mailbox', Router::controllerClass('mailbox') === 'MailboxController');
+check('actionMethod cli-run', Router::actionMethod('cli-run') === 'cliRunAction');
+check('actionMethod index', Router::actionMethod('index') === 'indexAction');
 check('actionMethod ajax-toggle-active', Router::actionMethod('ajax-toggle-active') === 'ajaxToggleActiveAction');
-check('actionMethod cli-reset-totp',     Router::actionMethod('cli-reset-totp') === 'cliResetTotpAction');
+check('actionMethod cli-reset-totp', Router::actionMethod('cli-reset-totp') === 'cliResetTotpAction');
 
 echo "== match() + native allowlist ==\n";
 $empty = new Router([]);
-check('empty allowlist -> no match',         $empty->match('/domain/list') === null);
-check('empty allowlist isNative false',     $empty->isNative('domain') === false);
+check('empty allowlist -> no match', $empty->match('/domain/list') === null);
+check('empty allowlist isNative false', $empty->isNative('domain') === false);
 
 $r = new Router(['domain', 'two-factor']);
-check('isNative case-insensitive',          $r->isNative('Domain') === true);
+check('isNative case-insensitive', $r->isNative('Domain') === true);
 $m = $r->match('/domain/edit/id/7');
-check('native match returns RouteMatch',    $m instanceof \ViMbAdmin\Kernel\RouteMatch);
-check('match controllerClass',              $m !== null && $m->controllerClass === 'DomainController');
-check('match actionMethod',                 $m !== null && $m->actionMethod === 'editAction');
-check('match params',                       $m !== null && $m->params === ['id' => '7']);
-check('non-native controller -> null',      $r->match('/mailbox/list') === null);
+check('native match returns RouteMatch', $m instanceof \ViMbAdmin\Kernel\RouteMatch);
+check('match controllerClass', $m !== null && $m->controllerClass === 'DomainController');
+check('match actionMethod', $m !== null && $m->actionMethod === 'editAction');
+check('match params', $m !== null && $m->params === ['id' => '7']);
+check('non-native controller -> null', $r->match('/mailbox/list') === null);
 $m2 = $r->match('/two-factor');
-check('dashed native controller matches',   $m2 !== null && $m2->controllerClass === 'TwoFactorController' && $m2->actionMethod === 'indexAction');
+check('dashed native controller matches', $m2 !== null && $m2->controllerClass === 'TwoFactorController' && $m2->actionMethod === 'indexAction');
 
 echo "\n";
 if ($failures === 0) {

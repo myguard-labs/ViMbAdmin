@@ -47,7 +47,7 @@
  */
 
 /**
- * Replace by regular expresion modifier
+ * Replace by regular expression modifier
  *
  * @category   OSS
  * @package    OSS_Smarty

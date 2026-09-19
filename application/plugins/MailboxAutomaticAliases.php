@@ -204,7 +204,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 // prevent deletion of an automatic alias' goto mailbox
                 $alias = $this->getAlias($controller, $item . '@' . $domain);
                 if ($alias !== null && $alias['goto'] === $mailbox) {
-                    $message = _('Mailbox %s is used to fullfill automatic alias %s. '
+                    $message = _('Mailbox %s is used to fulfill automatic alias %s. '
                         . 'See <a href="https://www.ietf.org/rfc/rfc2142.txt" target="page">RFC2142</a>. '
                         . 'If you want to delete it, update the alias to use a different goto address first.');
                     $controller->addMessage(sprintf($message, $mailbox, $alias['address']), OSS_Message::ERROR);
@@ -239,7 +239,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 // prevent toggling an automatic alias' goto mailbox off
                 $alias = $this->getAlias($controller, $item . '@' . $domain);
                 if ($alias !== null && $alias['goto'] === $mailbox) {
-                    $message = _('Mailbox %s is used to fullfill automatic alias %s. '
+                    $message = _('Mailbox %s is used to fulfill automatic alias %s. '
                         . 'See <a href="https://www.ietf.org/rfc/rfc2142.txt" target="page">RFC2142</a>. '
                         . 'If you want to disable it, update the alias to use a different goto address first.');
                     $controller->addMessage(sprintf($message, $mailbox, $alias['address']), OSS_Message::ERROR);
@@ -314,7 +314,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 foreach ($this->defaultAliases as $item) {
                     $alias = $this->getAlias($controller, $item . '@' . $domain);
                     if ($alias === null || !$alias['active']) {
-                        $message = _('Alias %s is used to fullfill automatic alias %s. '
+                        $message = _('Alias %s is used to fulfill automatic alias %s. '
                             . 'See <a href="https://www.ietf.org/rfc/rfc2142.txt" target="page">RFC2142</a>. '
                             . 'If you want to delete it, create a distinct alias first.');
                         $controller->addMessage(sprintf($message, $aliasAddress, $item . '@' . $domain), OSS_Message::ERROR);
@@ -342,7 +342,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 // prevent deletion of an automatic alias' goto alias
                 $alias = $this->getAlias($controller, $item . '@' . $domain);
                 if ($alias !== null && $alias['goto'] === $aliasAddress) {
-                    $message = _('Alias %s is used to fullfill automatic alias %s. '
+                    $message = _('Alias %s is used to fulfill automatic alias %s. '
                         . 'See <a href="https://www.ietf.org/rfc/rfc2142.txt" target="page">RFC2142</a>. '
                         . 'If you want to delete it, update the alias to use a different goto address first.');
                     $controller->addMessage(sprintf($message, $aliasAddress, $alias['address']), OSS_Message::ERROR);
@@ -375,7 +375,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 foreach ($this->defaultAliases as $item) {
                     $alias = $this->getAlias($controller, $item . '@' . $domain);
                     if ($alias === null || !$alias['active']) {
-                        $message = _('Alias %s is used to fullfill automatic alias %s. '
+                        $message = _('Alias %s is used to fulfill automatic alias %s. '
                             . 'See <a href="https://www.ietf.org/rfc/rfc2142.txt" target="page">RFC2142</a>. '
                             . 'If you want to disable it, create a distinct alias first.');
                         $controller->addMessage(sprintf($message, $aliasAddress, $item . '@' . $domain), OSS_Message::ERROR);
@@ -403,7 +403,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 // prevent toggling an automatic alias' goto alias off
                 $alias = $this->getAlias($controller, $item . '@' . $domain);
                 if ($alias !== null && $alias['goto'] === $aliasAddress) {
-                    $message = _('Alias %s is used to fullfill automatic alias %s. '
+                    $message = _('Alias %s is used to fulfill automatic alias %s. '
                         . 'See <a href="https://www.ietf.org/rfc/rfc2142.txt" target="page">RFC2142</a>. '
                         . 'If you want to disable it, update the alias to use a different goto address first.');
                     $controller->addMessage(sprintf($message, $aliasAddress, $alias['address']), OSS_Message::ERROR);

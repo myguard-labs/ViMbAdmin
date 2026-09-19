@@ -5,14 +5,14 @@
 /**
  * Smarty Whitespace Control
  *
- * {-tag}  remove white space infront of tag up to the previous non-whitespace character or beginning of the line
+ * {-tag}  remove white space in front of tag up to the previous non-whitespace character or beginning of the line
  *         "text \n\n\t {-tag}" -> "text \n\n{tag}"
  *         "text \n\n\t text\t {-tag}" -> "text \n\n\t text{tag}"
- * {--tag} remove white space infront of tag up to the previous non-whitespace character
+ * {--tag} remove white space in front of tag up to the previous non-whitespace character
  *         "text \n\n\t {--tag}" -> "text{tag}"
  *         "text \n\n\t text\t {--tag}" -> "text \n\n\t text{tag}"
  * {+-tag}
- * {-+tag} replace white space infront of tag up to the previous non-whitespace character by a single line-break
+ * {-+tag} replace white space in front of tag up to the previous non-whitespace character by a single line-break
  *         "text \n\n\t {-+tag}" -> "text\n{tag}"
  *         "text \n\n\t text\t {-+tag}" -> "text \n\n\t text\n{tag}"
  *
@@ -50,12 +50,12 @@ function smarty_prefilter_whitespace_control($string, \Smarty\Template $template
     $_ldelim = preg_quote($ldelim);
     $_rdelim = preg_quote($rdelim);
 
-    // remove preceeding whitepsace preserving a single line-break
+    // remove preceding whitespace preserving a single line-break
     $string =  preg_replace('#\s*'. $_ldelim .'(?:-\+|\+-)#', "\n" . $ldelim, $string) ?? $string;
-    // remove trailing whitespace preserving s single line-break
+    // remove trailing whitespace preserving a single line-break
     $string =  preg_replace('#(?:\+-|-\+)'. $_rdelim .'\s*#', $rdelim . "\n\n", $string) ?? $string;
 
-    // remove preceeding whitepsace
+    // remove preceding whitespace
     $string =  preg_replace('#\s*'. $_ldelim .'--|[^\S\r\n]*'. $_ldelim .'-#', $ldelim, $string) ?? $string;
     // remove trailing whitespace
     $string =  preg_replace('#--'. $_rdelim .'\s*|-'. $_rdelim .'[^\S\r\n]*#', $rdelim, $string) ?? $string;

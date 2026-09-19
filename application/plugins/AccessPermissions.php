@@ -36,7 +36,7 @@
  * The AccessPermissions plugin
  *
  * AccessPermissions were part of the main ViMbAdmin code but I have shunted them to a
- * plugin to demonstrate and prove the arcitecture. It's a slight cheat as AccessPermissions
+ * plugin to demonstrate and prove the architecture. It's a slight cheat as AccessPermissions
  * rely on a specific column in the Mailbox database table which plugins should typically
  * avoid.
  *

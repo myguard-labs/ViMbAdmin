@@ -47,7 +47,7 @@
  */
 
 /**
- * Function icludes template form skin, if file is not existing in skin folder
+ * Function includes template form skin, if file is not existing in skin folder
  * it displays default one.
  *
  * @category   OSS

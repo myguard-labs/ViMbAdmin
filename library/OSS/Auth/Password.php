@@ -38,7 +38,7 @@
  */
 
 /**
- * A class to hash and verify passwords using verious methods
+ * A class to hash and verify passwords using various methods
  *
  * @category   OSS
  * @package    OSS_Auth

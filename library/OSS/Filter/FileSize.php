@@ -92,7 +92,7 @@ class OSS_Filter_FileSize
 
 
     /**
-     * Set the multipler (the value by which integers are multiplied when, for
+     * Set the multiplier (the value by which integers are multiplied when, for
      * example, a text field makes it clear to the user than units are MB rather
      * than B).
      *
@@ -112,7 +112,7 @@ class OSS_Filter_FileSize
     }
 
     /**
-     * Get the multipler (the value by which integers are multiplied when, for
+     * Get the multiplier (the value by which integers are multiplied when, for
      * example, a text field makes it clear to the user than units are MB rather
      * than B).
      *

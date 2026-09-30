@@ -53,7 +53,34 @@ $correctCopyright = "\xC2\xA9"; // U+00A9 COPYRIGHT SIGN
 // -- not the original ASCII '?' mangling and not the correct one.
 $mojibakeCopyright = "\xC3\x82\xC2\xA9"; // "Â©"
 
+// ASCII-mangled attribution as produced by Closure's default US-ASCII output:
+// "Jörn Zaefferer" -> "J?rn", "©2008-2024" -> "?2008-".
+$mangledAttribution = static fn (string $text): bool => str_contains($text, 'J?rn')
+    || preg_match('/\?\s?(?:19|20)\d\d-/', $text) === 1;
+
+// Negative control: the guard predicate must fire on the known-bad spellings
+// and stay quiet on the correct ones, else the bundle checks below are vacuous.
+$check('guard flags "J?rn" attribution', $mangledAttribution('/* J?rn Zaefferer */'));
+$check('guard flags "?2008-" year range', $mangledAttribution('/*! ?2008-2024 SpryMedia Ltd */'));
+$check('guard flags "? 2008-" year range', $mangledAttribution('/*! ? 2008-2024 SpryMedia Ltd */'));
+$check(
+    'guard accepts correct UTF-8 attribution',
+    !$mangledAttribution("/* J\xC3\xB6rn Zaefferer \xC2\xA92008-2024 */")
+);
+
+$minifyOptions = file_get_contents($root . '/bin/minify-options.php');
+$check(
+    'minify-options.php passes --charset UTF-8 to Closure Compiler',
+    is_string($minifyOptions)
+        && preg_match('/^\$js_compiler\s*=.*--charset UTF-8/m', $minifyOptions) === 1
+);
+
 if (is_string($bundle)) {
+    $check('bundle is valid UTF-8', mb_check_encoding($bundle, 'UTF-8'));
+    $check(
+        'bundle carries no "J?rn" or "?200x-" mangled attribution',
+        !$mangledAttribution($bundle)
+    );
     $check(
         'bundle contains at least one non-ASCII (>= 0x80) byte',
         (bool) preg_match('/[\x80-\xFF]/', $bundle)

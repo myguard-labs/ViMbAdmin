@@ -75,12 +75,17 @@ $mangledAttribution = static function (string $text): bool {
 // Negative control: the guard predicate must fire on the known-bad spellings
 // and stay quiet on the correct ones, else the bundle checks below are vacuous.
 $check('guard flags "J?rn" attribution', $mangledAttribution('/* J?rn Zaefferer */'));
-$check('guard ignores "J?rn" in a string literal outside a comment', !$mangledAttribution('var a="J?rn";'));
+// Each "ignores" input carries a clean comment, so the guard gets past its
+// no-comment early return and the comment-scoping logic is what is exercised.
+$check(
+    'guard ignores "J?rn" in a string literal outside a comment',
+    !$mangledAttribution('/*! ok */ var a="J?rn";')
+);
 $check('guard flags "?2008-" year range', $mangledAttribution('/*! ?2008-2024 SpryMedia Ltd */'));
 $check('guard flags "? 2008-" year range', $mangledAttribution('/*! ? 2008-2024 SpryMedia Ltd */'));
 $check(
     'guard ignores a "?200x-" ternary in code',
-    !$mangledAttribution('var a=b ?2000-1:3;')
+    !$mangledAttribution('/*! ok */ var a=b ?2000-10:3;')
 );
 $check(
     'guard accepts correct UTF-8 attribution',

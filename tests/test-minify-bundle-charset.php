@@ -54,26 +54,55 @@ $correctCopyright = "\xC2\xA9"; // U+00A9 COPYRIGHT SIGN
 $mojibakeCopyright = "\xC3\x82\xC2\xA9"; // "Â©"
 
 // ASCII-mangled attribution as produced by Closure's default US-ASCII output:
-// "Jörn Zaefferer" -> "J?rn", "©2008-2024" -> "?2008-".
-$mangledAttribution = static fn (string $text): bool => str_contains($text, 'J?rn')
-    || preg_match('/\?\s?(?:19|20)\d\d-/', $text) === 1;
+// "Jörn Zaefferer" -> "J?rn", "©2008-2024" -> "?2008-". The year-range form is
+// only looked for inside block comments (licence headers), where a lone "?"
+// before a year range is never legitimate code such as a ternary.
+$mangledAttribution = static function (string $text): bool {
+    if (str_contains($text, 'J?rn')) {
+        return true;
+    }
+    if (preg_match_all('~/\*.*?\*/~s', $text, $comments) < 1) {
+        return false;
+    }
+    foreach ($comments[0] as $comment) {
+        if (preg_match('/(?:^|[\s*(])\?\s?(?:19|20)\d\d-\d{2,4}/', $comment) === 1) {
+            return true;
+        }
+    }
+    return false;
+};
 
 // Negative control: the guard predicate must fire on the known-bad spellings
 // and stay quiet on the correct ones, else the bundle checks below are vacuous.
 $check('guard flags "J?rn" attribution', $mangledAttribution('/* J?rn Zaefferer */'));
+$check('guard flags "J?rn" outside a comment', $mangledAttribution('var a="J?rn";'));
 $check('guard flags "?2008-" year range', $mangledAttribution('/*! ?2008-2024 SpryMedia Ltd */'));
 $check('guard flags "? 2008-" year range', $mangledAttribution('/*! ? 2008-2024 SpryMedia Ltd */'));
+$check(
+    'guard ignores a "?200x-" ternary in code',
+    !$mangledAttribution('var a=b ?2000-1:3;')
+);
 $check(
     'guard accepts correct UTF-8 attribution',
     !$mangledAttribution("/* J\xC3\xB6rn Zaefferer \xC2\xA92008-2024 */")
 );
 
+// Assert on the PHP string tokens, not raw source text, so reformatting,
+// renaming the variable or editing comments cannot flip the result.
 $minifyOptions = file_get_contents($root . '/bin/minify-options.php');
-$check(
-    'minify-options.php passes --charset UTF-8 to Closure Compiler',
-    is_string($minifyOptions)
-        && preg_match('/^\$js_compiler\s*=.*--charset UTF-8/m', $minifyOptions) === 1
-);
+$passesCharset = false;
+if (is_string($minifyOptions)) {
+    foreach (token_get_all($minifyOptions) as $token) {
+        if (is_array($token)
+            && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
+            && str_contains($token[1], '--charset UTF-8')
+        ) {
+            $passesCharset = true;
+            break;
+        }
+    }
+}
+$check('minify-options.php passes --charset UTF-8 to Closure Compiler', $passesCharset);
 
 if (is_string($bundle)) {
     $check('bundle is valid UTF-8', mb_check_encoding($bundle, 'UTF-8'));

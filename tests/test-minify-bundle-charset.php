@@ -54,18 +54,18 @@ $correctCopyright = "\xC2\xA9"; // U+00A9 COPYRIGHT SIGN
 $mojibakeCopyright = "\xC3\x82\xC2\xA9"; // "Â©"
 
 // ASCII-mangled attribution as produced by Closure's default US-ASCII output:
-// "Jörn Zaefferer" -> "J?rn", "©2008-2024" -> "?2008-". The year-range form is
-// only looked for inside block comments (licence headers), where a lone "?"
-// before a year range is never legitimate code such as a ternary.
+// "Jörn Zaefferer" -> "J?rn", "©2008-2024" -> "?2008-". Both forms are only
+// looked for inside block comments (licence headers): outside them "J?rn" could
+// be legitimate string data and "?2000-" a ternary. Only /* ... */ comments are
+// scanned; the shipped bundle keeps its licences as /*! ... */ blocks.
 $mangledAttribution = static function (string $text): bool {
-    if (str_contains($text, 'J?rn')) {
-        return true;
-    }
     if (preg_match_all('~/\*.*?\*/~s', $text, $comments) < 1) {
         return false;
     }
     foreach ($comments[0] as $comment) {
-        if (preg_match('/(?:^|[\s*(])\?\s?(?:19|20)\d\d-\d{2,4}/', $comment) === 1) {
+        if (str_contains($comment, 'J?rn')
+            || preg_match('/(?:^|[\s*(])\?\s?(?:19|20)\d\d-\d{2,4}/', $comment) === 1
+        ) {
             return true;
         }
     }
@@ -75,7 +75,7 @@ $mangledAttribution = static function (string $text): bool {
 // Negative control: the guard predicate must fire on the known-bad spellings
 // and stay quiet on the correct ones, else the bundle checks below are vacuous.
 $check('guard flags "J?rn" attribution', $mangledAttribution('/* J?rn Zaefferer */'));
-$check('guard flags "J?rn" outside a comment', $mangledAttribution('var a="J?rn";'));
+$check('guard ignores "J?rn" in a string literal outside a comment', !$mangledAttribution('var a="J?rn";'));
 $check('guard flags "?2008-" year range', $mangledAttribution('/*! ?2008-2024 SpryMedia Ltd */'));
 $check('guard flags "? 2008-" year range', $mangledAttribution('/*! ? 2008-2024 SpryMedia Ltd */'));
 $check(
@@ -105,7 +105,7 @@ if (is_string($minifyOptions)) {
 $check('minify-options.php passes --charset UTF-8 to Closure Compiler', $passesCharset);
 
 if (is_string($bundle)) {
-    $check('bundle is valid UTF-8', mb_check_encoding($bundle, 'UTF-8'));
+    $check('bundle is valid UTF-8', preg_match('//u', $bundle) === 1);
     $check(
         'bundle carries no "J?rn" or "?200x-" mangled attribution',
         !$mangledAttribution($bundle)

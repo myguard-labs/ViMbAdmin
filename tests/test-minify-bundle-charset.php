@@ -92,21 +92,48 @@ $check(
     !$mangledAttribution("/* J\xC3\xB6rn Zaefferer \xC2\xA92008-2024 */")
 );
 
-// Assert on the PHP string tokens, not raw source text, so reformatting,
-// renaming the variable or editing comments cannot flip the result.
-$minifyOptions = file_get_contents($root . '/bin/minify-options.php');
-$passesCharset = false;
-if (is_string($minifyOptions)) {
-    foreach (token_get_all($minifyOptions) as $token) {
+// Assert on the PHP tokens of the `$js_compiler = ...;` statement that
+// bin/minify-bundle.php consumes, not raw source text: reformatting or
+// editing comments cannot flip the result, and a "--charset UTF-8" string
+// elsewhere in the file (an unused variable, a different setting) does not
+// satisfy it.
+$compilerCharset = static function (string $source): bool {
+    $inCompiler = false;
+    foreach (token_get_all($source) as $token) {
+        if (!$inCompiler) {
+            $inCompiler = is_array($token) && $token[0] === T_VARIABLE && $token[1] === '$js_compiler';
+            continue;
+        }
+        if ($token === ';') {
+            return false;
+        }
         if (is_array($token)
             && in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)
             && str_contains($token[1], '--charset UTF-8')
         ) {
-            $passesCharset = true;
-            break;
+            return true;
         }
     }
-}
+    return false;
+};
+
+// Negative control: the predicate must reject UTF-8 that is not in the
+// compiler command, else the source check below is vacuous.
+$check(
+    'charset guard accepts --charset UTF-8 in $js_compiler',
+    $compilerCharset('<?php $js_compiler = "java -jar c.jar --charset UTF-8";')
+);
+$check(
+    'charset guard rejects US-ASCII compiler with an unrelated UTF-8 string',
+    !$compilerCharset('<?php $js_compiler = "java -jar c.jar --charset US-ASCII"; $x = "--charset UTF-8";')
+);
+$check(
+    'charset guard rejects a file without $js_compiler',
+    !$compilerCharset('<?php $css_compiler = "--charset UTF-8";')
+);
+
+$minifyOptions = file_get_contents($root . '/bin/minify-options.php');
+$passesCharset = is_string($minifyOptions) && $compilerCharset($minifyOptions);
 $check('minify-options.php passes --charset UTF-8 to Closure Compiler', $passesCharset);
 
 if (is_string($bundle)) {

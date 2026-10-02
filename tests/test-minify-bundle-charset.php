@@ -55,22 +55,39 @@ $mojibakeCopyright = "\xC3\x82\xC2\xA9"; // "Â©"
 
 // ASCII-mangled attribution as produced by Closure's default US-ASCII output:
 // "Jörn Zaefferer" -> "J?rn Zaefferer", "© 2008-2024 SpryMedia" ->
-// "? 2008-2024 SpryMedia". Each pattern is anchored on the vendor name, so the
-// whole bundle can be searched without parsing JavaScript: a bare "J?rn" could
-// be string data and a bare "?2000-" a ternary, but neither carries the name.
+// "? 2008-2024 SpryMedia". Each pattern is anchored on the vendor name, and
+// only searched inside licence comments: block comments that open at the
+// start of a line, which is where Closure Compiler emits every comment it
+// keeps. A "/* ... */" lookalike inside a string literal follows code on its
+// line and is not scanned, so no JavaScript parsing is needed.
 $mangledAttribution = static function (string $text): bool {
-    return str_contains($text, 'J?rn Zaefferer')
-        || preg_match('/\?\s?(?:19|20)\d\d-\d{2,4} SpryMedia/', $text) === 1;
+    preg_match_all('~^[ \t]*/\*.*?\*/~ms', $text, $comments);
+    foreach ($comments[0] as $comment) {
+        if (str_contains($comment, 'J?rn Zaefferer')
+            || preg_match('/\?\s?(?:19|20)\d\d-\d{2,4} SpryMedia/', $comment) === 1
+        ) {
+            return true;
+        }
+    }
+    return false;
 };
 
 // Negative control: the guard predicate must fire on the known-bad spellings
 // and stay quiet on the correct ones, else the bundle checks below are vacuous.
-$check('guard flags "J?rn Zaefferer" attribution', $mangledAttribution('/* J?rn Zaefferer */'));
+$check('guard flags "J?rn Zaefferer" attribution', $mangledAttribution("/* J?rn Zaefferer */"));
+$check(
+    'guard flags a mangled licence comment after code on earlier lines',
+    $mangledAttribution("var a=1;\n/*\n J?rn Zaefferer\n*/\n")
+);
 $check('guard flags "?2008-" year range', $mangledAttribution('/*! ?2008-2024 SpryMedia Ltd */'));
-$check('guard flags "? 2008-" year range', $mangledAttribution('/*! ? 2008-2024 SpryMedia Ltd */'));
+$check('guard flags "? 2008-" year range', $mangledAttribution("x();\n  /*! ? 2008-2024 SpryMedia Ltd */"));
 $check(
     'guard ignores a bare "J?rn" and a "?200x-" ternary in code',
-    !$mangledAttribution('var a="J?rn", b=c ?2000-10:3;')
+    !$mangledAttribution("/*! ok */\nvar a=\"J?rn\", b=c ?2000-10:3;")
+);
+$check(
+    'guard ignores a "/* J?rn Zaefferer */" lookalike inside a string literal',
+    !$mangledAttribution("/*! ok */\nvar attributionExample=\"/* J?rn Zaefferer */\";\n")
 );
 $check(
     'guard accepts correct UTF-8 attribution',

@@ -53,118 +53,28 @@ $correctCopyright = "\xC2\xA9"; // U+00A9 COPYRIGHT SIGN
 // -- not the original ASCII '?' mangling and not the correct one.
 $mojibakeCopyright = "\xC3\x82\xC2\xA9"; // "Â©"
 
-// Collect the /* ... */ block comments of a JS source with a small lexer that
-// skips string, template and regex literals and // line comments, so a "/*"
-// inside a string ("/* J?rn */" as data) is not mistaken for a comment and a
-// quote inside a regex or line comment does not desynchronise the scan.
-// Template `${...}` nesting is not tracked; the bundle check below asserts the
-// lexer reaches the DataTables licence comment, which catches a desync.
-$blockComments = static function (string $js): array {
-    $regexAfter = '(,=:[!&|?{;+-*%<>~^';
-    $regexKeywords = ['return', 'typeof', 'case', 'do', 'else', 'in', 'instanceof',
-        'new', 'delete', 'void', 'throw', 'yield', 'await'];
-    $comments = [];
-    $len = strlen($js);
-    $prevPos = -1; // offset of the last significant character outside comments
-    for ($i = 0; $i < $len; $i++) {
-        $c = $js[$i];
-        $next = $js[$i + 1] ?? '';
-        if ($c === '/' && $next === '*') {
-            $end = strpos($js, '*/', $i + 2);
-            $end = $end === false ? $len : $end + 2;
-            $comments[] = substr($js, $i, $end - $i);
-            $i = $end - 1;
-            continue;
-        }
-        if ($c === '/' && $next === '/') {
-            $end = strpos($js, "\n", $i);
-            $i = $end === false ? $len : $end;
-            continue;
-        }
-        if (ctype_space($c)) {
-            continue;
-        }
-        $isRegex = false;
-        if ($c === '/') {
-            $prev = $prevPos < 0 ? '' : $js[$prevPos];
-            if ($prev === '' || str_contains($regexAfter, $prev)) {
-                $isRegex = true;
-            } elseif (preg_match('/[A-Za-z_$]/', $prev) === 1) {
-                $wordStart = $prevPos;
-                while ($wordStart > 0 && preg_match('/[A-Za-z0-9_$]/', $js[$wordStart - 1]) === 1) {
-                    $wordStart--;
-                }
-                $isRegex = in_array(substr($js, $wordStart, $prevPos - $wordStart + 1), $regexKeywords, true);
-            }
-        }
-        if ($c === '"' || $c === "'" || $c === '`' || $isRegex) {
-            $inClass = false;
-            for ($i++; $i < $len; $i++) {
-                $d = $js[$i];
-                if ($d === '\\') {
-                    $i++;
-                } elseif ($isRegex && $d === '[') {
-                    $inClass = true;
-                } elseif ($isRegex && $d === ']') {
-                    $inClass = false;
-                } elseif ($d === $c && !$inClass) {
-                    break;
-                }
-            }
-        }
-        $prevPos = min($i, $len - 1);
-    }
-    return $comments;
-};
-
 // ASCII-mangled attribution as produced by Closure's default US-ASCII output:
-// "Jörn Zaefferer" -> "J?rn", "©2008-2024" -> "?2008-". Both forms are only
-// looked for inside block comments (licence headers): outside them "J?rn" could
-// be legitimate string data and "?2000-" a ternary. The shipped bundle keeps
-// its licences as /*! ... */ blocks.
-$mangledAttribution = static function (string $text) use ($blockComments): bool {
-    foreach ($blockComments($text) as $comment) {
-        if (str_contains($comment, 'J?rn')
-            || preg_match('/(?:^|[\s*(])\?\s?(?:19|20)\d\d-\d{2,4}/', $comment) === 1
-        ) {
-            return true;
-        }
-    }
-    return false;
+// "Jörn Zaefferer" -> "J?rn Zaefferer", "© 2008-2024 SpryMedia" ->
+// "? 2008-2024 SpryMedia". Each pattern is anchored on the vendor name, so the
+// whole bundle can be searched without parsing JavaScript: a bare "J?rn" could
+// be string data and a bare "?2000-" a ternary, but neither carries the name.
+$mangledAttribution = static function (string $text): bool {
+    return str_contains($text, 'J?rn Zaefferer')
+        || preg_match('/\?\s?(?:19|20)\d\d-\d{2,4} SpryMedia/', $text) === 1;
 };
 
 // Negative control: the guard predicate must fire on the known-bad spellings
 // and stay quiet on the correct ones, else the bundle checks below are vacuous.
-$check('guard flags "J?rn" attribution', $mangledAttribution('/* J?rn Zaefferer */'));
-// Each "ignores" input carries a clean comment, so a scan that finds no
-// comment at all cannot pass it; the comment scoping is what is exercised.
-$check(
-    'guard ignores "J?rn" in a string literal outside a comment',
-    !$mangledAttribution('/*! ok */ var a="J?rn";')
-);
-$check(
-    'guard ignores a "/* J?rn */" lookalike inside string literals',
-    !$mangledAttribution(
-        '/*! ok */ var attributionExample="/* J?rn */"; var b=\'/* J?rn */\'; var c=`/* J?rn */`; var d="\\"/* J?rn */";'
-    )
-);
-$check(
-    'guard ignores a "/* J?rn */" lookalike inside a regex literal',
-    !$mangledAttribution('/*! ok */ var r=/\/* J?rn *\//; return /"/.test(s);')
-);
-$check(
-    'guard still flags a comment after a quote in a regex or line comment',
-    $mangledAttribution("/*! ok */ var r=/\"/; // don't\n/* J?rn */")
-);
+$check('guard flags "J?rn Zaefferer" attribution', $mangledAttribution('/* J?rn Zaefferer */'));
 $check('guard flags "?2008-" year range', $mangledAttribution('/*! ?2008-2024 SpryMedia Ltd */'));
 $check('guard flags "? 2008-" year range', $mangledAttribution('/*! ? 2008-2024 SpryMedia Ltd */'));
 $check(
-    'guard ignores a "?200x-" ternary in code',
-    !$mangledAttribution('/*! ok */ var a=b ?2000-10:3;')
+    'guard ignores a bare "J?rn" and a "?200x-" ternary in code',
+    !$mangledAttribution('var a="J?rn", b=c ?2000-10:3;')
 );
 $check(
     'guard accepts correct UTF-8 attribution',
-    !$mangledAttribution("/* J\xC3\xB6rn Zaefferer \xC2\xA92008-2024 */")
+    !$mangledAttribution("/* J\xC3\xB6rn Zaefferer \xC2\xA92008-2024 SpryMedia Ltd */")
 );
 
 // Evaluate the `$js_compiler` value bin/minify-options.php actually produces
@@ -251,11 +161,7 @@ $check(
 if (is_string($bundle)) {
     $check('bundle is valid UTF-8', preg_match('//u', $bundle) === 1);
     $check(
-        'comment lexer reaches the "SpryMedia Ltd" licence comment',
-        array_filter($blockComments($bundle), static fn (string $c): bool => str_contains($c, 'SpryMedia Ltd')) !== []
-    );
-    $check(
-        'bundle carries no "J?rn" or "?200x-" mangled attribution',
+        'bundle carries no "J?rn Zaefferer" or "?200x- SpryMedia" mangled attribution',
         !$mangledAttribution($bundle)
     );
     $check(

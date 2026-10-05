@@ -313,7 +313,7 @@ abstract class AbstractController
      * so the page templates (and the `header.phtml` / `footer.phtml` chrome they
      * `{tmplinclude}`) resolve and render identically — `{genUrl}` and
      * `{OSS_Message}` keep working because they read the front-controller base
-     * URL and session supplied by the native runtime.
+     * URL and session supplied by {@see \OSS_Runtime}.
      *
      * It seeds exactly the chrome variables those templates consume, mirroring
      * the ZF1 `OSS_Controller_Action_Trait_Smarty` setup plus the ViMbAdmin base

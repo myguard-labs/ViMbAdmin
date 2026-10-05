@@ -19,6 +19,7 @@ jobs:
   lint:
     name: PHP syntax lint (PHP ${{ matrix.php }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -68,6 +69,7 @@ jobs:
   audit:
     name: Dependency security audit
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     container:
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3

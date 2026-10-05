@@ -19,6 +19,7 @@ jobs:
   phpstan:
     name: PHPStan
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     container:
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
@@ -105,6 +106,7 @@ jobs:
   psalm-taint:
     name: Psalm taint analysis
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     container:
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
@@ -142,6 +144,7 @@ jobs:
   php-cs-fixer:
     name: PSR-12 formatting
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     container:
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3

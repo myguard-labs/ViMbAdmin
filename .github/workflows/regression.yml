@@ -200,6 +200,7 @@ jobs:
   unit:
     name: Service unit tests (PHP ${{ matrix.php }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -250,6 +251,7 @@ jobs:
   cache-wiring:
     name: Cache wiring (PHP ${{ matrix.php }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -318,6 +320,7 @@ jobs:
   schema-drift:
     name: Schema has no phantom pending changes
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     container:
       image: >-
         mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55

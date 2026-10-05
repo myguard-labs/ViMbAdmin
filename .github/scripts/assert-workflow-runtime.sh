@@ -5,7 +5,7 @@ readonly workflows=(
   .github/workflows/ci.yml
   "${WORKFLOW_RUNTIME_REGRESSION_WORKFLOW:-.github/workflows/regression.yml}"
   .github/workflows/static-analysis.yml
-  .github/workflows/security.yml
+  "${WORKFLOW_RUNTIME_SECURITY_WORKFLOW:-.github/workflows/security.yml}"
 )
 
 readonly php_workflows=(
@@ -13,6 +13,65 @@ readonly php_workflows=(
   "${WORKFLOW_RUNTIME_REGRESSION_WORKFLOW:-.github/workflows/regression.yml}"
   .github/workflows/static-analysis.yml
 )
+
+# Keep the two-space job layout and literal minute bounds explicit. Step-level
+# timeouts do not bound a whole job; actionlint checks the wider YAML schema.
+if ! timeout_errors=$(awk '
+  function finish_job() {
+    if (job != "" && timeout_count != 1) {
+      printf "%s:%d: job %s needs exactly one job-level timeout-minutes (found %d)\n", file, job_line, job, timeout_count
+      failed = 1
+    }
+    job = ""
+    timeout_count = 0
+  }
+  function finish_file() {
+    finish_job()
+    if (file != "" && job_count == 0) {
+      printf "%s: no jobs found in the supported two-space layout\n", file
+      failed = 1
+    }
+  }
+  FNR == 1 {
+    finish_file()
+    file = FILENAME
+    in_jobs = 0
+    job_count = 0
+  }
+  /^[[:space:]]*(#|$)/ { next }
+  /^jobs:[[:space:]]*(#.*)?$/ { in_jobs = 1; next }
+  in_jobs && /^[^ ]/ { finish_job(); in_jobs = 0 }
+  !in_jobs { next }
+  /^  [^ ]/ {
+    finish_job()
+    if ($0 !~ /^  [A-Za-z_][A-Za-z0-9_-]*:[[:space:]]*(#.*)?$/) {
+      printf "%s:%d: unsupported job declaration\n", file, FNR
+      failed = 1
+      next
+    }
+    job = $0
+    sub(/^  /, "", job)
+    sub(/:.*/, "", job)
+    job_line = FNR
+    job_count++
+    next
+  }
+  job != "" && /^    timeout-minutes:/ {
+    timeout_count++
+    value = $0
+    sub(/^    timeout-minutes:[[:space:]]*/, "", value)
+    sub(/[[:space:]]+#.*/, "", value)
+    sub(/[[:space:]]+$/, "", value)
+    if (value !~ /^[1-9][0-9]*$/ || value + 0 > 360) {
+      printf "%s:%d: job %s timeout-minutes must be a literal integer from 1 to 360\n", file, FNR, job
+      failed = 1
+    }
+  }
+  END { finish_file(); exit failed ? 1 : 0 }
+' "${workflows[@]}"); then
+  printf 'Invalid workflow job timeout:\n%s\n' "$timeout_errors" >&2
+  exit 1
+fi
 
 if grep -HnE 'runs-on:.*lxc' "${workflows[@]}"; then
   printf 'Unavailable runner target found.\n' >&2

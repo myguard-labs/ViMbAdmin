@@ -51,6 +51,8 @@ cp -- .github/workflows/security.yml "$fixture"
 cp -- .github/workflows/regression.yml "$regression_fixture"
 run_contract
 
+bash ci/test-workflow-timeouts.sh
+
 cp -- .github/workflows/regression.yml "$regression_fixture"
 sed -i '0,/mirror\.gcr\.io\/library\/php@sha256:/s//docker.io\/library\/php@sha256:/' \
   "$regression_fixture"

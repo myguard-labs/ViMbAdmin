@@ -22,6 +22,7 @@ jobs:
   semgrep:
     name: Semgrep
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     # CodeQL has no PHP support; Semgrep is the SAST engine for this codebase.
     container:
       image: >-

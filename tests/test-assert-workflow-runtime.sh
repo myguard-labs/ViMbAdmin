@@ -58,8 +58,12 @@ expect_rejected 'a runtime image outside the approved mirror' \
   'Workflow runtime images must use approved registry-mirror digests:'
 cp -- .github/workflows/regression.yml "$regression_fixture"
 
-sed -i '0,/^    container:$/{N;s/^    container:\n      image:.*$/    container: php:8.4/;}' \
+sed -i '0,/^    container:$/ { /^    container:$/ { N; s/^    container:\n      image:.*$/    container: php:8.4/; } }' \
   "$regression_fixture"
+grep -qFx '    container: php:8.4' "$regression_fixture" || {
+  printf 'Scalar container fixture mutation did not apply.\n' >&2
+  exit 1
+}
 if command -v actionlint >/dev/null; then
   actionlint "$regression_fixture"
 fi

@@ -399,6 +399,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         if (strpos($address, '@') === false) {
             $this->_validate($address, \ViMbAdmin\Kernel\Form\Validators::localPart(), 'address local part');
             $address .= '@' . $domain->requiredDomainName();
+            $this->_validateEmail($address, 'address');
         } else {
             $this->_validateEmail($address, 'address');
             $addressDomain = substr($address, strrpos($address, '@') + 1);

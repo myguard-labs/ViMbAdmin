@@ -239,6 +239,9 @@ jobs:
       - name: Run all framework-free PHP regression tests
         run: bash tests/run-unit-tests.sh
 
+      - name: MCP alias creation validates composed addresses
+        run: php ci/test-mcp-alias-create.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

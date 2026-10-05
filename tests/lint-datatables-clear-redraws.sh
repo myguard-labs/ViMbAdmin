@@ -133,8 +133,8 @@ expected_paths=(
 )
 
 # Emit NUL-separated matches to $2, diagnostics to $3, and return the real
-# pipeline status. Deliberately a function: an inline `find ... | sort` whose
-# status is discarded is exactly the defect shape being fixed here.
+# pipeline status as the pipefail guard. Deliberately a function: an inline
+# `find ... | sort` whose status is discarded is the defect shape guarded here.
 select_nul() {
   local out="$2" err="$3" rc=0
   find "$1" -type f -name '*.js' -print0 2>"$err" | sort -z >"$out" || rc=$?

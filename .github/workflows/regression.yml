@@ -30,6 +30,9 @@ jobs:
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
 
+      - name: PR runner job count reports observed and expected values
+        run: bash ci/test-pr-runner-isolation-count.sh
+
       - name: Install pinned asset toolchain
         run: |
           compiler_url=https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/
@@ -72,6 +75,12 @@ jobs:
 
       - name: Bundle resolver preserves inherited shell options
         run: bash tests/test-resolve-bundle-v.sh
+
+      - name: Shipped JS bundle retains UTF-8 licence attribution
+        run: php ci/test-bundle-utf8.php
+
+      - name: JS minifier preserves UTF-8 charset through the shipped bundle
+        run: php tests/test-minify-bundle-charset.php
 
       - name: Smarty 5 JS-template escaping (alias [+] button regression)
         run: bash tests/lint-template-escaping.sh

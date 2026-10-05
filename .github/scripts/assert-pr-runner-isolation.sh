@@ -59,7 +59,7 @@ awk '
   function finish_job() {
     if (!in_job) return
     jobs++
-    if (runner != 1 || guard != 1 || checkout != 1) failed = 1
+    if (runner != 1 || guard != 1 || checkout != 1) per_job_failed = 1
   }
   FNR == 1 {
     finish_job()
@@ -89,11 +89,16 @@ awk '
     finish_job()
     # Every PR-triggered job across the four workflows must be accounted for,
     # so adding or removing one requires updating this count deliberately.
-    if (jobs != 11) failed = 1
-    exit failed ? 1 : 0
+    if (per_job_failed) {
+      print "Every PR-triggered job must use ubuntu-24.04, pin the PR head, and run the isolation guard exactly once." > "/dev/stderr"
+    }
+    if (jobs != 11) {
+      printf "PR-triggered job count is %d; expected 11.\n", jobs > "/dev/stderr"
+      failed = 1
+    }
+    exit (per_job_failed || failed) ? 1 : 0
   }
 ' "${workflows[@]}" || {
-  printf 'Every PR-triggered job must use ubuntu-24.04, pin the PR head, and run the isolation guard exactly once.\n' >&2
   exit 1
 }
 

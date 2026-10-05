@@ -13,6 +13,7 @@ $finder = (new PhpCsFixer\Finder())
         __DIR__ . '/.github',
         __DIR__ . '/application',
         __DIR__ . '/bin',
+        __DIR__ . '/ci',
         __DIR__ . '/library',
         __DIR__ . '/public',
         __DIR__ . '/src',

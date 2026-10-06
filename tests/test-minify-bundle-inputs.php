@@ -336,13 +336,13 @@ $check(
 );
 $check(
     'clean-css CLI is an exact direct dependency',
-    ($toolDependencies['clean-css-cli'] ?? null) === '5.6.3'
+    ($toolDependencies['clean-css-cli'] ?? null) === '5.4.2'
 );
 $check(
     'clean-css dependency graph is locked',
     is_array($toolLock)
         && ($toolLock['lockfileVersion'] ?? null) === 3
-        && ($cleanCssCliLock['version'] ?? null) === '5.6.3'
+        && ($cleanCssCliLock['version'] ?? null) === '5.4.2'
         && ($cleanCssLock['version'] ?? null) === '5.3.3'
 );
 $check(

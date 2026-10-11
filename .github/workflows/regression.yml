@@ -246,6 +246,9 @@ jobs:
       - name: SMTP STARTTLS is fail-closed
         run: php ci/test-mailer-starttls.php
 
+      - name: Bcrypt password length is fail-closed
+        run: php ci/test-bcrypt-password-length.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

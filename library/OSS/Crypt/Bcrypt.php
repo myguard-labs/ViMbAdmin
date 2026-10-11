@@ -50,6 +50,8 @@
  */
 class OSS_Crypt_Bcrypt
 {
+    private const MAX_PASSWORD_BYTES = 72;
+
     /**
      * @var int The cost for the hashing algorithm
      *
@@ -102,6 +104,10 @@ class OSS_Crypt_Bcrypt
      */
     public function hash($plain)
     {
+        if (strlen($plain) > self::MAX_PASSWORD_BYTES) {
+            throw new OSS_Crypt_Exception('Password must not exceed 72 bytes for bcrypt');
+        }
+
         $hash = crypt($plain, $this->generateSalt());
 
         if (preg_match('/^\$2a\$\d{2}\$[.\/A-Za-z0-9]{53}$/D', $hash) === 1) {
@@ -119,6 +125,10 @@ class OSS_Crypt_Bcrypt
      */
     public static function verify($plain, $hash)
     {
+        if (strlen($plain) > self::MAX_PASSWORD_BYTES) {
+            return false;
+        }
+
         // Constant-time comparison (avoid timing side-channel on the hash).
         return hash_equals((string) $hash, crypt($plain, (string) $hash));
     }

@@ -417,6 +417,11 @@ final class AuthController extends AbstractController
                 $code = self::requiredString($form->values()['code'] ?? null, 'Authentication code');
                 $bf   = $this->bruteForce($options);
 
+                // The password step leaves its pending attempt in place until
+                // the whole login succeeds. Refuse an already-locked source
+                // before evaluating another second-factor guess.
+                $bf->assertNotLocked(null);
+
                 if ($tfa->verifyForAdmin($admin, $code) || $tfa->consumeBackupCode($admin, $code)) {
                     $bf->clear($admin->getUsername(), null);
                     return $this->grantPendingLogin($admin, $session);
@@ -424,6 +429,10 @@ final class AuthController extends AbstractController
 
                 $bf->record($admin->getUsername(), null);
                 $this->em()->flush();
+                // record() locks at >= max_attempts. Apply that transition to
+                // this response so the threshold-crossing failure cannot fall
+                // through to a reusable challenge.
+                $bf->assertNotLocked(null);
                 $this->flash('Invalid authentication code. Please try again.', FlashMessages::ERROR);
             }
         }

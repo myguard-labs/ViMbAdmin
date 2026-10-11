@@ -819,29 +819,31 @@ final class AuthController extends AbstractController
                 if (!$tokenMatches) {
                     $this->flash('Invalid username / token combination. Please check your details and try again.', FlashMessages::ERROR);
                 } else {
-                    $user->setPassword(\OSS_Auth_Password::hash(
+                    $replacement = \OSS_Auth_Password::hash(
                         self::requiredString($v['password'] ?? null, 'New admin password'),
                         self::passwordOptions($options),
-                    ));
-                    $user->deletePreference('tokens.password_reset');
-
-                    if (method_exists($user, 'setFailedLogins')) {
-                        $user->setFailedLogins(0);
-                    }
-
-                    $this->em()->flush();
-
-                    $this->sendAuthEmail(
-                        'reset-password',
-                        self::optionString($options, '', 'identity', 'sitename') . ' - Your Password Has Been Reset',
-                        $user,
-                        []
                     );
+                    if (!$this->adminRepository()->resetPasswordWithToken($user, $token, $replacement)) {
+                        $this->flash('Invalid username / token combination. Please check your details and try again.', FlashMessages::ERROR);
+                    } else {
+                        if (method_exists($user, 'setFailedLogins')) {
+                            $user->setFailedLogins(0);
+                        }
 
-                    $this->flash('Your password has been successfully changed. Please log in below with your new password.');
-                    error_log(sprintf('%s has completed a password reset', $user->getUsername()));
+                        $this->em()->flush();
 
-                    return $this->redirect('auth/login');
+                        $this->sendAuthEmail(
+                            'reset-password',
+                            self::optionString($options, '', 'identity', 'sitename') . ' - Your Password Has Been Reset',
+                            $user,
+                            []
+                        );
+
+                        $this->flash('Your password has been successfully changed. Please log in below with your new password.');
+                        error_log(sprintf('%s has completed a password reset', $user->getUsername()));
+
+                        return $this->redirect('auth/login');
+                    }
                 }
             }
         } else {

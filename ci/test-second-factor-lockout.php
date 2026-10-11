@@ -246,6 +246,11 @@ function secondFactorLockoutProbe(array $argv): never
         throw new InvalidArgumentException('Probe requires scenario, state directory and seed count');
     }
 
+    $statusPath = $stateDirectory . '.http-status';
+    register_shutdown_function(static function () use ($statusPath): void {
+        file_put_contents($statusPath, (string) http_response_code());
+    });
+
     $_SERVER['REMOTE_ADDR'] = '192.0.2.38';
     unset($_SERVER['HTTP_X_FORWARDED_FOR']);
     $disabled = $scenario === 'disabled';
@@ -308,9 +313,10 @@ $check = static function (string $label, bool $ok) use (&$checks, &$failures): v
     }
 };
 
-/** @return array{status:int,stdout:string,stderr:string,json:?array<string,mixed>} */
+/** @return array{status:int,stdout:string,stderr:string,json:?array<string,mixed>,http_status:?int} */
 $probe = static function (string $scenario, int $seed = 0) use ($evidenceRoot): array {
     $stateDirectory = $evidenceRoot . '/' . $scenario . '-' . bin2hex(random_bytes(4));
+    $statusPath = $stateDirectory . '.http-status';
     $command = [PHP_BINARY, __FILE__, '--probe', $scenario, $stateDirectory, (string) $seed];
     $pipes = [];
     $process = proc_open($command, [
@@ -326,11 +332,15 @@ $probe = static function (string $scenario, int $seed = 0) use ($evidenceRoot): 
     fclose($pipes[2]);
     $status = proc_close($process);
     $decoded = json_decode($stdout, true);
+    $httpStatus = is_file($statusPath)
+        ? filter_var(trim((string) file_get_contents($statusPath)), FILTER_VALIDATE_INT)
+        : false;
     return [
         'status' => $status,
         'stdout' => $stdout,
         'stderr' => $stderr,
         'json' => is_array($decoded) ? $decoded : null,
+        'http_status' => is_int($httpStatus) ? $httpStatus : null,
     ];
 };
 
@@ -349,6 +359,7 @@ $check(
     'threshold-crossing second-factor failure is rejected with the lockout response',
     $threshold['status'] === 0
         && $threshold['stderr'] === ''
+        && $threshold['http_status'] === 429
         && $threshold['stdout'] === 'Too many failed login attempts. Try again later.',
 );
 
@@ -357,6 +368,7 @@ $check(
     'an already-locked source cannot submit another second-factor guess',
     $alreadyLocked['status'] === 0
         && $alreadyLocked['stderr'] === ''
+        && $alreadyLocked['http_status'] === 429
         && $alreadyLocked['stdout'] === 'Too many failed login attempts. Try again later.',
 );
 

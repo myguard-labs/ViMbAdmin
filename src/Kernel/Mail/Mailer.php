@@ -31,8 +31,8 @@ use Symfony\Component\Mime\Email;
  *  - `type`            `smtp` (default) | `sendmail`
  *  - `host`            SMTP host (default `localhost`)
  *  - `port`            SMTP port (default 465 for implicit TLS, else 587)
- *  - `ssl`             `ssl` (implicit TLS) | `tls`/`starttls` (opportunistic
- *                      STARTTLS, the symfony default) | omitted/`none` (plaintext)
+ *  - `ssl`             `ssl` (implicit TLS) | `tls`/`starttls` or omitted
+ *                      (required STARTTLS) | `none` (intentional plaintext)
  *  - `username`        SMTP auth user (auth attempted only when non-empty)
  *  - `password`        SMTP auth password
  *  - `verify_peer`     `0` to accept an untrusted server certificate (default 1)
@@ -91,7 +91,7 @@ final class Mailer
      * config. Pure (no I/O, no symfony objects) so it is trivially testable.
      *
      * @param array<string,mixed> $o
-     * @return array{type:string,host:string,port:int,tls:?bool,username:?string,password:string,verifyPeer:bool,verifyPeerName:bool}
+     * @return array{type:string,host:string,port:int,tls:bool,requireTls:bool,autoTls:bool,username:?string,password:string,verifyPeer:bool,verifyPeerName:bool}
      */
     public static function resolveConfig(array $o): array
     {
@@ -109,7 +109,9 @@ final class Mailer
                 'type'           => 'sendmail',
                 'host'           => '',
                 'port'           => 0,
-                'tls'            => null,
+                'tls'            => false,
+                'requireTls'     => false,
+                'autoTls'        => false,
                 'username'       => null,
                 'password'       => '',
                 'verifyPeer'     => true,
@@ -126,15 +128,21 @@ final class Mailer
             throw new \InvalidArgumentException('Unsupported mail transport SSL mode');
         }
 
-        // implicit TLS (smtps) vs opportunistic STARTTLS vs plaintext
+        // Implicit TLS (smtps), required STARTTLS, or explicitly plaintext.
         if ($ssl === 'ssl') {
             $tls         = true;        // implicit TLS from connect
+            $requireTls  = true;
+            $autoTls     = false;
             $defaultPort = 465;
-        } elseif ($ssl === 'tls' || $ssl === 'starttls') {
-            $tls         = null;        // symfony auto-STARTTLS when offered
+        } elseif ($ssl !== 'none') {
+            $tls         = false;
+            $requireTls  = true;        // fail if STARTTLS is unavailable
+            $autoTls     = true;
             $defaultPort = 587;
         } else {
-            $tls         = false;       // disable TLS entirely
+            $tls         = false;
+            $requireTls  = false;
+            $autoTls     = false;       // explicit opt-in to plaintext SMTP
             $defaultPort = 587;
         }
 
@@ -160,6 +168,8 @@ final class Mailer
             'host'           => $host,
             'port'           => $port,
             'tls'            => $tls,
+            'requireTls'     => $requireTls,
+            'autoTls'        => $autoTls,
             'username'       => $username,
             'password'       => $password,
             'verifyPeer'     => array_key_exists('verify_peer', $o) ? self::boolOpt($o['verify_peer']) : true,
@@ -180,7 +190,9 @@ final class Mailer
             return new SendmailTransport();
         }
 
-        $transport = new EsmtpTransport($c['host'], $c['port'], $c['tls']);
+        $transport = new RequiredTlsEsmtpTransport($c['host'], $c['port'], $c['tls']);
+        $transport->setAutoTls($c['autoTls']);
+        $transport->setRequireTls($c['requireTls']);
 
         if ($c['username'] !== null) {
             $transport->setUsername($c['username']);

@@ -33,26 +33,37 @@ function check(string $label, bool $ok): void
 
 echo "== native mailer ==\n";
 
-// --- resolveConfig: SMTP defaults (no ssl) ---------------------------------
+// --- resolveConfig: secure SMTP defaults (required STARTTLS) ---------------
 $c = Mailer::resolveConfig([]);
 check('default type is smtp', $c['type'] === 'smtp');
 check('default host localhost', $c['host'] === 'localhost');
-check('default port 587 (no ssl)', $c['port'] === 587);
-check('default tls false (no ssl)', $c['tls'] === false);
+check('default port 587', $c['port'] === 587);
+check('default starts without implicit TLS', $c['tls'] === false);
+check('default requires TLS', $c['requireTls'] === true);
+check('default enables STARTTLS negotiation', $c['autoTls'] === true);
 check('default no auth (username null)', $c['username'] === null);
 check('default verify_peer true', $c['verifyPeer'] === true);
 check('default verify_peer_name true', $c['verifyPeerName'] === true);
 
-// --- resolveConfig: opportunistic STARTTLS (ssl=tls) -----------------------
+// --- resolveConfig: required STARTTLS (ssl=tls) ----------------------------
 $c = Mailer::resolveConfig(['ssl' => 'tls']);
-check('ssl=tls -> tls null (auto STARTTLS)', $c['tls'] === null);
+check('ssl=tls -> no implicit TLS', $c['tls'] === false);
+check('ssl=tls -> TLS required', $c['requireTls'] === true);
+check('ssl=tls -> STARTTLS enabled', $c['autoTls'] === true);
 check('ssl=tls -> default port 587', $c['port'] === 587);
 $c = Mailer::resolveConfig(['ssl' => 'STARTTLS']);
-check('ssl=STARTTLS (case-insensitive) -> tls null', $c['tls'] === null);
+check('ssl=STARTTLS (case-insensitive) -> TLS required', $c['requireTls'] === true);
+
+// --- resolveConfig: plaintext requires an explicit mode -------------------
+$c = Mailer::resolveConfig(['ssl' => 'none']);
+check('ssl=none -> TLS not required', $c['requireTls'] === false);
+check('ssl=none -> automatic STARTTLS disabled', $c['autoTls'] === false);
 
 // --- resolveConfig: implicit TLS (ssl=ssl) ---------------------------------
 $c = Mailer::resolveConfig(['ssl' => 'ssl']);
 check('ssl=ssl -> tls true (implicit)', $c['tls'] === true);
+check('ssl=ssl -> transport remains TLS-required', $c['requireTls'] === true);
+check('ssl=ssl -> STARTTLS disabled', $c['autoTls'] === false);
 check('ssl=ssl -> default port 465', $c['port'] === 465);
 
 // --- resolveConfig: explicit port wins over the ssl default ----------------
@@ -86,6 +97,12 @@ check(
     'smtp -> EsmtpTransport',
     Mailer::buildTransport(['ssl' => 'tls', 'host' => 'mail.example.net', 'port' => 587]) instanceof EsmtpTransport
 );
+$t = Mailer::buildTransport(['ssl' => 'tls']);
+check('required STARTTLS transport enforces TLS', $t instanceof EsmtpTransport && $t->isTlsRequired());
+check('required STARTTLS transport negotiates STARTTLS', $t instanceof EsmtpTransport && $t->isAutoTls());
+$t = Mailer::buildTransport(['ssl' => 'none']);
+check('explicit plaintext transport does not require TLS', $t instanceof EsmtpTransport && !$t->isTlsRequired());
+check('explicit plaintext transport cannot auto-upgrade', $t instanceof EsmtpTransport && !$t->isAutoTls());
 check(
     'sendmail -> SendmailTransport',
     Mailer::buildTransport(['type' => 'sendmail']) instanceof SendmailTransport

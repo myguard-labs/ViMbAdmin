@@ -329,7 +329,8 @@ resources.smarty.skin      = "dark"
 ;; password resets, error alerts). Defaults to submission on 587 + STARTTLS.
 ;;
 ;;   type : smtp | sendmail
-;;   ssl  : tls (STARTTLS, port 587) | ssl (implicit TLS, port 465) | omit (plaintext)
+;;   ssl  : tls (required STARTTLS, port 587; also the secure default)
+;;          ssl (implicit TLS, port 465) | none (intentional plaintext)
 ;;   auth : plain | login | crammd5   (omit entirely for an unauthenticated relay)
 ;;
 

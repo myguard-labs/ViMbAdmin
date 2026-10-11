@@ -3,6 +3,7 @@
 namespace Repositories;
 
 use Doctrine\ORM\EntityRepository;
+use Throwable;
 use UnexpectedValueException;
 
 /**
@@ -15,6 +16,77 @@ use UnexpectedValueException;
  */
 class Admin extends EntityRepository
 {
+    /**
+     * Consume a live password-reset proof and publish its replacement password
+     * as one serialized database transition.
+     */
+    public function resetPasswordWithToken(
+        \Entities\Admin $admin,
+        string $token,
+        string $replacement,
+    ): bool {
+        $adminId = $admin->getId();
+        if (!is_int($adminId) || $adminId < 1) {
+            return false;
+        }
+
+        $entityManager = $this->getEntityManager();
+        $connection = $entityManager->getConnection();
+        $connection->beginTransaction();
+        try {
+            $lockedId = $connection->fetchOne(
+                'SELECT id FROM admin WHERE id = ? FOR UPDATE',
+                [ $adminId ],
+            );
+            if ($lockedId !== $adminId && $lockedId !== (string) $adminId) {
+                $connection->rollBack();
+                return false;
+            }
+
+            $proofId = $connection->fetchOne(
+                'SELECT id FROM admin_pref'
+                . ' WHERE Admin_id = ? AND attribute = ?'
+                . ' AND BINARY value = BINARY ? AND (expire = 0 OR expire >= ?)'
+                . ' LIMIT 1',
+                [ $adminId, 'tokens.password_reset', $token, time() ],
+            );
+            if ($proofId === false) {
+                $connection->rollBack();
+                return false;
+            }
+
+            $connection->executeStatement(
+                'DELETE FROM admin_pref WHERE Admin_id = ? AND attribute = ?',
+                [ $adminId, 'tokens.password_reset' ],
+            );
+            $affected = $connection->executeStatement(
+                'UPDATE admin SET password = ? WHERE id = ?',
+                [ $replacement, $adminId ],
+            );
+            if ($affected !== 1) {
+                throw new UnexpectedValueException('Password-reset publication affected an invalid number of admins.');
+            }
+            $connection->commit();
+        } catch (Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+            throw $e;
+        }
+
+        // Keep managed state aligned with the direct database transition so a
+        // later controller flush cannot restore the password or reset proofs.
+        $admin->setPassword($replacement);
+        $entityManager->getUnitOfWork()->setOriginalEntityProperty(
+            spl_object_id($admin),
+            'password',
+            $replacement,
+        );
+        $admin->deletePreference('tokens.password_reset');
+
+        return true;
+    }
+
     /**
      * Replace an authenticated credential only if it is still the exact hash
      * that was verified. A concurrent password reset wins harmlessly.

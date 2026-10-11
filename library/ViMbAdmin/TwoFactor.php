@@ -1,5 +1,7 @@
 <?php
 
+use InvalidArgumentException as TotpSaltException;
+
 /**
  * ViMbAdmin two-factor authentication (TOTP).
  *
@@ -64,6 +66,10 @@ class ViMbAdmin_TwoFactor
      */
     public function __construct($issuer = 'ViMbAdmin', $securitysalt = '')
     {
+        if (!is_string($securitysalt) || trim($securitysalt) === '') {
+            throw new TotpSaltException('TOTP security salt must be a non-empty string.');
+        }
+
         // Use Bacon's SVG backend: pure PHP, no imagick/gd dependency. The
         // resulting data: URI embeds an inline SVG QR code.
         $qr = new \RobThree\Auth\Providers\Qr\BaconQrCodeProvider(
@@ -75,9 +81,7 @@ class ViMbAdmin_TwoFactor
 
         $this->_tfa = new \RobThree\Auth\TwoFactorAuth($qr, $issuer);
 
-        // Derive a stable 32-byte key from the securitysalt. If the salt is
-        // empty (misconfigured), fall back to a fixed-but-app-local digest so
-        // we never key with an empty string.
+        // Derive a stable 32-byte key from the securitysalt.
         $this->_key = hash('sha256', 'vimbadmin-totp|' . $securitysalt, true);
     }
 

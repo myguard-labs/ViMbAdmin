@@ -267,6 +267,10 @@ A newer version may add config keys. Your live `application.ini` is **never
 overwritten** (it holds DB credentials and salt), so reconcile it against the
 shipped template after a `git pull`:
 
+If an existing configuration omits `resources.mail.transport.ssl` and uses a
+plaintext SMTP relay, set `resources.mail.transport.ssl = "none"` explicitly.
+An omitted value now requires STARTTLS.
+
 ```sh
 # see which keys the template gained that your live file lacks
 diff <(grep -oE '^[a-z][a-zA-Z0-9_.\[\]]*' application/configs/application.ini      | sort -u) \

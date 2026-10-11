@@ -32,6 +32,59 @@ class Admin
     }
 
     /**
+     * Atomically replace an unexpired scalar preference if its stored value is
+     * still the value the caller inspected. A missing preference may be
+     * claimed by passing false as the expected value.
+     */
+    public function compareAndSwapPreference(string $attribute, string|false $expected, string $replacement): bool
+    {
+        if ($this->getId() === null) {
+            if ($this->getPreference($attribute) !== $expected) {
+                return false;
+            }
+            $this->setPreference($attribute, $replacement);
+            return true;
+        }
+
+        $connection = $this->_getPreferenceEntityManager()->getConnection();
+        if ($expected === false) {
+            $affected = $connection->executeStatement(
+                'INSERT IGNORE INTO admin_pref (Admin_id, attribute, ix, op, value, expire) VALUES (?, ?, 0, ?, ?, 0)',
+                [ $this->getId(), $attribute, '=', $replacement ],
+            );
+        } else {
+            $affected = $connection->executeStatement(
+                'UPDATE admin_pref SET value = ?'
+                . ' WHERE Admin_id = ? AND attribute = ? AND ix = 0'
+                . ' AND BINARY value = BINARY ? AND (expire = 0 OR expire >= ?)',
+                [ $replacement, $this->getId(), $attribute, $expected, time() ],
+            );
+        }
+
+        if (!is_int($affected) || $affected < 0 || $affected > 1) {
+            throw new \UnexpectedValueException('Preference compare-and-swap returned an invalid affected-row count.');
+        }
+        if ($affected !== 1) {
+            return false;
+        }
+
+        // Keep an already-managed preference aligned with the direct update,
+        // so the login controller's later flush cannot restore stale state.
+        if ($expected !== false) {
+            $preference = $this->loadPreference($attribute);
+            if ($preference !== false) {
+                $preference->setValue($replacement);
+                $this->_getPreferenceEntityManager()->getUnitOfWork()->setOriginalEntityProperty(
+                    spl_object_id($preference),
+                    'value',
+                    $replacement,
+                );
+            }
+        }
+        return true;
+    }
+
+    /**
      * @param string $attribute
      * @param bool $withIndex
      * @param bool $ignoreExpired

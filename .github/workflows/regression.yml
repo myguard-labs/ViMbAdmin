@@ -416,3 +416,13 @@ jobs:
           DB_PASS: ci
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php tests/test-mailbox-queue-atomic-mariadb.php
+
+      - name: One-time second factors are atomic across database sessions
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-two-factor-atomic-mariadb.php

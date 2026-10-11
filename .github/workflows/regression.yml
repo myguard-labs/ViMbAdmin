@@ -249,6 +249,9 @@ jobs:
       - name: Bcrypt password length is fail-closed
         run: php ci/test-bcrypt-password-length.php
 
+      - name: Second-factor guessing stops at the brute-force threshold
+        run: php ci/test-second-factor-lockout.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

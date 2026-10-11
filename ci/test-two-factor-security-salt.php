@@ -38,8 +38,16 @@ $minimal = new ViMbAdmin_TwoFactor('CI-039', 'x');
 $minimalCiphertext = $encrypt->invoke($minimal, $secret);
 $check('a one-character salt is accepted and decrypts its ciphertext', $decrypt->invoke($minimal, $minimalCiphertext) === $secret);
 
+$padded = new ViMbAdmin_TwoFactor('CI-039', ' x ');
+$trimmed = new ViMbAdmin_TwoFactor('CI-039', 'x');
+$paddedCiphertext = $encrypt->invoke($padded, $secret);
+$check('an accepted padded salt decrypts its own ciphertext', $decrypt->invoke($padded, $paddedCiphertext) === $secret);
+$check('accepted salt bytes remain distinct key material', $decrypt->invoke($trimmed, $paddedCiphertext) === null);
+
 $check('an empty salt is rejected before key derivation', $rejectsSalt(''));
 $check('a whitespace-only salt is rejected before key derivation', $rejectsSalt(" \t\n"));
+$check('a form-feed-only salt is rejected before key derivation', $rejectsSalt("\f"));
+$check('an NBSP-only salt is rejected before key derivation', $rejectsSalt("\u{00A0}"));
 $check('a non-string salt is rejected deterministically', $rejectsSalt(null));
 
 echo "\n";

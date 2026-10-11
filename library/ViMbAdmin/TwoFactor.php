@@ -66,7 +66,7 @@ class ViMbAdmin_TwoFactor
      */
     public function __construct($issuer = 'ViMbAdmin', $securitysalt = '')
     {
-        if (!is_string($securitysalt) || trim($securitysalt) === '') {
+        if (!is_string($securitysalt) || mb_trim($securitysalt) === '') {
             throw new TotpSaltException('TOTP security salt must be a non-empty string.');
         }
 

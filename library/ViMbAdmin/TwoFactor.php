@@ -265,8 +265,13 @@ class ViMbAdmin_TwoFactor
             return false;
         }
 
-        $admin->setPreference(self::PREF_LASTTS, (string) $timeslice);
-        return true;
+        return $admin->compareAndSwapPreference(
+            self::PREF_LASTTS,
+            $last === 0 && $admin->getPreference(self::PREF_LASTTS) === false
+                ? false
+                : (string) $last,
+            (string) $timeslice,
+        );
     }
 
     // ---- backup codes --------------------------------------------------
@@ -325,8 +330,11 @@ class ViMbAdmin_TwoFactor
             }
             if (password_verify($code, $hash)) {
                 unset($hashes[ $idx ]);
-                $admin->setPreference(self::PREF_BACKUP, json_encode(array_values($hashes), JSON_THROW_ON_ERROR));
-                return true;
+                return $admin->compareAndSwapPreference(
+                    self::PREF_BACKUP,
+                    $raw,
+                    json_encode(array_values($hashes), JSON_THROW_ON_ERROR),
+                );
             }
         }
         return false;

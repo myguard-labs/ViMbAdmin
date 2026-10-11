@@ -38,6 +38,8 @@
  */
 class ViMbAdmin_Dovecot
 {
+    private const MAX_BCRYPT_PASSWORD_BYTES = 72;
+
     // crypt() scheme identifiers, keyed by Dovecot scheme name. These produce
     // exactly the bare hash strings Dovecot stores after its {SCHEME} prefix:
     //   BLF-CRYPT    -> $2y$...   (bcrypt / Blowfish)
@@ -68,6 +70,10 @@ class ViMbAdmin_Dovecot
 
         switch ($scheme) {
             case 'BLF-CRYPT':
+                if (strlen($pass) > self::MAX_BCRYPT_PASSWORD_BYTES) {
+                    throw new ViMbAdmin_Exception(_('Password must not exceed 72 bytes for bcrypt'));
+                }
+
                 // password_hash() emits the modern $2y$ bcrypt prefix Dovecot
                 // accepts under {BLF-CRYPT}.
                 $hash = password_hash($pass, PASSWORD_BCRYPT);
@@ -132,6 +138,10 @@ class ViMbAdmin_Dovecot
 
         // bcrypt: password_verify handles $2y$/$2a$/$2b$ (also {BLF-CRYPT}).
         if (strncmp($pwhash, '$2', 2) === 0) {
+            if (strlen($pwplain) > self::MAX_BCRYPT_PASSWORD_BYTES) {
+                return false;
+            }
+
             return password_verify($pwplain, $pwhash);
         }
 

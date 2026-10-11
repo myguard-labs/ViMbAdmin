@@ -130,8 +130,7 @@ defaults.mailbox.min_password_length = 8
 ;                   blowfish, sha256, sha512. New passwords use bcrypt through
 ;                   password_hash(); existing hashes in the named format still
 ;                   verify. New passwords and authentication candidates over
-;                   bcrypt's 72-byte limit are rejected for new $2y$ hashes;
-;                   historical $2a$ hashes retain their verification behavior.
+;                   bcrypt's 72-byte limit are rejected for every bcrypt hash.
 ;                   Prefer "dovecot:BLF-CRYPT" for new installations.
 ;   "dovecot:XXX" - produce a Dovecot-compatible hash for scheme XXX. Hashing is
 ;                      done natively in PHP (no external doveadm binary), so XXX

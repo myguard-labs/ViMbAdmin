@@ -173,7 +173,7 @@ class OSS_Auth_Password
         }
 
         if (substr($hash, 0, 6) == 'crypt:') {
-            if (str_starts_with($pwhash, '$2y$') && strlen($pwplain) > 72) {
+            if (str_starts_with($pwhash, '$2') && strlen($pwplain) > 72) {
                 return false;
             }
 

@@ -128,8 +128,8 @@ foreach ($legacyCryptHashes as $mode => $legacyHash) {
 $longLegacyBlowfishPassword = str_repeat('A', 72) . 'X';
 $longLegacyBlowfishHash = crypt($longLegacyBlowfishPassword, '$2a$04$abcdefghijklmnopqrstuu');
 $check(
-    'crypt:blowfish existing $2a$ hash retains over-72-byte verification',
-    OSS_Auth_Password::verify($longLegacyBlowfishPassword, $longLegacyBlowfishHash, 'crypt:blowfish')
+    'crypt:blowfish existing $2a$ hash rejects over-72-byte verification',
+    !OSS_Auth_Password::verify($longLegacyBlowfishPassword, $longLegacyBlowfishHash, 'crypt:blowfish')
 );
 $longLegacyPassword = str_repeat('A', 72) . 'X';
 foreach (['crypt:md5' => '$1$12345678$', 'crypt:sha256' => '$5$1234567890abcdef$', 'crypt:sha512' => '$6$1234567890abcdef$'] as $mode => $salt) {

@@ -342,6 +342,11 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $m->setActive(ViMbAdmin_Mcp_Input::optionalBoolean($params, 'active', true));
         $m->setDeletePending(false);
         $m->setCreated(new \DateTime());
+        try {
+            ViMbAdmin_Service_Mailbox::applyCreationPolicy($m, $domain);
+        } catch (ViMbAdmin_Service_Exception $e) {
+            throw new ViMbAdmin_Mcp_DomainException($e->getMessage(), 0, $e);
+        }
         $m->setPassword(OSS_Auth_Password::hash($password, [
             'pwhash'    => ViMbAdmin_Mcp_Input::string(
                 ViMbAdmin_Mcp_Input::option($this->options(), 'defaults', 'mailbox', 'password_scheme')[1],

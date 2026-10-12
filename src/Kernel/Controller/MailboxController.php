@@ -717,8 +717,7 @@ final class MailboxController extends AbstractController
                 $this->flash('Please select a valid domain.', FlashMessages::ERROR);
             } elseif ($pErr !== null) {
                 $this->flash($pErr, FlashMessages::ERROR);
-            } elseif (!$admin->isSuper() && $domain->getMaxMailboxes() != 0
-                && $domain->getMailboxCount() >= $domain->getMaxMailboxes()) {
+            } elseif (\ViMbAdmin_Service_Mailbox::mailboxLimitReached($domain, !$admin->isSuper())) {
                 $this->flash('You have used all of your allocated mailboxes.', FlashMessages::ERROR);
             } else {
                 $localPart = \ViMbAdmin_Identity::canonical(
@@ -741,10 +740,8 @@ final class MailboxController extends AbstractController
                     ));
 
                     // Clamp the quota to the domain's per-mailbox maximum.
-                    if ($domain->getMaxQuota() != 0
-                        && ($mailbox->getQuota() <= 0 || $mailbox->getQuota() > $domain->getMaxQuota())) {
+                    if (\ViMbAdmin_Service_Mailbox::clampCreationQuota($mailbox, $domain)) {
                         $domainQuota = $domain->requiredQuota();
-                        $mailbox->setQuota($domainQuota);
                         $this->flash('Mailbox quota set to ' . $domainQuota, FlashMessages::INFO);
                     }
 

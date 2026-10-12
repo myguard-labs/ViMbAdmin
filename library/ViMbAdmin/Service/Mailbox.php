@@ -37,6 +37,52 @@ class ViMbAdmin_Service_Mailbox
         $this->em = $em;
     }
 
+    /** Return whether this domain has exhausted its mailbox allowance. */
+    public static function mailboxLimitReached(
+        \Entities\Domain $domain,
+        bool $enforceLimit = true
+    ): bool {
+        return $enforceLimit
+            && $domain->getMaxMailboxes() != 0
+            && $domain->getMailboxCount() >= $domain->getMaxMailboxes();
+    }
+
+    /**
+     * Apply the domain's per-mailbox quota policy.
+     *
+     * @return bool true when the requested quota was replaced by the domain default
+     */
+    public static function clampCreationQuota(
+        \Entities\Mailbox $mailbox,
+        \Entities\Domain $domain
+    ): bool {
+        if ($domain->getMaxQuota() == 0
+            || ($mailbox->getQuota() > 0 && $mailbox->getQuota() <= $domain->getMaxQuota())) {
+            return false;
+        }
+
+        $mailbox->setQuota($domain->requiredQuota());
+        return true;
+    }
+
+    /**
+     * Enforce every domain policy shared by mailbox-creation entry points.
+     *
+     * @throws ViMbAdmin_Service_Exception when the mailbox allowance is exhausted
+     * @return bool true when the requested quota was replaced by the domain default
+     */
+    public static function applyCreationPolicy(
+        \Entities\Mailbox $mailbox,
+        \Entities\Domain $domain,
+        bool $enforceLimit = true
+    ): bool {
+        if (self::mailboxLimitReached($domain, $enforceLimit)) {
+            throw new ViMbAdmin_Service_Exception('You have used all of your allocated mailboxes.');
+        }
+
+        return self::clampCreationQuota($mailbox, $domain);
+    }
+
     /**
      * Toggle a mailbox's active flag, threading the plugin hooks.
      *

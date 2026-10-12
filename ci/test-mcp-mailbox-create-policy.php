@@ -225,11 +225,51 @@ function persistedAlias(McpMailboxPolicyManager $manager): ?\Entities\Alias
 
 [$allowed, $allowedManager, $allowedDomain] = mcpMailboxPolicyFixture(1, 2, 256, 1000);
 $created = mcpMailboxCreate($allowed);
+$allowedMailbox = persistedMailbox($allowedManager);
+mcpMailboxCheck(
+    'ordinary MCP password reaches the mailbox hash unchanged',
+    $allowedMailbox instanceof \Entities\Mailbox
+        && OSS_Auth_Password::verify(
+            'correct horse battery staple',
+            $allowedMailbox->requiredPassword(),
+            ['pwhash' => 'crypt:sha512'],
+        ),
+);
 mcpMailboxCheck(
     'below-limit MCP creation preserves an allowed quota',
-    $created['created'] === true && persistedMailbox($allowedManager)?->getQuota() === 500
+    $created['created'] === true && $allowedMailbox?->getQuota() === 500
         && $allowedDomain->getMailboxCount() === 2 && $allowedManager->flushes === 1,
 );
+
+$boundaryBytes = " \tleading and trailing\r\n";
+[$passwordBoundary, $passwordBoundaryManager] = mcpMailboxPolicyFixture(0, 2, 256, 1000);
+mcpMailboxCreate($passwordBoundary, ['password' => $boundaryBytes]);
+$passwordBoundaryHash = persistedMailbox($passwordBoundaryManager)?->requiredPassword();
+mcpMailboxCheck(
+    'MCP password preserves exact leading and trailing whitespace bytes through hashing',
+    is_string($passwordBoundaryHash)
+        && OSS_Auth_Password::verify($boundaryBytes, $passwordBoundaryHash, ['pwhash' => 'crypt:sha512'])
+        && !OSS_Auth_Password::verify(trim($boundaryBytes), $passwordBoundaryHash, ['pwhash' => 'crypt:sha512']),
+);
+
+foreach ([['password' => []], ['password' => '']] as $invalidPassword) {
+    [$invalid, $invalidManager, $invalidDomain] = mcpMailboxPolicyFixture(0, 2, 256, 1000);
+    $invalidError = null;
+    try {
+        mcpMailboxCreate($invalid, $invalidPassword);
+    } catch (ViMbAdmin_Mcp_Exception $exception) {
+        $invalidError = $exception->getMessage();
+    }
+    $expectedError = is_array($invalidPassword['password'])
+        ? 'param "password" must be a string'
+        : 'param "password" required';
+    mcpMailboxCheck(
+        $expectedError . ' is reported before mailbox state changes',
+        $invalidError === $expectedError
+            && $invalidManager->persisted === [] && $invalidManager->flushes === 0
+            && $invalidDomain->getMailboxCount() === 0,
+    );
+}
 
 [$boundary, $boundaryManager] = mcpMailboxPolicyFixture(0, 2, 256, 1000);
 mcpMailboxCreate($boundary, ['quota' => 1000]);
@@ -324,4 +364,4 @@ mcpMailboxCheck(
         && $automaticAliasManager->flushes === 1,
 );
 
-echo "ALL PASSED (12 checks)\n";
+echo "ALL PASSED (16 checks)\n";

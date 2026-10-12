@@ -261,6 +261,9 @@ jobs:
       - name: CLI forwards queue one-batch mode
         run: php ci/test-cli-once-forwarding.php
 
+      - name: Native schema derives the mailbox collation
+        run: php ci/test-schema-collation-contract.php
+
       - name: MCP orphan archive deletion enforces domain authorization
         run: php ci/test-mcp-archive-domain-authorization.php
 
@@ -425,6 +428,7 @@ jobs:
           DB_USER: root
           DB_PASS: ci
           SEED_ALIAS_COUNT_DRIFT: '1'
+          VERIFY_FRESH_SCHEMA_COLLATION: '1'
         run: php tests/test-schema-no-pending.php
 
       # Step 2: layer the shipped fork SQL (FKs / collations / unique index /
@@ -446,6 +450,7 @@ jobs:
           DB_PASS: ci
           SKIP_CREATE: '1'
           VERIFY_ALIAS_COUNT_RECONCILIATION: '1'
+          VERIFY_NATIVE_COLLATION_ALIGNMENT: '1'
         run: php tests/test-schema-no-pending.php
 
       - name: Reapply fork SQL — alias-count reconciliation stays idempotent

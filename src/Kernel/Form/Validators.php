@@ -263,11 +263,11 @@ final class Validators
     }
 
     /**
-     * A non-negative number (integer or decimal). Used for size/quota fields,
-     * where a negative or non-numeric value otherwise flows through
-     * OSS_Filter_FileSize + (int) and yields a garbage quota. Empty passes
-     * (combine with required() where the field is mandatory); 0 is allowed
-     * (it means "unlimited" for quotas).
+     * A non-negative number (integer or decimal), optionally followed by a
+     * B/KB/MB/GB unit accepted by OSS_Filter_FileSize. Used for size/quota
+     * fields, including values that OSS_Filter_FileSize::unfilter() rendered
+     * for an unchanged form. Empty passes (combine with required() where the
+     * field is mandatory); 0 is allowed (it means "unlimited" for quotas).
      */
     public static function nonNegativeNumber(string $message = 'Please enter a number of 0 or more.'): callable
     {
@@ -280,12 +280,43 @@ final class Validators
             if ($string === null) {
                 return $message;
             }
-            $s = trim($string);
-            if (!is_numeric($s) || (float) $s < 0) {
+
+            // OSS_Filter_FileSize removes literal spaces before parsing. Keep
+            // this grammar aligned while rejecting signs, exponents, unknown
+            // units and malformed decimals that its permissive digit stripping
+            // would otherwise reinterpret.
+            $s = str_replace(' ', '', $string);
+            if (preg_match(
+                '/^([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(B|[KMG]B?)?$/iD',
+                $s,
+                $matches,
+            ) !== 1) {
                 return $message;
             }
 
-            return null;
+            $multipliers = [
+                '' => 1.0,
+                'B' => 1.0,
+                'K' => 1024.0,
+                'KB' => 1024.0,
+                'M' => 1048576.0,
+                'MB' => 1048576.0,
+                'G' => 1073741824.0,
+                'GB' => 1073741824.0,
+            ];
+            $unit = strtoupper($matches[2] ?? '');
+            if (!array_key_exists($unit, $multipliers)) {
+                return $message;
+            }
+            $bytes = (float) $matches[1] * $multipliers[$unit];
+
+            // PHP_INT_MAX rounds up to 2^63 as a double on 64-bit builds, so
+            // `<= PHP_INT_MAX` also admits the first value that casts to
+            // PHP_INT_MIN. The first out-of-range integer is the exact
+            // exclusive limit on both 32- and 64-bit builds.
+            $integerLimit = PHP_INT_MAX + 1.0;
+
+            return is_finite($bytes) && $bytes < $integerLimit ? null : $message;
         };
     }
 

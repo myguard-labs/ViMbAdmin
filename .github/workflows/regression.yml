@@ -249,6 +249,9 @@ jobs:
       - name: Quota forms accept their rendered file-size values
         run: php ci/test-quota-form-validation.php
 
+      - name: CLI forwards queue one-batch mode
+        run: php ci/test-cli-once-forwarding.php
+
       - name: MCP orphan archive deletion enforces domain authorization
         run: php ci/test-mcp-archive-domain-authorization.php
 

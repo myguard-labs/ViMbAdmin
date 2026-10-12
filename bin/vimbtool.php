@@ -27,7 +27,7 @@ set_include_path(implode(PATH_SEPARATOR, [
 
 $opts = getopt('a:vdhc', [
     'action:', 'verbose', 'debug', 'help', 'copyright',
-    'username:', 'all', 'name:', 'scope:', 'ip:', 'domains:', 'days:', 'id:',
+    'username:', 'all', 'name:', 'scope:', 'ip:', 'domains:', 'days:', 'id:', 'once',
 ]);
 
 if (isset($opts['h']) || isset($opts['help'])) {

@@ -293,6 +293,19 @@ final class Bootstrap
             return '/' . trim($prefix, '/');
         }
 
+        return self::scriptBaseUrl();
+    }
+
+    /**
+     * Derive the mount prefix PHP itself received from the executing script.
+     *
+     * Unlike configured or forwarded prefixes, this identifies a prefix that
+     * is still present in REQUEST_URI and therefore must be removed before
+     * native routing. Reverse proxies that strip their public mount expose a
+     * root SCRIPT_NAME and leave the forwarded application path unchanged.
+     */
+    public static function scriptBaseUrl(): string
+    {
         $scriptName = array_key_exists('SCRIPT_NAME', $_SERVER)
             ? self::serverString('SCRIPT_NAME') : '';
         $dir        = str_replace('\\', '/', dirname($scriptName));

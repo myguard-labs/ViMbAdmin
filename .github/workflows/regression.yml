@@ -270,6 +270,9 @@ jobs:
       - name: MCP action routes retain the edge IP policy
         run: php ci/test-mcp-edge-routing.php
 
+      - name: FPM health routes reach their loopback-only handlers
+        run: php ci/test-fpm-health-routing.php
+
       - name: SMTP STARTTLS is fail-closed
         run: php ci/test-mailer-starttls.php
 

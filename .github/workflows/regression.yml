@@ -249,6 +249,9 @@ jobs:
       - name: Bcrypt password length is fail-closed
         run: php ci/test-bcrypt-password-length.php
 
+      - name: Password-reset bearer secrecy
+        run: php ci/test-password-reset-bearer.php
+
       - name: Second-factor guessing stops at the brute-force threshold
         run: php ci/test-second-factor-lockout.php
 

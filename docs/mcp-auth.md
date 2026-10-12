@@ -10,7 +10,7 @@ Three independent layers — defence in depth, machine-friendly, no OTP:
 
 1. **Edge IP allowlist (primary).** The web server only lets known client IPs
    reach `/mcp` at all; everything else is denied before PHP runs. See the
-   `location = /mcp` block in
+   `location ~ ^/mcp(?:/|$)` block in
    [`contrib/angie/vimbadmin.conf`](../contrib/angie/vimbadmin.conf).
 2. **Bearer token.** Every request carries `Authorization: Bearer <token>`.
    Only the **SHA-256 hash** of the token is stored (table `mcp_token`); the

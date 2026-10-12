@@ -246,6 +246,9 @@ jobs:
       - name: MCP mailbox creation enforces domain policy
         run: php ci/test-mcp-mailbox-create-policy.php
 
+      - name: Quota forms accept their rendered file-size values
+        run: php ci/test-quota-form-validation.php
+
       - name: MCP orphan archive deletion enforces domain authorization
         run: php ci/test-mcp-archive-domain-authorization.php
 

@@ -48,7 +48,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             $id = $req['id'];
             $method = $req['method'];
             $params = $req['params'];
-            $definition = $this->_methodDefinition($method);
+            $definition = $this->_methodDefinition($method, $id);
         } catch (ViMbAdmin_Mcp_ProtocolException $e) {
             return $this->_protocolError($e);
         }
@@ -742,11 +742,11 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      *     destructive:bool
      * }
      */
-    private function _methodDefinition(string $method): array
+    private function _methodDefinition(string $method, mixed $id): array
     {
         $table = $this->_methodTable();
         if (!array_key_exists($method, $table)) {
-            throw new ViMbAdmin_Mcp_ProtocolException("unknown method '{$method}'", -32601);
+            throw new ViMbAdmin_Mcp_ProtocolException("unknown method '{$method}'", -32601, $id);
         }
 
         return $table[$method];

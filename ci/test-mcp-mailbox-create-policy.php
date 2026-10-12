@@ -231,6 +231,13 @@ mcpMailboxCheck(
         && $allowedDomain->getMailboxCount() === 2 && $allowedManager->flushes === 1,
 );
 
+[$boundary, $boundaryManager] = mcpMailboxPolicyFixture(0, 2, 256, 1000);
+mcpMailboxCreate($boundary, ['quota' => 1000]);
+mcpMailboxCheck(
+    'exact domain maximum MCP quota is preserved',
+    persistedMailbox($boundaryManager)?->getQuota() === 1000 && $boundaryManager->flushes === 1,
+);
+
 [$full, $fullManager, $fullDomain] = mcpMailboxPolicyFixture(2, 2, 256, 1000);
 $fullError = null;
 try {
@@ -251,6 +258,26 @@ foreach ([0, 1001] as $requestedQuota) {
     mcpMailboxCheck(
         "MCP quota {$requestedQuota} is normalized to the domain quota",
         persistedMailbox($clampedManager)?->getQuota() === 256 && $clampedManager->flushes === 1,
+    );
+}
+
+foreach ([0, 1001] as $requestedQuota) {
+    [$unsafeDefault, $unsafeDefaultManager] = mcpMailboxPolicyFixture(0, 2, 2000, 1000);
+    mcpMailboxCreate($unsafeDefault, ['quota' => $requestedQuota]);
+    mcpMailboxCheck(
+        "MCP quota {$requestedQuota} cannot persist above the domain maximum when the default is over-limit",
+        persistedMailbox($unsafeDefaultManager)?->getQuota() === 1000
+            && $unsafeDefaultManager->flushes === 1,
+    );
+}
+
+foreach ([0, 1001] as $requestedQuota) {
+    [$unlimitedDefault, $unlimitedDefaultManager] = mcpMailboxPolicyFixture(0, 2, 0, 1000);
+    mcpMailboxCreate($unlimitedDefault, ['quota' => $requestedQuota]);
+    mcpMailboxCheck(
+        "MCP quota {$requestedQuota} is capped when the unlimited default has a finite domain maximum",
+        persistedMailbox($unlimitedDefaultManager)?->getQuota() === 1000
+            && $unlimitedDefaultManager->flushes === 1,
     );
 }
 
@@ -297,4 +324,4 @@ mcpMailboxCheck(
         && $automaticAliasManager->flushes === 1,
 );
 
-echo "ALL PASSED (7 checks)\n";
+echo "ALL PASSED (12 checks)\n";

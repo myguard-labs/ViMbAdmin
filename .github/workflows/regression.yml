@@ -261,6 +261,9 @@ jobs:
       - name: CLI forwards queue one-batch mode
         run: php ci/test-cli-once-forwarding.php
 
+      - name: Cron HOWTO queue contract
+        run: php ci/test-cron-readme-queue-contract.php
+
       - name: Native schema derives the mailbox collation
         run: php ci/test-schema-collation-contract.php
 

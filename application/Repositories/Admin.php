@@ -48,7 +48,7 @@ class Admin extends EntityRepository
                 . ' WHERE Admin_id = ? AND attribute = ?'
                 . ' AND BINARY value = BINARY ? AND (expire = 0 OR expire >= ?)'
                 . ' LIMIT 1',
-                [ $adminId, 'tokens.password_reset', $token, time() ],
+                [ $adminId, 'tokens.password_reset', \ViMbAdmin_PasswordResetToken::verifier($token), time() ],
             );
             if ($proofId === false) {
                 $connection->rollBack();

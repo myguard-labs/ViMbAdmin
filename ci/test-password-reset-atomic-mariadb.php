@@ -215,7 +215,7 @@ $addProof = static function (string $value, int $index, int $expire) use ($db, $
         'attribute' => 'tokens.password_reset',
         'ix' => $index,
         'op' => '=',
-        'value' => $value,
+        'value' => \ViMbAdmin_PasswordResetToken::verifier($value),
         'expire' => $expire,
     ]);
 };
@@ -226,6 +226,16 @@ $clearProofs = static function () use ($db, $adminId): void {
 $token = 'valid-reset-proof';
 $addProof($token, 0, time() + 3600);
 $addProof('second-live-proof', 1, time() + 3600);
+$storedProof = $db->fetchOne(
+    'SELECT value FROM admin_pref WHERE Admin_id = ? AND attribute = ? AND ix = 0',
+    [$adminId, 'tokens.password_reset'],
+);
+$check(
+    'a database read cannot recover the live reset bearer',
+    is_string($storedProof)
+        && $storedProof !== $token
+        && \ViMbAdmin_PasswordResetToken::matches($storedProof, $token),
+);
 $syncDir = sys_get_temp_dir() . '/vimbadmin-password-reset-atomic-' . bin2hex(random_bytes(8));
 if (!mkdir($syncDir, 0700)) {
     throw new RuntimeException('failed to create synchronization directory');
@@ -236,7 +246,7 @@ $db->beginTransaction();
 try {
     $lockedProof = $db->fetchOne(
         'SELECT id FROM admin_pref WHERE Admin_id = ? AND attribute = ? AND BINARY value = BINARY ? FOR UPDATE',
-        [$adminId, 'tokens.password_reset', $token],
+        [$adminId, 'tokens.password_reset', \ViMbAdmin_PasswordResetToken::verifier($token)],
     );
     if ($lockedProof === false) {
         throw new RuntimeException('failed to lock the reset-proof fixture');
@@ -329,6 +339,49 @@ $check(
     'an unpersisted admin cannot consume a proof',
     $transientRepository instanceof \Repositories\Admin
         && !$transientRepository->resetPasswordWithToken($transient, 'live-proof', 'transient-password'),
+);
+
+$clearProofs();
+for ($index = 0; $index < 4; $index++) {
+    $addProof('retained-proof-' . $index, $index, time() + 3600);
+}
+$db->insert('admin_pref', [
+    'Admin_id' => $adminId,
+    'attribute' => 'tokens.password_reset',
+    'ix' => 4,
+    'op' => '=',
+    'value' => 'legacy-raw-proof',
+    'expire' => time() + 3600,
+]);
+[$migrationManager, $migrationAdmin] = passwordResetSession($adminId);
+$storedTokens = $migrationAdmin->getIndexedPreference('tokens.password_reset', true);
+foreach (\ViMbAdmin_PasswordResetToken::legacyIndexes($storedTokens) as $legacyIndex) {
+    $migrationAdmin->deletePreference('tokens.password_reset', $legacyIndex);
+}
+$migrationManager->flush();
+$migrationAdmin->addIndexedPreference(
+    'tokens.password_reset',
+    \ViMbAdmin_PasswordResetToken::verifier('new-proof-after-migration'),
+    '=',
+    time() + 3600,
+    5,
+);
+$migrationManager->flush();
+$migratedCount = $db->fetchOne(
+    'SELECT COUNT(*) FROM admin_pref WHERE Admin_id = ? AND attribute = ?',
+    [$adminId, 'tokens.password_reset'],
+);
+$check(
+    'mixed migration preserves four verifiers and adds one request at the limit',
+    $migratedCount === 5 || $migratedCount === '5',
+);
+$legacyCount = $db->fetchOne(
+    'SELECT COUNT(*) FROM admin_pref WHERE Admin_id = ? AND attribute = ? AND value = ?',
+    [$adminId, 'tokens.password_reset', 'legacy-raw-proof'],
+);
+$check(
+    'mixed migration removes the legacy live bearer from the database',
+    $legacyCount === 0 || $legacyCount === '0',
 );
 
 echo $failures === 0 ? "ALL PASSED ({$checks} checks)\n" : "{$failures} FAILED\n";

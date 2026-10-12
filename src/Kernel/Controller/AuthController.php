@@ -664,10 +664,9 @@ final class AuthController extends AbstractController
      * valid POST it looks the admin up by username and, to avoid revealing which
      * usernames exist, ALWAYS shows the same success message and redirects to the
      * reset form — only actually minting a token + sending mail when the admin is
-     * found. The token is a 40-char random string stored as an indexed, expiring
-     * (2h, max 5) `tokens.password_reset` preference on the admin entity (the
-     * framework-free `OSS_Doctrine2_WithPreferences` API), and mailed as a
-     * reset-link via the native {@see Mailer}.
+     * found. The token is a 40-char random string. Only its one-way verifier is
+     * stored as an expiring `tokens.password_reset` preference; the email links
+     * to the clean reset form and presents the token separately.
      *
      * The captcha is honoured when `resources.auth.oss.lost_password.use_captcha`
      * is on: a fresh `OSS_Captcha_Image` is generated for the render and the
@@ -753,7 +752,26 @@ final class AuthController extends AbstractController
                 $token = \OSS_String::random(40);
 
                 try {
-                    $user->addIndexedPreference('tokens.password_reset', $token, '=', time() + 2 * 60 * 60, 5);
+                    // Raw legacy preferences cannot be migrated without retaining
+                    // bearer capability. Invalidate only those entries; keep new
+                    // verifier-backed requests subject to the existing limit.
+                    $storedTokens = $user->getIndexedPreference('tokens.password_reset', true);
+                    $legacyIndexes = \ViMbAdmin_PasswordResetToken::legacyIndexes($storedTokens);
+                    foreach ($legacyIndexes as $legacyIndex) {
+                        $user->deletePreference('tokens.password_reset', $legacyIndex);
+                    }
+                    if ($legacyIndexes !== []) {
+                        // Persist removals before reusing an index; Doctrine
+                        // schedules inserts before deletes in a single flush.
+                        $this->em()->flush();
+                    }
+                    $user->addIndexedPreference(
+                        'tokens.password_reset',
+                        \ViMbAdmin_PasswordResetToken::verifier($token),
+                        '=',
+                        time() + 2 * 60 * 60,
+                        5,
+                    );
                 } catch (\OSS_Doctrine2_WithPreferences_IndexLimitException $e) {
                     $this->flash(
                         'The limit of password reset tokens has been reached. Please try again later when the existing ones will expire or contact support.',
@@ -787,8 +805,7 @@ final class AuthController extends AbstractController
      * GET|POST /auth/reset-password — set a new password using an emailed token.
      *
      * Native port of `OSS_Controller_Trait_Auth::resetPasswordAction()`. The GET
-     * (reached from the emailed link `/auth/reset-password/username/<u>/token/<t>`)
-     * prefills username + token from the path. A valid POST verifies the token is
+     * reached from email prefills only the non-secret username. A valid POST verifies the token is
      * among the admin's live `tokens.password_reset` preferences, sets the new
      * password hash, clears ALL reset tokens, zeroes any failed-login counter,
      * mails a confirmation, and redirects to login. Every failure path uses the
@@ -804,7 +821,8 @@ final class AuthController extends AbstractController
         if ($this->isPost() && $form->isValid($this->postData())) {
             $v    = $form->values();
             $username = self::requiredString($v['username'] ?? null, 'Password-reset username');
-            $token = self::requiredString($v['token'] ?? null, 'Password-reset token');
+            $submittedToken = self::requiredString($v['token'] ?? null, 'Password-reset token');
+            $token = \ViMbAdmin_PasswordResetToken::verifier($submittedToken);
             $user = $this->em()->getRepository($entityClass)->findOneBy(['username' => $username]);
 
             if ($user === null) {
@@ -832,7 +850,7 @@ final class AuthController extends AbstractController
                         self::requiredString($v['password'] ?? null, 'New admin password'),
                         self::passwordOptions($options),
                     );
-                    if (!$this->adminRepository()->resetPasswordWithToken($user, $token, $replacement)) {
+                    if (!$this->adminRepository()->resetPasswordWithToken($user, $submittedToken, $replacement)) {
                         $this->flash('Invalid username / token combination. Please check your details and try again.', FlashMessages::ERROR);
                     } else {
                         if (method_exists($user, 'setFailedLogins')) {
@@ -859,9 +877,6 @@ final class AuthController extends AbstractController
             // GET (incl. the emailed link): prefill from the path params.
             $form->field('username')?->setValue(
                 self::stringOrDefault($this->param('username'), '', 'Password-reset username'),
-            );
-            $form->field('token')?->setValue(
-                self::stringOrDefault($this->param('token'), '', 'Password-reset token'),
             );
         }
 

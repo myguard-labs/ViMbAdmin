@@ -31,6 +31,7 @@
  */
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../library/ViMbAdmin/Schema.php';
 
 // The Entities\ and Repositories\ classes live under application/ and are not
 // in Composer's PSR map. Register the same bounded SPL namespace shape used by
@@ -123,6 +124,24 @@ if (getenv('SKIP_CREATE') !== '1') {
     $tool->createSchema($metadatas);
 }
 
+if (getenv('VERIFY_FRESH_SCHEMA_COLLATION') === '1') {
+    $freshCollations = $connection->fetchAllKeyValue(
+        "SELECT TABLE_NAME, CONCAT(CHARACTER_SET_NAME, '/', COLLATION_NAME)
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME IN ('mailbox', 'dovecot_quota')
+           AND COLUMN_NAME = 'username'
+         ORDER BY TABLE_NAME"
+    );
+    if (count($freshCollations) !== 2
+        || ($freshCollations['mailbox'] ?? null) !== ($freshCollations['dovecot_quota'] ?? null)) {
+        fwrite(STDERR, 'fresh schema username collations differ: '
+            . json_encode($freshCollations) . "\n");
+        exit(1);
+    }
+    echo "OK: fresh schema creates matching mailbox and quota collations\n";
+}
+
 // Seed deliberately stale counters before the external mysql step applies the
 // consolidated migration. The follow-up invocation verifies both correction
 // and boundary behavior against the real MariaDB schema and column names.
@@ -181,12 +200,79 @@ if (getenv('VERIFY_ALIAS_COUNT_RECONCILIATION') === '1') {
     echo "OK: alias counts exclude self-aliases and preserve source rows\n";
 }
 
+if (getenv('VERIFY_NATIVE_COLLATION_ALIGNMENT') === '1') {
+    $mailboxCharset = $connection->fetchOne(
+        "SELECT CHARACTER_SET_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'username'"
+    );
+    $mailboxCollation = $connection->fetchOne(
+        "SELECT COLLATION_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' AND COLUMN_NAME = 'username'"
+    );
+    if (!is_string($mailboxCharset) || !is_string($mailboxCollation)) {
+        fwrite(STDERR, "mailbox username collation metadata is missing\n");
+        exit(2);
+    }
+
+    $driftCharset = $mailboxCharset === 'utf8mb4' ? 'utf8mb3' : 'utf8mb4';
+    $driftCollation = $driftCharset === 'utf8mb4' ? 'utf8mb4_unicode_ci' : 'utf8mb3_unicode_ci';
+    $connection->executeStatement(
+        'ALTER TABLE `dovecot_quota` DROP FOREIGN KEY `FK_dovecot_quota_mailbox`'
+    );
+    $connection->executeStatement(sprintf(
+        'ALTER TABLE `dovecot_quota` MODIFY `username` VARCHAR(255) '
+            . 'CHARACTER SET %s COLLATE %s NOT NULL',
+        $driftCharset,
+        $driftCollation,
+    ));
+
+    $nativeSchema = new ViMbAdmin_Schema($em);
+    $nativeSql = $nativeSchema->extraSql();
+    $expectedAlignment = sprintf(
+        'ALTER TABLE `dovecot_quota` MODIFY `username` VARCHAR(255) '
+            . 'CHARACTER SET %s COLLATE %s NOT NULL',
+        $mailboxCharset,
+        $mailboxCollation,
+    );
+    if (!in_array($expectedAlignment, $nativeSql, true)
+        || count(array_filter(
+            $nativeSql,
+            static fn (string $statement): bool => str_contains(
+                $statement,
+                'ADD CONSTRAINT `FK_dovecot_quota_mailbox`'
+            )
+        )) !== 1) {
+        fwrite(STDERR, 'native schema did not derive the mailbox collation and restore its FK: '
+            . json_encode($nativeSql) . "\n");
+        exit(1);
+    }
+
+    $nativeSchema->apply($nativeSql);
+    $quotaMetadata = $connection->fetchAssociative(
+        "SELECT CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dovecot_quota' AND COLUMN_NAME = 'username'"
+    );
+    if (!is_array($quotaMetadata)
+        || ($quotaMetadata['CHARACTER_SET_NAME'] ?? null) !== $mailboxCharset
+        || ($quotaMetadata['COLLATION_NAME'] ?? null) !== $mailboxCollation
+        || $nativeSchema->extraSql() !== []) {
+        fwrite(STDERR, 'native schema collation alignment is not applied or idempotent: '
+            . json_encode($quotaMetadata) . "\n");
+        exit(1);
+    }
+    echo "OK: native schema derives and applies the live mailbox collation\n";
+}
+
 // 3. Diff the mapped metadata against the current DB schema.
 $sql = $tool->getUpdateSchemaSql($metadatas);
 
-// 3. Doctrine never manages the Dovecot-owned dict tables; ignore any diff that
-//    targets them (defence in depth — they should not be in the mappings at all,
-//    but if a mapping is added by mistake this keeps the message precise).
+// 3. Production's additive updater never drops an unmanaged table. Apply that
+//    same filter here before checking mapped schema drift; the shipped `setting`
+//    table is intentionally absent from Doctrine metadata.
+//
+// Doctrine also never manages the Dovecot-owned dict tables; ignore any diff
+// that targets them (defence in depth — they should not be in the mappings at all,
+// but if a mapping is added by mistake this keeps the message precise).
 // Match the table name with or without backticks. These tables carry
 // column-definition timestamp defaults that Doctrine's schema comparator cannot
 // round-trip, so it reports a perpetual phantom ALTER even on a fresh schema —
@@ -194,6 +280,9 @@ $sql = $tool->getUpdateSchemaSql($metadatas);
 // fails the test.
 $dovecotOwned = ['dovecot_quota', 'dovecot_last_login'];
 $pending = array_values(array_filter($sql, static function (string $stmt) use ($dovecotOwned): bool {
+    if (preg_match('/^\s*DROP\s+TABLE\b/i', $stmt) === 1) {
+        return false;
+    }
     foreach ($dovecotOwned as $t) {
         if (preg_match('/\b`?' . preg_quote($t, '/') . '`?\b/i', $stmt)) {
             return false; // drop — Dovecot owns it / un-diffable column-definition

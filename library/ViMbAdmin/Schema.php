@@ -37,6 +37,17 @@ class ViMbAdmin_Schema
         }
         return $value;
     }
+
+    private static function schemaIdentifier(mixed $value, string $label): string
+    {
+        if (!is_string($value) || preg_match('/^[A-Za-z0-9_]+$/D', $value) !== 1) {
+            throw new \UnexpectedValueException(sprintf(
+                'Schema introspection %s is malformed',
+                $label
+            ));
+        }
+        return $value;
+    }
     /** @var \Doctrine\ORM\EntityManagerInterface */
     private $_em;
 
@@ -243,16 +254,43 @@ class ViMbAdmin_Schema
                        . ' ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_unicode_ci';
             }
 
-            // 1) dovecot_quota.username collation must match mailbox.username
-            //    (utf8mb3_unicode_ci) or the FK fails with errno 150.
-            $coll = $conn->fetchOne(
+            // 1) dovecot_quota.username charset and collation must match
+            //    mailbox.username or the FK fails with errno 150. Derive both
+            //    values from the live mailbox column because DBAL and server
+            //    defaults differ across supported MariaDB versions.
+            $quotaCharset = $conn->fetchOne(
+                'SELECT CHARACTER_SET_NAME FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                [ $db, 'dovecot_quota', 'username' ]
+            );
+            $quotaCollation = $conn->fetchOne(
                 'SELECT COLLATION_NAME FROM information_schema.COLUMNS
                   WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
                 [ $db, 'dovecot_quota', 'username' ]
             );
-            if ($coll !== false && $coll !== null && $coll !== 'utf8mb3_unicode_ci') {
+            $mailboxCharset = $conn->fetchOne(
+                'SELECT CHARACTER_SET_NAME FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                [ $db, 'mailbox', 'username' ]
+            );
+            $mailboxCollation = $conn->fetchOne(
+                'SELECT COLLATION_NAME FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+                [ $db, 'mailbox', 'username' ]
+            );
+            if ($quotaCharset !== false && $quotaCharset !== null
+                && $quotaCollation !== false && $quotaCollation !== null
+                && $mailboxCharset !== false && $mailboxCharset !== null
+                && $mailboxCollation !== false && $mailboxCollation !== null
+                && ($quotaCharset !== $mailboxCharset || $quotaCollation !== $mailboxCollation)) {
+                $mailboxCharset = self::schemaIdentifier($mailboxCharset, 'mailbox charset');
+                $mailboxCollation = self::schemaIdentifier($mailboxCollation, 'mailbox collation');
                 $out[] = 'ALTER TABLE `dovecot_quota` MODIFY `username` '
-                       . 'VARCHAR(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL';
+                       . sprintf(
+                           'VARCHAR(255) CHARACTER SET %s COLLATE %s NOT NULL',
+                           $mailboxCharset,
+                           $mailboxCollation
+                       );
             }
 
             // 2) the cascade FKs themselves (only if absent).

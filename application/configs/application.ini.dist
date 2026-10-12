@@ -18,6 +18,8 @@
 ; During installation, you will be prompted to enter strings here. This
 ; is to verify that you are in fact the person authorised to complete the
 ; installation as well as provide security for cookies and passwords.
+; securitysalt must be a non-blank 64-character ASCII value. Keep it stable:
+; it is also the key material for encrypted administrator TOTP secrets.
 
 securitysalt                       = ""
 

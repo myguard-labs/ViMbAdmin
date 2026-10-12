@@ -46,7 +46,7 @@
  *   hostmaster@domains.tld
  *
  * Add the following lines to configs/application.ini:
- *   vimbadmin_plugins.MailboxAutomaticAliases.disabled = false
+ *   vimbadmin_plugins.MailboxAutomaticAliases.enabled = true
  *   vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "postmaster"
  *   vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "abuse"
  *   vimbadmin_plugins.MailboxAutomaticAliases.defaultAliases[] = "hostmaster"

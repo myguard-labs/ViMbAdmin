@@ -89,7 +89,7 @@ final class IniConfig
             // A scalar, or a `key[] = ...` array-append in the section-less scope
             // (which PHP returns as a list-keyed array), is a global base key —
             // not a `[section]`. Real section bodies are string-keyed maps.
-            if (!is_array($body) || array_is_list($body)) {
+            if (!is_array($body) || ($body !== [] && array_is_list($body))) {
                 $globals[$header] = $body;
                 continue;
             }

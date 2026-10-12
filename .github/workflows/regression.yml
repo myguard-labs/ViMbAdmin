@@ -249,6 +249,9 @@ jobs:
       - name: MCP list responses expose complete pagination
         run: php ci/test-mcp-list-pagination.php
 
+      - name: Empty INI parent sections retain inheritance shape
+        run: php ci/test-ini-config-empty-parent.php
+
       - name: Quota forms accept their rendered file-size values
         run: php ci/test-quota-form-validation.php
 

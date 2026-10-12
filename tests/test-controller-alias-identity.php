@@ -926,6 +926,13 @@ controllerAliasIdentityCheck(
             'goto' => 'user@example.test',
             'active' => true,
         ]],
+        'pagination' => [
+            'limit' => 100,
+            'offset' => 0,
+            'returned' => 1,
+            'has_more' => false,
+            'next_offset' => null,
+        ],
     ]
 );
 
@@ -963,12 +970,27 @@ controllerAliasIdentityCheck(
     count($pageOneRows) === 2
         && count($pageTwoRows) === 1
         && $pagedUsernames === ['a@example.test', 'm@example.test', 'z@example.test']
+        && ($pageOne['pagination'] ?? null) === [
+            'limit' => 2,
+            'offset' => 0,
+            'returned' => 2,
+            'has_more' => true,
+            'next_offset' => 2,
+        ]
+        && ($pageTwo['pagination'] ?? null) === [
+            'limit' => 2,
+            'offset' => 2,
+            'returned' => 1,
+            'has_more' => false,
+            'next_offset' => null,
+        ]
 );
 
 foreach ([
     ['limit' => 0],
     ['limit' => 201],
-    ['offset' => 10001],
+    ['offset' => -1],
+    ['offset' => (string) PHP_INT_MAX . '0'],
     ['limit' => '1.5'],
 ] as $invalidBounds) {
     $boundsRejected = false;

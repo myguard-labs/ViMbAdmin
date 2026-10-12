@@ -191,7 +191,7 @@ mcpContractCheck(
     $actual === $expected && is_array($table) && count($table) === count($expected)
 );
 mcpContractCheck('every table row carries its direct dispatch closure', $handlersValid);
-$pingDefinition = (new ReflectionMethod($controller, '_methodDefinition'))->invoke($controller, 'ping');
+$pingDefinition = (new ReflectionMethod($controller, '_methodDefinition'))->invoke($controller, 'ping', 'ping-id');
 $pingHandler = is_array($pingDefinition) ? ($pingDefinition['handler'] ?? null) : null;
 $pingResult = $pingHandler instanceof Closure ? $pingHandler([]) : null;
 mcpContractCheck(
@@ -199,16 +199,21 @@ mcpContractCheck(
     is_array($pingResult) && ($pingResult['pong'] ?? null) === true
 );
 
-$unknownMethod = null;
-try {
-    (new ReflectionMethod($controller, '_methodDefinition'))->invoke($controller, 'future.unclassified');
-} catch (ViMbAdmin_Mcp_ProtocolException $error) {
-    $unknownMethod = $error->rpcCode();
+$methodDefinition = new ReflectionMethod($controller, '_methodDefinition');
+foreach ([42, 'request-42'] as $requestId) {
+    $unknownMethod = null;
+    try {
+        $methodDefinition->invoke($controller, 'future.unclassified', $requestId);
+    } catch (ViMbAdmin_Mcp_ProtocolException $error) {
+        $unknownMethod = mcpErrorBody(mcpProtocolResponse($controller, $error));
+    }
+    mcpContractCheck(
+        "unknown methods preserve the {$requestId} request id in their error response",
+        $unknownMethod !== null
+            && $unknownMethod['id'] === $requestId
+            && $unknownMethod['error']['code'] === -32601
+    );
 }
-mcpContractCheck(
-    'unknown methods fail before dispatch, scope or destructive classification',
-    $unknownMethod === -32601
-);
 
 $valid = ViMbAdmin_Mcp_Request::parse('{"jsonrpc":"2.0","id":"req-7","method":"domains.list","params":{}}');
 mcpContractCheck(

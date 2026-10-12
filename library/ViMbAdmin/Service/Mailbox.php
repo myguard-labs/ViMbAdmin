@@ -50,7 +50,7 @@ class ViMbAdmin_Service_Mailbox
     /**
      * Apply the domain's per-mailbox quota policy.
      *
-     * @return bool true when the requested quota was replaced by the domain default
+     * @return bool true when the requested quota was normalized to the domain policy
      */
     public static function clampCreationQuota(
         \Entities\Mailbox $mailbox,
@@ -61,7 +61,10 @@ class ViMbAdmin_Service_Mailbox
             return false;
         }
 
-        $mailbox->setQuota($domain->requiredQuota());
+        $domainQuota = $domain->requiredQuota();
+        $mailbox->setQuota($domainQuota === 0
+            ? $domain->getMaxQuota()
+            : min($domainQuota, $domain->getMaxQuota()));
         return true;
     }
 
@@ -69,7 +72,7 @@ class ViMbAdmin_Service_Mailbox
      * Enforce every domain policy shared by mailbox-creation entry points.
      *
      * @throws ViMbAdmin_Service_Exception when the mailbox allowance is exhausted
-     * @return bool true when the requested quota was replaced by the domain default
+     * @return bool true when the requested quota was normalized to the domain policy
      */
     public static function applyCreationPolicy(
         \Entities\Mailbox $mailbox,

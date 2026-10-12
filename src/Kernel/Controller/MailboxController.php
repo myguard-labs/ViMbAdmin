@@ -760,8 +760,7 @@ final class MailboxController extends AbstractController
 
                     // Clamp the quota to the domain's per-mailbox maximum.
                     if (\ViMbAdmin_Service_Mailbox::clampCreationQuota($mailbox, $domain)) {
-                        $domainQuota = $domain->requiredQuota();
-                        $this->flash('Mailbox quota set to ' . $domainQuota, FlashMessages::INFO);
+                        $this->flash('Mailbox quota set to ' . $mailbox->getQuota(), FlashMessages::INFO);
                     }
 
                     // Plugin form sections write back onto the entity (e.g. the
@@ -875,11 +874,8 @@ final class MailboxController extends AbstractController
                 ));
 
                 // Clamp the quota to the domain's per-mailbox maximum.
-                if ($domain->getMaxQuota() != 0
-                    && ($mailbox->getQuota() <= 0 || $mailbox->getQuota() > $domain->getMaxQuota())) {
-                    $domainQuota = $domain->requiredQuota();
-                    $mailbox->setQuota($domainQuota);
-                    $this->flash('Mailbox quota set to ' . $domainQuota, FlashMessages::INFO);
+                if (\ViMbAdmin_Service_Mailbox::clampCreationQuota($mailbox, $domain)) {
+                    $this->flash('Mailbox quota set to ' . $mailbox->getQuota(), FlashMessages::INFO);
                 }
 
                 $formHost->apply($mailbox, $v, $options, $em);

@@ -26,6 +26,10 @@ if (!is_string($requestUri)) {
 }
 $path = parse_url($requestUri, PHP_URL_PATH);
 $path = is_string($path) ? $path : '/';
+$path = \ViMbAdmin\Kernel\Router::withoutBasePath(
+    $path,
+    \ViMbAdmin\Kernel\Bootstrap::scriptBaseUrl(),
+);
 $router = new \ViMbAdmin\Kernel\Router(\ViMbAdmin\Kernel\Http\Kernel::nativeControllers());
 $probe = new \ViMbAdmin\Kernel\Http\Kernel($router);
 

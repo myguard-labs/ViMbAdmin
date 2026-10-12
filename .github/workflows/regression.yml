@@ -252,6 +252,9 @@ jobs:
       - name: Empty INI parent sections retain inheritance shape
         run: php ci/test-ini-config-empty-parent.php
 
+      - name: Native routing preserves supported sub-path deployments
+        run: php ci/test-subpath-routing.php
+
       - name: Quota forms accept their rendered file-size values
         run: php ci/test-quota-form-validation.php
 

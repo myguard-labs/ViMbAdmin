@@ -78,6 +78,29 @@ final class Router
     }
 
     /**
+     * Remove an application mount prefix from an incoming request path.
+     *
+     * Reverse proxies commonly remove the prefix before forwarding, while the
+     * shipped Apache rewrite preserves it. Accept both forms, and require a
+     * complete path-segment boundary so a mount such as "/vimb" never strips
+     * the start of an unrelated "/vimbadmin" path.
+     */
+    public static function withoutBasePath(string $path, string $basePath): string
+    {
+        $basePath = rtrim($basePath, '/');
+        if ($basePath === '' || $basePath === '/') {
+            return $path;
+        }
+        if ($path !== $basePath && !str_starts_with($path, $basePath . '/')) {
+            return $path;
+        }
+
+        $relative = substr($path, strlen($basePath));
+
+        return $relative === '' ? '/' : $relative;
+    }
+
+    /**
      * Pure decode of a path into controller / action / params, with no regard to
      * the native allowlist. Mirrors the ZF1 default router:
      *

@@ -249,6 +249,9 @@ jobs:
       - name: MCP orphan archive deletion enforces domain authorization
         run: php ci/test-mcp-archive-domain-authorization.php
 
+      - name: MCP action routes retain the edge IP policy
+        run: php ci/test-mcp-edge-routing.php
+
       - name: SMTP STARTTLS is fail-closed
         run: php ci/test-mailer-starttls.php
 

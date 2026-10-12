@@ -523,6 +523,9 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $archiveDomain = $archive->getDomain();
         if ($archiveDomain) {
             $this->_assertDomainAllowed($archiveDomain->requiredDomainName());
+        } else {
+            $this->_validateEmail($username, 'username');
+            $this->_assertDomainAllowed(substr($username, strrpos($username, '@') + 1));
         }
 
         $dest    = $archive->getMaildirFile();

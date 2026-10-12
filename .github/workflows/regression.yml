@@ -243,6 +243,9 @@ jobs:
       - name: MCP alias creation validates composed addresses
         run: php ci/test-mcp-alias-create.php
 
+      - name: MCP orphan archive deletion enforces domain authorization
+        run: php ci/test-mcp-archive-domain-authorization.php
+
       - name: SMTP STARTTLS is fail-closed
         run: php ci/test-mailer-starttls.php
 

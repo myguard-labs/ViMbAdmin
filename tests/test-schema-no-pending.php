@@ -53,6 +53,20 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\ORM\Tools\SchemaTool;
 
+function schemaRequiredNonNegativeInteger(mixed $value, string $label): int
+{
+    if (is_int($value) && $value >= 0) {
+        return $value;
+    }
+    if (is_string($value) && preg_match('/^(0|[1-9][0-9]*)$/D', $value) === 1) {
+        $integer = filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+        if ($integer !== false) {
+            return $integer;
+        }
+    }
+    throw new UnexpectedValueException("MariaDB returned an invalid {$label}");
+}
+
 $host = getenv('DB_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('DB_PORT') ?: 3306);
 $name = getenv('DB_NAME') ?: 'vimbadmin';
@@ -107,6 +121,64 @@ $tool = new SchemaTool($em);
 if (getenv('SKIP_CREATE') !== '1') {
     $tool->dropDatabase();
     $tool->createSchema($metadatas);
+}
+
+// Seed deliberately stale counters before the external mysql step applies the
+// consolidated migration. The follow-up invocation verifies both correction
+// and boundary behavior against the real MariaDB schema and column names.
+if (getenv('SEED_ALIAS_COUNT_DRIFT') === '1') {
+    $connection->executeStatement(
+        "INSERT INTO `domain`
+            (`domain`, `quota`, `transport`, `backupmx`, `active`, `created`,
+             `max_quota`, `max_aliases`, `max_mailboxes`, `alias_count`, `mailbox_count`)
+         VALUES
+            ('drift-forward.test', 0, 'virtual', 0, 1, NOW(), 0, 2, 0, 99, 0),
+            ('drift-self.test', 0, 'virtual', 0, 1, NOW(), 0, 2, 0, 7, 0),
+            ('drift-empty.test', 0, 'virtual', 0, 1, NOW(), 0, 2, 0, 5, 0)"
+    );
+    $connection->executeStatement(
+        "INSERT INTO `alias` (`address`, `goto`, `active`, `created`, `Domain_id`)
+         SELECT 'forward@drift-forward.test', 'target@example.test', 1, NOW(), `id`
+           FROM `domain` WHERE `domain` = 'drift-forward.test'
+         UNION ALL
+         SELECT 'self@drift-forward.test', 'self@drift-forward.test', 1, NOW(), `id`
+           FROM `domain` WHERE `domain` = 'drift-forward.test'
+         UNION ALL
+         SELECT 'Case@drift-forward.test', 'case@drift-forward.test', 1, NOW(), `id`
+           FROM `domain` WHERE `domain` = 'drift-forward.test'
+         UNION ALL
+         SELECT 'self@drift-self.test', 'self@drift-self.test', 1, NOW(), `id`
+           FROM `domain` WHERE `domain` = 'drift-self.test'"
+    );
+}
+
+if (getenv('VERIFY_ALIAS_COUNT_RECONCILIATION') === '1') {
+    $actualCounts = $connection->fetchAllKeyValue(
+        "SELECT `domain`, `alias_count` FROM `domain`
+         WHERE `domain` IN ('drift-forward.test', 'drift-self.test', 'drift-empty.test')
+         ORDER BY `domain`"
+    );
+    $actualCounts = array_map(
+        static fn (mixed $count): int => schemaRequiredNonNegativeInteger($count, 'alias count'),
+        $actualCounts,
+    );
+    $expectedCounts = [
+        'drift-empty.test' => 0,
+        'drift-forward.test' => 2,
+        'drift-self.test' => 0,
+    ];
+    $aliasRows = schemaRequiredNonNegativeInteger(
+        $connection->fetchOne("SELECT COUNT(*) FROM `alias` WHERE `address` LIKE '%@drift-%'"),
+        'alias row count',
+    );
+    if ($actualCounts !== $expectedCounts || $aliasRows !== 4) {
+        fwrite(STDERR, 'alias-count reconciliation failed: ' . json_encode([
+            'counts' => $actualCounts,
+            'alias_rows' => $aliasRows,
+        ]) . "\n");
+        exit(1);
+    }
+    echo "OK: alias counts exclude self-aliases and preserve source rows\n";
 }
 
 // 3. Diff the mapped metadata against the current DB schema.

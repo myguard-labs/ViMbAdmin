@@ -409,6 +409,7 @@ jobs:
           DB_NAME: vimbadmin
           DB_USER: root
           DB_PASS: ci
+          SEED_ALIAS_COUNT_DRIFT: '1'
         run: php tests/test-schema-no-pending.php
 
       # Step 2: layer the shipped fork SQL (FKs / collations / unique index /
@@ -429,6 +430,23 @@ jobs:
           DB_USER: root
           DB_PASS: ci
           SKIP_CREATE: '1'
+          VERIFY_ALIAS_COUNT_RECONCILIATION: '1'
+        run: php tests/test-schema-no-pending.php
+
+      - name: Reapply fork SQL — alias-count reconciliation stays idempotent
+        run: >-
+          mysql -hmariadb -P3306 -uroot -pci vimbadmin
+          < contrib/migrations/2026-06-fork-schema.sql
+
+      - name: After second fork SQL — alias counts remain reconciled
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          SKIP_CREATE: '1'
+          VERIFY_ALIAS_COUNT_RECONCILIATION: '1'
         run: php tests/test-schema-no-pending.php
 
       - name: Mailbox-task enqueue is atomic under concurrent transactions

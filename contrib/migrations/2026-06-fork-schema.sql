@@ -29,6 +29,7 @@
 --    5. queue_runner lease table.
 --    6. retirement of the per-mailbox storage-location columns.
 --    7. database-atomic open mailbox-task deduplication.
+--    8. domain alias-count reconciliation (mailbox self-aliases excluded).
 --
 --  NB: the dovecot_last_login, mailbox_task, mcp_token and archive tables (and
 --  admin.last_login) are created by the entity mappings via the schema-tool on
@@ -344,3 +345,20 @@ SET @ddl := IF( @have_mailbox_task = 0,
            (`username`, `type`, `status`)',
         'DO 0 /* mailbox_task_username_type_status_idx already present */' ) );
 PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
+
+
+-- ---------------------------------------------------------------------
+-- 8) Reconcile persisted domain alias counts
+-- ---------------------------------------------------------------------
+-- Historical MCP writes counted mailbox self-aliases (address == goto), while
+-- the shared alias service and capacity checks exclude them. Recompute from
+-- the persisted source rows on every upgrade so stale counters cannot keep a
+-- domain artificially at capacity. This UPDATE is idempotent and also repairs
+-- undercounts left by interrupted or older writes.
+UPDATE `domain` AS d
+SET `alias_count` = (
+    SELECT COUNT(*)
+    FROM `alias` AS a
+    WHERE a.`Domain_id` = d.`id`
+      AND BINARY a.`address` != BINARY a.`goto`
+);

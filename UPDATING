@@ -3,7 +3,8 @@ Upgrading this fork
 
 After pulling a newer version, apply the schema and configuration changes below.
 For an existing database, first apply the consolidated migration below. It
-seeds `dovecot_quota` from the legacy columns before retiring them:
+seeds `dovecot_quota` from the legacy columns before retiring them and
+reconciles each domain's alias count from forwarding aliases:
 
     mysql < contrib/migrations/2026-06-fork-schema.sql
 

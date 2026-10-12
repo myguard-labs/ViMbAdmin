@@ -57,7 +57,7 @@ optional cron left is the panel's own queue-runner.
   (`[child : parent]` inheritance, `resources.*` keys) — read by a small native
   loader now, a candidate to replace later. See
   [Upgrading & schema migrations](#upgrading--schema-migrations).
-- **PHP 8.1 → 8.5** clean. Every implicit-nullable parameter and PHP-8-removed
+- **PHP 8.4.1 → 8.5** clean. Every implicit-nullable parameter and PHP-8-removed
   function call fixed.
 - **Smarty 4 → 5.** Templating bridge ported to the new API (setters, the
   `nofilter` flag, `{if}`-can't-call-PHP-functions, and the clone bug where

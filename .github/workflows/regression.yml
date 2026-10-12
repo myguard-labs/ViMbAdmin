@@ -240,6 +240,9 @@ jobs:
       - name: Run all framework-free PHP regression tests
         run: bash tests/run-unit-tests.sh
 
+      - name: PHP support claims match the installable Composer contract
+        run: php ci/test-php-version-contract.php
+
       - name: MCP alias creation validates composed addresses
         run: php ci/test-mcp-alias-create.php
 

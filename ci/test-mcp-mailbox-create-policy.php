@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../application/Entities/Domain.php';
 require_once __DIR__ . '/../application/Entities/Mailbox.php';
+require_once __DIR__ . '/../application/Entities/Alias.php';
 require_once __DIR__ . '/../application/Repositories/Mailbox.php';
 
 use Doctrine\DBAL\DriverManager;
@@ -126,8 +127,10 @@ final class McpMailboxPolicyManager extends EntityManager
 
 final class McpMailboxPolicyResources
 {
-    public function __construct(private readonly McpMailboxPolicyManager $manager)
-    {
+    public function __construct(
+        private readonly McpMailboxPolicyManager $manager,
+        private readonly bool $mailboxAliases,
+    ) {
     }
     public function getResource(string $name): object
     {
@@ -137,26 +140,37 @@ final class McpMailboxPolicyResources
     public function getOptions(): array
     {
         return [
-            'mailboxAliases' => false,
+            'mailboxAliases' => $this->mailboxAliases,
             'defaults' => ['mailbox' => ['password_scheme' => 'crypt:sha512']],
         ];
     }
 }
 
 /** @return array{McpController,McpMailboxPolicyManager,\Entities\Domain} */
-function mcpMailboxPolicyFixture(int $count, int $maximum, int $quota, int $maximumQuota): array
-{
+function mcpMailboxPolicyFixture(
+    int $count,
+    int $maximum,
+    int $quota,
+    int $maximumQuota,
+    bool $mailboxAliases = false,
+    int $aliasCount = 0,
+    int $maxAliases = 0,
+): array {
     $domain = (new \Entities\Domain())
         ->setDomain('example.test')
         ->setMailboxCount($count)
-        ->setAliasCount(0)
+        ->setAliasCount($aliasCount)
+        ->setMaxAliases($maxAliases)
         ->setMaxMailboxes($maximum)
         ->setQuota($quota)
         ->setMaxQuota($maximumQuota);
     $manager = new McpMailboxPolicyManager($domain);
     $session = new McpMailboxPolicySession();
     $controller = new McpController(
-        new Container(new McpMailboxPolicyResources($manager), new Auth($session, static fn (int $id): null => null)),
+        new Container(
+            new McpMailboxPolicyResources($manager, $mailboxAliases),
+            new Auth($session, static fn (int $id): null => null),
+        ),
         new RouteMatch('mcp', 'index', McpController::class, 'indexAction', []),
     );
     return [$controller, $manager, $domain];
@@ -192,6 +206,17 @@ function persistedMailbox(McpMailboxPolicyManager $manager): ?\Entities\Mailbox
 {
     foreach ($manager->persisted as $entity) {
         if ($entity instanceof \Entities\Mailbox) {
+            return $entity;
+        }
+    }
+    return null;
+}
+
+/** @return \Entities\Alias|null */
+function persistedAlias(McpMailboxPolicyManager $manager): ?\Entities\Alias
+{
+    foreach ($manager->persisted as $entity) {
+        if ($entity instanceof \Entities\Alias) {
             return $entity;
         }
     }
@@ -251,4 +276,25 @@ mcpMailboxCheck(
         && $unlimitedDomain->getMailboxCount() === 100 && $unlimitedManager->flushes === 1,
 );
 
-echo "ALL PASSED (6 checks)\n";
+[$automaticAlias, $automaticAliasManager, $automaticAliasDomain] = mcpMailboxPolicyFixture(
+    0,
+    2,
+    256,
+    1000,
+    true,
+    2,
+    2,
+);
+mcpMailboxCreate($automaticAlias);
+$createdAlias = persistedAlias($automaticAliasManager);
+mcpMailboxCheck(
+    'mailbox auto self-alias persists at capacity without consuming alias capacity',
+    $createdAlias instanceof \Entities\Alias
+        && $createdAlias->getAddress() === 'new-user@example.test'
+        && $createdAlias->getGoto() === 'new-user@example.test'
+        && $automaticAliasDomain->getAliasCount() === 2
+        && $automaticAliasDomain->getMailboxCount() === 1
+        && $automaticAliasManager->flushes === 1,
+);
+
+echo "ALL PASSED (7 checks)\n";

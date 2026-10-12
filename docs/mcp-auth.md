@@ -89,11 +89,15 @@ notification-shaped calls cannot execute silently.
 | `domain.delete` | `{domain}` | **destructive** — purges the domain + its mailboxes/aliases |
 | `mailbox.create` | `{domain, local_part, password, name?, quota?, active?}` | Enforces the domain mailbox limit and quota maximum like the GUI; password is hashed in the configured scheme (`doveadm pw`) |
 | `mailbox.delete` | `{username}` | **destructive** |
-| `alias.create` | `{domain, address, goto, active?}` | `address` may be a local part (domain appended) or full |
+| `alias.create` | `{domain, address, goto, active?}` | See below. |
 | `alias.delete` | `{address}` | deletes the alias row |
 | `mailbox.archive` | `{username}` | **destructive** — queues an `ARCHIVE` task with initial status `PENDING` (panel-compatible) |
 | `archive.restore` | `{username}` | **destructive** — restores immediately, then removes backup and row |
 | `archive.delete` | `{username}` | **destructive** — immediately deletes backup files and row |
+
+`alias.create` accepts a local part (and appends the domain) or a full address.
+Forwarding aliases enforce the domain maximum. A `max_aliases` value of zero
+means unlimited. Exact self-aliases (`address == goto`) do not consume capacity.
 
 A token's scope must contain the method's scope (`read`/`write`) or `*`. Issue a
 read-only token by default; only grant `write` where needed.

@@ -372,7 +372,6 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             $a->setActive(true);
             $a->setCreated(new \DateTime());
             $em->persist($a);
-            $domain->setAliasCount($domain->getAliasCount() + 1);
         }
         $domain->setMailboxCount($domain->getMailboxCount() + 1);
         $em->flush();
@@ -419,6 +418,12 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             throw new ViMbAdmin_Mcp_DomainException('alias already exists');
         }
 
+        $countsTowardCapacity = $address != $goto;
+        if ($countsTowardCapacity && $domain->getMaxAliases() != 0
+            && $domain->getAliasCount() >= $domain->getMaxAliases()) {
+            throw new ViMbAdmin_Mcp_DomainException('You have used all of your allocated aliases.');
+        }
+
         $a = new \Entities\Alias();
         $a->setAddress($address);
         $a->setGoto($goto);
@@ -427,7 +432,9 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $a->setCreated(new \DateTime());
         $em = $this->em();
         $em->persist($a);
-        $domain->setAliasCount($domain->getAliasCount() + 1);
+        if ($countsTowardCapacity) {
+            $domain->increaseAliasCount();
+        }
         $em->flush();
         return [ 'created' => true, 'address' => $address ];
     }
@@ -448,9 +455,12 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             throw new ViMbAdmin_Mcp_DomainException('unknown alias');
         }
         $this->_assertDomainAllowed($domain->requiredDomainName());
+        $identity = $this->requiredAliasIdentity($a);
         $em = $this->em();
         $em->remove($a);
-        $domain->setAliasCount(max(0, $domain->getAliasCount() - 1));
+        if ($identity['address'] != $identity['goto']) {
+            $domain->decreaseAliasCount();
+        }
         $em->flush();
         return [ 'deleted' => true, 'address' => $address ];
     }

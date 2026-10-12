@@ -255,6 +255,9 @@ jobs:
       - name: Native routing preserves supported sub-path deployments
         run: php ci/test-subpath-routing.php
 
+      - name: Domain alias counts link to the registered alias route
+        run: php ci/test-domain-alias-count-route.php
+
       - name: Quota forms accept their rendered file-size values
         run: php ci/test-quota-form-validation.php
 

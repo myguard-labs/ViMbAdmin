@@ -124,7 +124,7 @@ function formatAliases( id, aliases, maxaliases )
     var str = '<a class="btn btn-sm have-tooltip" id="add_alias_' + id + '" title="Add Alias" href="{genUrl controller="alias" action="add"}/did/' + id + '">\
         <i class="bi-plus-lg"></i>\
     </a>&nbsp;&nbsp;\
-    <a class="ul" href="{genUrl controller="aliases" action="list"}/did/' + id + '">' + aliases;
+    <a class="ul" href="{genUrl controller="alias" action="list"}/did/' + id + '">' + aliases;
     if( maxaliases != 0 )
        str += '/' + maxaliases;
     str += '</a>';

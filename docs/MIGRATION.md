@@ -242,7 +242,7 @@ scope). Drop these into your Dovecot `conf.d/` and adjust DB creds / API key:
 | [`00-mail-storage.conf`](../contrib/dovecot/conf.d/00-mail-storage.conf) | `mail_path`/`mail_inbox_path` derive the maildir from **Dovecot config, not the DB**. **Drop `maildir AS mail` / `homedir AS home` (and the passdb prefetch) from your userdb queries** — else the per-row DB value wins. Pairs with the blank `defaults.mailbox.{homedir,maildir}` from Phase 2. |
 | [`95-doveadm-http.conf`](../contrib/dovecot/conf.d/95-doveadm-http.conf) | Exposes the doveadm HTTP API on `:8081` with the bearer key ViMbAdmin POSTs to. **Never publish 8081 to the host** — the docker network + key are the perimeter. The key here must equal `doveadm.http.api_key` from Phase 2. |
 | [`96-fs-posix.conf`](../contrib/dovecot/conf.d/96-fs-posix.conf) | Named `fs posix` filter so `doveadm fs delete -R` can remove a backup dir over the API (archive autoprune). |
-| [`99-zzz-quotaclone.conf`](../contrib/dovecot/conf.d/99-zzz-quotaclone.conf) | `quota_clone` writes real-time usage into `dovecot_quota`; a DB trigger mirrors it into `mailbox.maildir_size`. **Replaces the `du` scan.** Self-contained SQL `dict_server` map included. |
+| [`99-zzz-quotaclone.conf`](../contrib/dovecot/conf.d/99-zzz-quotaclone.conf) | `quota_clone` writes real-time usage into `dovecot_quota`, which ViMbAdmin reads directly. **Replaces the `du` scan; no mailbox size mirror is required.** Self-contained SQL `dict_server` map included. |
 | [`99-zzz-lastlogin.conf`](../contrib/dovecot/conf.d/99-zzz-lastlogin.conf) | Writes `last_login` into `dovecot_last_login`. **Scope to `protocol imap`/`pop3`** or every doveadm queue action counts as a login. |
 
 - [ ] Drop the snippets in, set DB creds + the shared API key, and **reload

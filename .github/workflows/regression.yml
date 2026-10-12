@@ -261,6 +261,9 @@ jobs:
       - name: Password-reset links use a trusted origin
         run: php ci/test-password-reset-origin.php
 
+      - name: Queue loopback bearer origin is pinned
+        run: php ci/test-queue-loopback-origin.php
+
       - name: Second-factor guessing stops at the brute-force threshold
         run: php ci/test-second-factor-lockout.php
 

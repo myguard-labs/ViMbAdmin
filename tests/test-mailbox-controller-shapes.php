@@ -148,23 +148,6 @@ $check(
         )
 );
 $check(
-    'queue endpoint parser accepts safe server scalars and rejects hostile runtime values',
-    $invoke('queueEndpoint', 'on', 'mail.example.test:443', '443') === [
-        'https' => true,
-        'host' => 'mail.example.test:443',
-        'sni' => 'mail.example.test',
-        'port' => 443,
-    ]
-        && $fails(
-            static fn (): mixed => $invoke('queueEndpoint', null, "mail.example.test\r\nX: y", '80'),
-            'Server HTTP_HOST contains control characters',
-        )
-        && $fails(
-            static fn (): mixed => $invoke('queueEndpoint', null, 'mail.example.test', '80junk'),
-            'Server port must be an integer from 1 through 65535',
-        )
-);
-$check(
     'invalid email form containers have safe non-echoing render values',
     $invoke('renderStringOrDefault', ['username'], 'username') === 'username'
         && $invoke('renderStringOrDefault', ['attacker@example.test'], '') === ''

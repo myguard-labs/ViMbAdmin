@@ -36,31 +36,45 @@ for ($index = 0; $index < 4; $index++) {
 $mixedPreferences[] = ['p_index' => 4, 'p_value' => $token];
 $legacyIndexes = ViMbAdmin_PasswordResetToken::legacyIndexes($mixedPreferences);
 $check('migration selects only the legacy raw preference', $legacyIndexes === [4]);
-$check('migration preserves four verifiers so one new request reaches the five-token limit',
-    count($mixedPreferences) - count($legacyIndexes) + 1 === 5);
-$check('migration accepts an admin with no existing reset preferences',
-    ViMbAdmin_PasswordResetToken::legacyIndexes(false) === []);
-$check('migration ignores malformed preference rows safely',
-    ViMbAdmin_PasswordResetToken::legacyIndexes([['p_index' => '0', 'p_value' => []]]) === []);
+$check(
+    'migration preserves four verifiers so one new request reaches the five-token limit',
+    count($mixedPreferences) - count($legacyIndexes) + 1 === 5
+);
+$check(
+    'migration accepts an admin with no existing reset preferences',
+    ViMbAdmin_PasswordResetToken::legacyIndexes(false) === []
+);
+$check(
+    'migration ignores malformed preference rows safely',
+    ViMbAdmin_PasswordResetToken::legacyIndexes([['p_index' => '0', 'p_value' => []]]) === []
+);
 
 $template = file_get_contents(__DIR__ . '/../application/views/auth/email/html/lost-password.phtml');
 $controller = file_get_contents(__DIR__ . '/../src/Kernel/Controller/AuthController.php');
 $repository = file_get_contents(__DIR__ . '/../application/Repositories/Admin.php');
-$check('reset email URL excludes the bearer token parameter',
+$check(
+    'reset email URL excludes the bearer token parameter',
     is_string($template)
         && !preg_match('/genUrl[^}]*\btoken\s*=/', $template)
-        && str_contains($template, '<strong>{$token}</strong>'));
-$check('reset GET never imports a token from route parameters',
-    is_string($controller) && !preg_match('/param\([\'\"]token[\'\"]\)/', $controller));
-$check('new reset preferences persist only a verifier',
+        && str_contains($template, '<strong>{$token}</strong>')
+);
+$check(
+    'reset GET never imports a token from route parameters',
+    is_string($controller) && !preg_match('/param\([\'\"]token[\'\"]\)/', $controller)
+);
+$check(
+    'new reset preferences persist only a verifier',
     is_string($controller)
         && str_contains($controller, 'ViMbAdmin_PasswordResetToken::verifier($token)')
         && str_contains($controller, 'ViMbAdmin_PasswordResetToken::legacyIndexes($storedTokens)')
         && !str_contains($controller, '$user->deletePreference(\'tokens.password_reset\');')
-        && !str_contains($controller, 'addIndexedPreference(\'tokens.password_reset\', $token'));
-$check('atomic reset lookup compares the derived verifier',
+        && !str_contains($controller, 'addIndexedPreference(\'tokens.password_reset\', $token')
+);
+$check(
+    'atomic reset lookup compares the derived verifier',
     is_string($repository)
-        && str_contains($repository, 'ViMbAdmin_PasswordResetToken::verifier($token)'));
+        && str_contains($repository, 'ViMbAdmin_PasswordResetToken::verifier($token)')
+);
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

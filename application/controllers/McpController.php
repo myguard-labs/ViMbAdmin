@@ -20,7 +20,6 @@
 class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
 {
     private const LIST_MAX = 200;
-    private const LIST_MAX_OFFSET = 10000;
     /** @var \Entities\McpToken|null  the authenticated token for this request */
     private $_token = null;
 
@@ -119,7 +118,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $out = [];
         $repository = $this->em()->getRepository('\\Entities\\Domain');
         $query = $repository->createQueryBuilder('d')->orderBy('d.domain', 'ASC')
-            ->setFirstResult($offset)->setMaxResults($limit);
+            ->setFirstResult($offset)->setMaxResults($limit + 1);
         if (isset($criteria['domain'])) {
             $query->andWhere('LOWER(d.domain) IN (:allowed)')->setParameter('allowed', $criteria['domain']);
         }
@@ -128,7 +127,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             \Entities\Domain::class,
             'MCP domain list query'
         );
-        foreach ($domains as $d) {
+        foreach (array_slice($domains, 0, $limit) as $d) {
             $domainName = $d->requiredDomainName();
             if ($this->_token && !$this->_token->allowsDomain($domainName)) {
                 continue;
@@ -144,7 +143,10 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
                 'aliases'   => $d->getAliasCount(),
             ];
         }
-        return [ 'domains' => $out ];
+        return [
+            'domains' => $out,
+            'pagination' => $this->_pagination(count($domains), count($out), $limit, $offset),
+        ];
     }
 
     /**
@@ -161,13 +163,13 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             $this->em()->getRepository('\\Entities\\Mailbox')->findBy(
                 [ 'Domain' => $domain ],
                 [ 'username' => 'ASC' ],
-                $limit,
+                $limit + 1,
                 $offset
             ),
             \Entities\Mailbox::class,
             'MCP mailbox list query'
         );
-        foreach ($mailboxes as $m) {
+        foreach (array_slice($mailboxes, 0, $limit) as $m) {
             $out[] = [
                 'username'   => $m->requiredUsername(),
                 'name'       => $m->getName(),
@@ -176,7 +178,11 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
                 'local_part' => $m->getLocalPart(),
             ];
         }
-        return [ 'domain' => $domainName, 'mailboxes' => $out ];
+        return [
+            'domain' => $domainName,
+            'mailboxes' => $out,
+            'pagination' => $this->_pagination(count($mailboxes), count($out), $limit, $offset),
+        ];
     }
 
     /**
@@ -193,13 +199,13 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             $this->em()->getRepository('\\Entities\\Alias')->findBy(
                 [ 'Domain' => $domain ],
                 [ 'address' => 'ASC' ],
-                $limit,
+                $limit + 1,
                 $offset
             ),
             \Entities\Alias::class,
             'MCP alias list query'
         );
-        foreach ($aliases as $a) {
+        foreach (array_slice($aliases, 0, $limit) as $a) {
             $identity = $this->requiredAliasIdentity($a);
             $out[] = [
                 'address' => $identity['address'],
@@ -207,7 +213,11 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
                 'active'  => (bool) $a->getActive(),
             ];
         }
-        return [ 'domain' => $domainName, 'aliases' => $out ];
+        return [
+            'domain' => $domainName,
+            'aliases' => $out,
+            'pagination' => $this->_pagination(count($aliases), count($out), $limit, $offset),
+        ];
     }
 
     /**
@@ -221,10 +231,22 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         if ($limit < 1 || $limit > self::LIST_MAX) {
             throw new ViMbAdmin_Mcp_Exception('param "limit" must be between 1 and ' . self::LIST_MAX);
         }
-        if ($offset > self::LIST_MAX_OFFSET) {
-            throw new ViMbAdmin_Mcp_Exception('param "offset" must be at most ' . self::LIST_MAX_OFFSET);
-        }
         return [ $limit, $offset ];
+    }
+
+    /**
+     * @return array{limit:int,offset:int,returned:int,has_more:bool,next_offset:int|null}
+     */
+    private function _pagination(int $fetched, int $returned, int $limit, int $offset): array
+    {
+        $hasMore = $fetched > $limit;
+        return [
+            'limit' => $limit,
+            'offset' => $offset,
+            'returned' => $returned,
+            'has_more' => $hasMore,
+            'next_offset' => $hasMore ? $offset + $limit : null,
+        ];
     }
 
     /** @return array{address:string,goto:string} */

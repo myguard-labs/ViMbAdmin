@@ -99,10 +99,10 @@ $mcp = $source('application/controllers/McpController.php');
 $check(
     'all MCP list abilities use validated bounded repository queries',
     substr_count($mcp, '$this->_listBounds($params)') === 3
-    && preg_match_all('/\],\s*\$limit,\s*\$offset/', $mcp) === 2
-    && str_contains($mcp, '->setFirstResult($offset)->setMaxResults($limit)')
+    && preg_match_all('/\],\s*\$limit\s*\+\s*1,\s*\$offset/', $mcp) === 2
+    && str_contains($mcp, '->setFirstResult($offset)->setMaxResults($limit + 1)')
     && str_contains($mcp, 'LOWER(d.domain) IN (:allowed)')
-    && str_contains($mcp, 'LIST_MAX_OFFSET = 10000')
+    && !str_contains($mcp, 'LIST_MAX_OFFSET')
 );
 
 $aliases = $source('application/plugins/MailboxAutomaticAliases.php');

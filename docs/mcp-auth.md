@@ -74,17 +74,32 @@ notification-shaped calls cannot execute silently.
 
 ### Read methods (scope: `read`)
 
+<!-- markdownlint-disable MD013 -->
+
 | Method | Params | Returns |
-|---|---|---|
+| --- | --- | --- |
 | `ping` | — | `{pong, time}` |
-| `domains.list` | — | all domains (id, name, active, transport, quotas, counts) |
-| `mailboxes.list` | `{domain}` | mailboxes of that domain |
-| `aliases.list` | `{domain}` | aliases of that domain |
+| `domains.list` | `{limit?, offset?}` | one domain page (`domains`, `pagination`) |
+| `mailboxes.list` | `{domain, limit?, offset?}` | one mailbox page (`domain`, `mailboxes`, `pagination`) |
+| `aliases.list` | `{domain, limit?, offset?}` | one alias page (`domain`, `aliases`, `pagination`) |
+
+<!-- markdownlint-enable MD013 -->
+
+All list methods are paginated. `limit` defaults to 100 and accepts 1–200;
+`offset` defaults to 0 and accepts any non-negative integer supported by the
+server. The `pagination` object reports the effective `limit` and `offset`, the
+number of `returned` rows, whether the current response `has_more`, and a
+`next_offset`. To retrieve the complete list, repeat the same request with
+`offset` set to `next_offset` until `next_offset` is `null`. Each response keeps
+the existing item array and, for mailboxes and aliases, the existing `domain`
+field.
 
 ### Write methods (scope: `write`)
 
+<!-- markdownlint-disable MD013 -->
+
 | Method | Params | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `domain.create` | `{domain, active?, transport?, quota?, maxquota?, max_mailboxes?, max_aliases?}` | |
 | `domain.delete` | `{domain}` | **destructive** — purges the domain + its mailboxes/aliases |
 | `mailbox.create` | `{domain, local_part, password, name?, quota?, active?}` | Enforces the domain mailbox limit and quota maximum like the GUI; password is hashed in the configured scheme (`doveadm pw`) |
@@ -94,6 +109,8 @@ notification-shaped calls cannot execute silently.
 | `mailbox.archive` | `{username}` | **destructive** — queues an `ARCHIVE` task with initial status `PENDING` (panel-compatible) |
 | `archive.restore` | `{username}` | **destructive** — restores immediately, then removes backup and row |
 | `archive.delete` | `{username}` | **destructive** — immediately deletes backup files and row |
+
+<!-- markdownlint-enable MD013 -->
 
 `alias.create` accepts a local part (and appends the domain) or a full address.
 Forwarding aliases enforce the domain maximum. A `max_aliases` value of zero

@@ -489,7 +489,9 @@ function runResetTotp(object $entityManager, array $args): array
 {
     ob_start();
     try {
-        $status = (new ResetTotpCommand())->run(cliContainer($entityManager, ['securitysalt' => 'test-salt']), $args);
+        // Recovery must work before a legacy short salt is replaced. The
+        // command clears opaque encrypted state without deriving a key.
+        $status = (new ResetTotpCommand())->run(cliContainer($entityManager, ['securitysalt' => 'legacy-short-salt']), $args);
         return [$status, (string) ob_get_clean()];
     } catch (Throwable $e) {
         ob_end_clean();
@@ -627,7 +629,7 @@ $repository = new CliTotpAdminRepository([$enabled]);
 $entityManager = new CliTotpObjectManager($repository);
 [$status, $output] = runResetTotp($entityManager, ['username' => 'enabled@example.com']);
 check('username reset queries the exact account', $repository->criteria === ['username' => 'enabled@example.com'] && !$repository->findAllCalled);
-check('enabled account reset clears all TOTP state before one flush', $status === 0 && $enabled->preferences === [] && $entityManager->operations === ['getRepository', 'flush']);
+check('legacy-salt recovery clears all TOTP state before one flush', $status === 0 && $enabled->preferences === [] && $entityManager->operations === ['getRepository', 'flush']);
 check('username reset retains stable success output', $output === "2FA reset for: enabled@example.com\nDone. 1 admin(s) had 2FA disabled.\n");
 
 $disabled = new CliTotpAdmin('disabled@example.com', []);

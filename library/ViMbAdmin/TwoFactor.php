@@ -66,8 +66,8 @@ class ViMbAdmin_TwoFactor
      */
     public function __construct($issuer = 'ViMbAdmin', $securitysalt = '')
     {
-        if (!is_string($securitysalt) || mb_trim($securitysalt) === '') {
-            throw new TotpSaltException('TOTP security salt must be a non-empty string.');
+        if (!is_string($securitysalt) || strlen($securitysalt) !== 64 || mb_trim($securitysalt) === '') {
+            throw new TotpSaltException('TOTP security salt must be a non-blank string of exactly 64 bytes.');
         }
 
         // Use Bacon's SVG backend: pure PHP, no imagick/gd dependency. The
@@ -143,8 +143,7 @@ class ViMbAdmin_TwoFactor
      */
     public function isEnabled($admin)
     {
-        $secret = $admin->getPreference(self::PREF_SECRET);
-        return is_string($secret) && $secret !== '';
+        return self::hasStoredState($admin);
     }
 
     /**
@@ -183,6 +182,33 @@ class ViMbAdmin_TwoFactor
      * @return void
      */
     public function disable($admin)
+    {
+        self::clearStoredState($admin);
+    }
+
+    /**
+     * Check for stored TOTP state without constructing a key-derivation
+     * service. This keeps the administrative recovery path available while a
+     * legacy installation replaces invalid security-salt material.
+     *
+     * @param \Entities\Admin $admin
+     * @return bool
+     */
+    public static function hasStoredState($admin)
+    {
+        $secret = $admin->getPreference(self::PREF_SECRET);
+        return is_string($secret) && $secret !== '';
+    }
+
+    /**
+     * Remove stored TOTP state without deriving or using its encryption key.
+     * Encrypted secrets are deliberately discarded, never decrypted with
+     * replacement key material; the affected admins can then enrol again.
+     *
+     * @param \Entities\Admin $admin
+     * @return void
+     */
+    public static function clearStoredState($admin)
     {
         $admin->deletePreference(self::PREF_SECRET);
         $admin->deletePreference(self::PREF_BACKUP);

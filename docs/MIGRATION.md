@@ -137,13 +137,34 @@ new dist and re-apply only your site values**, rather than hand-merge.
 
    - `resources.doctrine2.connection.options.*` — **DB host / name / user /
      password** (copy verbatim from your backup).
-   - `securitysalt` — **keep the existing value** (changing it invalidates
-     stored tokens / sessions).
+   - `securitysalt` — **keep the existing value when it is exactly 64 bytes**.
+     It remains the key material for encrypted TOTP secrets, so changing any
+     byte makes those secrets unreadable.
    - `resources.doctrine2cache.*` — cache backend + `namespace` if you set one.
    - `defaults.quota.multiplier`, `defaults.mailbox.min_password_length`, any
      branding / locale you customised.
 
-4. [ ] **Set the new doveadm + queue keys** (no equivalent existed before):
+4. [ ] **Recover before replacing a legacy short `securitysalt`.** If the
+       existing value is not exactly 64 bytes, keep the old config active and
+       disable TOTP for every enrolled administrator first:
+
+       ```sh
+       ./bin/vimbtool.php -a admin.cli-reset-totp --all
+       ```
+
+       Confirm the command reports each affected administrator, then replace
+       the invalid value with a fresh 64-character ASCII salt, for example:
+
+       ```sh
+       php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+       ```
+
+       The reset command discards the opaque encrypted TOTP secrets without
+       trying another key. Administrators must enrol TOTP again after the
+       upgrade. Do not replace the salt before running the reset: ciphertext
+       encrypted with different bytes cannot be recovered or migrated.
+
+5. [ ] **Set the new doveadm + queue keys** (no equivalent existed before):
 
    ```ini
    ; Dovecot doveadm HTTP API — the new mail integration point.
@@ -156,12 +177,12 @@ new dist and re-apply only your site values**, rather than hand-merge.
    defaults.mailbox.password_scheme = "dovecot:BLF-CRYPT"
    ```
 
-5. [ ] **Blank the per-mailbox storage defaults** so the DB never pins a maildir
+6. [ ] **Blank the per-mailbox storage defaults** so the DB never pins a maildir
        root — Dovecot derives it (Phase 3). The dist already ships these blank;
        just confirm you did **not** carry over old `defaults.mailbox.homedir` /
        `defaults.mailbox.maildir` values from your backup.
 
-6. [ ] Sanity-check the result boots:
+7. [ ] Sanity-check the result boots:
 
        ```sh
        php bin/vimbtool.php -a maintenance.cli-schema-update --verbose   # "up to date"

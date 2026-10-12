@@ -39,13 +39,6 @@ final class ResetTotpCommand implements CliCommand
             return 1;
         }
 
-        $options = $container->options();
-        $salt = $options['securitysalt'] ?? '';
-        if (!is_string($salt)) {
-            throw new \TypeError('TOTP security salt must be a string.');
-        }
-
-        $tfa = new \ViMbAdmin_TwoFactor('ViMbAdmin', $salt);
         $entityManager = $container->entityManager();
         if (!$entityManager instanceof ObjectManager) {
             throw new LogicException('TOTP reset requires a Doctrine object manager.');
@@ -62,8 +55,8 @@ final class ResetTotpCommand implements CliCommand
 
         $n = 0;
         foreach ($admins as $admin) {
-            if ($tfa->isEnabled($admin)) {
-                $tfa->disable($admin);
+            if (\ViMbAdmin_TwoFactor::hasStoredState($admin)) {
+                \ViMbAdmin_TwoFactor::clearStoredState($admin);
                 echo '2FA reset for: ' . $admin->getUsername() . "\n";
                 $n++;
             }

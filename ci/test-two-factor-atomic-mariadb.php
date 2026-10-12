@@ -90,7 +90,7 @@ $check = static function (string $label, bool $ok) use (&$checks, &$failures): v
     }
 };
 
-$twoFactor = new \ViMbAdmin_TwoFactor('CI-027', 'test-security-salt');
+$twoFactor = new \ViMbAdmin_TwoFactor('CI-027', str_repeat('s', 64));
 $secret = $twoFactor->createSecret();
 $encrypt = new ReflectionMethod($twoFactor, '_encrypt');
 $ciphertext = $encrypt->invoke($twoFactor, $secret);

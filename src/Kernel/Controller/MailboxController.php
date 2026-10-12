@@ -325,26 +325,45 @@ final class MailboxController extends AbstractController
         );
     }
 
-    /** @return array{https:bool,host:string,sni:string,port:int} */
-    private static function queueEndpoint(mixed $httpsValue, mixed $hostValue, mixed $portValue): array
+    /**
+     * @param array<string,mixed> $options
+     * @return array{https:bool,host:string,sni:string,port:int}
+     */
+    private static function queueEndpoint(array $options, mixed $httpsValue, mixed $portValue): array
     {
         $httpsString = self::stringOrDefault($httpsValue, '', 'Server HTTPS value');
         $reportedPort = self::optionalServerPort($portValue);
         $https = ($httpsString !== '' && $httpsString !== '0' && strtolower($httpsString) !== 'off')
             || $reportedPort === 443;
-        $host = self::controlSafeString(
-            self::stringOrDefault($hostValue, '127.0.0.1', 'Server HTTP_HOST'),
-            'Server HTTP_HOST',
+        $configuredHost = self::controlSafeString(
+            self::optionString($options, '', 'queue', 'runner', 'host'),
+            'Configuration queue.runner.host',
         );
-        if ($host === '' || strpbrk($host, " \t\r\n/\\") !== false) {
-            throw new \LogicException('Server HTTP_HOST has an invalid shape');
+        $hasOpeningBracket = str_starts_with($configuredHost, '[');
+        $hasClosingBracket = str_ends_with($configuredHost, ']');
+        if ($hasOpeningBracket !== $hasClosingBracket) {
+            throw new \LogicException('Configuration queue.runner.host must be a hostname or IP address');
+        }
+        $sni = $hasOpeningBracket ? substr($configuredHost, 1, -1) : $configuredHost;
+        $isIp = filter_var($sni, FILTER_VALIDATE_IP) !== false;
+        $isHostname = preg_match(
+            '/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$/i',
+            $sni,
+        ) === 1;
+        if ($configuredHost === '' || (!$isIp && !$isHostname)) {
+            throw new \LogicException('Configuration queue.runner.host must be a hostname or IP address');
+        }
+        $host = str_contains($sni, ':') ? '[' . $sni . ']' : $sni;
+        $port = $reportedPort ?? ($https ? 443 : 80);
+        if (($https && $port !== 443) || (!$https && $port !== 80)) {
+            $host .= ':' . $port;
         }
 
         return [
             'https' => $https,
             'host' => $host,
-            'sni' => preg_replace('/:\d+$/', '', $host) ?: '127.0.0.1',
-            'port' => $reportedPort ?? ($https ? 443 : 80),
+            'sni' => $sni,
+            'port' => $port,
         ];
     }
 
@@ -1226,7 +1245,8 @@ final class MailboxController extends AbstractController
         // whole backup, so the browser's follow-up GET /mailbox/list blocks on
         // session_start() until it finishes -> 504). No shell-out (Snuffleupagus
         // blocks exec), no fork. If the trigger is disabled (no queue.runner.key)
-        // the call is a silent no-op and the */2-min cron drains the backlog.
+        // or no queue.runner.host) the call is a silent no-op and the */2-min
+        // cron drains the backlog.
         $this->kickQueueAsync($queueRunnerKey);
 
         return $this->redirect('mailbox/list');
@@ -1238,8 +1258,9 @@ final class MailboxController extends AbstractController
      * the trigger's own worker, never in the caller's request.
      *
      * Connects to loopback (127.0.0.1) on the same port/scheme this request
-     * arrived on, carrying the real vhost in the Host header (and as TLS SNI) so
-     * the web server routes to the right server block and sub-path mount. Writes
+     * arrived on, carrying the configured local vhost in the Host header (and as
+     * TLS SNI) so the web server routes to the right server block and sub-path
+     * mount. Writes
      * the bearer-authenticated request and closes immediately without reading the
      * response — the trigger accepts, returns {"triggered":true} and drains after
      * its own connection closes. Best-effort: any failure (endpoint disabled,
@@ -1254,8 +1275,8 @@ final class MailboxController extends AbstractController
 
         try {
             $endpoint = self::queueEndpoint(
+                $this->container->options(),
                 $_SERVER['HTTPS'] ?? null,
-                $_SERVER['HTTP_HOST'] ?? null,
                 $_SERVER['SERVER_PORT'] ?? null,
             );
         } catch (\LogicException $e) {

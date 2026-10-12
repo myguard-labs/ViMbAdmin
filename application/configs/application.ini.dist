@@ -243,6 +243,11 @@ queue.autoprune.days = 90
 ; DISABLE the remote endpoint (the CLI runner and Maintenance button still work).
 ;   curl -X POST -H 'Authorization: Bearer <key>' https://host/vimbadmin/queue/trigger
 queue.runner.key         = ""
+; Virtual host used only by in-panel fire-and-forget requests to the loopback
+; trigger. Set this to the local web-server vhost name in multi-vhost installs.
+; It must be a hostname or IP address without a scheme, path, or port. Leave it
+; empty to disable the in-panel request and rely on the periodic queue runner.
+queue.runner.host        = ""
 ; Comma- or whitespace-separated IPs / CIDRs allowed to hit /queue/trigger.
 ; Default = all RFC1918 private ranges + loopback + IPv6 unique-local, so an
 ; internal cron works out of the box; a bearer key is still required on top.

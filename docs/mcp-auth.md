@@ -87,7 +87,7 @@ notification-shaped calls cannot execute silently.
 |---|---|---|
 | `domain.create` | `{domain, active?, transport?, quota?, maxquota?, max_mailboxes?, max_aliases?}` | |
 | `domain.delete` | `{domain}` | **destructive** — purges the domain + its mailboxes/aliases |
-| `mailbox.create` | `{domain, local_part, password, name?, quota?, active?}` | password hashed in the configured scheme (`doveadm pw`) |
+| `mailbox.create` | `{domain, local_part, password, name?, quota?, active?}` | Enforces the domain mailbox limit and quota maximum like the GUI; password is hashed in the configured scheme (`doveadm pw`) |
 | `mailbox.delete` | `{username}` | **destructive** |
 | `alias.create` | `{domain, address, goto, active?}` | `address` may be a local part (domain appended) or full |
 | `alias.delete` | `{address}` | deletes the alias row |

@@ -243,6 +243,9 @@ jobs:
       - name: MCP alias creation validates composed addresses
         run: php ci/test-mcp-alias-create.php
 
+      - name: MCP mailbox creation enforces domain policy
+        run: php ci/test-mcp-mailbox-create-policy.php
+
       - name: MCP orphan archive deletion enforces domain authorization
         run: php ci/test-mcp-archive-domain-authorization.php
 

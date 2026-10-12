@@ -266,9 +266,13 @@ if (getenv('VERIFY_NATIVE_COLLATION_ALIGNMENT') === '1') {
 // 3. Diff the mapped metadata against the current DB schema.
 $sql = $tool->getUpdateSchemaSql($metadatas);
 
-// 3. Doctrine never manages the Dovecot-owned dict tables; ignore any diff that
-//    targets them (defence in depth — they should not be in the mappings at all,
-//    but if a mapping is added by mistake this keeps the message precise).
+// 3. Production's additive updater never drops an unmanaged table. Apply that
+//    same filter here before checking mapped schema drift; the shipped `setting`
+//    table is intentionally absent from Doctrine metadata.
+//
+// Doctrine also never manages the Dovecot-owned dict tables; ignore any diff
+// that targets them (defence in depth — they should not be in the mappings at all,
+// but if a mapping is added by mistake this keeps the message precise).
 // Match the table name with or without backticks. These tables carry
 // column-definition timestamp defaults that Doctrine's schema comparator cannot
 // round-trip, so it reports a perpetual phantom ALTER even on a fresh schema —
@@ -276,6 +280,9 @@ $sql = $tool->getUpdateSchemaSql($metadatas);
 // fails the test.
 $dovecotOwned = ['dovecot_quota', 'dovecot_last_login'];
 $pending = array_values(array_filter($sql, static function (string $stmt) use ($dovecotOwned): bool {
+    if (preg_match('/^\s*DROP\s+TABLE\b/i', $stmt) === 1) {
+        return false;
+    }
     foreach ($dovecotOwned as $t) {
         if (preg_match('/\b`?' . preg_quote($t, '/') . '`?\b/i', $stmt)) {
             return false; // drop — Dovecot owns it / un-diffable column-definition

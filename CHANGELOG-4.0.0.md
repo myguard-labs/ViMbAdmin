@@ -6,7 +6,7 @@ First tagged release of the modernised fork. PHP 8.5, Doctrine ORM 3, a full sec
 
 ## Minimum requirements
 
-- **PHP 8.4.1+** (runs clean on 8.4 / 8.5).
+- **PHP 8.4.1+** (runs clean on 8.4.1 / 8.5).
 - PHP extensions: `ctype`, `dom`, `gd`, `gettext`, `iconv`, `intl`, `json`, `mbstring`, `pdo`, `pdo_mysql`, `sodium` (2FA secrets are libsodium-encrypted). Optional: `apcu` (cache), `redis` (multi-replica cache).
 - **MariaDB / MySQL** database.
 - Doctrine ORM 3.3+, Smarty 5.0+ (pulled by Composer).

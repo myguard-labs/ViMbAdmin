@@ -325,7 +325,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $domain    = $this->_requireDomain($params);
         $localPart = $this->_identity($params, 'local_part');
         $this->_validate($localPart, \ViMbAdmin\Kernel\Form\Validators::localPart(), 'local_part');
-        $password  = $this->_str($params, 'password', true);
+        $password  = $this->_requiredExactStr($params, 'password');
         $username  = $localPart . '@' . $domain->requiredDomainName();
 
         $repo = $this->_mailboxRepository();
@@ -660,6 +660,16 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         }
 
         return ViMbAdmin_Mcp_Input::string($params[$key], "param \"{$key}\"", $required);
+    }
+
+    /** @param array<string,mixed> $params */
+    private function _requiredExactStr(array $params, string $key): string
+    {
+        if (!array_key_exists($key, $params)) {
+            throw new ViMbAdmin_Mcp_Exception("param \"{$key}\" required");
+        }
+
+        return ViMbAdmin_Mcp_Input::exactString($params[$key], "param \"{$key}\"", true);
     }
 
     /** @param array<string,mixed> $params */

@@ -30,9 +30,12 @@ Three independent layers — defence in depth, machine-friendly, no OTP:
 ## Enable it
 
 ```ini
-; application.ini  ([user] section)
+; application/configs/application.ini: change the existing top-level key.
 mcp.enabled = 1
 ```
+
+Keep this setting before any `[environment]` section. A setting inside an
+environment section applies only when `APPLICATION_ENV` selects that section.
 
 Restrict `/mcp` to your client IP(s) in the vhost (`allow ...; deny all;`), and
 create a token:

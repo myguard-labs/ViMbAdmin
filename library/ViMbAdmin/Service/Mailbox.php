@@ -210,8 +210,8 @@ class ViMbAdmin_Service_Mailbox
      * caller has already resolved `$domain`, set the username, name, quota and
      * the PLAINTEXT password on `$mailbox`, and run its own form validation /
      * uniqueness / quota-clamp checks. This service owns the rest of the add:
-     * it derives the storage fields from the application options (homedir / uid /
-     * gid + the formatted home/maildir paths), hashes the plaintext password,
+     * it preserves the storage fields already set on `$mailbox`, hashes the
+     * plaintext password,
      * marks the mailbox active and not delete-pending, stamps `created`, persists
      * it, optionally creates the matching auto mailbox-alias (address -> address,
      * skipped if one already exists), bumps the domain's mailbox count, logs the

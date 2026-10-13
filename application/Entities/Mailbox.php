@@ -497,7 +497,7 @@ class Mailbox
      *
      * @param string $email An email address used to extract the domain name
      * @param string $str The format string
-     * @return string The newly created maildir (also set in the object)
+     * @return string The substituted path; this method does not modify an object
      */
     public static function substitute($email, $str)
     {

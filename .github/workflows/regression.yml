@@ -379,6 +379,9 @@ jobs:
       - name: PHP runtime and dependency compatibility
         run: php ci/test-php-runtime.php
 
+      - name: Verify portable proxy generation
+        run: php ci/test-proxy-generation.php
+
       - name: Cache + ORM bootstrap smoke
         run: php -d apc.enable_cli=1 tests/test-cache-bootstrap.php
 

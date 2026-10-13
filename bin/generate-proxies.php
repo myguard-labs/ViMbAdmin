@@ -14,7 +14,7 @@
  * No database is required: the metadata + proxy generation are driver-agnostic,
  * so a connection is configured but never opened (lazy connect).
  *
- * Usage:  php bin/generate-proxies.php
+ * Usage:  php bin/generate-proxies.php [output-directory]
  */
 
 $root = dirname(__DIR__);
@@ -40,18 +40,20 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\DBAL\DriverManager;
 
 $entityDir = $root . '/application/Entities';
-$proxyDir  = $root . '/application/Proxies';
+$proxyDir  = $argv[1] ?? $root . '/application/Proxies';
 
 if (!is_dir($entityDir)) {
     fwrite(STDERR, "Entities dir not found: $entityDir\n");
     exit(1);
 }
-@mkdir($proxyDir, 0755, true);
+if (count($argv) > 2 || (!is_dir($proxyDir) && !@mkdir($proxyDir, 0755, true))) {
+    fwrite(STDERR, "Cannot prepare proxy output directory.\n");
+    exit(1);
+}
 
 $config = ORMSetup::createAttributeMetadataConfiguration([$entityDir], true);
-if (PHP_VERSION_ID >= 80400) {
-    $config->enableNativeLazyObjects(true);
-}
+// Build portable proxies even when the build interpreter supports native lazy objects.
+$config->enableNativeLazyObjects(false);
 $config->setProxyDir($proxyDir);
 $config->setProxyNamespace('Proxies');
 
@@ -79,6 +81,10 @@ if ($metadata === []) {
     exit(1);
 }
 
-$em->getProxyFactory()->generateProxyClasses($metadata, $proxyDir);
+$generated = $em->getProxyFactory()->generateProxyClasses($metadata, $proxyDir);
+if ($generated <= 0) {
+    fwrite(STDERR, "No proxy classes were generated.\n");
+    exit(1);
+}
 
-printf("generated %d proxy classes into %s\n", count($metadata), $proxyDir);
+printf("generated %d proxy classes into %s\n", $generated, $proxyDir);

@@ -375,3 +375,18 @@ SET `alias_count` = (
     WHERE a.`Domain_id` = d.`id`
       AND CAST(a.`address` AS BINARY) != CAST(a.`goto` AS BINARY)
 ), `capacity_version` = `capacity_version` + 1;
+
+-- 9) Generation-fenced mailbox-task transitions (additive/idempotent).
+-- Apply before running upgraded queue workers; normal ORM schema updates also
+-- add this column. Existing task history starts at generation 1.
+SET @have_task_version := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox_task'
+      AND COLUMN_NAME = 'task_version'
+);
+SET @ddl := IF( @have_mailbox_task = 0,
+    'DO 0 /* mailbox_task is created by the entity schema */',
+    IF( @have_task_version = 0,
+        'ALTER TABLE `mailbox_task` ADD `task_version` BIGINT NOT NULL DEFAULT 1',
+        'DO 0 /* mailbox_task.task_version already present */' ) );
+PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;

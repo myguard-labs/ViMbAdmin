@@ -394,12 +394,24 @@ jobs:
   # Attribute mappings have no pending changes (phantom-ALTER guard). #
   # ------------------------------------------------------------------ #
   schema-drift:
-    name: Schema has no phantom pending changes
+    name: Schema and atomic transitions (PHP ${{ matrix.php }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.3'
+            image: >-
+              mirror.gcr.io/library/php@sha256:6cb44388b6ffc8c9a35b4cfdf518d0565e0cf9150e479add338b498874d7e971
+          - php: '8.4'
+            image: >-
+              mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
+          - php: '8.5'
+            image: >-
+              mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
     container:
-      image: >-
-        mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+      image: ${{ matrix.image }}
     services:
       mariadb:
         image: >-
@@ -539,3 +551,23 @@ jobs:
           DB_PASS: ci
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-domain-capacity-atomic-mariadb.php
+
+      - name: Terminal task state remains fenced across cleanup and rollback
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-task-ownership.php
+
+      - name: Retry requires the exact safely failed task generation
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-task-retry.php

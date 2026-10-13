@@ -22,7 +22,7 @@ class MailboxTask extends EntityRepository
     {
         $message = '[' . gmdate('Y-m-d H:i:s') . '] cancelled by ' . $actor . "\n";
         $affected = $this->getEntityManager()->getConnection()->executeStatement(
-            'UPDATE mailbox_task SET status = :cancelled, finished_at = CURRENT_TIMESTAMP,'
+            'UPDATE mailbox_task SET task_version = task_version + 1, status = :cancelled, finished_at = CURRENT_TIMESTAMP,'
             . " log = CONCAT(COALESCE(log, ''), :message)"
             . ' WHERE id = :id AND status = :pending',
             [
@@ -51,7 +51,7 @@ class MailboxTask extends EntityRepository
         $message = '[' . gmdate('Y-m-d H:i:s') . "] FAILED: runner exited before task completion\n";
         $affected = $this->getEntityManager()->getConnection()->executeStatement(
             'UPDATE mailbox_task t LEFT JOIN queue_runner r ON r.id = t.QueueRunner_id'
-            . ' SET t.status = :failed, t.abandoned = 1, t.finished_at = CURRENT_TIMESTAMP,'
+            . ' SET t.task_version = t.task_version + 1, t.status = :failed, t.abandoned = 1, t.finished_at = CURRENT_TIMESTAMP,'
             . " t.log = CONCAT(COALESCE(t.log, ''), :message)"
             . ' WHERE t.status = :running AND r.id IS NULL',
             [
@@ -101,43 +101,79 @@ class MailboxTask extends EntityRepository
         \Entities\QueueRunner $runner,
         callable $publish
     ): bool {
-        $connection = $this->getEntityManager()->getConnection();
-        $connection->beginTransaction();
+        return $this->transitionIfCurrent($task, \Entities\MailboxTask::STATUS_RUNNING, $publish, $runner);
+    }
+
+    /** Retry the exact failed generation observed by the operator. */
+    public function retryIfFailed(\Entities\MailboxTask $task, string $actor): bool
+    {
+        return $this->transitionIfCurrent($task, \Entities\MailboxTask::STATUS_FAILED, static function () use ($task, $actor): void {
+            $task->setStatus(\Entities\MailboxTask::STATUS_PENDING)
+                ->setFinishedAt(null)->appendLog('retry queued by ' . $actor);
+        });
+    }
+
+    /**
+     * PENDING becomes RUNNING only through claim; a live owner may finish that
+     * RUNNING generation. Only an unabandoned FAILED generation may retry.
+     * Lock order is runner, then task. State, generation and callback ORM edits
+     * commit together. Rejection/rollback discards the whole pending UnitOfWork:
+     * cleanup and later unrelated flushes must never publish stale task dirt.
+     * Callbacks stage database state only, never external work.
+     *
+     * @param callable():void $publish
+     */
+    private function transitionIfCurrent(
+        \Entities\MailboxTask $task,
+        string $expectedStatus,
+        callable $publish,
+        ?\Entities\QueueRunner $runner = null
+    ): bool {
+        $em = $this->getEntityManager();
+        $connection = $em->getConnection();
+        $committed = false;
         try {
-            $runnerId = $runner->getId();
-            if (!is_int($runnerId) || $runnerId < 1) {
-                throw new \LogicException('Runner lease must be persisted before terminal publication.');
+            $connection->beginTransaction();
+            $runnerId = null;
+            if ($runner !== null) {
+                $runnerId = $runner->getId();
+                if (!is_int($runnerId) || $runnerId < 1) {
+                    throw new \LogicException('Runner lease must be persisted before terminal publication.');
+                }
+                $liveOwner = $connection->fetchOne(
+                    'SELECT id FROM queue_runner WHERE id = ? FOR UPDATE',
+                    [$runnerId]
+                );
+                if ($liveOwner !== $runnerId && $liveOwner !== (string) $runnerId) {
+                    $connection->rollBack();
+                    return false;
+                }
             }
-            $liveOwner = $connection->fetchOne(
-                'SELECT id FROM queue_runner WHERE id = ? FOR UPDATE',
-                [ $runnerId ]
-            );
-            if ($liveOwner !== $runnerId && $liveOwner !== (string) $runnerId) {
-                $connection->rollBack();
-                return false;
-            }
-            $owner = $connection->fetchOne(
+            $row = $connection->fetchAssociative(
                 'SELECT t.QueueRunner_id FROM mailbox_task t'
-                . ' WHERE t.id = ? AND t.status = ? FOR UPDATE',
-                [ $task->getId(), \Entities\MailboxTask::STATUS_RUNNING ]
+                . ' WHERE t.id = ? AND t.status = ? AND t.task_version = ?'
+                . ($runner === null ? ' AND t.abandoned = 0' : '') . ' FOR UPDATE',
+                [$task->getId(), $expectedStatus, $task->getTaskVersion()]
             );
-            $owned = $owner === $runnerId;
-            if (is_string($owner) && preg_match('/^[1-9][0-9]*$/D', $owner) === 1) {
-                $owned = filter_var($owner, FILTER_VALIDATE_INT) === $runnerId;
-            }
-            if (!$owned) {
+            $owner = is_array($row) ? $row['QueueRunner_id'] : null;
+            if ($row === false || ($runner !== null && $owner !== $runnerId && $owner !== (string) $runnerId)) {
                 $connection->rollBack();
                 return false;
             }
             $publish();
-            $this->getEntityManager()->flush();
+            $em->flush();
             $connection->commit();
+            $committed = true;
             return true;
         } catch (\Throwable $e) {
             if ($connection->isTransactionActive()) {
                 $connection->rollBack();
             }
             throw $e;
+        } finally {
+            if (!$committed) {
+                $em->clear();
+            }
         }
     }
 
@@ -214,7 +250,7 @@ class MailboxTask extends EntityRepository
     {
         $conn = $this->getEntityManager()->getConnection();
         $affected = $conn->executeStatement(
-            'UPDATE mailbox_task SET status = :running, abandoned = 0,'
+            'UPDATE mailbox_task SET task_version = task_version + 1, status = :running, abandoned = 0,'
             . ' started_at = CURRENT_TIMESTAMP, QueueRunner_id = :runner'
             . ' WHERE id = :id AND status = :pending',
             [

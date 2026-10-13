@@ -179,6 +179,9 @@ class ViMbAdmin_Service_QueueRunner
 
         try {
             $operation($lease);
+        } catch (\Throwable $error) {
+            $this->em->clear();
+            throw $error;
         } finally {
             ViMbAdmin_QueueRunner::release($this->em, $lease);
         }
@@ -234,6 +237,15 @@ class ViMbAdmin_Service_QueueRunner
             $this->autopruneSweep();
 
             foreach ($repo->pending($max) as $task) {
+                // A rejected predecessor clears the UnitOfWork. Reacquire each
+                // remaining snapshot before claim's refresh; deleted rows skip.
+                if (!$em->contains($task)) {
+                    $current = $repo->find($task->getId());
+                    if (!$current instanceof \Entities\MailboxTask) {
+                        continue;
+                    }
+                    $task = $current;
+                }
                 // Atomic PENDING -> RUNNING; skip if another runner won the row.
                 if (!$repo->claim($task, $lease)) {
                     continue;
@@ -250,19 +262,15 @@ class ViMbAdmin_Service_QueueRunner
                 // Recover before publishing either outcome; otherwise a
                 // failed command can leave its task stranded RUNNING too.
                 $this->ensureDatabaseConnection();
-                if ($error === null) {
-                    $task->setStatus(\Entities\MailboxTask::STATUS_DONE);
-                    $task->setRunner(null);
-                    $task->appendLog('done');
-                } else {
-                    $task->setStatus(\Entities\MailboxTask::STATUS_FAILED);
-                    $task->setRunner(null);
-                    $task->appendLog('FAILED: ' . $error->getMessage());
+                if ($error !== null) {
                     error_log("QueueRunner task {$task->getId()} ({$task->getType()} {$task->getUsername()}): " . $error->getMessage());
                 }
 
                 ($this->leaseProgress($lease))();
-                $published = $repo->publishIfOwned($task, $lease, function () use ($task): void {
+                $published = $repo->publishIfOwned($task, $lease, function () use ($task, $error): void {
+                    $task->setStatus($error === null ? \Entities\MailboxTask::STATUS_DONE : \Entities\MailboxTask::STATUS_FAILED);
+                    $task->setRunner(null);
+                    $task->appendLog($error === null ? 'done' : 'FAILED: ' . $error->getMessage());
                     $task->setFinishedAt(new \DateTime());
                 });
                 if (!$published) {

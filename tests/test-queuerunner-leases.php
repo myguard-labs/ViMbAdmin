@@ -174,6 +174,15 @@ final class QueueRunnerLeaseConnection
     /** @param list<mixed> $parameters */
     public function executeStatement(string $sql, array $parameters = []): int
     {
+        if ($sql === 'DELETE FROM queue_runner WHERE id = ? AND slot = ?') {
+            $id = $parameters[0] ?? null;
+            $slot = $parameters[1] ?? null;
+            $lease = is_int($id) ? ($this->em->leases[$id] ?? null) : null;
+            if (!$lease instanceof \Entities\QueueRunner || $lease->getSlot() !== $slot) {
+                return 0;
+            }
+            unset($this->em->leases[$id]);
+        }
         return 1;
     }
 }
@@ -259,6 +268,16 @@ final class QueueRunnerLeaseEntityManager
         if ($lease instanceof \Entities\QueueRunner && $lease->getId() !== null) {
             unset($this->leases[$lease->getId()]);
         }
+    }
+
+    public function detach(object $entity): void
+    {
+        // SQL owns the persisted lease rows; detaching changes no database row.
+    }
+
+    public function clear(): void
+    {
+        // No UnitOfWork dirt is retained by this lease fixture.
     }
 
     public function flush(): void
@@ -644,7 +663,7 @@ queueRunnerCheck(
 );
 queueRunnerCheck(
     'manual task finalization uses one ownership-fenced flush',
-    $live->taskRepository->terminalFlushes === 1 && $live->flushes === 2
+    $live->taskRepository->terminalFlushes === 1 && $live->flushes === 1
 );
 $queueControllerSource = file_get_contents(__DIR__ . '/../src/Kernel/Controller/QueueController.php');
 $runTaskStart = is_string($queueControllerSource) ? strpos($queueControllerSource, 'public function runTaskAction()') : false;

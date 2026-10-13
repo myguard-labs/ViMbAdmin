@@ -381,7 +381,12 @@ final class ControllerAliasIdentityRepositoryFactory implements RepositoryFactor
 function controllerAliasIdentityEntityManager(array $repositories): EntityManager
 {
     $configuration = ORMSetup::createAttributeMetadataConfiguration([]);
-    $configuration->enableNativeLazyObjects(true);
+    if (PHP_VERSION_ID >= 80400) {
+        $configuration->enableNativeLazyObjects(true);
+    } else {
+        $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+        $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+    }
     $configuration->setRepositoryFactory(new ControllerAliasIdentityRepositoryFactory($repositories));
     $connection = DriverManager::getConnection([
         'driver' => 'pdo_mysql',

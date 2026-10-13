@@ -24,6 +24,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - php: '8.2'
+            image: >-
+              mirror.gcr.io/library/php@sha256:118ef4fb1db5e866fb604f2f260da81f819a0a1eac87a4083f9194f48e00beee
+          - php: '8.3'
+            image: >-
+              mirror.gcr.io/library/php@sha256:6cb44388b6ffc8c9a35b4cfdf518d0565e0cf9150e479add338b498874d7e971
           - php: '8.4'
             image: >-
               mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3

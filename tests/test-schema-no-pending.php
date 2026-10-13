@@ -84,7 +84,12 @@ if ($entityDir === false) {
 $config = ORMSetup::createAttributeMetadataConfiguration([$entityDir], true);
 // ORM 3 on PHP 8.4+: native lazy objects are the proxy backend the app uses
 // (see EntityManagerFactory); the EM ctor instantiates ProxyFactory eagerly.
-$config->enableNativeLazyObjects(true);
+if (PHP_VERSION_ID >= 80400) {
+    $config->enableNativeLazyObjects(true);
+} else {
+    $config->setProxyDir($config->getProxyDir() ?? sys_get_temp_dir());
+    $config->setProxyNamespace($config->getProxyNamespace() ?? 'Proxies');
+}
 
 // DBAL 4 dropped the `object` type that DirectoryEntry.jpegPhoto maps to;
 // register the same compat shim the app does so SchemaTool can declare it.

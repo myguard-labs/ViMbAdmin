@@ -161,7 +161,12 @@ final class DirectoryEntryEntityManagerDouble extends \Doctrine\ORM\Decorator\En
     public function __construct()
     {
         $config = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfig([], true);
-        $config->enableNativeLazyObjects(true);
+        if (PHP_VERSION_ID >= 80400) {
+            $config->enableNativeLazyObjects(true);
+        } else {
+            $config->setProxyDir($config->getProxyDir() ?? sys_get_temp_dir());
+            $config->setProxyNamespace($config->getProxyNamespace() ?? 'Proxies');
+        }
         $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql'], $config);
         parent::__construct(new \Doctrine\ORM\EntityManager($connection, $config));
     }

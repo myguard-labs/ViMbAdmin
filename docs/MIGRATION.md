@@ -34,7 +34,7 @@ these builds; that contract lists the affected forms and operator replacements.
 The Modernised Edition will not run on the old stack. Before you start, make sure
 you have at least:
 
-- **PHP 8.4.1** or newer.
+- **PHP 8.2.0** or newer.
 - **Dovecot 2.4** or newer (the doveadm HTTP API + the `fs` / `quota_clone`
   features the integration relies on are 2.4-era).
 

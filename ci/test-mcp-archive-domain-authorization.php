@@ -101,7 +101,12 @@ final class ArchiveAuthorizationManager extends EntityManager
     public function __construct(\Entities\Archive $archive)
     {
         $configuration = ORMSetup::createAttributeMetadataConfiguration([]);
-        $configuration->enableNativeLazyObjects(true);
+        if (PHP_VERSION_ID >= 80400) {
+            $configuration->enableNativeLazyObjects(true);
+        } else {
+            $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+            $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+        }
         $configuration->setRepositoryFactory(new ArchiveAuthorizationRepositoryFactory(
             new ArchiveAuthorizationRepository($archive),
         ));

@@ -102,7 +102,12 @@ final class AliasCreateManager extends EntityManager
     public function __construct(\Entities\Domain $domain)
     {
         $configuration = ORMSetup::createAttributeMetadataConfiguration([]);
-        $configuration->enableNativeLazyObjects(true);
+        if (PHP_VERSION_ID >= 80400) {
+            $configuration->enableNativeLazyObjects(true);
+        } else {
+            $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+            $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+        }
         $this->repositories = new AliasCreateRepositoryFactory(
             new AliasCreateDomainRepository($domain),
             new AliasCreateAliasRepository(),

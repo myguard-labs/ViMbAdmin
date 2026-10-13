@@ -205,6 +205,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - php: '8.2'
+            image: >-
+              mirror.gcr.io/library/php@sha256:118ef4fb1db5e866fb604f2f260da81f819a0a1eac87a4083f9194f48e00beee
+          - php: '8.3'
+            image: >-
+              mirror.gcr.io/library/php@sha256:6cb44388b6ffc8c9a35b4cfdf518d0565e0cf9150e479add338b498874d7e971
           - php: '8.4'
             image: >-
               mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
@@ -324,7 +330,7 @@ jobs:
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #
-  # Runs on the two PHP versions that matter: 8.4 (floor) + 8.5 (prod).#
+  # Runs on every supported PHP minor: 8.2 through 8.5.
   # ------------------------------------------------------------------ #
   cache-wiring:
     name: Cache wiring (PHP ${{ matrix.php }})
@@ -334,6 +340,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - php: '8.2'
+            image: >-
+              mirror.gcr.io/library/php@sha256:118ef4fb1db5e866fb604f2f260da81f819a0a1eac87a4083f9194f48e00beee
+          - php: '8.3'
+            image: >-
+              mirror.gcr.io/library/php@sha256:6cb44388b6ffc8c9a35b4cfdf518d0565e0cf9150e479add338b498874d7e971
           - php: '8.4'
             image: >-
               mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
@@ -361,22 +373,14 @@ jobs:
         run: >-
           composer install --no-interaction --no-progress --prefer-dist --no-dev
 
-      - name: Assert doctrine/orm is on 3.x (migrated; ORM 2 APIs are gone)
-        run: |
-          ver=$(composer show doctrine/orm --no-interaction 2>/dev/null \
-                | awk '/^versions/ {print $4}')
-          echo "doctrine/orm = $ver"
-          case "$ver" in
-            3.*|v3.*) echo "OK: ORM 3.x" ;;
-            2.*|v2.*)
-              echo "::error::doctrine/orm $ver is unsupported; expected 3.x"
-              exit 1
-              ;;
-            *)
-              echo "::error::doctrine/orm $ver has an unexpected major"
-              exit 1
-              ;;
-          esac
+      - name: Verify locked Doctrine compatibility
+        run: composer check-platform-reqs --no-dev
+
+      - name: PHP runtime and dependency compatibility
+        run: php ci/test-php-runtime.php
+
+      - name: Verify portable proxy generation
+        run: php ci/test-proxy-generation.php
 
       - name: Cache + ORM bootstrap smoke
         run: php -d apc.enable_cli=1 tests/test-cache-bootstrap.php

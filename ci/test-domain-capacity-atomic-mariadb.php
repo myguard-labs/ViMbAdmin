@@ -40,7 +40,9 @@ final class CapacitySqlLogger extends \Psr\Log\AbstractLogger
 function capacityManager(?string $sqlTrace = null): EntityManager
 {
     $config = ORMSetup::createAttributeMetadataConfiguration([__DIR__ . '/../application/Entities'], true);
-    $config->enableNativeLazyObjects(true);
+    if (PHP_VERSION_ID >= 80400) {
+        $config->enableNativeLazyObjects(true);
+    }
     if ($sqlTrace !== null) {
         $logger = new CapacitySqlLogger($sqlTrace);
         $config->setMiddlewares([new \Doctrine\DBAL\Logging\Middleware($logger)]);
@@ -54,6 +56,18 @@ function capacityManager(?string $sqlTrace = null): EntityManager
         'password' => getenv('DB_PASS') ?: '',
         'charset' => 'utf8mb4',
     ], $config), $config);
+}
+
+/** Publish a completed synchronization marker atomically. */
+function capacityMarker(string $path, string $contents): void
+{
+    $temporary = $path . '.tmp';
+    if (file_put_contents($temporary, $contents) !== strlen($contents)) {
+        throw new RuntimeException('could not write capacity synchronization marker');
+    }
+    if (!rename($temporary, $path)) {
+        throw new RuntimeException('could not publish capacity synchronization marker');
+    }
 }
 
 function capacityWait(callable $predicate): void
@@ -101,6 +115,42 @@ function capacityConflictKind(Throwable $error): ?string
     return null;
 }
 
+function capacityMarkerControls(): void
+{
+    $directory = sys_get_temp_dir() . '/capacity-marker-' . bin2hex(random_bytes(8));
+    if (!mkdir($directory, 0700)) {
+        throw new RuntimeException('could not create marker control directory');
+    }
+    $path = $directory . '/marker';
+    try {
+        foreach (['', '123', str_repeat('7', 65536)] as $contents) {
+            capacityMarker($path, $contents);
+            clearstatcache();
+            if (file_get_contents($path) !== $contents || is_file($path . '.tmp')) {
+                throw new RuntimeException('FAIL: complete marker must replace its predecessor');
+            }
+        }
+        $failed = false;
+        try {
+            // A directory cannot be replaced by the marker file.
+            @capacityMarker($directory, '123');
+        } catch (RuntimeException $error) {
+            $failed = $error->getMessage() === 'could not publish capacity synchronization marker';
+        }
+        if (!$failed) {
+            throw new RuntimeException('FAIL: marker publication error must be reported');
+        }
+        echo "ok: marker complete publication, replacement and failure controls\n";
+    } finally {
+        foreach ([$path, $path . '.tmp', $directory . '.tmp'] as $file) {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+        rmdir($directory);
+    }
+}
+
 function capacityClassifierControls(): void
 {
     $query = 'UPDATE domain SET alias_count = ?, capacity_version = capacity_version + 1 WHERE id = ? AND capacity_version = ?';
@@ -130,6 +180,7 @@ function capacityClassifierControls(): void
 }
 
 if (($argv[1] ?? '') !== '--worker') {
+    capacityMarkerControls();
     capacityClassifierControls();
     if (($argv[1] ?? '') === '--classifier-control') {
         exit(0);
@@ -138,9 +189,14 @@ if (($argv[1] ?? '') !== '--worker') {
 
 function capacityDomain(EntityManager $em, int $id): \Entities\Domain
 {
-    $domain = $em->find(\Entities\Domain::class, $id);
+    $domain = $em->getReference(\Entities\Domain::class, $id);
     if (!$domain instanceof \Entities\Domain) {
         throw new RuntimeException('capacity domain fixture missing');
+    }
+    // Exercise actual generated/native lazy initialization, not only configuration.
+    $domain->requiredDomainName();
+    if ($em->isUninitializedObject($domain)) {
+        throw new RuntimeException('capacity domain lazy reference did not initialize');
     }
     return $domain;
 }
@@ -183,12 +239,12 @@ if (($argv[1] ?? '') === '--worker') {
     $hooks = [];
     $pre = static function () use (&$hooks, $sync, $em): void {
         $hooks[] = 'pre';
-        file_put_contents($sync . '/pre', (string) capacityInteger($em->getConnection()->fetchOne('SELECT CONNECTION_ID()')));
+        capacityMarker($sync . '/pre', (string) capacityInteger($em->getConnection()->fetchOne('SELECT CONNECTION_ID()')));
     };
     $post = static function () use (&$hooks): void {
         $hooks[] = 'post';
     };
-    file_put_contents($sync . '/ready', (string) capacityInteger($em->getConnection()->fetchOne('SELECT CONNECTION_ID()')));
+    capacityMarker($sync . '/ready', (string) capacityInteger($em->getConnection()->fetchOne('SELECT CONNECTION_ID()')));
     capacityWait(static fn (): bool => is_file($sync . '/go'));
     try {
         if ($case === 'mailbox') {

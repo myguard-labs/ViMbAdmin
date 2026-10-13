@@ -142,8 +142,8 @@ $lockedPlatform = nestedValue($lock, 'platform-overrides', 'php');
 echo "== PHP version contract ==\n";
 
 $check(
-    'positive: Composer, configured platform, and lock metadata share PHP 8.4.1',
-    $minimum === '8.4.1'
+    'positive: Composer, configured platform, and lock metadata share PHP 8.2.0',
+    $minimum === '8.2.0'
         && $platform === $minimum
         && $lockedConstraint === '>=' . $minimum
         && $lockedPlatform === $minimum
@@ -151,14 +151,14 @@ $check(
 
 $check(
     'boundary: the minimum and newer releases pass while the prior patch fails',
-    version_compare('8.4.1', $minimum, '>=')
+    version_compare('8.2.0', $minimum, '>=')
         && version_compare('8.5.0', $minimum, '>=')
-        && !version_compare('8.4.0', $minimum, '>=')
+        && !version_compare('8.1.99', $minimum, '>=')
 );
 
 $malformedRejected = false;
 try {
-    minimumPhpVersion('8.4.1');
+    minimumPhpVersion('8.2.0');
 } catch (InvalidArgumentException) {
     $malformedRejected = true;
 }
@@ -171,9 +171,9 @@ foreach (supportDocumentation($root) as $path) {
 
 $check(
     'positive: user-facing and deployment documentation advertises the Composer floor',
-    str_contains($claims, 'PHP **8.4.1+**')
-        && str_contains($claims, '**PHP 8.4.1 → 8.5** clean')
-        && str_contains($claims, 'running on PHP 8.4.1+')
+    str_contains($claims, 'PHP **8.2.0+**')
+        && str_contains($claims, '**PHP 8.2.0 → 8.5** clean')
+        && str_contains($claims, 'running on PHP 8.2.0+')
 );
 
 $check(
@@ -182,11 +182,11 @@ $check(
 );
 $check(
     'boundary: an emphasized PHP patch below the Composer floor is detected',
-    hasUnsupportedPhpSupportClaim('Requires PHP **8.4.0+**.', $minimum)
+    hasUnsupportedPhpSupportClaim('Requires PHP **8.1.99+**.', $minimum)
 );
 $check(
     'near-miss: a Markdown-emphasized supported PHP claim remains allowed',
-    !hasUnsupportedPhpSupportClaim('Requires PHP **8.4.1+**.', $minimum)
+    !hasUnsupportedPhpSupportClaim('Requires PHP **8.2.0+**.', $minimum)
 );
 $check(
     'negative: documentation does not advertise support below the Composer floor',

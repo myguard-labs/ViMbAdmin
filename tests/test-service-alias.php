@@ -518,7 +518,12 @@ check('delete veto left aliasCount', (int) $domV->getAliasCount() === 5);
 $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([
     __DIR__ . '/../application/Entities',
 ]);
-$configuration->enableNativeLazyObjects(true);
+if (PHP_VERSION_ID >= 80400) {
+    $configuration->enableNativeLazyObjects(true);
+} else {
+    $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+    $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+}
 $connection = \Doctrine\DBAL\DriverManager::getConnection([
     'driver' => 'pdo_mysql',
     'host' => '127.0.0.1',

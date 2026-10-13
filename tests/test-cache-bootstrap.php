@@ -75,10 +75,15 @@ if (extension_loaded('apcu') && (PHP_SAPI === 'cli' ? ini_get('apc.enable_cli') 
     echo "SKIP ApcuAdapter (apcu ext/cli not enabled)\n";
 }
 
-cacheBootstrapCheck('ORM3 Configuration accepts PSR-6 pools + native lazy + EntityManager constructible', function () {
+cacheBootstrapCheck('ORM3 Configuration accepts PSR-6 pools + runtime-appropriate lazy objects + EntityManager constructible', function () {
     $pool   = new ArrayAdapter();
     $config = new Configuration();
-    $config->enableNativeLazyObjects(true);
+    if (PHP_VERSION_ID >= 80400) {
+        $config->enableNativeLazyObjects(true);
+    } else {
+        $config->setProxyDir($config->getProxyDir() ?? sys_get_temp_dir());
+        $config->setProxyNamespace($config->getProxyNamespace() ?? 'Proxies');
+    }
     $config->setMetadataCache($pool);
     $config->setQueryCache($pool);
     $config->setResultCache($pool);
@@ -102,8 +107,8 @@ cacheBootstrapCheck('ORM3 Configuration accepts PSR-6 pools + native lazy + Enti
     ], $config);
 
     $em = new EntityManager($connection, $config);
-    if (!$em->getConfiguration()->isNativeLazyObjectsEnabled()) {
-        throw new RuntimeException('native lazy objects not enabled on the EM');
+    if ($em->getConfiguration()->isNativeLazyObjectsEnabled() !== (PHP_VERSION_ID >= 80400)) {
+        throw new RuntimeException('lazy-object backend does not match the PHP runtime');
     }
 });
 

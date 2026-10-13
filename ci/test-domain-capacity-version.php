@@ -14,7 +14,9 @@ EntityManagerFactory::registerEntityAutoloaders(['resources' => ['doctrine2' => 
     'repositories_path' => __DIR__ . '/../application',
 ]]]);
 $config = ORMSetup::createAttributeMetadataConfiguration([__DIR__ . '/../application/Entities'], true);
-$config->enableNativeLazyObjects(true);
+if (PHP_VERSION_ID >= 80400) {
+    $config->enableNativeLazyObjects(true);
+}
 $em = new EntityManager(DriverManager::getConnection(['driver' => 'pdo_mysql', 'serverVersion' => '8.0'], $config), $config);
 $checks = 0;
 $check = static function (string $label, bool $ok) use (&$checks): void {

@@ -281,7 +281,12 @@ final class CsrfMutationEntityManager extends EntityManagerDecorator
     public function __construct(array $repositories)
     {
         $configuration = ORMSetup::createAttributeMetadataConfiguration([]);
-        $configuration->enableNativeLazyObjects(true);
+        if (PHP_VERSION_ID >= 80400) {
+            $configuration->enableNativeLazyObjects(true);
+        } else {
+            $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+            $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+        }
         $configuration->setRepositoryFactory(new CsrfMutationRepositoryFactory($repositories));
         $connection = DriverManager::getConnection(['driver' => 'pdo_mysql', 'serverVersion' => '8.0'], $configuration);
         parent::__construct(new EntityManager($connection, $configuration));

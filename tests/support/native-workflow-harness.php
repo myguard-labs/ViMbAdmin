@@ -250,7 +250,12 @@ final class WorkflowHarness
     public function __construct(public bool $setup = false, bool $guest = false, bool $plugins = true, bool $mailboxPlugin = true)
     {
         $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([]);
-        $configuration->enableNativeLazyObjects(true);
+        if (PHP_VERSION_ID >= 80400) {
+            $configuration->enableNativeLazyObjects(true);
+        } else {
+            $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+            $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+        }
         $configuration->setRepositoryFactory(new WorkflowRepositoryFactory($this));
         $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql', 'serverVersion' => '8.0'], $configuration);
         $this->em = new \Doctrine\ORM\EntityManager($connection, $configuration);

@@ -215,9 +215,8 @@ final class Mailer
     }
 
     /**
-     * Interpret an ini value as a boolean. `parse_ini_*` yields the string `"0"`,
-     * which a plain `(bool)` cast would (wrongly) read as true — so route
-     * everything through {@see FILTER_VALIDATE_BOOLEAN}.
+     * Interpret an ini value as a boolean. PHP casts the string `"0"` to false;
+     * use {@see FILTER_VALIDATE_BOOLEAN} to also reject unrecognised values.
      */
     private static function boolOpt(mixed $v): bool
     {

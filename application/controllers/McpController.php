@@ -280,7 +280,11 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         }
 
         $multiplier = strtoupper(ViMbAdmin_Mcp_Input::optionString(
-            $options, OSS_Filter_FileSize::SIZE_KILOBYTES, 'defaults', 'quota', 'multiplier'
+            $options,
+            OSS_Filter_FileSize::SIZE_KILOBYTES,
+            'defaults',
+            'quota',
+            'multiplier'
         ));
         if (!array_key_exists($multiplier, OSS_Filter_FileSize::$SIZE_MULTIPLIERS)) {
             throw new ViMbAdmin_Mcp_Exception('configuration defaults.quota.multiplier is unsupported');

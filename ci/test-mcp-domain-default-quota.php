@@ -22,10 +22,20 @@ use ViMbAdmin\Kernel\Session\SessionStorage;
 
 final class DomainQuotaSession implements SessionStorage
 {
-    public function has(string $key): bool { return false; }
-    public function get(string $key): mixed { return null; }
-    public function set(string $key, mixed $value): void {}
-    public function remove(string $key): void {}
+    public function has(string $key): bool
+    {
+        return false;
+    }
+    public function get(string $key): mixed
+    {
+        return null;
+    }
+    public function set(string $key, mixed $value): void
+    {
+    }
+    public function remove(string $key): void
+    {
+    }
 }
 
 /** @extends EntityRepository<\Entities\Domain> */
@@ -85,10 +95,18 @@ final class DomainQuotaManager extends EntityManager
 final class DomainQuotaResources
 {
     /** @param array<string,mixed> $options */
-    public function __construct(private readonly DomainQuotaManager $manager, private readonly array $options) {}
-    public function getResource(string $name): object { return $this->manager; }
+    public function __construct(private readonly DomainQuotaManager $manager, private readonly array $options)
+    {
+    }
+    public function getResource(string $name): object
+    {
+        return $this->manager;
+    }
     /** @return array<string,mixed> */
-    public function getOptions(): array { return $this->options; }
+    public function getOptions(): array
+    {
+        return $this->options;
+    }
 }
 
 function quotaCheck(string $name, bool $ok): void

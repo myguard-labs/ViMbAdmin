@@ -219,3 +219,43 @@ foreach ([
         quotaCheck("{$name}: creation rejected", $e->getMessage() !== '');
     }
 }
+
+// DomainController builds and validates configured defaults before applying
+// submitted values. MCP must reject the same unusable configuration even when
+// callers supply explicit byte quotas.
+foreach ([
+    'tiny float default' => [
+        ['defaults' => ['domain' => ['quota' => 1.0e-5, 'maxquota' => 1], 'quota' => ['multiplier' => 'GB']]],
+        [],
+    ],
+    'explicit bytes with overflowing defaults' => [
+        ['defaults' => ['domain' => ['quota' => str_repeat('9', 400), 'maxquota' => str_repeat('9', 400)]]],
+        ['quota' => 11, 'maxquota' => 12],
+    ],
+    'explicit bytes with unsupported unit' => [
+        ['defaults' => ['domain' => ['quota' => 2, 'maxquota' => 3], 'quota' => ['multiplier' => 'TB']]],
+        ['quota' => 11, 'maxquota' => 12],
+    ],
+    'quota override with invalid maxquota default' => [
+        ['defaults' => ['domain' => ['quota' => 2, 'maxquota' => 'bad']]],
+        ['quota' => 11],
+    ],
+    'maxquota override with invalid quota default' => [
+        ['defaults' => ['domain' => ['quota' => 'bad', 'maxquota' => 3]]],
+        ['maxquota' => 12],
+    ],
+] as $name => [$invalidOptions, $params]) {
+    $mcpRejected = false;
+    try {
+        mcpDomainWithDefaults($invalidOptions, $params);
+    } catch (ViMbAdmin_Mcp_Exception) {
+        $mcpRejected = true;
+    }
+    $guiRejected = false;
+    try {
+        guiDomainWithDefaults($invalidOptions);
+    } catch (LogicException) {
+        $guiRejected = true;
+    }
+    quotaCheck("{$name}: MCP and GUI reject unusable configuration", $mcpRejected && $guiRejected);
+}

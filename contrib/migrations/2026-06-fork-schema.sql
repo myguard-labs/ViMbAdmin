@@ -30,6 +30,7 @@
 --    6. retirement of the per-mailbox storage-location columns.
 --    7. database-atomic open mailbox-task deduplication.
 --    8. domain alias-count reconciliation (mailbox self-aliases excluded).
+--    9. optimistic domain capacity/counter version.
 --
 --  NB: the dovecot_last_login, mailbox_task, mcp_token and archive tables (and
 --  admin.last_login) are created by the entity mappings via the schema-tool on
@@ -355,10 +356,22 @@ PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
 -- the persisted source rows on every upgrade so stale counters cannot keep a
 -- domain artificially at capacity. This UPDATE is idempotent and also repairs
 -- undercounts left by interrupted or older writes.
+-- Install the version before reconciliation so existing ORM readers are
+-- invalidated by the counter repair as well as ordinary application writes.
+SET @have_capacity_version := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'domain'
+      AND COLUMN_NAME = 'capacity_version'
+);
+SET @ddl := IF( @have_capacity_version = 0,
+    'ALTER TABLE `domain` ADD `capacity_version` BIGINT NOT NULL DEFAULT 1',
+    'DO 0 /* capacity_version already present */' );
+PREPARE _v FROM @ddl; EXECUTE _v; DEALLOCATE PREPARE _v;
+
 UPDATE `domain` AS d
 SET `alias_count` = (
     SELECT COUNT(*)
     FROM `alias` AS a
     WHERE a.`Domain_id` = d.`id`
-      AND BINARY a.`address` != BINARY a.`goto`
-);
+      AND CAST(a.`address` AS BINARY) != CAST(a.`goto` AS BINARY)
+), `capacity_version` = `capacity_version` + 1;

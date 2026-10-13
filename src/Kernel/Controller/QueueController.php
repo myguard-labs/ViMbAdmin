@@ -210,11 +210,7 @@ final class QueueController extends AbstractController
 
         $task = $this->taskFromPost();
 
-        if ($task && $task->getStatus() === \Entities\MailboxTask::STATUS_FAILED && !$task->isAbandoned()) {
-            $task->setStatus(\Entities\MailboxTask::STATUS_PENDING)
-                 ->setFinishedAt(null)
-                 ->appendLog('retry queued by ' . $admin->getFormattedName());
-            $this->em()->flush();
+        if ($task && $this->mailboxTaskRepository()->retryIfFailed($task, $admin->getFormattedName())) {
             $this->flash('Task re-queued.');
         } else {
             $this->flash('Task not found or not safely retryable.', FlashMessages::ERROR);

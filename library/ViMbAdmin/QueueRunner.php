@@ -132,8 +132,12 @@ class ViMbAdmin_QueueRunner
     public static function release($em, \Entities\QueueRunner $lease)
     {
         try {
-            $em->remove($lease);
-            $em->flush();
+            // Cleanup cannot flush task or callback dirt outside its fence.
+            $em->getConnection()->executeStatement(
+                'DELETE FROM queue_runner WHERE id = ? AND slot = ?',
+                [self::positiveInt($lease->getId(), 'runner lease id'), self::positiveInt($lease->getSlot(), 'runner lease slot')]
+            );
+            $em->detach($lease);
         } catch (\Throwable $e) {
             // best-effort; a stale row will be reaped by reapStale().
         }

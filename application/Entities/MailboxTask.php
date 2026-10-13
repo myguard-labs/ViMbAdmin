@@ -112,6 +112,16 @@ class MailboxTask
     #[ORM\Column(type: 'string', length: 32)]
     private ?string $status = null;
 
+    /** Every ORM edit and atomic state transition advances this generation. */
+    #[ORM\Version]
+    #[ORM\Column(type: 'bigint', options: ['default' => 1])]
+    private int $task_version = 1;
+
+    public function getTaskVersion(): int
+    {
+        return $this->task_version;
+    }
+
     /**
      * Nullable generated discriminator for the open-task unique constraint.
      * MariaDB permits multiple NULLs in a unique index, so terminal rows keep

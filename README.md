@@ -619,7 +619,7 @@ PHP 8 — while keeping Doctrine (ORM 3) and Smarty (5). GPLv3, same as always.
 
 ## Local PHP validation
 
-Supported PHP minors: 8.2, 8.3, 8.4, 8.5. In the MyGuard workspace, use the
+Tested PHP minors: 8.3, 8.4, 8.5. In the MyGuard workspace, use the
 shared PHP matrix runner from the active worktree:
 
 ```bash

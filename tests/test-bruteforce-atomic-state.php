@@ -156,7 +156,8 @@ function bruteForceRunWorkers(string $stateDirectory, string $ip, string $syncDi
 
     $errors = '';
     $successful = $allReady;
-    foreach ($processes as $entry) {
+    $exitCodes = [];
+    foreach ($processes as $worker => $entry) {
         $status = proc_get_status($entry['process']);
         if ($status['running']) {
             proc_terminate($entry['process']);
@@ -168,9 +169,21 @@ function bruteForceRunWorkers(string $stateDirectory, string $ip, string $syncDi
         fclose($entry['pipes'][2]);
         $closedExit = proc_close($entry['process']);
         $exit = $entry['exit'] ?? $closedExit;
+        $exitCodes[$worker] = $exit;
         if ($exit !== 0) {
             $successful = false;
         }
+    }
+
+    if (!$successful || $errors !== '') {
+        fwrite(STDERR, sprintf(
+            "worker diagnostics: ready=%d/%d started=%d exits=%s output=%s\n",
+            $readyCount,
+            $workers,
+            count($processes),
+            json_encode($exitCodes),
+            substr(trim($errors), 0, 2048),
+        ));
     }
 
     return ['ready' => $allReady, 'successful' => $successful, 'errors' => $errors];
@@ -184,7 +197,9 @@ $stateDirectory = $root . '/state';
 $syncDirectory = $root . '/sync';
 bruteForceCreateDirectory($syncDirectory);
 $ip = '192.0.2.77';
-$workers = 20;
+// Keep concurrent writers below the one-second fail-closed lock deadline on
+// throttled CI runners; the barrier still makes every worker contend for one record.
+$workers = 8;
 $attemptsPerWorker = 10;
 $workerResult = bruteForceRunWorkers($stateDirectory, $ip, $syncDirectory, $workers, $attemptsPerWorker);
 $stateFile = bruteForceStatePath($stateDirectory, $ip);

@@ -276,6 +276,9 @@ jobs:
       - name: Dovecot quota-clone matches the retired mailbox-size schema
         run: php ci/test-dovecot-quota-clone-contract.php
 
+      - name: dovecot-storage-config-schema-contract-tests
+        run: php ci/test-dovecot-storage-config-schema-contract.php
+
       - name: MCP orphan archive deletion enforces domain authorization
         run: php ci/test-mcp-archive-domain-authorization.php
 

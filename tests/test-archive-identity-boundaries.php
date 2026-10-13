@@ -255,7 +255,12 @@ function archiveIdentityEntityManager(array $repositories): EntityManager
     $configuration = ORMSetup::createAttributeMetadataConfiguration([
         __DIR__ . '/../application/Entities',
     ]);
-    $configuration->enableNativeLazyObjects(true);
+    if (PHP_VERSION_ID >= 80400) {
+        $configuration->enableNativeLazyObjects(true);
+    } else {
+        $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+        $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+    }
     $repositoryFactory = new DefaultRepositoryFactory();
     $configuration->setRepositoryFactory($repositoryFactory);
     $connection = DriverManager::getConnection([

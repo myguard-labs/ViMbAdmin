@@ -33,7 +33,12 @@ function mailboxQueueEntityManager(): EntityManager
     }
 
     $config = ORMSetup::createAttributeMetadataConfiguration([$entityDir], true);
-    $config->enableNativeLazyObjects(true);
+    if (PHP_VERSION_ID >= 80400) {
+        $config->enableNativeLazyObjects(true);
+    } else {
+        $config->setProxyDir($config->getProxyDir() ?? sys_get_temp_dir());
+        $config->setProxyNamespace($config->getProxyNamespace() ?? 'Proxies');
+    }
     if (!Type::hasType(LegacyObjectType::NAME)) {
         Type::addType(LegacyObjectType::NAME, LegacyObjectType::class);
     }

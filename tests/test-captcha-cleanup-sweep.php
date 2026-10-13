@@ -61,6 +61,7 @@ $check(
 
 // ---- a stale marker sweeps again, so cleanup still happens eventually -- //
 touch($root . '/.sweep', time() - 3600); // force the marker stale
+clearstatcache(true, $root . '/.sweep');
 $check(
     'dueForSweep() is true once the marker is older than the interval',
     $dueForSweep->invoke(null, $root) === true
@@ -68,6 +69,7 @@ $check(
 // dueForSweep() above already re-touched the marker as a side effect; reset
 // it stale again so cleanup() itself is exercised against a stale marker.
 touch($root . '/.sweep', time() - 3600);
+clearstatcache(true, $root . '/.sweep');
 $cleanup->invoke($instance, $root);
 $check('a stale marker still removes expired files eventually', !file_exists($expired2));
 

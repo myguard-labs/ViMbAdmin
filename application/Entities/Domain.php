@@ -181,6 +181,24 @@ class Domain
     private ?int $mailbox_count = null;
 
     /**
+     * Counter changes and their child rows commit in one Doctrine flush.
+     * A stale capacity decision must lose this CAS and roll back the entire
+     * flush, including inserts executed before the domain UPDATE. All domain
+     * edits (including capacity policy changes) advance the same version.
+     * Counter mutators also replace modified, so a create/delete pair with a
+     * net-zero count still participates in the CAS. Postflush hooks start a
+     * separate transition using the version refreshed by the successful flush.
+     */
+    #[ORM\Version]
+    #[ORM\Column(type: 'bigint', options: ['default' => 1])]
+    private int $capacity_version = 1;
+
+    public function getCapacityVersion(): int
+    {
+        return $this->capacity_version;
+    }
+
+    /**
      * @var \Doctrine\Common\Collections\ArrayCollection<int, \Entities\Mailbox>
      */
     #[ORM\OneToMany(targetEntity: \Entities\Mailbox::class, mappedBy: 'Domain')]
@@ -752,7 +770,11 @@ class Domain
      */
     public function setAliasCount($aliasCount)
     {
+        $previous = $this->alias_count;
         $this->alias_count = $aliasCount;
+        if ($previous !== $aliasCount) {
+            $this->modified = new \DateTime();
+        }
         return $this;
     }
 
@@ -774,6 +796,7 @@ class Domain
     public function increaseAliasCount()
     {
         $this->alias_count += 1;
+        $this->modified = new \DateTime();
     }
 
     /**
@@ -785,6 +808,7 @@ class Domain
     {
         if ($this->alias_count > 0) {
             $this->alias_count -= 1;
+            $this->modified = new \DateTime();
         }
     }
 
@@ -798,7 +822,11 @@ class Domain
      */
     public function setMailboxCount($mailboxCount)
     {
+        $previous = $this->mailbox_count;
         $this->mailbox_count = $mailboxCount;
+        if ($previous !== $mailboxCount) {
+            $this->modified = new \DateTime();
+        }
         return $this;
     }
 
@@ -820,6 +848,7 @@ class Domain
     public function increaseMailboxCount()
     {
         $this->mailbox_count += 1;
+        $this->modified = new \DateTime();
     }
 
     /**
@@ -831,6 +860,7 @@ class Domain
     {
         if ($this->mailbox_count > 0) {
             $this->mailbox_count -= 1;
+            $this->modified = new \DateTime();
         }
     }
 

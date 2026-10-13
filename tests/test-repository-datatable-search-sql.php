@@ -264,7 +264,12 @@ final class SearchCapturingDriver extends AbstractMySQLDriver
 function searchSqlEntityManager(): EntityManager
 {
     $configuration = ORMSetup::createAttributeMetadataConfig([], true);
-    $configuration->enableNativeLazyObjects(true);
+    if (PHP_VERSION_ID >= 80400) {
+        $configuration->enableNativeLazyObjects(true);
+    } else {
+        $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+        $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+    }
     $connection = new Connection(['serverVersion' => '8.0.0'], new SearchCapturingDriver());
     return new EntityManager($connection, $configuration);
 }

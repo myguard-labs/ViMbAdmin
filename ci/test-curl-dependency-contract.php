@@ -40,7 +40,7 @@ $check(
 );
 $check(
     'positive: source-install guide names the PHP cURL extension',
-    preg_match('/PHP \*\*8\.4\.1\+\*\* with [\s\S]{0,150}`curl`/', $readme) === 1
+    preg_match('/PHP \*\*8\.2\.0\+\*\* with [\s\S]{0,150}`curl`/', $readme) === 1
 );
 $check(
     'boundary: an optional suggestion does not satisfy a required extension',

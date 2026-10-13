@@ -313,7 +313,12 @@ function logClientSideOptions(): array
 function logEntityManager(array $repositories): EntityManager
 {
     $configuration = ORMSetup::createAttributeMetadataConfiguration([]);
-    $configuration->enableNativeLazyObjects(true);
+    if (PHP_VERSION_ID >= 80400) {
+        $configuration->enableNativeLazyObjects(true);
+    } else {
+        $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+        $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+    }
     $configuration->setRepositoryFactory(new LogControllerTestRepositoryFactory($repositories));
     $connection = DriverManager::getConnection(['driver' => 'pdo_mysql'], $configuration);
     return new EntityManager($connection, $configuration);

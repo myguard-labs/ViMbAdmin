@@ -57,15 +57,15 @@ optional cron left is the panel's own queue-runner.
   (`[child : parent]` inheritance, `resources.*` keys) — read by a small native
   loader now, a candidate to replace later. See
   [Upgrading & schema migrations](#upgrading--schema-migrations).
-- **PHP 8.4.1 → 8.5** clean. Every implicit-nullable parameter and PHP-8-removed
+- **PHP 8.2.0 → 8.5** clean. Every implicit-nullable parameter and PHP-8-removed
   function call fixed.
 - **Smarty 4 → 5.** Templating bridge ported to the new API (setters, the
   `nofilter` flag, `{if}`-can't-call-PHP-functions, and the clone bug where
   Smarty 5's BC plugin loader drops every custom plugin from a cloned view —
   why forms used to render blank).
-- **Doctrine ORM 2.8 → 3.x** (orm 3.6 / dbal 4) + persistence 4. CLI and query
-  API rewritten; the ORM 3 jump needed native lazy-loading proxies
-  (`enableNativeLazyObjects`), PSR-6 caches and an `object`-type shim.
+- **Doctrine ORM 3.x** with a PHP 8.2-compatible DBAL 4 dependency graph.
+  Generated proxies support PHP 8.2–8.3; native lazy objects support PHP 8.4+
+  (`enableNativeLazyObjects`), with PSR-6 caches and an `object`-type shim.
 - **Cache layer rebuilt on Symfony Cache.** ORM metadata, query, and result
   caches use Symfony PSR-6 pools (`ArrayAdapter` / `ApcuAdapter` /
   `RedisAdapter`) directly — backend picked in `application.ini`. The Docker
@@ -224,7 +224,7 @@ ModSecurity plugin shipped in this repo.
 
 ## Quick start (from source)
 
-PHP **8.4.1+** with `pdo_mysql`, `mbstring`, `intl`, `gettext`, `gd`, `dom`,
+PHP **8.2.0+** with `pdo_mysql`, `mbstring`, `intl`, `gettext`, `gd`, `dom`,
 `ctype`, `curl`, `iconv` and `sodium` (2FA secrets are libsodium-encrypted). `apcu`
 optional but recommended (see [Performance](#performance)).
 
@@ -616,4 +616,20 @@ PHP 8 — while keeping Doctrine (ORM 3) and Smarty (5). GPLv3, same as always.
 - Upstream: <https://github.com/opensolutions/ViMbAdmin>
 - This fork: <https://github.com/eilandert/ViMbAdmin>
 - Write-up: <https://deb.myguard.nl/2026/06/vimbadmin-postfix-dovecot-mailbox-admin-panel/>
+
+## Local PHP validation
+
+Supported PHP minors: 8.2, 8.3, 8.4, 8.5. In the MyGuard workspace, use the
+shared PHP matrix runner from the active worktree:
+
+```bash
+checkout="$PWD"
+/opt/myguard/tools/php-test-matrix --project vimbadmin \
+  --cwd "$checkout" -- bash tests/run-unit-tests.sh
 ```
+
+Provision dependencies and external fixtures as specified by CI first. Run
+invasive checks in a disposable container. The runner executes every required
+minor and retains per-version logs and a JSON summary. This named suite is
+part of the complete CI gate; dedicated fixture, syntax, coverage and static
+checks still apply. See [project instructions](AGENTS.md).

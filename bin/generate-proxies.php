@@ -46,10 +46,12 @@ if (!is_dir($entityDir)) {
     fwrite(STDERR, "Entities dir not found: $entityDir\n");
     exit(1);
 }
-@mkdir($proxyDir, 0o755, true);
+@mkdir($proxyDir, 0755, true);
 
 $config = ORMSetup::createAttributeMetadataConfiguration([$entityDir], true);
-$config->enableNativeLazyObjects(true); // ORM 3.x on PHP 8.4: native lazy-object proxies
+if (PHP_VERSION_ID >= 80400) {
+    $config->enableNativeLazyObjects(true);
+}
 $config->setProxyDir($proxyDir);
 $config->setProxyNamespace('Proxies');
 

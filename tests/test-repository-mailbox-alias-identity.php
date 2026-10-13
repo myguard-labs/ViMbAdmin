@@ -47,7 +47,12 @@ final class MailboxAliasIdentityEntityManager extends \Doctrine\ORM\Decorator\En
     public function __construct(private MailboxAliasIdentityAliasRepository $aliasRepository)
     {
         $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfig([], true);
-        $configuration->enableNativeLazyObjects(true);
+        if (PHP_VERSION_ID >= 80400) {
+            $configuration->enableNativeLazyObjects(true);
+        } else {
+            $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+            $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+        }
         $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql'], $configuration);
         parent::__construct(new \Doctrine\ORM\EntityManager($connection, $configuration));
     }

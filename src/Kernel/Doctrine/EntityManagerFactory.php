@@ -215,10 +215,10 @@ final class EntityManagerFactory
         self::registerLegacyTypes();
 
         $config = new \Doctrine\ORM\Configuration();
-        // ORM 3.x on PHP 8.4: use native lazy objects for proxies. The old
-        // Symfony var-exporter "LazyGhost" route was removed in Symfony 8, so on
-        // this stack native lazy objects are the only working proxy backend.
-        $config->enableNativeLazyObjects(true);
+        // PHP 8.2–8.3 use generated proxies; PHP 8.4+ uses native lazy objects.
+        if (PHP_VERSION_ID >= 80400) {
+            $config->enableNativeLazyObjects(true);
+        }
         $config->setMetadataCache($cache);
 
         // Mapping now lives in #[ORM\...] attributes on the entity classes

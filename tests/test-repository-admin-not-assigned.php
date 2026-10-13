@@ -86,7 +86,12 @@ final class NotAssignedSqlProbe extends \Repositories\Admin
 }
 
 $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfig([], true);
-$configuration->enableNativeLazyObjects(true);
+if (PHP_VERSION_ID >= 80400) {
+    $configuration->enableNativeLazyObjects(true);
+} else {
+    $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+    $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+}
 // serverVersion pins the platform so the compiler never reaches for a live
 // server: SQL generation needs a platform, and without this DBAL would try to
 // connect just to ask which MySQL it is talking to.

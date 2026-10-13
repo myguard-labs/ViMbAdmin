@@ -112,7 +112,12 @@ function preferenceContractThrows(string $message, \Closure $operation): bool
 echo "== nullable preference contracts ==\n";
 
 $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([]);
-$configuration->enableNativeLazyObjects(true);
+if (PHP_VERSION_ID >= 80400) {
+    $configuration->enableNativeLazyObjects(true);
+} else {
+    $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
+    $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
+}
 $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql'], $configuration);
 \OSS_Runtime::configure([], '', new \Doctrine\ORM\EntityManager($connection, $configuration));
 

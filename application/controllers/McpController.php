@@ -267,10 +267,38 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
 
     // ---- write abilities (scope: write) --------------------------------
 
-    /**
-     * @param array<string,mixed> $params
-     * @return array<string,mixed>
-     */
+    /** @param array<string,mixed> $options */
+    private static function _domainDefaultQuotaBytes(array $options, string $key): int
+    {
+        [$found, $value] = ViMbAdmin_Mcp_Input::option($options, 'defaults', 'domain', $key);
+        $value = $found ? $value : 0;
+        $name = 'configuration defaults.domain.' . $key;
+        if (!(is_int($value) && $value >= 0)
+            && !(is_float($value) && is_finite($value) && $value >= 0)
+            && !(is_string($value) && preg_match('/^(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)$/D', $value) === 1)) {
+            throw new ViMbAdmin_Mcp_Exception("{$name} must be a non-negative number");
+        }
+
+        $multiplier = strtoupper(ViMbAdmin_Mcp_Input::optionString(
+            $options,
+            OSS_Filter_FileSize::SIZE_KILOBYTES,
+            'defaults',
+            'quota',
+            'multiplier'
+        ));
+        if (!array_key_exists($multiplier, OSS_Filter_FileSize::$SIZE_MULTIPLIERS)) {
+            throw new ViMbAdmin_Mcp_Exception('configuration defaults.quota.multiplier is unsupported');
+        }
+        $bytes = (new OSS_Filter_FileSize($multiplier))->filter((string) $value);
+        if ((!is_int($bytes) && !is_float($bytes)) || !is_finite((float) $bytes)
+            || $bytes < 0 || $bytes >= PHP_INT_MAX) {
+            throw new ViMbAdmin_Mcp_Exception("{$name} produced an invalid byte value");
+        }
+        return (int) $bytes;
+    }
+
+    /** @param array<string,mixed> $params
+     *  @return array{created:bool,domain:string,id:int} */
     private function _domainCreate(array $params): array
     {
         $name = $this->_identity($params, 'domain');
@@ -297,12 +325,12 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $d->setQuota(ViMbAdmin_Mcp_Input::optionalInteger(
             $params,
             'quota',
-            ViMbAdmin_Mcp_Input::optionInteger($options, 0, 'defaults', 'domain', 'quota')
+            self::_domainDefaultQuotaBytes($options, 'quota')
         ));
         $d->setMaxQuota(ViMbAdmin_Mcp_Input::optionalInteger(
             $params,
             'maxquota',
-            ViMbAdmin_Mcp_Input::optionInteger($options, 0, 'defaults', 'domain', 'maxquota')
+            self::_domainDefaultQuotaBytes($options, 'maxquota')
         ));
         $d->setMaxMailboxes(ViMbAdmin_Mcp_Input::optionalInteger(
             $params,

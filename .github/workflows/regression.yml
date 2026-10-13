@@ -243,6 +243,9 @@ jobs:
       - name: PHP support claims match the installable Composer contract
         run: php ci/test-php-version-contract.php
 
+      - name: cURL is required by the installation contract
+        run: php ci/test-curl-dependency-contract.php
+
       - name: MCP alias creation validates composed addresses
         run: php ci/test-mcp-alias-create.php
 

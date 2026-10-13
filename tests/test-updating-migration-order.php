@@ -18,7 +18,7 @@ $aliasCountReconciliationOk = is_string($migration)
     && str_contains($migration, 'UPDATE `domain` AS d')
     && str_contains($migration, 'SET `alias_count` = (')
     && str_contains($migration, 'a.`Domain_id` = d.`id`')
-    && str_contains($migration, 'BINARY a.`address` != BINARY a.`goto`')
+    && str_contains($migration, 'CAST(a.`address` AS BINARY) != CAST(a.`goto` AS BINARY)')
     && str_contains($updating, "reconciles each domain's alias count from forwarding aliases");
 $companionRolloutOk = str_contains($updating, '`myguard-labs/vimbadmin-crs-plugin#9` DataTables 2 allowlist')
     && str_contains($updating, 'All three components must be deployed')

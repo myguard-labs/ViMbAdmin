@@ -270,6 +270,9 @@ jobs:
       - name: Domain alias counts link to the registered alias route
         run: php ci/test-domain-alias-count-route.php
 
+      - name: Domain counter mutations retain their optimistic capacity guard
+        run: php ci/test-domain-capacity-version.php
+
       - name: Quota forms accept their rendered file-size values
         run: php ci/test-quota-form-validation.php
 
@@ -528,3 +531,13 @@ jobs:
           DB_PASS: ci
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-password-reset-atomic-mariadb.php
+
+      - name: Domain capacity transitions are atomic across database sessions
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-domain-capacity-atomic-mariadb.php

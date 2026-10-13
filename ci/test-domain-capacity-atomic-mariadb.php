@@ -80,6 +80,62 @@ function capacityInteger(mixed $value): int
     throw new RuntimeException('invalid database integer');
 }
 
+function capacityVersionUpdate(string $sql): bool
+{
+    return preg_match('/^UPDATE domain SET .*capacity_version = capacity_version \+ 1 WHERE id = \? AND capacity_version = \?$/D', $sql) === 1;
+}
+
+function capacityConflictKind(Throwable $error): ?string
+{
+    if ($error instanceof OptimisticLockException && $error->getEntity() instanceof \Entities\Domain) {
+        return 'orm-version';
+    }
+    // MariaDB snapshot isolation can reject a changed row before Doctrine
+    // receives the zero affected-row count. DBAL preserves the native code,
+    // SQLSTATE and exact query; unrelated driver failures must remain errors.
+    if ($error instanceof \Doctrine\DBAL\Exception\DriverException
+        && $error->getCode() === 1020 && $error->getSQLState() === 'HY000'
+        && $error->getQuery() !== null && capacityVersionUpdate($error->getQuery()->getSQL())) {
+        return 'mariadb-checkread';
+    }
+    return null;
+}
+
+function capacityClassifierControls(): void
+{
+    $query = 'UPDATE domain SET alias_count = ?, capacity_version = capacity_version + 1 WHERE id = ? AND capacity_version = ?';
+    $converter = new \Doctrine\DBAL\Driver\API\MySQL\ExceptionConverter();
+    $driverError = static function (int $code, string $state, ?string $sql) use ($converter): \Doctrine\DBAL\Exception\DriverException {
+        return $converter->convert(new \Doctrine\DBAL\Driver\PDO\Exception('test fixture', $state, $code), $sql === null ? null : new \Doctrine\DBAL\Query($sql, [], []));
+    };
+    $cases = [
+        'ORM domain version conflict' => [OptimisticLockException::lockFailed(new \Entities\Domain()), 'orm-version'],
+        'native changed-row conflict on domain CAS' => [$driverError(1020, 'HY000', $query), 'mariadb-checkread'],
+        'unrelated HY000 driver error stays an error' => [$driverError(1030, 'HY000', $query), null],
+        'unrelated invalid-field error stays an error' => [$driverError(1054, '42S22', $query), null],
+        'wrong SQLSTATE stays an error' => [$driverError(1020, '40001', $query), null],
+        'missing failing query stays an error' => [$driverError(1020, 'HY000', null), null],
+        'unversioned domain write stays an error' => [$driverError(1020, 'HY000', 'UPDATE domain SET alias_count = ? WHERE id = ?'), null],
+        'other table conflict stays an error' => [$driverError(1020, 'HY000', 'UPDATE alias SET active = ? WHERE id = ?'), null],
+        'other entity optimistic error stays an error' => [OptimisticLockException::lockFailed(new \Entities\Alias()), null],
+        'programming error stays an error' => [new LogicException('test fixture'), null],
+    ];
+    foreach ($cases as $label => [$error, $expected]) {
+        if (capacityConflictKind($error) !== $expected) {
+            throw new RuntimeException('FAIL: classifier: ' . $label);
+        }
+        echo 'ok: classifier: ' . $label . "\n";
+    }
+    echo 'ALL PASSED (' . count($cases) . " checks)\n";
+}
+
+if (($argv[1] ?? '') !== '--worker') {
+    capacityClassifierControls();
+    if (($argv[1] ?? '') === '--classifier-control') {
+        exit(0);
+    }
+}
+
 function capacityDomain(EntityManager $em, int $id): \Entities\Domain
 {
     $domain = $em->find(\Entities\Domain::class, $id);
@@ -161,10 +217,21 @@ if (($argv[1] ?? '') === '--worker') {
             capacityCreateAlias($em, $domain, $actor, 'loser', $pre, $post);
         }
         echo 'PUBLISHED ' . json_encode($hooks) . "\n";
-    } catch (OptimisticLockException) {
-        echo 'CONFLICT ' . json_encode($hooks) . "\n";
     } catch (Throwable $e) {
+        $kind = capacityConflictKind($e);
+        if ($kind !== null && !$em->isOpen() && !$em->getConnection()->isTransactionActive()) {
+            echo 'CONFLICT ' . json_encode([
+                'kind' => $kind, 'code' => $e->getCode(),
+                'state' => $e instanceof \Doctrine\DBAL\Exception\DriverException ? $e->getSQLState() : null,
+                'query' => $e instanceof \Doctrine\DBAL\Exception\DriverException ? $e->getQuery()?->getSQL() : null,
+                'hooks' => $hooks, 'manager_closed' => true, 'transaction_closed' => true,
+            ]) . "\n";
+            exit(0);
+        }
         fwrite(STDERR, $e->getMessage() . "\n");
+        if ($e instanceof \Doctrine\DBAL\Exception\DriverException) {
+            fwrite(STDERR, get_class($e) . ' code=' . $e->getCode() . ' state=' . $e->getSQLState() . ' sql=' . $e->getQuery()?->getSQL() . "\n");
+        }
         exit(1);
     }
     exit(0);
@@ -292,7 +359,14 @@ try {
         fclose($pipes[2]);
         proc_close($process);
         $process = null;
-        $check($case . ': stale transition rejects before postFlush (' . trim($output) . ' ' . trim($error) . ')', trim($output) === 'CONFLICT ["pre"]' && $error === '');
+        $conflict = str_starts_with(trim($output), 'CONFLICT ') ? json_decode(substr(trim($output), 9), true) : null;
+        $categorized = is_array($conflict) && (
+            (($conflict['kind'] ?? null) === 'orm-version' && ($conflict['code'] ?? null) === 0 && ($conflict['state'] ?? null) === null)
+            || (($conflict['kind'] ?? null) === 'mariadb-checkread' && ($conflict['code'] ?? null) === 1020
+                && ($conflict['state'] ?? null) === 'HY000' && is_string($conflict['query'] ?? null) && capacityVersionUpdate($conflict['query']))
+        );
+        $check($case . ': stale transition rejects before postFlush (' . trim($output) . ' ' . trim($error) . ')', $categorized
+            && $conflict['hooks'] === ['pre'] && $conflict['manager_closed'] === true && $conflict['transaction_closed'] === true && $error === '');
         $check($case . ': all loser children, logs and domain updates roll back', capacitySnapshot($setup) === $snapshot);
         $sql = file_get_contents($sync . '/sql');
         $check($case . ': actual domain UPDATE compares the loaded version', is_string($sql) && preg_match('/UPDATE domain SET .* WHERE id = \? AND capacity_version = \?/', $sql) === 1);

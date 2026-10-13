@@ -1,7 +1,7 @@
 # Doctrine ORM 3 upgrade
 
 The ORM 3 migration is complete. The shipped PHP 8.2-compatible lock file
-retains Doctrine ORM 3.6.8 and DBAL 4.4.4. Generated proxies support PHP 8.2–8.3;
+retains Doctrine ORM 3.7.5 and DBAL 4.5.0. Generated proxies support PHP 8.2–8.3;
 native lazy objects are enabled on PHP 8.4–8.5. The application's legacy
 object-type shim keeps its hardened decoder (`allowed_classes=false`).
 

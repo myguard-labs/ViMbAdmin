@@ -258,6 +258,9 @@ jobs:
       - name: Empty INI parent sections retain inheritance shape
         run: php ci/test-ini-config-empty-parent.php
 
+      - name: MCP enablement guide selects the loaded environment
+        run: php ci/test-mcp-enable-config.php
+
       - name: Native routing preserves supported sub-path deployments
         run: php ci/test-subpath-routing.php
 

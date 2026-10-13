@@ -225,7 +225,7 @@ ModSecurity plugin shipped in this repo.
 ## Quick start (from source)
 
 PHP **8.4.1+** with `pdo_mysql`, `mbstring`, `intl`, `gettext`, `gd`, `dom`,
-`ctype`, `iconv` and `sodium` (2FA secrets are libsodium-encrypted). `apcu`
+`ctype`, `curl`, `iconv` and `sodium` (2FA secrets are libsodium-encrypted). `apcu`
 optional but recommended (see [Performance](#performance)).
 
 ```sh

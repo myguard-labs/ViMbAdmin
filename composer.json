@@ -22,6 +22,7 @@
     "require": {
         "php": ">=8.4.1",
         "ext-ctype": "*",
+        "ext-curl": "*",
         "ext-dom": "*",
         "ext-gettext": "*",
         "ext-gd": "*",

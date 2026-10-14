@@ -11,6 +11,34 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'archive')]
 class Archive
 {
+    #[ORM\Column(type: 'string', length: 64, options: ['default' => ''])]
+    private string $archive_generation = '';
+
+    #[ORM\Version]
+    #[ORM\Column(type: 'bigint', options: ['default' => 1])]
+    private int $archive_version = 1;
+
+    public function __construct()
+    {
+        $this->renewGeneration();
+    }
+
+    public function renewGeneration(): self
+    {
+        $this->archive_generation = bin2hex(random_bytes(32));
+        return $this;
+    }
+
+    public function getArchiveGeneration(): string
+    {
+        return $this->archive_generation;
+    }
+
+    public function getArchiveVersion(): int
+    {
+        return $this->archive_version;
+    }
+
     public const STATUS_PENDING_ARCHIVE = "PENDING_ARCHIVE";
     public const STATUS_ARCHIVING       = "ARCHIVING";
     public const STATUS_ARCHIVED        = "ARCHIVED";

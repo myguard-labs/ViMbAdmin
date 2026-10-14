@@ -436,8 +436,12 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
     {
         $m = $this->_requireMailbox($params);
         $username = $m->requiredUsername();
-        $this->_mailboxRepository()->purgeMailbox($m, null, true);
-        $this->em()->flush();
+        ViMbAdmin_ResourceClaim::withMailbox($this->em(), $username, function () use ($m): void {
+            ViMbAdmin_Recipients::atomic($this->em(), function () use ($m): void {
+                $this->_mailboxRepository()->purgeMailbox($m, null, true);
+                $this->em()->flush();
+            });
+        });
         return [ 'deleted' => true, 'username' => $username ];
     }
 
@@ -505,14 +509,17 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             throw new ViMbAdmin_Mcp_DomainException('unknown alias');
         }
         $this->_assertDomainAllowed($domain->requiredDomainName());
-        $identity = $this->requiredAliasIdentity($a);
-        $em = $this->em();
-        $em->remove($a);
-        if ($identity['address'] != $identity['goto']) {
-            $domain->decreaseAliasCount();
-        }
-        $em->flush();
-        return [ 'deleted' => true, 'address' => $address ];
+        return ViMbAdmin_Recipients::atomic($this->em(), function () use ($a, $domain, $address): array {
+            ViMbAdmin_Recipients::guardDelete($this->em(), $a);
+            $identity = $this->requiredAliasIdentity($a);
+            $em = $this->em();
+            $em->remove($a);
+            if ($identity['address'] != $identity['goto']) {
+                $domain->decreaseAliasCount();
+            }
+            $em->flush();
+            return [ 'deleted' => true, 'address' => $address ];
+        });
     }
 
     // ---- destructive: archive queue (scope: write, rate-limited) --------
@@ -593,58 +600,79 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             $this->_assertDomainAllowed(substr($username, strrpos($username, '@') + 1));
         }
 
-        $dest    = $archive->getMaildirFile();
-        $doveadm = ViMbAdmin_Doveadm::fromOptions($this->options());
+        $claim = ViMbAdmin_ResourceClaim::acquire($em->getConnection(), $username);
+        $operationError = null;
+        try {
+            $dest    = $archive->getMaildirFile();
+            $doveadm = ViMbAdmin_Doveadm::fromOptions($this->options());
 
-        if ($operation === 'delete') {
-            // delete the backup files + the archive row.
+            if ($operation === 'delete') {
+                $claim->guardArchive($archive);
+                // delete the backup files + the archive row.
+                if ($dest) {
+                    $claim->remote(fn () => $doveadm->fsDelete($dest));
+                }
+                $em->remove($archive);
+                $em->flush();
+                return [ 'deleted' => $username ];
+            }
+
+            // restore: recreate the mailbox from the snapshot if it's gone, sync the
+            // mail back, then drop the backup + row.
+            $mailbox = $em->getRepository('\\Entities\\Mailbox')->findOneBy([ 'username' => $username ]);
+            if (!$mailbox) {
+                $archiveDomain = $archive->requiredDomain();
+                $archiveData = $archive->getData();
+                $snap = is_string($archiveData) ? json_decode($archiveData, true) : null;
+                if (!is_array($snap) || !array_key_exists('mailbox', $snap)) {
+                    throw new ViMbAdmin_Mcp_DomainException('no mailbox snapshot stored with this archive — cannot restore');
+                }
+                try {
+                    $mb = ViMbAdmin_Mcp_Input::mailboxSnapshot($snap['mailbox']);
+                } catch (ViMbAdmin_Mcp_Exception $e) {
+                    throw new ViMbAdmin_Mcp_DomainException($e->getMessage(), 0, $e);
+                }
+                $expectedSnapshotUsername = $mb['local_part'] . '@' . $archiveDomain->requiredDomainName();
+                if ($mb['username'] !== $username || $mb['username'] !== $expectedSnapshotUsername) {
+                    throw new ViMbAdmin_Mcp_DomainException('archive mailbox snapshot identity mismatch');
+                }
+
+                $claim->guardArchive($archive);
+                $mailbox = new \Entities\Mailbox();
+                $mailbox->setUsername($mb['username'])->setLocalPart($mb['local_part']);
+                if ($mb['name'] !== null) {
+                    $mailbox->setName($mb['name']);
+                }
+                $mailbox->setPassword($mb['password'])
+                        ->setQuota($mb['quota'])->setActive($mb['active'])
+                        ->setDomain($archiveDomain)->setCreated(new \DateTime());
+                $archiveDomain->increaseMailboxCount();
+                $em->persist($mailbox);
+                $em->flush();
+            }
+            $claim->guardArchive($archive);
             if ($dest) {
-                $doveadm->fsDelete($dest);
+                $claim->remote(fn () => $doveadm->restoreFrom($username, $dest));
+                $claim->remote(fn () => $doveadm->fsDelete($dest));
             }
             $em->remove($archive);
             $em->flush();
-            return [ 'deleted' => $username ];
-        }
-
-        // restore: recreate the mailbox from the snapshot if it's gone, sync the
-        // mail back, then drop the backup + row.
-        $mailbox = $em->getRepository('\\Entities\\Mailbox')->findOneBy([ 'username' => $username ]);
-        if (!$mailbox) {
-            $archiveDomain = $archive->requiredDomain();
-            $archiveData = $archive->getData();
-            $snap = is_string($archiveData) ? json_decode($archiveData, true) : null;
-            if (!is_array($snap) || !array_key_exists('mailbox', $snap)) {
-                throw new ViMbAdmin_Mcp_DomainException('no mailbox snapshot stored with this archive — cannot restore');
-            }
+            return [ 'restored' => $username ];
+        } catch (\Throwable $error) {
+            $operationError = $error;
+            $claim->retainOnFailure($error);
+            throw $error;
+        } finally {
             try {
-                $mb = ViMbAdmin_Mcp_Input::mailboxSnapshot($snap['mailbox']);
-            } catch (ViMbAdmin_Mcp_Exception $e) {
-                throw new ViMbAdmin_Mcp_DomainException($e->getMessage(), 0, $e);
+                $claim->finish();
+            } catch (\Throwable $cleanupError) {
+                if ($operationError === null) {
+                    throw $cleanupError;
+                }
+                error_log('MCP archive resource cleanup failed after rejection: ' . $cleanupError->getMessage());
             }
-            $expectedSnapshotUsername = $mb['local_part'] . '@' . $archiveDomain->requiredDomainName();
-            if ($mb['username'] !== $username || $mb['username'] !== $expectedSnapshotUsername) {
-                throw new ViMbAdmin_Mcp_DomainException('archive mailbox snapshot identity mismatch');
-            }
+        }
 
-            $mailbox = new \Entities\Mailbox();
-            $mailbox->setUsername($mb['username'])->setLocalPart($mb['local_part']);
-            if ($mb['name'] !== null) {
-                $mailbox->setName($mb['name']);
-            }
-            $mailbox->setPassword($mb['password'])
-                    ->setQuota($mb['quota'])->setActive($mb['active'])
-                    ->setDomain($archiveDomain)->setCreated(new \DateTime());
-            $archiveDomain->increaseMailboxCount();
-            $em->persist($mailbox);
-            $em->flush();
-        }
-        if ($dest) {
-            $doveadm->restoreFrom($username, $dest);
-            $doveadm->fsDelete($dest);
-        }
-        $em->remove($archive);
-        $em->flush();
-        return [ 'restored' => $username ];
     }
 
     // ---- lookup + param helpers ----------------------------------------

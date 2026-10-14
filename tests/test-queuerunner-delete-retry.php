@@ -11,10 +11,20 @@ declare(strict_types=1);
  */
 
 require __DIR__ . '/../vendor/autoload.php';
+spl_autoload_register(static function (string $class): void {
+    if (str_starts_with($class, 'Entities\\')) {
+        $file = __DIR__ . '/../application/Entities/' . substr($class, 9) . '.php';
+        if (is_file($file)) {
+            require_once $file;
+        }
+    }
+});
 require_once __DIR__ . '/../library/OSS/Doctrine2/WithPreferences.php';
 require_once __DIR__ . '/../application/Entities/Domain.php';
 require_once __DIR__ . '/../application/Entities/Mailbox.php';
 require_once __DIR__ . '/../application/Entities/MailboxTask.php';
+require_once __DIR__ . '/../application/Entities/Admin.php';
+require_once __DIR__ . '/../application/Entities/QueueRunner.php';
 require_once __DIR__ . '/../application/Entities/Archive.php';
 require_once __DIR__ . '/../application/Entities/Log.php';
 require_once __DIR__ . '/../library/ViMbAdmin/Service/QueueRunner.php';
@@ -62,14 +72,15 @@ final class DeleteRetryState
     }
 }
 
-final class DeleteRetryMailboxRepository
+/** @extends \Doctrine\ORM\EntityRepository<\Entities\Mailbox> */
+final class DeleteRetryMailboxRepository extends \Doctrine\ORM\EntityRepository
 {
     public function __construct(private readonly DeleteRetryState $state)
     {
     }
 
     /** @param array<string,mixed> $criteria */
-    public function findOneBy(array $criteria): ?\Entities\Mailbox
+    public function findOneBy(array $criteria, ?array $orderBy = null): ?\Entities\Mailbox
     {
         if ($criteria !== ['username' => 'user@example.test']) {
             throw new RuntimeException('unexpected mailbox criteria');
@@ -88,14 +99,15 @@ final class DeleteRetryMailboxRepository
     }
 }
 
-final class DeleteRetryArchiveRepository
+/** @extends \Doctrine\ORM\EntityRepository<\Entities\Archive> */
+final class DeleteRetryArchiveRepository extends \Doctrine\ORM\EntityRepository
 {
     public function __construct(private readonly DeleteRetryState $state)
     {
     }
 
     /** @param array<string,mixed> $criteria */
-    public function findOneBy(array $criteria): ?\Entities\Archive
+    public function findOneBy(array $criteria, ?array $orderBy = null): ?\Entities\Archive
     {
         if ($criteria !== ['username' => 'user@example.test']) {
             throw new RuntimeException('unexpected archive criteria');
@@ -104,30 +116,16 @@ final class DeleteRetryArchiveRepository
     }
 }
 
-final class DeleteRetryQuery
+final class DeleteRetryConnection extends \Doctrine\DBAL\Connection
 {
-    /** @var array<string,mixed> */
-    private array $parameters = [];
-
-    public function setParameter(string $name, mixed $value): self
+    public function seed(): void
     {
-        $this->parameters[$name] = $value;
-        return $this;
+        parent::executeStatement('CREATE TABLE resource_claim (resource_key VARCHAR(64) PRIMARY KEY, owner_token VARCHAR(64), username VARCHAR(255), phase VARCHAR(16), created_at DATETIME)');
+        parent::executeStatement('CREATE TABLE mailbox_task (id INTEGER PRIMARY KEY,username TEXT,type TEXT,status TEXT)');
     }
 
-    public function getSingleScalarResult(): int
-    {
-        if (array_keys($this->parameters) !== ['u', 't', 'open']) {
-            throw new RuntimeException('unexpected measure-task query parameters');
-        }
-        return 0;
-    }
-}
-
-final class DeleteRetryConnection
-{
     /** @param list<mixed> $parameters */
-    public function fetchOne(string $sql, array $parameters = []): int
+    public function fetchOne(string $sql, array $parameters = [], array $types = []): int
     {
         if ($sql === 'SELECT 1' && $parameters === []) {
             return 1;
@@ -140,7 +138,7 @@ final class DeleteRetryConnection
     }
 
     /** @param list<mixed> $parameters */
-    public function executeStatement(string $sql, array $parameters = []): int
+    public function executeStatement(string $sql, array $parameters = [], array $types = []): int
     {
         if (!str_contains($sql, 'DELETE FROM dovecot_quota')
             || $parameters !== ['user@example.test']) {
@@ -150,7 +148,7 @@ final class DeleteRetryConnection
     }
 }
 
-final class DeleteRetryEntityManager
+final class DeleteRetryEntityManager extends \Doctrine\ORM\Decorator\EntityManagerDecorator
 {
     private readonly DeleteRetryConnection $connection;
     private readonly DeleteRetryMailboxRepository $mailboxes;
@@ -162,26 +160,24 @@ final class DeleteRetryEntityManager
         private readonly \Entities\MailboxTask $task,
         private ?string $interruptAfter = null,
     ) {
-        $this->connection = new DeleteRetryConnection();
+        $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([__DIR__ . '/../application/Entities'], true);
+        $path = tempnam(sys_get_temp_dir(), 'delete-retry-claims-');
+        if ($path === false) {
+            throw new RuntimeException('Cannot create delete retry claim fixture');
+        }
+        register_shutdown_function(static fn (): bool => unlink($path));
+        $this->connection = new DeleteRetryConnection(['driver' => 'pdo_sqlite','path' => $path], new \Doctrine\DBAL\Driver\PDO\SQLite\Driver());
+        $this->connection->seed();
+        $factory = new \Doctrine\ORM\Repository\DefaultRepositoryFactory();
+        $configuration->setRepositoryFactory($factory);
+        $manager = new \Doctrine\ORM\EntityManager($this->connection, $configuration);
         $this->mailboxes = new DeleteRetryMailboxRepository($state);
         $this->archives = new DeleteRetryArchiveRepository($state);
-    }
-
-    public function getRepository(string $class): object
-    {
-        return match ($class) {
-            '\\Entities\\Mailbox' => $this->mailboxes,
-            '\\Entities\\Archive' => $this->archives,
-            default => throw new RuntimeException('unexpected repository: ' . $class),
-        };
-    }
-
-    public function createQuery(string $dql): DeleteRetryQuery
-    {
-        if (!str_contains($dql, 'TYPE_MEASURE_SIZE') && !str_contains($dql, 't.type = :t')) {
-            throw new RuntimeException('unexpected task query');
-        }
-        return new DeleteRetryQuery();
+        (new ReflectionProperty($factory, 'repositoryList'))->setValue($factory, [
+            \Entities\Mailbox::class . spl_object_id($manager) => $this->mailboxes,
+            \Entities\Archive::class . spl_object_id($manager) => $this->archives,
+        ]);
+        parent::__construct($manager);
     }
 
     public function getConnection(): DeleteRetryConnection
@@ -376,11 +372,20 @@ function deleteRetryExecute(
     \Entities\MailboxTask $task,
     DeleteRetryDoveadm $doveadm,
 ): ?Throwable {
+    $manager = (new ReflectionProperty($runner, 'em'))->getValue($runner);
+    if (!$manager instanceof DeleteRetryEntityManager) {
+        throw new RuntimeException('Retry fixture manager missing');
+    }
+    $claim = ViMbAdmin_ResourceClaim::acquire($manager->getConnection(), $task->requiredUsername());
+    (new ReflectionProperty($runner, 'resourceClaim'))->setValue($runner, $claim);
     try {
         (new ReflectionMethod($runner, 'execute'))->invoke($runner, $task, $doveadm);
         return null;
     } catch (Throwable $error) {
         return $error->getPrevious() ?? $error;
+    } finally {
+        $claim->finish();
+
     }
 }
 

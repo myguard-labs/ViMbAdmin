@@ -290,3 +290,83 @@ Each phase is independently reversible **before** Phase 4 is confirmed:
   `project-dovecot-hardened-docker`, `reference-vimbadmin-backup-zstd`,
   `feedback-vimbadmin-quota-clone-table`,
   `reference-vimbadmin-stale-apcu-phantom-schema`.
+
+## Mail-store claims and recipient/archive generations
+
+Stop queue workers and web/MCP mutation clients during this upgrade. Apply
+`contrib/migrations/2026-06-fork-schema.sql` (or the normal ORM schema updater)
+before restarting only upgraded code. The additive `resource_claim` table and
+`alias_version`, `archive_version`, `archive_generation` columns preserve the
+existing rows. The SQL migration seeds an opaque generation on historical
+archives. With the ORM updater, historical empty generations remain valid only
+for new generation-and-version-pinned tasks; every replacement writes a fresh
+random generation. Previously enqueued prune tasks lack these preconditions and
+safely skip; a later sweep can enqueue a current task.
+
+Archive, restore, prune and mailbox deletion use one claim per canonical physical
+mailbox username, including archives whose mailbox row has been deleted. A claim
+has an opaque owner token and either `READY` (no remote mutation in flight) or
+`REMOTE` (completion is uncertain until its owner receives a command response).
+There is no expiry or automatic takeover. Application connection loss, process
+death, missing heartbeat and elapsed time cannot establish that Dovecot stopped.
+An ambiguous HTTP/response failure or release/transaction failure keeps the
+claim and rejects further operations for that mailbox; unrelated mailboxes can
+continue.
+
+To reconcile one retained claim:
+
+1. Quiesce mutation clients for that exact mailbox and establish that the original
+   owner cannot resume. Record its current `resource_key`, `owner_token`, username
+   and phase from `resource_claim`, along with the related task/checkpoints.
+2. Inspect the Dovecot backend independently. Confirm the original command has
+   completed and no remote mutation remains in flight. Inspect the live store,
+   backup destination and archive/task records; resolve any partial operation
+   before retrying it. A stopped PHP process or disconnected HTTP client alone
+   is insufficient evidence. If completion remains unknown, retain the claim.
+3. In a DB transaction, select that exact resource row `FOR UPDATE`. Verify its
+   token and username still match the recorded owner, then delete **only** that
+   resource key with the exact recorded token as an additional predicate. Require
+   exactly one affected row and commit. A zero-row result means ownership changed;
+   rollback and inspect again. Never clear claims by age, phase or a blanket
+   table purge.
+4. Resume clients for that mailbox. A failed task can use the existing guarded
+   retry route after its backend/checkpoint state has been reconciled; an old
+   running task follows the existing queue recovery policy. Keep the reconciliation
+   record for the operator audit trail.
+
+Normal exact-token release joins the task's fenced terminal transaction or an
+existing direct caller transaction. Until its outer commit, independent observers
+still see the claim. Rollback restores it. Recipient removals read and lock the
+current aggregate through their final flush, while replacement edits use the
+persisted optimistic version; stale edits/deletes cannot overwrite newer data.
+
+Mailbox purge and alias deletion require Doctrine ORM `EntityManagerInterface`
+at their mutation boundary. Other service methods retain their existing
+`ObjectManager` contract. Unsupported managers reject with a `LogicException`
+before plugin effects or mutation. Successful current-owner publication preserves
+unrelated staged changes. A rejected stale owner or transaction failure rolls back
+and clears the UnitOfWork, discarding uncommitted dirt for the failed operation;
+callers must reload before retrying, and a later flush cannot publish that dirt.
+
+Domain purge enumerates and acquires the same canonical mail-store claims in
+sorted order before opening its primary transaction. It then locks the expected
+persisted Domain generation and compares the current resource set with the claimed
+set before the existing bulk-delete sequence. A changed set or generation rejects
+without deletion. Creation cannot slip a new mailbox under the locked domain row.
+A conflict during partial claim acquisition performs no deletion and releases
+those known no-start claims after rollback. Standalone bulk mailbox/alias purge
+helpers require this fenced domain transaction. Invoke the full Domain purge
+before starting an outer transaction: it rejects an already-active primary
+transaction before enumeration, token acquisition or deletion, preserving the
+caller's healthy transaction. Normal controller/service callers already use
+this order.
+
+Acquire claims and complete remote mail-store work before starting the
+persistence transaction. A claim used inside an active primary
+transaction rejects remote work before starting it and retains its exact token;
+complete/rollback the caller transaction and reconcile that known no-start token.
+MariaDB snapshot isolation can reject a claim inserted or changed after the
+primary read view, even with `FOR UPDATE`. DB-only outer transactions retain the
+existing atomic commit/rollback lifetime. Never disable isolation to force a
+release. Failed publication after confirmed remote work retains ownership for
+operator reconciliation; a cleanup failure never replaces the original error.

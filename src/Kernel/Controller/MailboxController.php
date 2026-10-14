@@ -1021,31 +1021,28 @@ final class MailboxController extends AbstractController
             return $this->redirect('mailbox/list');
         }
 
-        $identity = $this->requiredAliasIdentity($alias);
-        $user     = $mailbox->requiredUsername();
+        $this->requiredAliasIdentity($alias); // Reject malformed identity before SQL.
+        return \ViMbAdmin_Recipients::atomic($em, function () use ($em, $alias, $aliasDomain, $mailbox, $admin): Response {
+            $em->refresh($alias, \Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
+            $identity = $this->requiredAliasIdentity($alias);
+            $user     = $mailbox->requiredUsername();
 
-        if ($user === $identity['goto']) {
-            $em->remove($alias);
-            $this->logAlias($admin, "removed alias {$identity['address']}");
-            // The counter belongs to the ALIAS's domain, which is not
-            // necessarily the mailbox's — see the cross-domain note above.
-            $aliasDomain->setAliasCount($aliasDomain->getAliasCount() - 1);
-            $this->flash('You have successfully removed the alias.');
-        } else {
-            $gotos = explode(',', $identity['goto']);
-            foreach ($gotos as $key => $item) {
-                $gotos[$key] = $item = trim($item);
-                if ($item === $user || $item === '') {
-                    unset($gotos[$key]);
-                }
+            if ($user === $identity['goto']) {
+                $em->remove($alias);
+                $this->logAlias($admin, "removed alias {$identity['address']}");
+                // The counter belongs to the ALIAS's domain, which is not
+                // necessarily the mailbox's — see the cross-domain note above.
+                $aliasDomain->setAliasCount($aliasDomain->getAliasCount() - 1);
+                $this->flash('You have successfully removed the alias.');
+            } else {
+                $alias->setGoto(\ViMbAdmin_Recipients::without($identity['goto'], $user, true));
+                $this->logAlias($admin, "removed destination {$user} from alias {$identity['address']}");
+                $this->flash("You have successfully removed {$user} from the alias {$identity['address']}.");
             }
-            $alias->setGoto(implode(',', $gotos));
-            $this->logAlias($admin, "removed destination {$user} from alias {$identity['address']}");
-            $this->flash("You have successfully removed {$user} from the alias {$identity['address']}.");
-        }
 
-        $em->flush();
-        return $this->redirect('mailbox/aliases/mid/' . $mailbox->getId());
+            $em->flush();
+            return $this->redirect('mailbox/aliases/mid/' . $mailbox->getId());
+        });
     }
 
     /** @return array{address:string,goto:string} */

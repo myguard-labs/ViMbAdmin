@@ -15,6 +15,14 @@ class Alias
 {
     /** @use \OSS_Doctrine2_WithPreferences<\Entities\AliasPreference> */
     use \OSS_Doctrine2_WithPreferences;
+    #[ORM\Version]
+    #[ORM\Column(type: 'bigint', options: ['default' => 1])]
+    private int $alias_version = 1;
+
+    public function getAliasVersion(): int
+    {
+        return $this->alias_version;
+    }
 
     /** @return class-string<\Entities\AliasPreference> */
     protected function _getPreferenceEntityClassname()

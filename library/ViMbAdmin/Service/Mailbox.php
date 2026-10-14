@@ -166,41 +166,49 @@ class ViMbAdmin_Service_Mailbox
         ?callable $preFlush = null,
         ?callable $postFlush = null
     ): bool {
+        if (!$this->em instanceof \Doctrine\ORM\EntityManagerInterface) {
+            throw new \LogicException('Mailbox purge requires Doctrine ORM EntityManager capabilities.');
+        }
         $username = $mailbox->requiredUsername();
         if ($preRemove !== null && $preRemove() === false) {
             return false;
         }
 
-        $repository = $this->em->getRepository('\\Entities\\Mailbox');
-        if (!method_exists($repository, 'purgeMailbox')) {
-            throw new \LogicException('Mailbox repository must implement purgeMailbox().');
-        }
-        $repository->purgeMailbox($mailbox, $actor, !$deleteFiles);
+        $operation = function () use ($mailbox, $actor, $deleteFiles, $preFlush, $postFlush, $username): bool {
+            return ViMbAdmin_Recipients::atomic($this->em, function () use ($mailbox, $actor, $deleteFiles, $preFlush, $postFlush, $username): bool {
+                $repository = $this->em->getRepository('\\Entities\\Mailbox');
+                if (!method_exists($repository, 'purgeMailbox')) {
+                    throw new \LogicException('Mailbox repository must implement purgeMailbox().');
+                }
+                $repository->purgeMailbox($mailbox, $actor, !$deleteFiles);
 
-        $this->log(
-            $actor,
-            \Entities\Log::ACTION_MAILBOX_PURGE,
-            "{$actor->getFormattedName()} purged mailbox {$username}"
-        );
+                $this->log(
+                    $actor,
+                    \Entities\Log::ACTION_MAILBOX_PURGE,
+                    "{$actor->getFormattedName()} purged mailbox {$username}"
+                );
 
-        if ($preFlush !== null) {
-            $preFlush();
-        }
+                if ($preFlush !== null) {
+                    $preFlush();
+                }
 
-        if ($deleteFiles) {
-            $mailbox->setDeletePending(true);
-            $mailbox->setActive(false);
-        } else {
-            $this->em->remove($mailbox);
-        }
+                if ($deleteFiles) {
+                    $mailbox->setDeletePending(true);
+                    $mailbox->setActive(false);
+                } else {
+                    $this->em->remove($mailbox);
+                }
 
-        $this->em->flush();
+                $this->em->flush();
 
-        if ($postFlush !== null) {
-            $postFlush();
-        }
+                if ($postFlush !== null) {
+                    $postFlush();
+                }
 
-        return true;
+                return true;
+            });
+        };
+        return ViMbAdmin_ResourceClaim::withMailbox($this->em, $username, $operation);
     }
 
     /**

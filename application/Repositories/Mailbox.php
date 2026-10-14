@@ -469,14 +469,18 @@ class Mailbox extends EntityRepository
             return false;
         }
 
+        if (!$this->getEntityManager()->getConnection()->isTransactionActive()) {
+            throw new \LogicException('Mailbox purge requires a caller-owned recipient transaction.');
+        }
+
         $username = $mailbox->requiredUsername();
 
         $aliasRepository = $this->getEntityManager()->getRepository("\\Entities\\Alias");
         if (!$aliasRepository instanceof \Repositories\Alias) {
             throw new \LogicException('Alias entity must use Repositories\\Alias.');
         }
-        $aliases = $aliasRepository->loadForMailbox($mailbox, $admin, true);
-        $inAliases = $aliasRepository->loadWithMailbox($mailbox, $admin);
+        $aliases = $aliasRepository->loadForMailbox($mailbox, $admin, true, true);
+        $inAliases = $aliasRepository->loadWithMailbox($mailbox, $admin, true);
 
         /** @var array<int,array{address:string,goto:string,domain:\Entities\Domain}> $aliasIdentities */
         $aliasIdentities = [];
@@ -498,20 +502,12 @@ class Mailbox extends EntityRepository
 
         foreach ($inAliases as $alias) {
             $identity = $aliasIdentities[ spl_object_id($alias) ];
-            $gotos = explode(',', $identity['goto']);
+            $remaining = \ViMbAdmin_Recipients::without($identity['goto'], $username);
 
-            foreach ($gotos as $key => $goto) {
-                $gotos[ $key ] = $goto = trim($goto);
-
-                if (($goto == $username) || ($goto == '')) {
-                    unset($gotos[ $key ]);
-                }
-            }
-
-            if (sizeof($gotos) == 0) {
+            if ($remaining === '') {
                 $this->_removeAlias($alias, $identity);
             } else {
-                $alias->setGoto(implode(',', $gotos));
+                $alias->setGoto($remaining);
             }
         }
 

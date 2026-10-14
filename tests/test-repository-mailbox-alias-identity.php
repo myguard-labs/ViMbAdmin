@@ -27,13 +27,13 @@ final class MailboxAliasIdentityAliasRepository extends \Repositories\Alias
     }
 
     /** @return list<\Entities\Alias> */
-    public function loadForMailbox($mailbox, $admin, $ima = false): array
+    public function loadForMailbox($mailbox, $admin, $ima = false, bool $lock = false): array
     {
         return $this->forMailbox;
     }
 
     /** @return list<\Entities\Alias> */
-    public function loadWithMailbox($mailbox, $admin): array
+    public function loadWithMailbox($mailbox, $admin, bool $lock = false): array
     {
         return $this->withMailbox;
     }
@@ -55,6 +55,16 @@ final class MailboxAliasIdentityEntityManager extends \Doctrine\ORM\Decorator\En
         }
         $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_mysql'], $configuration);
         parent::__construct(new \Doctrine\ORM\EntityManager($connection, $configuration));
+    }
+
+    public function getConnection(): \Doctrine\DBAL\Connection
+    {
+        return new class (['driver' => 'pdo_mysql'], new \Doctrine\DBAL\Driver\PDO\MySQL\Driver()) extends \Doctrine\DBAL\Connection {
+            public function isTransactionActive(): bool
+            {
+                return true;
+            }
+        };
     }
 
     /**

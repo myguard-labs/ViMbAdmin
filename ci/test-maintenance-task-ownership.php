@@ -200,6 +200,26 @@ function maintenanceTaskMigrationTest(): void
     }
 }
 
+
+/** Reconcile only a completed synchronous SQL-only fake backend's exact token. */
+function maintenanceTaskReconcileFakeBackend(\Doctrine\DBAL\Connection $observer, string $username): void
+{
+    $key = \ViMbAdmin_ResourceClaim::key($username);
+    $token = $observer->fetchOne('SELECT owner_token FROM resource_claim WHERE resource_key=?', [$key]);
+    if ($token === false) {
+        return;
+    }
+    if (!is_string($token)) {
+        throw new RuntimeException('fake backend token is malformed');
+    }
+    // Every caller has returned from MaintenanceTaskService: its backend closure
+    // performs synchronous fixture SQL only, and neither starts a remote command
+    // nor forks a process. ResourceClaim has closed its owner connection. The
+    // isolated fixture can therefore reconcile this exact token after completion.
+    $released = $observer->executeStatement("DELETE FROM resource_claim WHERE resource_key=? AND owner_token=? AND phase IN ('READY','REMOTE')", [$key,$token]);
+    maintenanceTaskCheck('completed fake backend reconciles only its exact retained token', $released === 1);
+}
+
 function maintenanceOwnershipTests(): void
 {
     $em = maintenanceTaskManager();
@@ -299,7 +319,7 @@ function maintenanceOwnershipTests(): void
     }
 
     foreach (['manual', 'batch'] as $mode) {
-        foreach (['success', 'failure', 'lease-loss'] as $outcome) {
+        foreach (['success', 'failure', 'completed-error', 'lease-loss'] as $outcome) {
             [$task] = maintenanceTaskFixture($em, 'PENDING');
             // The fixture lease is not the one the service will acquire.
             $observer->executeStatement('DELETE FROM queue_runner');
@@ -311,6 +331,8 @@ function maintenanceOwnershipTests(): void
                 if ($outcome === 'lease-loss') {
                     $observer->executeStatement('DELETE FROM queue_runner');
                     $service->clock->modify('+61 seconds');
+                } elseif ($outcome === 'completed-error') {
+                    throw new \ViMbAdmin_Doveadm_CommandException('quota recalc', 'controlled command completion', 75);
                 } elseif ($outcome === 'failure') {
                     throw new RuntimeException('injected backend error');
                 }
@@ -334,7 +356,10 @@ function maintenanceOwnershipTests(): void
             maintenanceTaskCheck($mode . ' service ' . $outcome . ' keeps completion within the ownership fence', $calls === 1
                 && is_array($row) && ($outcome === 'lease-loss'
                     ? $caught && !$completed && $row['status'] === 'RUNNING' && $row['log'] === 'original log'
-                    : $completed && !$caught && $row['status'] === ($outcome === 'failure' ? 'FAILED' : 'DONE')));
+                    : $completed && !$caught && $row['status'] === ($outcome === 'success' ? 'DONE' : 'FAILED')));
+            $retained = maintenanceTaskInteger($observer->fetchOne('SELECT COUNT(*) FROM resource_claim WHERE resource_key=?', [\ViMbAdmin_ResourceClaim::key($task->requiredUsername())]));
+            maintenanceTaskCheck($mode.' backend completion resource lifetime: '.$outcome, $retained === (in_array($outcome, ['failure','lease-loss'], true) ? 1 : 0));
+            maintenanceTaskReconcileFakeBackend($observer, $task->requiredUsername());
         }
     }
 
@@ -371,6 +396,8 @@ function maintenanceOwnershipTests(): void
         maintenanceTaskCheck('stale first task leaves next pending task independently runnable' . ($deleteSecond ? ' after deleted snapshot' : ''), $processed === 1 && $calls === 2
             && $observer->fetchOne('SELECT status FROM mailbox_task WHERE id = ?', [($deleteSecond ? $third : $second)->getId()]) === 'DONE'
             && $observer->fetchOne('SELECT log FROM mailbox_task WHERE id = ?', [$first->getId()]) === 'original log');
+        maintenanceTaskCheck('stale fake task keeps its resource until explicit reconciliation', maintenanceTaskInteger($observer->fetchOne('SELECT COUNT(*) FROM resource_claim WHERE resource_key=?', [\ViMbAdmin_ResourceClaim::key($first->requiredUsername())])) === 1);
+        maintenanceTaskReconcileFakeBackend($observer, $first->requiredUsername());
 
     }
 

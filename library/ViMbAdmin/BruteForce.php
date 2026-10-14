@@ -443,8 +443,40 @@ class ViMbAdmin_BruteForce
      */
     private function _withLock($ip, callable $operation, $exclusive = true)
     {
+        return $this->_withLockFile($this->_lockFile($ip), $operation, $exclusive);
+    }
+
+    /**
+     * Run cleanup against the same shard sidecar used by the writer for this
+     * record digest. The exact path check keeps cleanup inside the state
+     * directory and the fixed .lock.00 .. .lock.ff sidecar set.
+     *
+     * @param callable():bool $operation
+     * @return bool
+     */
+    private function _withStateFileLock(string $path, callable $operation)
+    {
+        $entry = basename($path);
+        if ($path !== $this->_statedir . '/' . $entry
+            || preg_match('/^([a-f0-9]{64})\.json$/D', $entry, $matches) !== 1) {
+            return false;
+        }
+
+        return $this->_withLockFile(
+            $this->_statedir . '/.lock.' . substr($matches[1], 0, 2),
+            $operation
+        );
+    }
+
+    /**
+     * @template T
+     * @param callable():T $operation
+     * @return T
+     */
+    private function _withLockFile(string $lockFile, callable $operation, bool $exclusive = true)
+    {
         $this->_ensureDir();
-        $handle = @fopen($this->_lockFile($ip), 'c');
+        $handle = @fopen($lockFile, 'c');
         if ($handle === false) {
             throw new RuntimeException('bruteforce state persistence unavailable');
         }
@@ -616,13 +648,12 @@ class ViMbAdmin_BruteForce
     }
 
     /**
-     * Opportunistic maintenance. It deliberately does NOT take the state lock
-     * that record()/clear() serialize on: the reaper touches only records that
-     * are older than max(window, lockout), it re-stats every file to confirm
-     * the inode did not change underneath it, and a losing race merely leaves a
-     * stale file for the next request. Holding the exclusive lock across a
-     * directory scan is what let a grown state directory turn concurrent failed
-     * logins into HTTP 500s.
+     * Opportunistic maintenance scans the directory without writer shard locks,
+     * then takes each candidate's exact shard only for the final liveness
+     * recheck and unlink. Holding a writer lock across the directory scan is what
+     * let a grown state directory turn concurrent failed logins into HTTP 500s;
+     * the short final lock closes the replacement-generation race without
+     * restoring that global contention.
      *
      * The maintenance lock is non-blocking: one worker sweeps, everybody else
      * moves straight on to the state write.
@@ -915,14 +946,17 @@ class ViMbAdmin_BruteForce
                 return false;
             }
             $path = $this->_statedir . '/' . $entry;
-            $before = @lstat($path);
-            clearstatcache(true, $path);
-            $after = @lstat($path);
-            // Re-check liveness under the same stat pair: a source can have
-            // become locked between the readdir sample and this deletion.
-            if ($this->_isStableRegularFile($before, $after)
-                && $this->_evictionCandidate($path, $now) !== null
-                && @unlink($path)) {
+            $removed = $this->_withStateFileLock($path, function () use ($path, $now): bool {
+                $before = @lstat($path);
+                clearstatcache(true, $path);
+                $after = @lstat($path);
+                // Re-check liveness while the writer shard is held: a source
+                // sampled as evictable may have published a live generation.
+                return $this->_isStableRegularFile($before, $after)
+                    && $this->_evictionCandidate($path, $now) !== null
+                    && @unlink($path);
+            });
+            if ($removed) {
                 $overflow--;
                 $evicted++;
             }
@@ -945,18 +979,20 @@ class ViMbAdmin_BruteForce
 
     private function _reapFile(string $path, int $cutoff): bool
     {
-        $before = @lstat($path);
-        if (!$this->_isStableRegularFile($before, $before)) {
-            return false;
-        }
-        $json = @file_get_contents($path);
-        $record = is_string($json) ? json_decode($json, true) : null;
-        if (!is_array($record) || !$this->_isStaleRecord($record, $cutoff)) {
-            return false;
-        }
-        clearstatcache(true, $path);
-        $after = @lstat($path);
-        return $this->_isStableRegularFile($before, $after) && @unlink($path);
+        return $this->_withStateFileLock($path, function () use ($path, $cutoff): bool {
+            $before = @lstat($path);
+            if (!$this->_isStableRegularFile($before, $before)) {
+                return false;
+            }
+            $json = @file_get_contents($path);
+            $record = is_string($json) ? json_decode($json, true) : null;
+            if (!is_array($record) || !$this->_isStaleRecord($record, $cutoff)) {
+                return false;
+            }
+            clearstatcache(true, $path);
+            $after = @lstat($path);
+            return $this->_isStableRegularFile($before, $after) && @unlink($path);
+        });
     }
 
     private function _isStableRegularFile(mixed $before, mixed $after): bool

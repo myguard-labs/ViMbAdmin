@@ -211,6 +211,7 @@ final class CsrfMutationArchive extends Entities\Archive
 {
     public function __construct()
     {
+        (new ReflectionProperty(\Entities\Archive::class, 'id'))->setValue($this, 1);
         $this->setUsername('user@example.test');
         $this->setStatus(\Entities\Archive::STATUS_ARCHIVED);
         // requiredDomain() is called by every archive action's authorisation
@@ -288,7 +289,15 @@ final class CsrfMutationEntityManager extends EntityManagerDecorator
             $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
         }
         $configuration->setRepositoryFactory(new CsrfMutationRepositoryFactory($repositories));
-        $connection = DriverManager::getConnection(['driver' => 'pdo_mysql', 'serverVersion' => '8.0'], $configuration);
+        $fixturePath = tempnam(sys_get_temp_dir(), 'csrf-unit-claims-');
+        if ($fixturePath === false) {
+            throw new RuntimeException('Cannot create claim fixture');
+        }
+        register_shutdown_function(static fn (): bool => unlink($fixturePath));
+        $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $fixturePath], $configuration);
+        $connection->executeStatement('CREATE TABLE resource_claim (resource_key VARCHAR(64) PRIMARY KEY, owner_token VARCHAR(64), username VARCHAR(255), phase VARCHAR(16), created_at DATETIME)');
+        $connection->executeStatement("CREATE TABLE archive (id INTEGER PRIMARY KEY,archive_generation VARCHAR(64),archive_version BIGINT)");
+        $connection->insert('archive', ['id' => 1,'archive_generation' => '', 'archive_version' => 1]);
         parent::__construct(new EntityManager($connection, $configuration));
     }
 
@@ -299,6 +308,11 @@ final class CsrfMutationEntityManager extends EntityManagerDecorator
     public function remove(object $object): void
     {
         $this->removed[] = $object;
+    }
+    public function refresh(object $object, LockMode|int|null $lockMode = null): void
+    {
+        // CSRF orchestration uses unpersisted entities; real locking has its
+        // own independent-actor MariaDB acceptance fixtures.
     }
     public function flush(): void
     {

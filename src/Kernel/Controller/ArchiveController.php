@@ -311,13 +311,32 @@ final class ArchiveController extends AbstractController
         }
 
         $username = $archive->requiredUsername();
-        $enabled = (new \ViMbAdmin_Service_Archive($this->em()))->toggleAutoprune($archive, $admin);
+        try {
+            $claim = \ViMbAdmin_ResourceClaim::acquire($this->em()->getConnection(), $username);
+            $claim->guardArchive($archive);
+        } catch (\Throwable $error) {
+            if (isset($claim)) {
+                self::finishRejectedClaim($claim);
+            }
+            $this->flash($error->getMessage(), FlashMessages::ERROR);
+            return $this->redirect('archive/list');
+        }
+        try {
+            $enabled = (new \ViMbAdmin_Service_Archive($this->em()))->toggleAutoprune($archive, $admin);
 
-        $this->flash($enabled
-            ? sprintf('Autoprune enabled for %s; the prune window restarts from now.', $username)
-            : sprintf('Autoprune disabled for %s.', $username));
+            $claim->finish();
+            $this->flash($enabled
+                ? sprintf('Autoprune enabled for %s; the prune window restarts from now.', $username)
+                : sprintf('Autoprune disabled for %s.', $username));
 
-        return $this->redirect('archive/list');
+            return $this->redirect('archive/list');
+        } catch (\Throwable $error) {
+            $claim->retainOnFailure($error);
+            throw $error;
+        } finally {
+            $claim->finish();
+        }
+
     }
 
     /**
@@ -352,22 +371,57 @@ final class ArchiveController extends AbstractController
         }
 
         $user = $archive->requiredUsername();
-        $dest = $archive->getMaildirFile();
-
-        // Remove the backup files first; abort (keeping the row) if doveadm fails.
         try {
-            if ($dest) {
-                \ViMbAdmin_Doveadm::fromOptions($this->container->options())->fsDelete($dest);
+            $claim = \ViMbAdmin_ResourceClaim::acquire($this->em()->getConnection(), $user);
+            $claim->guardArchive($archive);
+        } catch (\Throwable $error) {
+            if (isset($claim)) {
+                self::finishRejectedClaim($claim);
             }
-        } catch (\Throwable $e) {
-            $this->flash(sprintf('Could not remove the backup files for %s: %s', $user, $e->getMessage()), FlashMessages::ERROR);
+            $this->flash($error->getMessage(), FlashMessages::ERROR);
             return $this->redirect('archive/list');
         }
+        $claimFinalized = false;
+        try {
+            $dest = $archive->getMaildirFile();
 
-        (new \ViMbAdmin_Service_Archive($this->em()))->delete($archive, $admin);
+            // Remove the backup files first; abort (keeping the row) if doveadm fails.
+            try {
+                if ($dest) {
+                    $doveadm = \ViMbAdmin_Doveadm::fromOptions($this->container->options());
+                    $claim->remote(fn () => $doveadm->fsDelete($dest));
+                }
+            } catch (\Throwable $e) {
+                $this->flash(sprintf('Could not remove the backup files for %s: %s', $user, $e->getMessage()), FlashMessages::ERROR);
+                self::finishRejectedClaim($claim);
+                $claimFinalized = true;
+                return $this->redirect('archive/list');
+            }
 
-        $this->flash(sprintf('Archive backup for %s deleted.', $user));
-        return $this->redirect('archive/list');
+            (new \ViMbAdmin_Service_Archive($this->em()))->delete($archive, $admin);
+
+            $claim->finish();
+            $claimFinalized = true;
+            $this->flash(sprintf('Archive backup for %s deleted.', $user));
+            return $this->redirect('archive/list');
+        } catch (\Throwable $error) {
+            $claim->retainOnFailure($error);
+            throw $error;
+        } finally {
+            if (!$claimFinalized) {
+                $claim->finish();
+            }
+        }
+
+    }
+
+    private static function finishRejectedClaim(\ViMbAdmin_ResourceClaim $claim): void
+    {
+        try {
+            $claim->finish();
+        } catch (\Throwable $cleanupError) {
+            error_log('Archive resource cleanup failed after rejection: ' . $cleanupError->getMessage());
+        }
     }
 
     /**
@@ -415,89 +469,143 @@ final class ArchiveController extends AbstractController
         }
 
         $user    = $archive->requiredUsername();
-        $dest    = $archive->getMaildirFile();
-        $options = $this->container->options();
-
-        // 1) Recreate the mailbox if it's gone (a DELETE'd account).
-        $mailbox = $em->getRepository('\\Entities\\Mailbox')->findOneBy(['username' => $user]);
-        if (!$mailbox) {
-            $domain = $archive->requiredDomain();
-            $data = $archive->getData();
-            $snap = is_string($data) ? json_decode($data, true) : null;
-            try {
-                $m = is_array($snap) && array_key_exists('mailbox', $snap)
-                    ? self::mailboxSnapshot($snap['mailbox']) : null;
-            } catch (\LogicException $e) {
-                $m = null;
-            }
-            if ($m === null) {
-                $this->flash(sprintf('Cannot restore %s: no mailbox snapshot stored with the archive.', $user), FlashMessages::ERROR);
-                return $this->redirect('archive/list');
-            }
-            $expectedSnapshotUsername = $m['local_part'] . '@' . $domain->requiredDomainName();
-            if ($m['username'] !== $user || $m['username'] !== $expectedSnapshotUsername) {
-                $this->flash(sprintf('Cannot restore %s: mailbox snapshot identity does not match the archive.', $user), FlashMessages::ERROR);
-                return $this->redirect('archive/list');
-            }
-
-            $mailbox = new \Entities\Mailbox();
-            $mailbox->setUsername($m['username'])->setLocalPart($m['local_part']);
-            if ($m['name'] !== null) {
-                $mailbox->setName($m['name']);
-            }
-            $mailbox->setPassword($m['password'])   // original hash — password preserved
-                    ->setQuota($m['quota'])
-                    ->setActive($m['active'])
-                    ->setDomain($domain)
-                    ->setCreated(new \DateTime());
-            $domain->increaseMailboxCount();
-            $em->persist($mailbox);
-            $em->flush();   // userdb must see the account before doveadm sync
-        }
-
-        // 2) Sync the backup back into the live store.
         try {
-            if ($dest) {
-                \ViMbAdmin_Doveadm::fromOptions($options)->restoreFrom($user, $dest);
-            }
-        } catch (\Throwable $e) {
-            error_log("ArchiveController::restoreAction sync {$user}: " . $e->getMessage());
-            $this->flash(sprintf('Mailbox %s was recreated, but restoring its mail failed: %s', $user, $e->getMessage()), FlashMessages::ERROR);
+            $claim = \ViMbAdmin_ResourceClaim::acquire($this->em()->getConnection(), $user);
+        } catch (\Throwable $error) {
+            $this->flash($error->getMessage(), FlashMessages::ERROR);
             return $this->redirect('archive/list');
         }
-
-        // 3) Remove the backup files (a leftover backup dir is non-fatal).
+        $claimFinalized = false;
         try {
-            if ($dest) {
-                \ViMbAdmin_Doveadm::fromOptions($options)->fsDelete($dest);
+            $dest    = $archive->getMaildirFile();
+            $options = $this->container->options();
+
+            // 1) Recreate the mailbox if it's gone (a DELETE'd account).
+            $mailbox = $em->getRepository('\\Entities\\Mailbox')->findOneBy(['username' => $user]);
+            if (!$mailbox) {
+                $domain = $archive->requiredDomain();
+                $data = $archive->getData();
+                $snap = is_string($data) ? json_decode($data, true) : null;
+                try {
+                    $m = is_array($snap) && array_key_exists('mailbox', $snap)
+                        ? self::mailboxSnapshot($snap['mailbox']) : null;
+                } catch (\LogicException $e) {
+                    $m = null;
+                }
+                if ($m === null) {
+                    $this->flash(sprintf('Cannot restore %s: no mailbox snapshot stored with the archive.', $user), FlashMessages::ERROR);
+                    self::finishRejectedClaim($claim);
+                    $claimFinalized = true;
+                    return $this->redirect('archive/list');
+                }
+                $expectedSnapshotUsername = $m['local_part'] . '@' . $domain->requiredDomainName();
+                if ($m['username'] !== $user || $m['username'] !== $expectedSnapshotUsername) {
+                    $this->flash(sprintf('Cannot restore %s: mailbox snapshot identity does not match the archive.', $user), FlashMessages::ERROR);
+                    self::finishRejectedClaim($claim);
+                    $claimFinalized = true;
+                    return $this->redirect('archive/list');
+                }
+
+                try {
+                    $claim->guardArchive($archive);
+                } catch (\ViMbAdmin_Exception $error) {
+                    $this->flash($error->getMessage(), FlashMessages::ERROR);
+                    self::finishRejectedClaim($claim);
+                    $claimFinalized = true;
+                    return $this->redirect('archive/list');
+                }
+                $mailbox = new \Entities\Mailbox();
+                $mailbox->setUsername($m['username'])->setLocalPart($m['local_part']);
+                if ($m['name'] !== null) {
+                    $mailbox->setName($m['name']);
+                }
+                $mailbox->setPassword($m['password'])   // original hash — password preserved
+                        ->setQuota($m['quota'])
+                        ->setActive($m['active'])
+                        ->setDomain($domain)
+                        ->setCreated(new \DateTime());
+                $domain->increaseMailboxCount();
+                $em->persist($mailbox);
+                $em->flush();   // userdb must see the account before doveadm sync
             }
-        } catch (\Throwable $e) {
-            error_log("ArchiveController::restoreAction fsDelete {$user}: " . $e->getMessage());
+
+            try {
+                $claim->guardArchive($archive);
+            } catch (\ViMbAdmin_Exception $error) {
+                $this->flash($error->getMessage(), FlashMessages::ERROR);
+                self::finishRejectedClaim($claim);
+                $claimFinalized = true;
+                return $this->redirect('archive/list');
+            }
+
+            // 2) Sync the backup back into the live store.
+            try {
+                if ($dest) {
+                    $doveadm = \ViMbAdmin_Doveadm::fromOptions($options);
+                    $claim->remote(fn () => $doveadm->restoreFrom($user, $dest));
+                }
+            } catch (\Throwable $e) {
+                error_log("ArchiveController::restoreAction sync {$user}: " . $e->getMessage());
+                $this->flash(sprintf('Mailbox %s was recreated, but restoring its mail failed: %s', $user, $e->getMessage()), FlashMessages::ERROR);
+                self::finishRejectedClaim($claim);
+                $claimFinalized = true;
+                return $this->redirect('archive/list');
+            }
+
+            // 3) Remove the backup files (a leftover backup dir is non-fatal).
+            try {
+                if ($dest) {
+                    $doveadm = \ViMbAdmin_Doveadm::fromOptions($options);
+                    $claim->remote(fn () => $doveadm->fsDelete($dest));
+                }
+            } catch (\Throwable $e) {
+                error_log("ArchiveController::restoreAction fsDelete {$user}: " . $e->getMessage());
+            }
+
+            try {
+                $claim->assertReady();
+            } catch (\RuntimeException $error) {
+                $this->flash($error->getMessage(), FlashMessages::ERROR);
+                self::finishRejectedClaim($claim);
+                $claimFinalized = true;
+                return $this->redirect('archive/list');
+            }
+
+            $em->remove($archive);
+            $em->flush();
+
+            // 4) Queue a background REPAIR (force-resync + index + quota recalc) so the
+            //    restored account is fully consistent. Release the restore's
+            //    exact claim before publishing work that may run immediately.
+            $claim->finish();
+            $claimFinalized = true;
+            $repairQueued = false;
+            try {
+                if (\ViMbAdmin_MailboxQueue::enqueue($em, $mailbox, \Entities\MailboxTask::TYPE_REPAIR, $admin)) {
+                    $em->flush();
+                    $repairQueued = true;
+                }
+            } catch (\Throwable $e) {
+                error_log("ArchiveController::restoreAction enqueue repair {$user}: " . $e->getMessage());
+            }
+
+            (new \ViMbAdmin_Service_Archive($em))->logRestore($admin, $user, $repairQueued);
+
+            $this->flash(sprintf(
+                'Archive for %s restored into the live mailbox.%s',
+                $user,
+                $repairQueued ? ' A repair/optimize was queued and will run in the background.' : ''
+            ));
+            return $this->redirect('archive/list');
+        } catch (\Throwable $error) {
+            $claim->retainOnFailure($error);
+            throw $error;
+        } finally {
+            if (!$claimFinalized) {
+                $claim->finish();
+            }
         }
 
-        $em->remove($archive);
-        $em->flush();
-
-        // 4) Queue a background REPAIR (force-resync + index + quota recalc) so the
-        //    restored account is fully consistent. Non-blocking.
-        $repairQueued = false;
-        try {
-            if (\ViMbAdmin_MailboxQueue::enqueue($em, $mailbox, \Entities\MailboxTask::TYPE_REPAIR, $admin)) {
-                $em->flush();
-                $repairQueued = true;
-            }
-        } catch (\Throwable $e) {
-            error_log("ArchiveController::restoreAction enqueue repair {$user}: " . $e->getMessage());
-        }
-
-        (new \ViMbAdmin_Service_Archive($em))->logRestore($admin, $user, $repairQueued);
-
-        $this->flash(sprintf(
-            'Archive for %s restored into the live mailbox.%s',
-            $user,
-            $repairQueued ? ' A repair/optimize was queued and will run in the background.' : ''
-        ));
-        return $this->redirect('archive/list');
     }
 
     protected function em(): EntityManagerInterface

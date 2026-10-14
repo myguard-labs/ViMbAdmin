@@ -263,17 +263,21 @@ function archiveIdentityEntityManager(array $repositories): EntityManager
     }
     $repositoryFactory = new DefaultRepositoryFactory();
     $configuration->setRepositoryFactory($repositoryFactory);
-    $connection = DriverManager::getConnection([
-        'driver' => 'pdo_mysql',
-        'host' => '127.0.0.1',
-        'port' => 1,
-        'dbname' => 'unreachable',
-        'user' => 'unreachable',
-        'password' => 'unreachable',
-        'connectTimeout' => 1,
-        'serverVersion' => '8.0',
-    ], $configuration);
+    $fixturePath = tempnam(sys_get_temp_dir(), 'maintenance-unit-claims-');
+    if ($fixturePath === false) {
+        throw new RuntimeException('Cannot create isolated claim fixture');
+    }
+    register_shutdown_function(static fn (): bool => unlink($fixturePath));
+    $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $fixturePath], $configuration);
+    $connection->executeStatement('CREATE TABLE resource_claim (resource_key VARCHAR(64) PRIMARY KEY, owner_token VARCHAR(64), username VARCHAR(255), phase VARCHAR(16), created_at DATETIME)');
+    $connection->executeStatement("CREATE TABLE archive (id INTEGER PRIMARY KEY,archive_generation VARCHAR(64),archive_version BIGINT)");
     $entityManager = new EntityManager($connection, $configuration);
+    $entityManager->getEventManager()->addEventListener(['onFlush'], new class () {
+        public function onFlush(\Doctrine\ORM\Event\OnFlushEventArgs $event): void
+        {
+            throw new RuntimeException('Identity fixture stops at its persistence boundary');
+        }
+    });
 
     $repositoryList = [];
     foreach ($repositories as $entityName => $repository) {
@@ -289,6 +293,7 @@ function archiveIdentityEntityManager(array $repositories): EntityManager
 function archiveIdentityManage(EntityManager $entityManager, \Entities\Archive $archive, int $id): void
 {
     (new ReflectionProperty($archive, 'id'))->setValue($archive, $id);
+    $entityManager->getConnection()->insert('archive', ['id' => $id,'archive_generation' => $archive->getArchiveGeneration(),'archive_version' => $archive->getArchiveVersion()]);
     $entityManager->getUnitOfWork()->registerManaged($archive, ['id' => $id], []);
 }
 

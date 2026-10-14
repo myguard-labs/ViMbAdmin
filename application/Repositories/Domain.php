@@ -15,6 +15,15 @@ use ViMbAdmin\Kernel\DataTable\DataTableQuery;
  */
 class Domain extends EntityRepository
 {
+    private ?int $purgingDomain = null;
+
+    private function assertPurging(\Entities\Domain $domain): void
+    {
+        if ($this->purgingDomain !== $domain->requiredId() || !$this->getEntityManager()->getConnection()->isTransactionActive()) {
+            throw new \LogicException('Domain recipient destruction requires its current fenced purge transaction.');
+        }
+    }
+
     /** @return array<string,int|string> */
     private static function requiredDomainUsageByDomain(mixed $rows): array
     {
@@ -328,13 +337,84 @@ class Domain extends EntityRepository
      */
     public function purge($domain)
     {
-        $this->purgeMailboxes($domain);
-        $this->purgeAliases($domain);
-        $this->purgeLogs($domain);
-        $this->purgeDomainAdmins($domain);
+        $em = $this->getEntityManager();
+        $connection = $em->getConnection();
+        if ($connection->isTransactionActive()) {
+            throw new \LogicException('Domain purge must acquire resource claims before the caller transaction.');
+        }
+        $claims = [];
+        $operationError = null;
+        try {
+            // Durable claims precede the primary read view. Under MariaDB
+            // snapshot isolation a later independent insert cannot be released
+            // from an older primary view, even with a locking current read.
+            $users = $this->purgeResourceUsers($domain);
+            foreach ($users as $username) {
+                $claim = \ViMbAdmin_ResourceClaim::acquire($connection, $username);
+                $claims[] = $claim;
+                $claim->close(); // Durable tokens do not consume N DB sessions.
+            }
+            \ViMbAdmin_Recipients::atomic($em, function () use ($em, $connection, $domain, $users, $claims): void {
+                // Claims -> current Domain generation -> child rows. Its FK
+                // lock stabilizes the current set; additions before this lock
+                // reject rather than deleting an unclaimed resource.
+                $version = $connection->fetchOne('SELECT capacity_version FROM domain WHERE id = ? FOR UPDATE', [$domain->requiredId()]);
+                if (($version !== $domain->getCapacityVersion() && $version !== (string) $domain->getCapacityVersion())
+                    || $this->purgeResourceUsers($domain) !== $users) {
+                    throw \Doctrine\ORM\OptimisticLockException::lockFailed($domain);
+                }
+                $this->purgingDomain = $domain->requiredId();
+                $this->purgeMailboxes($domain);
+                $this->purgeAliases($domain);
+                $this->purgeLogs($domain);
+                $this->purgeDomainAdmins($domain);
+                $em->remove($domain);
+                $em->flush();
+                foreach ($claims as $claim) {
+                    $claim->releaseInTransaction($connection);
+                }
+            });
+        } catch (\Throwable $error) {
+            $operationError = $error;
+            throw $error;
+        } finally {
+            $this->purgingDomain = null;
+            $cleanupError = null;
+            foreach ($claims as $claim) {
+                try {
+                    $claim->finish();
+                } catch (\Throwable $error) {
+                    $cleanupError ??= $error;
+                }
+            }
+            if ($cleanupError !== null) {
+                if ($operationError === null) {
+                    // Successful releases leave only DBAL's local close; the
+                    // configured PDO driver cannot fail this cleanup-only path.
+                    throw $cleanupError;
+                }
+                error_log('Domain purge resource cleanup failed: ' . $cleanupError->getMessage());
+            }
+        }
+    }
 
-        $this->getEntityManager()->remove($domain);
-        $this->getEntityManager()->flush();
+    /** @return list<string> */
+    private function purgeResourceUsers(\Entities\Domain $domain): array
+    {
+        $users = [];
+        foreach ($this->getEntityManager()->getConnection()->fetchFirstColumn(
+            'SELECT username FROM mailbox WHERE Domain_id = ? UNION SELECT username FROM archive WHERE Domain_id = ?',
+            [$domain->requiredId(), $domain->requiredId()]
+        ) as $username) {
+            if (!is_string($username)) {
+                // Both selected columns are NOT NULL VARCHAR in the mapped
+                // schema; configured PDO_MYSQL returns them as strings.
+                throw new \UnexpectedValueException('Domain resource username must be a string.');
+            }
+            $users[\ViMbAdmin_Identity::canonical($username)] = true;
+        }
+        ksort($users);
+        return array_keys($users);
     }
 
     /**
@@ -345,6 +425,7 @@ class Domain extends EntityRepository
      */
     public function purgeMailboxes($domain)
     {
+        $this->assertPurging($domain);
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::affectedRows($this->getEntityManager()->createQuery(
             "DELETE FROM \\Entities\\Mailbox m WHERE m.Domain = ?1"
         )
@@ -360,6 +441,7 @@ class Domain extends EntityRepository
      */
     public function purgeAliases($domain)
     {
+        $this->assertPurging($domain);
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::affectedRows($this->getEntityManager()->createQuery(
             "DELETE FROM \\Entities\\Alias m WHERE m.Domain = ?1"
         )

@@ -230,40 +230,43 @@ class ViMbAdmin_Service_Alias
         ?callable $preFlush = null,
         ?callable $postFlush = null
     ): bool {
-        $identity = $this->requiredAliasIdentity($alias);
-        $domain = $this->requiredAliasDomain($alias);
+        return ViMbAdmin_Recipients::atomic($this->em, function () use ($alias, $actor, $preRemove, $preFlush, $postFlush): bool {
+            $identity = $this->requiredAliasIdentity($alias);
+            $domain = $this->requiredAliasDomain($alias);
+            ViMbAdmin_Recipients::guardDelete($this->em, $alias);
 
-        foreach ($alias->getPreferences() as $pref) {
-            $this->em->remove($pref);
-        }
+            foreach ($alias->getPreferences() as $pref) {
+                $this->em->remove($pref);
+            }
 
-        if ($preRemove !== null && $preRemove() === false) {
-            return false;
-        }
+            if ($preRemove !== null && $preRemove() === false) {
+                return false;
+            }
 
-        $this->em->remove($alias);
+            $this->em->remove($alias);
 
-        if ($identity['address'] != $identity['goto']) {
-            $domain->setAliasCount($domain->getAliasCount() - 1);
-        }
+            if ($identity['address'] != $identity['goto']) {
+                $domain->setAliasCount($domain->getAliasCount() - 1);
+            }
 
-        $this->log(
-            $actor,
-            \Entities\Log::ACTION_ALIAS_DELETE,
-            "{$actor->getFormattedName()} removed alias {$identity['address']}"
-        );
+            $this->log(
+                $actor,
+                \Entities\Log::ACTION_ALIAS_DELETE,
+                "{$actor->getFormattedName()} removed alias {$identity['address']}"
+            );
 
-        if ($preFlush !== null) {
-            $preFlush();
-        }
+            if ($preFlush !== null) {
+                $preFlush();
+            }
 
-        $this->em->flush();
+            $this->em->flush();
 
-        if ($postFlush !== null) {
-            $postFlush();
-        }
+            if ($postFlush !== null) {
+                $postFlush();
+            }
 
-        return true;
+            return true;
+        });
     }
 
     /**

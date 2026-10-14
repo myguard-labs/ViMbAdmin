@@ -26,11 +26,24 @@ spl_autoload_register(static function (string $class): void {
 
 require __DIR__ . '/../library/ViMbAdmin/Service/Alias.php';
 
-final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
+final class FakeObjectManager extends \Doctrine\ORM\Decorator\EntityManagerDecorator
 {
     /** @var object[] */ public array $persisted = [];
     /** @var object[] */ public array $removed = [];
     public int $flushes = 0;
+
+    public function __construct()
+    {
+        $path = tempnam(sys_get_temp_dir(), 'service-orm-claim-');
+        if ($path === false) {
+            throw new RuntimeException('Cannot create isolated service claim fixture');
+        }
+        register_shutdown_function(static fn (): bool => unlink($path));
+        $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([], true);
+        $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_sqlite','path' => $path], $configuration);
+        $connection->executeStatement('CREATE TABLE resource_claim (resource_key VARCHAR(64) PRIMARY KEY, owner_token VARCHAR(64), username VARCHAR(255), phase VARCHAR(16), created_at DATETIME)');
+        parent::__construct(new \Doctrine\ORM\EntityManager($connection, $configuration));
+    }
 
     public function persist(object $object): void
     {
@@ -44,7 +57,7 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     {
         $this->flushes++;
     }
-    public function find(string $className, mixed $id): ?object
+    public function find(string $className, mixed $id, \Doctrine\DBAL\LockMode|int|null $lockMode = null, ?int $lockVersion = null): ?object
     {
         return null;
     }
@@ -54,21 +67,12 @@ final class FakeObjectManager implements \Doctrine\Persistence\ObjectManager
     public function detach(object $object): void
     {
     }
-    public function refresh(object $object): void
+    public function refresh(object $object, \Doctrine\DBAL\LockMode|int|null $lockMode = null): void
     {
     }
-    public function getRepository(string $className): \Doctrine\Persistence\ObjectRepository
-    {
-        throw new \RuntimeException('not used');
-    }
-    public function getClassMetadata(string $className): \Doctrine\Persistence\Mapping\ClassMetadata
-    {
-        throw new \RuntimeException('not used');
-    }
-    public function getMetadataFactory(): \Doctrine\Persistence\Mapping\ClassMetadataFactory
-    {
-        throw new \RuntimeException('not used');
-    }
+
+
+
     public function initializeObject(object $obj): void
     {
     }

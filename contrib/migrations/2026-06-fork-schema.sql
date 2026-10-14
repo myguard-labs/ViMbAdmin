@@ -390,3 +390,46 @@ SET @ddl := IF( @have_mailbox_task = 0,
         'ALTER TABLE `mailbox_task` ADD `task_version` BIGINT NOT NULL DEFAULT 1',
         'DO 0 /* mailbox_task.task_version already present */' ) );
 PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
+
+-- 10) Shared durable mail-store ownership and aggregate generations.
+-- Stop all old workers and mutation clients before deploying this schema/code.
+CREATE TABLE IF NOT EXISTS `resource_claim` (
+    `resource_key` VARCHAR(64) NOT NULL,
+    `owner_token` VARCHAR(64) NOT NULL,
+    `username` VARCHAR(255) NOT NULL,
+    `phase` VARCHAR(16) NOT NULL,
+    `created_at` DATETIME NOT NULL,
+    PRIMARY KEY (`resource_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+SET @have_archive_generation := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'archive'
+      AND COLUMN_NAME = 'archive_generation'
+);
+SET @ddl := IF(@have_archive_generation = 0,
+    'ALTER TABLE `archive` ADD `archive_generation` VARCHAR(64) NOT NULL DEFAULT ''''',
+    'DO 0 /* archive_generation already present */');
+PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
+
+SET @have_archive_version := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'archive'
+      AND COLUMN_NAME = 'archive_version'
+);
+SET @ddl := IF(@have_archive_version = 0,
+    'ALTER TABLE `archive` ADD `archive_version` BIGINT NOT NULL DEFAULT 1',
+    'DO 0 /* archive_version already present */');
+PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;
+UPDATE `archive` SET `archive_generation` = SHA2(UUID(), 256),
+    `archive_version` = `archive_version` + 1 WHERE `archive_generation` = '';
+
+SET @have_alias_version := (
+    SELECT COUNT(*) FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'alias'
+      AND COLUMN_NAME = 'alias_version'
+);
+SET @ddl := IF(@have_alias_version = 0,
+    'ALTER TABLE `alias` ADD `alias_version` BIGINT NOT NULL DEFAULT 1',
+    'DO 0 /* alias_version already present */');
+PREPARE _m FROM @ddl; EXECUTE _m; DEALLOCATE PREPARE _m;

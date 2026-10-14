@@ -155,7 +155,7 @@ final class MaintenanceController extends AbstractController
                 'UPDATE mailbox m JOIN domain d ON d.id = m.Domain_id SET m.active = 0 WHERE d.active = 0 AND m.active = 1'
             );
             $al = $conn->executeStatement(
-                'UPDATE alias a JOIN domain d ON d.id = a.Domain_id SET a.active = 0 WHERE d.active = 0 AND a.active = 1'
+                'UPDATE alias a JOIN domain d ON d.id = a.Domain_id SET a.active = 0, a.alias_version = a.alias_version + 1 WHERE d.active = 0 AND a.active = 1'
             );
             $conn->commit();
         } catch (\Throwable $e) {
@@ -305,15 +305,27 @@ final class MaintenanceController extends AbstractController
                 error_log('MaintenanceController::prune: ' . $e->getMessage());
                 continue;
             }
-            $dest = $archive->getMaildirFile();
+            $claim = null;
             try {
+                $claim = \ViMbAdmin_ResourceClaim::acquire($this->em()->getConnection(), $username);
+                $claim->guardArchive($archive);
+                $dest = $archive->getMaildirFile();
                 if ($dest) {
-                    $doveadm->fsDelete($dest);
+                    $claim->remote(fn () => $doveadm->fsDelete($dest));
                 }
                 $this->em()->remove($archive);
+                $this->em()->flush();
+                $claim->finish();
                 $pruned++;
             } catch (\Throwable $e) {
+                $claim?->retainOnFailure($e);
                 error_log("MaintenanceController::prune {$username}: " . $e->getMessage());
+            } finally {
+                try {
+                    $claim?->finish();
+                } catch (\Throwable $cleanupError) {
+                    error_log("MaintenanceController::prune cleanup {$username}: " . $cleanupError->getMessage());
+                }
             }
         }
         $this->em()->flush();

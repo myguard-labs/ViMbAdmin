@@ -6,6 +6,14 @@
  */
 
 require __DIR__ . '/../vendor/autoload.php';
+spl_autoload_register(static function (string $class): void {
+    if (str_starts_with($class, 'Entities\\')) {
+        $file = __DIR__.'/../application/Entities/'.substr($class, 9).'.php';
+        if (is_file($file)) {
+            require_once $file;
+        }
+    }
+});
 require __DIR__ . '/../application/Entities/QueueRunner.php';
 require __DIR__ . '/../application/Entities/MailboxTask.php';
 require __DIR__ . '/../application/Repositories/MailboxTask.php';
@@ -14,66 +22,7 @@ require __DIR__ . '/../library/ViMbAdmin/QueueRunner.php';
 require __DIR__ . '/../library/ViMbAdmin/Doveadm.php';
 require __DIR__ . '/../library/ViMbAdmin/Service/QueueRunner.php';
 
-final class QueueRunnerLeaseQuery
-{
-    /** @var array<string,mixed> */
-    private array $parameters = [];
-
-    public function __construct(
-        private QueueRunnerLeaseEntityManager $em,
-        private string $dql
-    ) {
-    }
-
-    public function setParameter(string $name, mixed $value): self
-    {
-        $this->parameters[$name] = $value;
-        return $this;
-    }
-
-    public function getSingleScalarResult(): int
-    {
-        return count($this->em->leases);
-    }
-
-    public function execute(): int
-    {
-        if (str_starts_with($this->dql, 'DELETE')) {
-            $cutoff = $this->parameters['cutoff'] ?? null;
-            if (!$cutoff instanceof DateTime) {
-                throw new RuntimeException('stale reaper omitted its cutoff');
-            }
-            $reaped = 0;
-            foreach ($this->em->leases as $id => $lease) {
-                $heartbeat = $lease->getHeartbeatAt();
-                if ($heartbeat !== null && $heartbeat < $cutoff) {
-                    unset($this->em->leases[$id]);
-                    $reaped++;
-                }
-            }
-            return $reaped;
-        }
-
-        if (str_starts_with($this->dql, 'UPDATE')) {
-            $id = $this->parameters['id'] ?? null;
-            $slot = $this->parameters['slot'] ?? null;
-            $heartbeat = $this->parameters['heartbeat'] ?? null;
-            if (!is_int($id) || !is_int($slot) || !$heartbeat instanceof DateTime) {
-                throw new RuntimeException('heartbeat query parameters malformed');
-            }
-            $lease = $this->em->leases[$id] ?? null;
-            if (!$lease instanceof \Entities\QueueRunner || $lease->getSlot() !== $slot) {
-                return 0;
-            }
-            $lease->setHeartbeatAt(clone $heartbeat);
-            return 1;
-        }
-
-        throw new RuntimeException('unexpected lease query: ' . $this->dql);
-    }
-}
-
-final class QueueRunnerLeaseConnection
+final class QueueRunnerLeaseConnection extends \Doctrine\DBAL\Connection
 {
     public ?int $contendOnSlot = null;
     public mixed $nextAcquireLockResult = 1;
@@ -83,18 +32,36 @@ final class QueueRunnerLeaseConnection
     private bool $acquireLockHeld = false;
     private int $lastId = 0;
 
-    public function __construct(private QueueRunnerLeaseEntityManager $em)
+    private ?QueueRunnerLeaseEntityManager $em = null;
+    public function initialize(QueueRunnerLeaseEntityManager $em): void
     {
+        $this->em = $em;
+        parent::executeStatement('CREATE TABLE resource_claim (resource_key VARCHAR(64) PRIMARY KEY,owner_token VARCHAR(64),username VARCHAR(255),phase VARCHAR(16),created_at DATETIME)');
+        parent::executeStatement('CREATE TABLE queue_runner (id INTEGER PRIMARY KEY,slot INTEGER UNIQUE,host TEXT,pid INTEGER,started_at DATETIME,heartbeat_at DATETIME)');
+    }
+    public function addPersistedLease(\Entities\QueueRunner $lease): void
+    {
+        parent::insert('queue_runner', ['id' => $lease->getId(),'slot' => $lease->getSlot(),'host' => $lease->getHost(),'pid' => $lease->getPid(),'started_at' => $lease->getStartedAt()?->format('Y-m-d H:i:s'),'heartbeat_at' => $lease->getHeartbeatAt()?->format('Y-m-d H:i:s')]);
+    }
+    public function fetchAssociative(string $query, array $params = [], array $types = []): array|false
+    {
+        // SQLite lacks FOR UPDATE; actual MariaDB row-lock schedules live in ci/.
+        return parent::fetchAssociative(str_replace(' FOR UPDATE', '', $query), $params, $types);
     }
 
     /** @param array<string,mixed> $data */
-    public function insert(string $table, array $data): int
+    public function insert(string $table, array $data, array $types = []): int|string
     {
+        if ($table !== 'queue_runner') {
+            return parent::insert($table, $data, $types);
+        }
+        if ($this->em === null) {
+            throw new RuntimeException('lease fixture manager missing');
+        }
         if (!$this->acquireLockHeld) {
             throw new RuntimeException('lease insert happened outside the database mutex');
         }
-        if ($table !== 'queue_runner'
-            || !is_int($data['slot'] ?? null)
+        if (!is_int($data['slot'] ?? null)
             || !is_string($data['host'] ?? null)
             || !is_int($data['pid'] ?? null)
             || !is_string($data['started_at'] ?? null)
@@ -130,7 +97,7 @@ final class QueueRunnerLeaseConnection
     }
 
     /** @param list<mixed> $parameters */
-    public function fetchOne(string $sql, array $parameters = []): mixed
+    public function fetchOne(string $sql, array $parameters = [], array $types = []): mixed
     {
         if ($sql === 'SELECT 1' && $parameters === []) {
             return 1;
@@ -168,13 +135,16 @@ final class QueueRunnerLeaseConnection
             return 1;
         }
 
-        throw new RuntimeException('unexpected scalar query: ' . $sql);
+        return parent::fetchOne($sql, $parameters, $types);
     }
 
     /** @param list<mixed> $parameters */
-    public function executeStatement(string $sql, array $parameters = []): int
+    public function executeStatement(string $sql, array $parameters = [], array $types = []): int|string
     {
         if ($sql === 'DELETE FROM queue_runner WHERE id = ? AND slot = ?') {
+            if ($this->em === null) {
+                throw new RuntimeException('lease fixture manager missing');
+            }
             $id = $parameters[0] ?? null;
             $slot = $parameters[1] ?? null;
             $lease = is_int($id) ? ($this->em->leases[$id] ?? null) : null;
@@ -183,7 +153,23 @@ final class QueueRunnerLeaseConnection
             }
             unset($this->em->leases[$id]);
         }
-        return 1;
+        $affected = parent::executeStatement($sql, $parameters, $types);
+        if ($this->em !== null && str_starts_with($sql, 'DELETE FROM queue_runner')) {
+            foreach ($this->em->leases as $id => $lease) {
+                if (parent::fetchOne('SELECT COUNT(*) FROM queue_runner WHERE id=?', [$id]) === 0) {
+                    unset($this->em->leases[$id]);
+                }
+            }
+        }
+        if ($this->em !== null && str_starts_with($sql, 'UPDATE queue_runner')) {
+            foreach ($this->em->leases as $id => $lease) {
+                $heartbeat = parent::fetchOne('SELECT heartbeat_at FROM queue_runner WHERE id=?', [$id]);
+                if (is_string($heartbeat)) {
+                    $lease->setHeartbeatAt(new DateTime($heartbeat));
+                }
+            }
+        }
+        return $affected;
     }
 }
 
@@ -212,17 +198,26 @@ final class QueueRunnerLeaseTaskRepository extends \Repositories\MailboxTask
         \Entities\QueueRunner $runner,
         callable $publish
     ): bool {
-        $publish();
         if (!$this->fakeEntityManager instanceof QueueRunnerLeaseEntityManager) {
             throw new RuntimeException('fake entity manager missing');
         }
-        $this->fakeEntityManager->flush();
+        $connection = $this->fakeEntityManager->getConnection();
+        $connection->beginTransaction();
+        try {
+            $publish();
+            $this->fakeEntityManager->flush();
+            $connection->commit();
+        } catch (Throwable $error) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            } throw $error;
+        }
         $this->terminalFlushes++;
         return true;
     }
 }
 
-final class QueueRunnerLeaseEntityManager
+final class QueueRunnerLeaseEntityManager extends \Doctrine\ORM\Decorator\EntityManagerDecorator
 {
     /** @var array<int,\Entities\QueueRunner> */
     public array $leases = [];
@@ -234,15 +229,41 @@ final class QueueRunnerLeaseEntityManager
 
     public function __construct()
     {
-        $this->connection = new QueueRunnerLeaseConnection($this);
+        $path = tempnam(sys_get_temp_dir(), 'queue-lease-');
+        if ($path === false) {
+            throw new RuntimeException('lease SQLite fixture failed');
+        }
+        register_shutdown_function(static function () use ($path): void {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        });
+        $connection = \Doctrine\DBAL\DriverManager::getConnection(['driver' => 'pdo_sqlite','path' => $path,'wrapperClass' => QueueRunnerLeaseConnection::class]);
+        if (!$connection instanceof QueueRunnerLeaseConnection) {
+            throw new RuntimeException('lease connection mismatch');
+        }
+        $this->connection = $connection;
+        $connection->initialize($this);
+        $config = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([__DIR__.'/../application/Entities'], true);
+        if (PHP_VERSION_ID >= 80400) {
+            $config->enableNativeLazyObjects(true);
+        } else {
+            $config->setProxyDir(sys_get_temp_dir());
+            $config->setProxyNamespace('LeaseFixtureProxies');
+        }
+        $factory = new \Doctrine\ORM\Repository\DefaultRepositoryFactory();
+        $config->setRepositoryFactory($factory);
+        $manager = new \Doctrine\ORM\EntityManager($connection, $config);
+        parent::__construct($manager);
         $this->taskRepository = new QueueRunnerLeaseTaskRepository();
         $this->taskRepository->fakeEntityManager = $this;
+        (new ReflectionProperty($factory, 'repositoryList'))->setValue($factory, [\Entities\MailboxTask::class.spl_object_id($manager) => $this->taskRepository]);
     }
 
-    public function createQuery(string $dql): QueueRunnerLeaseQuery
+    public function createQuery(string $dql = ''): \Doctrine\ORM\Query
     {
         $this->queries++;
-        return new QueueRunnerLeaseQuery($this, $dql);
+        return parent::createQuery($dql);
     }
 
     public function getConnection(): QueueRunnerLeaseConnection
@@ -250,17 +271,13 @@ final class QueueRunnerLeaseEntityManager
         return $this->connection;
     }
 
-    public function getRepository(string $class): object
+    public function find(string $class, mixed $id, \Doctrine\DBAL\LockMode|int|null $lockMode = \Doctrine\DBAL\LockMode::NONE, ?int $lockVersion = null): ?object
     {
-        if ($class !== '\Entities\MailboxTask') {
-            throw new RuntimeException('unexpected repository request');
+        if (!is_int($id)) {
+            throw new RuntimeException('lease fixture id must be integer');
         }
-        return $this->taskRepository;
-    }
-
-    public function find(string $class, int $id): ?object
-    {
-        return $class === '\Entities\QueueRunner' ? ($this->leases[$id] ?? null) : null;
+        $lease = $this->leases[$id] ?? null;
+        return $lease instanceof $class ? $lease : null;
     }
 
     public function remove(object $lease): void
@@ -296,6 +313,7 @@ final class QueueRunnerLeaseEntityManager
         $property = new ReflectionProperty($lease, 'id');
         $property->setValue($lease, $this->nextId);
         $this->leases[$this->nextId++] = $lease;
+        $this->connection->addPersistedLease($lease);
         return $lease;
     }
 }

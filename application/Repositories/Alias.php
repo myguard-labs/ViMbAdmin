@@ -64,7 +64,7 @@ class Alias extends EntityRepository
      * @param bool              $ima     If set to true, then it include and where address equals to goto.
      * @return \Entities\Alias[]
      */
-    public function loadForMailbox($mailbox, $admin, $ima = false)
+    public function loadForMailbox($mailbox, $admin, $ima = false, bool $lock = false)
     {
         $username = $mailbox->requiredUsername();
         $qb = $this->getEntityManager()->createQueryBuilder()
@@ -88,8 +88,13 @@ class Alias extends EntityRepository
                 ->setParameter('admin', $admin);
         }
 
+        $query = $qb->orderBy('a.id', 'ASC')->getQuery();
+        if ($lock) {
+            $query->setLockMode(\Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
+            $query->setHint(\Doctrine\ORM\Query::HINT_REFRESH, true);
+        }
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $qb->getQuery()->getResult(),
+            $lock ? \ViMbAdmin_Recipients::currentAliases($this->getEntityManager(), $query) : $query->getResult(),
             \Entities\Alias::class,
             'Alias mailbox query'
         );
@@ -106,7 +111,7 @@ class Alias extends EntityRepository
      * @param \Entities\Admin|null $admin Admin for checking privileges, or null for a trusted system context.
      * @return \Entities\Alias[]
      */
-    public function loadWithMailbox($mailbox, $admin)
+    public function loadWithMailbox($mailbox, $admin, bool $lock = false)
     {
         $username = $mailbox->requiredUsername();
         $qb = $this->getEntityManager()->createQueryBuilder();
@@ -134,8 +139,13 @@ class Alias extends EntityRepository
                 ->setParameter('admin', $admin);
         }
 
+        $query = $qb->orderBy('a.id', 'ASC')->getQuery();
+        if ($lock) {
+            $query->setLockMode(\Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE);
+            $query->setHint(\Doctrine\ORM\Query::HINT_REFRESH, true);
+        }
         return \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $qb->getQuery()->getResult(),
+            $lock ? \ViMbAdmin_Recipients::currentAliases($this->getEntityManager(), $query) : $query->getResult(),
             \Entities\Alias::class,
             'Alias mailbox-membership query'
         );

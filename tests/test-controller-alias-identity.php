@@ -388,10 +388,13 @@ function controllerAliasIdentityEntityManager(array $repositories): EntityManage
         $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
     }
     $configuration->setRepositoryFactory(new ControllerAliasIdentityRepositoryFactory($repositories));
-    $connection = DriverManager::getConnection([
-        'driver' => 'pdo_mysql',
-        'serverVersion' => '8.0',
-    ], $configuration);
+    $fixturePath = tempnam(sys_get_temp_dir(), 'maintenance-unit-claims-');
+    if ($fixturePath === false) {
+        throw new RuntimeException('Cannot create isolated claim fixture');
+    }
+    register_shutdown_function(static fn (): bool => unlink($fixturePath));
+    $connection = DriverManager::getConnection(['driver' => 'pdo_sqlite', 'path' => $fixturePath], $configuration);
+    $connection->executeStatement('CREATE TABLE resource_claim (resource_key VARCHAR(64) PRIMARY KEY, owner_token VARCHAR(64), username VARCHAR(255), phase VARCHAR(16), created_at DATETIME)');
     return new EntityManager($connection, $configuration);
 }
 
@@ -434,6 +437,11 @@ final class ControllerAliasIdentityRecordingEntityManager extends EntityManagerD
     public function remove(object $object): void
     {
         $this->removed[] = $object;
+    }
+    public function refresh(object $object, \Doctrine\DBAL\LockMode|int|null $lockMode = null): void
+    {
+        // This identity double owns unpersisted entities; real SQL locking is
+        // exercised separately by ci/test-maintenance-recipient-ownership.php.
     }
     public function flush(): void
     {

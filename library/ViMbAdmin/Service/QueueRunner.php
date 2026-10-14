@@ -90,6 +90,48 @@ class ViMbAdmin_Service_QueueRunner
         return $value;
     }
 
+    private ?ViMbAdmin_ResourceClaim $resourceClaim = null;
+
+    /** @param callable(?\Throwable):void $operation */
+    private function withTaskResource(\Entities\MailboxTask $task, callable $operation): void
+    {
+        if (!in_array($task->getType(), [\Entities\MailboxTask::TYPE_ARCHIVE,
+            \Entities\MailboxTask::TYPE_DELETE, \Entities\MailboxTask::TYPE_PRUNE,
+            \Entities\MailboxTask::TYPE_BACKUP_ORPHAN, \Entities\MailboxTask::TYPE_REPAIR,
+            \Entities\MailboxTask::TYPE_OPTIMIZE, \Entities\MailboxTask::TYPE_QUOTA_RECALC], true)) {
+            $operation(null);
+            return;
+        }
+        // Acquisition failures have made no remote change and use the normal
+        // task error mapping. Errors after acquisition must never replay work.
+        try {
+            $claim = ViMbAdmin_ResourceClaim::acquire($this->em->getConnection(), $task->requiredUsername());
+        } catch (\Throwable $error) {
+            $operation($error);
+            return;
+        }
+        $this->resourceClaim = $claim;
+        try {
+            $operation(null);
+        } finally {
+            $this->resourceClaim = null;
+            $claim->close();
+        }
+    }
+
+    /**
+     * @template T
+     * @param callable():T $operation
+     * @return T
+     */
+    private function remoteMutation(callable $operation): mixed
+    {
+        if ($this->resourceClaim === null) {
+            throw new \LogicException('Mailbox backend mutation requires its resource claim.');
+        }
+        return $this->resourceClaim->remote($operation);
+    }
+
     /** @return array{bool,mixed} */
     private function option(string ...$path): array
     {
@@ -251,38 +293,44 @@ class ViMbAdmin_Service_QueueRunner
                     continue;
                 }
 
-                $error = null;
-                try {
-                    $doveadm = $this->doveadmForLease($lease);
-                    $this->execute($task, $doveadm);
-                } catch (\Throwable $e) {
-                    $error = $e;
-                }
-                // Long doveadm calls can outlive the database wait_timeout.
-                // Recover before publishing either outcome; otherwise a
-                // failed command can leave its task stranded RUNNING too.
-                $this->ensureDatabaseConnection();
-                if ($error !== null) {
-                    error_log("QueueRunner task {$task->getId()} ({$task->getType()} {$task->getUsername()}): " . $error->getMessage());
-                }
+                $this->withTaskResource($task, function (?\Throwable $claimError) use ($em, $repo, $task, $lease, $verbose, &$processed): void {
+                    $error = $claimError;
+                    try {
+                        $doveadm = $this->doveadmForLease($lease);
+                        if ($error === null) {
+                            $this->execute($task, $doveadm);
+                            $this->resourceClaim?->assertReady();
+                        }
+                    } catch (\Throwable $e) {
+                        $error = $e;
+                    }
+                    // Long doveadm calls can outlive the database wait_timeout.
+                    // Recover before publishing either outcome; otherwise a
+                    // failed command can leave its task stranded RUNNING too.
+                    $this->ensureDatabaseConnection();
+                    if ($error !== null) {
+                        error_log("QueueRunner task {$task->getId()} ({$task->getType()} {$task->getUsername()}): " . $error->getMessage());
+                    }
 
-                ($this->leaseProgress($lease))();
-                $published = $repo->publishIfOwned($task, $lease, function () use ($task, $error): void {
-                    $task->setStatus($error === null ? \Entities\MailboxTask::STATUS_DONE : \Entities\MailboxTask::STATUS_FAILED);
-                    $task->setRunner(null);
-                    $task->appendLog($error === null ? 'done' : 'FAILED: ' . $error->getMessage());
-                    $task->setFinishedAt(new \DateTime());
+                    ($this->leaseProgress($lease))();
+                    $published = $repo->publishIfOwned($task, $lease, function () use ($task, $error): void {
+                        $this->resourceClaim?->releaseInTransaction($this->em->getConnection());
+                        $task->setStatus($error === null ? \Entities\MailboxTask::STATUS_DONE : \Entities\MailboxTask::STATUS_FAILED);
+                        $task->setRunner(null);
+                        $task->appendLog($error === null ? 'done' : 'FAILED: ' . $error->getMessage());
+                        $task->setFinishedAt(new \DateTime());
+                    });
+                    if (!$published) {
+                        $em->clear();
+                        error_log("QueueRunner task ownership lost before terminal publication.");
+                        return;
+                    }
+                    if ($verbose) {
+                        echo " - #{$task->getId()} {$task->getType()} {$task->getUsername()}: {$task->getStatus()}\n";
+                    }
+
+                    $processed++;
                 });
-                if (!$published) {
-                    $em->clear();
-                    error_log("QueueRunner task ownership lost before terminal publication.");
-                    continue;
-                }
-                if ($verbose) {
-                    echo " - #{$task->getId()} {$task->getType()} {$task->getUsername()}: {$task->getStatus()}\n";
-                }
-
-                $processed++;
             }
         });
 
@@ -318,22 +366,28 @@ class ViMbAdmin_Service_QueueRunner
                 return;
             }
 
-            $error = null;
-            try {
-                $this->execute($task, $this->doveadmForLease($lease));
-            } catch (\Throwable $e) {
-                $error = $e;
-            }
-            $this->ensureDatabaseConnection();
-            ($this->leaseProgress($lease))();
-            if ($repo->publishIfOwned($task, $lease, function () use ($complete, $error): void {
-                $complete($error);
-            })) {
-                $result = self::RUN_ONE_COMPLETED;
-            } else {
-                $this->em->clear();
-                $result = self::RUN_ONE_NOT_CLAIMED;
-            }
+            $this->withTaskResource($task, function (?\Throwable $claimError) use ($repo, $task, $lease, $complete, &$result): void {
+                $error = $claimError;
+                try {
+                    if ($error === null) {
+                        $this->execute($task, $this->doveadmForLease($lease));
+                        $this->resourceClaim?->assertReady();
+                    }
+                } catch (\Throwable $e) {
+                    $error = $e;
+                }
+                $this->ensureDatabaseConnection();
+                ($this->leaseProgress($lease))();
+                if ($repo->publishIfOwned($task, $lease, function () use ($complete, $error): void {
+                    $this->resourceClaim?->releaseInTransaction($this->em->getConnection());
+                    $complete($error);
+                })) {
+                    $result = self::RUN_ONE_COMPLETED;
+                } else {
+                    $this->em->clear();
+                    $result = self::RUN_ONE_NOT_CLAIMED;
+                }
+            });
         });
 
         return $acquired ? $result : self::RUN_ONE_BUSY;
@@ -352,18 +406,18 @@ class ViMbAdmin_Service_QueueRunner
             case \Entities\MailboxTask::TYPE_REPAIR:
             case \Entities\MailboxTask::TYPE_OPTIMIZE:
                 $task->appendLog('force-resync');
-                $doveadm->forceResync($user);
+                $this->remoteMutation(fn () => $doveadm->forceResync($user));
                 $task->appendLog('index');
-                $doveadm->index($user);
+                $this->remoteMutation(fn () => $doveadm->index($user));
                 $task->appendLog('purge');
-                $doveadm->purge($user);
+                $this->remoteMutation(fn () => $doveadm->purge($user));
                 $task->appendLog('quota recalc');
-                $doveadm->quotaRecalc($user);
+                $this->remoteMutation(fn () => $doveadm->quotaRecalc($user));
                 break;
 
             case \Entities\MailboxTask::TYPE_QUOTA_RECALC:
                 $task->appendLog('quota recalc');
-                $doveadm->quotaRecalc($user);
+                $this->remoteMutation(fn () => $doveadm->quotaRecalc($user));
                 break;
 
             case \Entities\MailboxTask::TYPE_MEASURE_SIZE:
@@ -389,14 +443,26 @@ class ViMbAdmin_Service_QueueRunner
                     $task->appendLog('prune: archive already gone — nothing to do');
                     break;
                 }
-                if (!$archive->getAutoprune()) {
-                    $task->appendLog('prune: autoprune turned off — skipping');
+                $this->em->refresh($archive);
+                $data = json_decode($task->getData() ?? '', true);
+                $currentCutoff = $this->now()->modify('-' . $this->autopruneDays() . ' days')->getTimestamp();
+                // Refresh loads archived_at from its mapped NOT NULL column;
+                // the defensive null arm cannot occur with the valid DB schema.
+                if (!is_array($data) || !isset($data['archive_id'], $data['archive_generation'], $data['archive_version'], $data['cutoff'])
+                    || $data['archive_id'] !== $archive->getId()
+                    || $data['archive_generation'] !== $archive->getArchiveGeneration()
+                    || $data['archive_version'] !== $archive->getArchiveVersion()
+                    || !is_int($data['cutoff']) || !$archive->getAutoprune()
+                    || $archive->getStatus() !== \Entities\Archive::STATUS_ARCHIVED
+                    || $archive->getArchivedAt() === null
+                    || $archive->getArchivedAt()->getTimestamp() > min($data['cutoff'], $currentCutoff)) {
+                    $task->appendLog('prune: archive generation or eligibility changed — skipping');
                     break;
                 }
                 $dest = $archive->getMaildirFile();
                 if ($dest) {
                     $task->appendLog('prune: fs delete ' . $dest);
-                    $doveadm->fsDelete($dest);
+                    $this->remoteMutation(fn () => $doveadm->fsDelete($dest));
                 }
                 $this->em->remove($archive);
                 ViMbAdmin_Setting::stampNow($this->em, ViMbAdmin_Setting::LAST_PRUNE);
@@ -421,12 +487,12 @@ class ViMbAdmin_Service_QueueRunner
             case \Entities\MailboxTask::TYPE_ARCHIVE:
                 $dest = $this->backupDest($task);
                 $task->appendLog("backup -> {$dest}");
-                $doveadm->backup($user, $dest);
+                $this->remoteMutation(fn () => $doveadm->backup($user, $dest));
                 $this->ensureDatabaseConnection();
                 $task->appendLog('recording archive row');
                 $this->recordArchive($task, $dest, false, $doveadm);
                 $task->appendLog('mailbox delete (empty store, keep account)');
-                $doveadm->mailboxDelete($user);
+                $this->remoteMutation(fn () => $doveadm->mailboxDelete($user));
                 $this->logAudit(
                     $task,
                     \Entities\Log::ACTION_ARCHIVE_REQUEST,
@@ -475,7 +541,7 @@ class ViMbAdmin_Service_QueueRunner
 
         $this->deleteStep($task, 'mailbox-delete', function () use ($task, $doveadm, $user): void {
             $task->appendLog('mailbox delete (empty store)');
-            $doveadm->mailboxDelete($user);
+            $this->remoteMutation(fn () => $doveadm->mailboxDelete($user));
         });
         $this->deleteStep($task, 'maildir-home', function () use ($task, $doveadm, $user): void {
             $this->removeMaildirHome($task, $doveadm, $user);
@@ -526,25 +592,33 @@ class ViMbAdmin_Service_QueueRunner
     /** @param callable():void $operation */
     private function deleteStep(\Entities\MailboxTask $task, string $step, callable $operation): void
     {
-        $progress = $this->deleteProgress($task);
-        if ($progress === null) {
-            throw new \LogicException('Delete progress must be initialized before running a step.');
-        }
-        if (in_array($step, $progress['completed'], true)) {
-            $task->appendLog("skip completed delete step: {$step}");
-            return;
+        $checkpoint = function () use ($task, $step, $operation): void {
+            $progress = $this->deleteProgress($task);
+            if ($progress === null) {
+                throw new \LogicException('Delete progress must be initialized before running a step.');
+            }
+            if (in_array($step, $progress['completed'], true)) {
+                $task->appendLog("skip completed delete step: {$step}");
+                return;
+            }
+
+            $operation();
+            $this->ensureDatabaseConnection();
+            $progress['completed'][] = $step;
+            $this->writeDeleteProgress(
+                $task,
+                $progress['mode'],
+                $progress['destination'],
+                $progress['completed']
+            );
+            $this->em->flush();
+        };
+        if ($step === 'mailbox-row') {
+            ViMbAdmin_Recipients::atomic($this->em, $checkpoint);
+        } else {
+            $checkpoint();
         }
 
-        $operation();
-        $this->ensureDatabaseConnection();
-        $progress['completed'][] = $step;
-        $this->writeDeleteProgress(
-            $task,
-            $progress['mode'],
-            $progress['destination'],
-            $progress['completed']
-        );
-        $this->em->flush();
     }
 
     /**
@@ -567,7 +641,7 @@ class ViMbAdmin_Service_QueueRunner
             }
         }
 
-        $doveadm->backup($user, $dest);
+        $this->remoteMutation(fn () => $doveadm->backup($user, $dest));
     }
 
     /** A missing destination is the normal first-backup case; other errors fail closed. */
@@ -756,7 +830,7 @@ class ViMbAdmin_Service_QueueRunner
         $origSize = null;
         try {
             $doveadm ??= ViMbAdmin_Doveadm::fromOptions($this->options);
-            $doveadm->quotaRecalc($user);
+            $this->remoteMutation(fn () => $doveadm->quotaRecalc($user));
             $bytes = $em->getConnection()->fetchOne('SELECT bytes FROM dovecot_quota WHERE username = ?', [$user]);
             if ($bytes !== false && $bytes !== null) {
                 $origSize = self::nonNegativeInteger($bytes, 'Dovecot quota bytes');
@@ -765,7 +839,7 @@ class ViMbAdmin_Service_QueueRunner
             error_log("QueueRunner::recordArchive quota {$user}: " . $e->getMessage());
         }
 
-        $archive->setStatus(\Entities\Archive::STATUS_ARCHIVED)
+        $archive->renewGeneration()->setStatus(\Entities\Archive::STATUS_ARCHIVED)
                 ->setArchivedAt($now)
                 ->setStatusChangedAt($now)
                 ->setArchivedBy($task->getRequestedBy())
@@ -851,7 +925,7 @@ class ViMbAdmin_Service_QueueRunner
 
         try {
             $task->appendLog('remove empty maildir home ' . $home);
-            $doveadm->fsDelete($home);
+            $this->remoteMutation(fn () => $doveadm->fsDelete($home));
         } catch (\Throwable $e) {
             try {
                 $doveadm->fsListDirs($home);
@@ -889,6 +963,7 @@ class ViMbAdmin_Service_QueueRunner
         } catch (\Exception $e) {
             error_log('vimbadmin: dovecot_quota cleanup failed for ' . $username . ': ' . $e->getMessage());
         }
+
     }
 
     /**
@@ -936,14 +1011,14 @@ class ViMbAdmin_Service_QueueRunner
     {
         $em = $this->em;
 
-        $now = new \DateTimeImmutable();
+        $now = \DateTimeImmutable::createFromMutable($this->now());
         if (!$this->claimAutopruneSweep($now)) {
             return;
         }
 
         try {
             $days   = $this->autopruneDays();
-            $cutoff = (new \DateTime())->modify('-' . $days . ' days');
+            $cutoff = $this->now()->modify('-' . $days . ' days');
             $archiveRepository = $em->getRepository('\\Entities\\Archive');
             if (!$archiveRepository instanceof \Repositories\Archive) {
                 throw new \LogicException('Archive entity must use Repositories\\Archive.');
@@ -970,7 +1045,13 @@ class ViMbAdmin_Service_QueueRunner
                    ->setPriority(-20)
                    ->setCreatedAt(new \DateTime())
                    ->setDomain($archive->getDomain())
-                   ->setData($this->encodeTaskData(['dest' => $archive->getMaildirFile()]));
+                   ->setData($this->encodeTaskData([
+                       'dest' => $archive->getMaildirFile(),
+                       'archive_id' => $archive->getId(),
+                       'archive_generation' => $archive->getArchiveGeneration(),
+                       'archive_version' => $archive->getArchiveVersion(),
+                       'cutoff' => $cutoff->getTimestamp(),
+                   ]));
                 $em->persist($mt);
                 $alreadyQueued[$user] = true;
             }
@@ -1184,13 +1265,13 @@ class ViMbAdmin_Service_QueueRunner
 
             $task->setDomain($domain);
 
-            $doveadm->authCacheFlush();
+            $this->remoteMutation(fn () => $doveadm->authCacheFlush());
 
             $task->appendLog('orphan: repair (force-resync/index/purge)');
             try {
-                $doveadm->forceResync($user);
-                $doveadm->index($user);
-                $doveadm->purge($user);
+                $this->remoteMutation(fn () => $doveadm->forceResync($user));
+                $this->remoteMutation(fn () => $doveadm->index($user));
+                $this->remoteMutation(fn () => $doveadm->purge($user));
             } catch (\Throwable $e) {
                 $task->appendLog('orphan: repair warning: ' . $e->getMessage());
             }
@@ -1198,7 +1279,7 @@ class ViMbAdmin_Service_QueueRunner
             if ($doveadm->maildirHasMail($home)) {
                 $dest = $this->backupDest($task);
                 $task->appendLog("orphan: has mail — backup -> {$dest}");
-                $doveadm->backup($user, $dest);
+                $this->remoteMutation(fn () => $doveadm->backup($user, $dest));
                 $this->ensureDatabaseConnection();
 
                 $task->appendLog('orphan: recording archive row');
@@ -1209,7 +1290,7 @@ class ViMbAdmin_Service_QueueRunner
 
                 $task->appendLog('orphan: empty store + remove maildir home');
                 try {
-                    $doveadm->mailboxDelete($user);
+                    $this->remoteMutation(fn () => $doveadm->mailboxDelete($user));
                 } catch (\Throwable $e) {
                     $task->appendLog('orphan: mailboxDelete warning: ' . $e->getMessage());
                 }
@@ -1269,7 +1350,7 @@ class ViMbAdmin_Service_QueueRunner
                 }
             }
             try {
-                $doveadm->authCacheFlush();
+                $this->remoteMutation(fn () => $doveadm->authCacheFlush());
             } catch (\Throwable $e) {
             }
         }

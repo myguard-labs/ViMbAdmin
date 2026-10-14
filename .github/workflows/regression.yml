@@ -571,3 +571,53 @@ jobs:
           DB_PASS: ci
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-maintenance-task-retry.php
+
+      - name: Mail-store claims survive contention and uncertain completion
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-resource-claims.php
+
+      - name: Delayed prune requires current archive generation and eligibility
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-archive-generation.php
+
+      - name: Recipient writers preserve concurrent aggregate changes
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-recipient-ownership.php
+
+      - name: Purge extraction preserves recipient and count behavior
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-purge-parity.php
+
+      - name: Resource and aggregate schema upgrade remains additive
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-resource-migration.php

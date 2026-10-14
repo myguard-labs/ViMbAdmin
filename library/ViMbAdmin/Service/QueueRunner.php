@@ -31,6 +31,8 @@
 class ViMbAdmin_Service_QueueRunner
 {
     private const ORPHAN_SCAN_MAX = 500;
+    private const ORPHAN_SCAN_MAX_NAME_BYTES = 255;
+    private const ORPHAN_SCAN_MAX_RESPONSE_BYTES = 1048576;
     private const ORPHAN_TEMP_PASSWORD_PREFIX = '{PLAIN}!vimbadmin-orphan-backup-temp-v1:';
     /** Refresh often enough that an active request cannot reach the 30m TTL. */
     public const LEASE_HEARTBEAT_INTERVAL = 60;
@@ -1127,17 +1129,13 @@ class ViMbAdmin_Service_QueueRunner
     private function scanOrphans(ViMbAdmin_Doveadm $doveadm): array
     {
         $root = $this->maildirRoot();
-        $dirs = $doveadm->fsListDirs($root);
-        sort($dirs);
-        if (count($dirs) > self::ORPHAN_SCAN_MAX) {
-            throw new ViMbAdmin_Exception('orphan scan exceeds the bounded candidate limit of ' . self::ORPHAN_SCAN_MAX);
-        }
+        $dirs = $this->orphanCandidateNames($doveadm, $root);
         if ($dirs === []) {
             return [];
         }
 
         $candidateNames = array_map(
-            static fn (string $name): string => ViMbAdmin_Identity::canonical(self::safeMaildirName($name)),
+            static fn (string $name): string => ViMbAdmin_Identity::canonical($name),
             $dirs
         );
         $known = [];
@@ -1163,6 +1161,28 @@ class ViMbAdmin_Service_QueueRunner
             }
         }
         return $orphans;
+    }
+
+    /**
+     * Enumerate, bound, validate and order candidate names before database or
+     * per-maildir work begins.
+     *
+     * @return list<string>
+     */
+    private function orphanCandidateNames(ViMbAdmin_Doveadm $doveadm, string $root): array
+    {
+        $dirs = $doveadm->fsListDirsBounded(
+            $root,
+            self::ORPHAN_SCAN_MAX,
+            self::ORPHAN_SCAN_MAX_NAME_BYTES,
+            self::ORPHAN_SCAN_MAX_RESPONSE_BYTES
+        );
+        foreach ($dirs as &$name) {
+            $name = self::safeMaildirName($name);
+        }
+        unset($name);
+        sort($dirs);
+        return $dirs;
     }
 
     private static function safeMaildirName(mixed $value): string
@@ -1264,95 +1284,128 @@ class ViMbAdmin_Service_QueueRunner
             }
 
             $task->setDomain($domain);
-
-            $this->remoteMutation(fn () => $doveadm->authCacheFlush());
-
-            $task->appendLog('orphan: repair (force-resync/index/purge)');
-            try {
-                $this->remoteMutation(fn () => $doveadm->forceResync($user));
-                $this->remoteMutation(fn () => $doveadm->index($user));
-                $this->remoteMutation(fn () => $doveadm->purge($user));
-            } catch (\Throwable $e) {
-                $task->appendLog('orphan: repair warning: ' . $e->getMessage());
-            }
-
-            if ($doveadm->maildirHasMail($home)) {
-                $dest = $this->backupDest($task);
-                $task->appendLog("orphan: has mail — backup -> {$dest}");
-                $this->remoteMutation(fn () => $doveadm->backup($user, $dest));
-                $this->ensureDatabaseConnection();
-
-                $task->appendLog('orphan: recording archive row');
-                $this->recordArchive($task, $dest, false, $doveadm);
-                // Archive row now references $domain (FK RESTRICT, flushed after
-                // this method) -> a transient domain must NOT be deleted.
-                $keepDomain = true;
-
-                $task->appendLog('orphan: empty store + remove maildir home');
-                try {
-                    $this->remoteMutation(fn () => $doveadm->mailboxDelete($user));
-                } catch (\Throwable $e) {
-                    $task->appendLog('orphan: mailboxDelete warning: ' . $e->getMessage());
-                }
-                $this->removeMaildirHome($task, $doveadm, $user);
-
-                $this->logAudit(
-                    $task,
-                    \Entities\Log::ACTION_ARCHIVE_REQUEST,
-                    "imported ORPHAN maildir for {$user}: backed up + removed (had mail)"
-                );
-            } else {
-                $task->appendLog('orphan: empty skeleton — removing maildir home (no backup)');
-                $this->removeMaildirHome($task, $doveadm, $user);
-
-                $this->logAudit(
-                    $task,
-                    \Entities\Log::ACTION_MAILBOX_PURGE,
-                    "removed empty ORPHAN maildir skeleton for {$user} (no mail)"
-                );
-            }
+            $this->performOrphanBackup($task, $doveadm, $user, $home, $tempDomainId, $keepDomain);
         } finally {
-            if ($tempId !== null) {
-                try {
-                    $removed = $this->deleteOrphanBackupTemp($tempId, $tempPassword);
-                    $task->appendLog($removed
-                        ? 'backup-orphan: temp user row removed'
-                        : 'backup-orphan: temp user row retained (changed concurrently)');
-                } catch (\Throwable $e) {
-                    error_log("backup-orphan temp-row cleanup {$user}: " . $e->getMessage());
-                    $task->appendLog('backup-orphan: temp user row cleanup failed: ' . $e->getMessage());
-                }
-            }
-            // Remove the transient domain (created above) AFTER the temp mailbox
-            // row that FK-references it. Keep it when an archive references it.
-            if ($tempDomainId !== null) {
-                if ($keepDomain) {
-                    $task->appendLog("backup-orphan: transient domain '{$domainPart}' kept (referenced by archive), left inactive");
-                } else {
-                    // Drop the in-memory reference first: the task FK is
-                    // onDelete SET NULL at the DB, but the EM still holds the
-                    // transient Domain entity and would re-write Domain_id on the
-                    // task's later flush (-> FK error against the deleted row).
-                    $task->setDomain(null);
-                    if ($domain instanceof \Entities\Domain) {
-                        try {
-                            $em->detach($domain);
-                        } catch (\Throwable $e) {
-                        }
-                    }
-                    try {
-                        $conn->delete('domain', ['id' => $tempDomainId]);
-                        $task->appendLog('backup-orphan: transient domain row removed');
-                    } catch (\Throwable $e) {
-                        error_log("backup-orphan temp-domain cleanup {$domainPart}: " . $e->getMessage());
-                        $task->appendLog('backup-orphan: transient domain kept (cleanup failed: ' . $e->getMessage() . ')');
-                    }
-                }
-            }
+            $this->cleanupOrphanBackup(
+                $task,
+                $doveadm,
+                $user,
+                $tempId,
+                $tempPassword,
+                $tempDomainId,
+                $domainPart,
+                $domain,
+                $keepDomain
+            );
+        }
+    }
+
+    private function performOrphanBackup(
+        \Entities\MailboxTask $task,
+        ViMbAdmin_Doveadm $doveadm,
+        string $user,
+        string $home,
+        ?int $tempDomainId,
+        bool &$keepDomain
+    ): void {
+        $this->remoteMutation(fn () => $doveadm->authCacheFlush());
+
+        $task->appendLog('orphan: repair (force-resync/index/purge)');
+        try {
+            $this->remoteMutation(fn () => $doveadm->forceResync($user));
+            $this->remoteMutation(fn () => $doveadm->index($user));
+            $this->remoteMutation(fn () => $doveadm->purge($user));
+        } catch (\Throwable $e) {
+            $task->appendLog('orphan: repair warning: ' . $e->getMessage());
+        }
+
+        if ($doveadm->maildirHasMail($home)) {
+            $dest = $this->backupDest($task);
+            $task->appendLog("orphan: has mail — backup -> {$dest}");
+            $this->remoteMutation(fn () => $doveadm->backup($user, $dest));
+            $this->ensureDatabaseConnection();
+
+            $task->appendLog('orphan: recording archive row');
+            $this->recordArchive($task, $dest, false, $doveadm);
+            $keepDomain = true;
+
+            $task->appendLog('orphan: empty store + remove maildir home');
             try {
-                $this->remoteMutation(fn () => $doveadm->authCacheFlush());
+                $this->remoteMutation(fn () => $doveadm->mailboxDelete($user));
             } catch (\Throwable $e) {
+                $task->appendLog('orphan: mailboxDelete warning: ' . $e->getMessage());
             }
+            $this->removeMaildirHome($task, $doveadm, $user);
+
+            $this->logAudit(
+                $task,
+                \Entities\Log::ACTION_ARCHIVE_REQUEST,
+                "imported ORPHAN maildir for {$user}: backed up + removed (had mail)"
+            );
+            return;
+        }
+
+        $task->appendLog('orphan: empty skeleton — removing maildir home (no backup)');
+        $this->removeMaildirHome($task, $doveadm, $user);
+        // An audit row must not retain the transient domain that this
+        // no-archive path removes in the finalizer.
+        if ($tempDomainId !== null) {
+            $task->setDomain(null);
+        }
+        $this->logAudit(
+            $task,
+            \Entities\Log::ACTION_MAILBOX_PURGE,
+            "removed empty ORPHAN maildir skeleton for {$user} (no mail)"
+        );
+    }
+
+    private function cleanupOrphanBackup(
+        \Entities\MailboxTask $task,
+        ViMbAdmin_Doveadm $doveadm,
+        string $user,
+        ?int $tempId,
+        string $tempPassword,
+        ?int $tempDomainId,
+        string $domainPart,
+        mixed $domain,
+        bool $keepDomain
+    ): void {
+        if ($tempId !== null) {
+            try {
+                $removed = $this->deleteOrphanBackupTemp($tempId, $tempPassword);
+                $task->appendLog($removed
+                    ? 'backup-orphan: temp user row removed'
+                    : 'backup-orphan: temp user row retained (changed concurrently)');
+            } catch (\Throwable $e) {
+                error_log("backup-orphan temp-row cleanup {$user}: " . $e->getMessage());
+                $task->appendLog('backup-orphan: temp user row cleanup failed: ' . $e->getMessage());
+            }
+        }
+        // Remove the transient domain after its temp mailbox. Archive-backed
+        // domains stay because Archive.Domain_id is restrictive.
+        if ($tempDomainId !== null) {
+            if ($keepDomain) {
+                $task->appendLog("backup-orphan: transient domain '{$domainPart}' kept (referenced by archive), left inactive");
+            } else {
+                $task->setDomain(null);
+                if ($domain instanceof \Entities\Domain) {
+                    try {
+                        $this->em->detach($domain);
+                    } catch (\Throwable $e) {
+                    }
+                }
+                try {
+                    $this->em->getConnection()->delete('domain', ['id' => $tempDomainId]);
+                    $task->appendLog('backup-orphan: transient domain row removed');
+                } catch (\Throwable $e) {
+                    error_log("backup-orphan temp-domain cleanup {$domainPart}: " . $e->getMessage());
+                    $task->appendLog('backup-orphan: transient domain kept (cleanup failed: ' . $e->getMessage() . ')');
+                }
+            }
+        }
+        try {
+            $this->remoteMutation(fn () => $doveadm->authCacheFlush());
+        } catch (\Throwable $e) {
         }
     }
 

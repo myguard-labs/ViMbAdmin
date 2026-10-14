@@ -605,6 +605,16 @@ jobs:
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-maintenance-archive-generation.php
 
+      - name: Orphan discovery and cleanup remain bounded and ordered
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-maintenance-orphan-workflow.php
+
       - name: Recipient writers preserve concurrent aggregate changes
         env:
           DB_HOST: mariadb

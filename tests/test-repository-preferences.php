@@ -21,13 +21,14 @@ $check = static function (string $label, bool $ok) use (&$failures): void {
     }
 };
 
+/** @param array{adminId:int,super:bool,domainIds:list<int>} $scope */
 function invokePreferenceQuery(
     ReflectionMethod $method,
     \Repositories\MailboxPreference $repository,
     string $attribute,
-    \Entities\Admin $admin,
+    array $scope,
 ): \Doctrine\ORM\QueryBuilder {
-    $query = $method->invoke($repository, $attribute, $admin);
+    $query = $method->invoke($repository, $attribute, $scope);
     if (!$query instanceof \Doctrine\ORM\QueryBuilder) {
         throw new RuntimeException('preferenceValueQuery did not return a QueryBuilder');
     }
@@ -43,11 +44,6 @@ function preferenceQueryParameters(\Doctrine\ORM\QueryBuilder $query): array
     }
     return $parameters;
 }
-
-$admin = new \Entities\Admin();
-$admin->setSuper(false);
-$assignId = new ReflectionMethod($admin, 'assignGeneratedId');
-$assignId->invoke($admin, 42);
 
 $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([
     __DIR__ . '/../application/Entities',
@@ -67,10 +63,15 @@ $entityManager = new \Doctrine\ORM\EntityManager($connection, $configuration);
 $metadata = new \Doctrine\ORM\Mapping\ClassMetadata(\Entities\MailboxPreference::class);
 $repository = new \Repositories\MailboxPreference($entityManager, $metadata);
 $queryMethod = new ReflectionMethod($repository, 'preferenceValueQuery');
-$query = invokePreferenceQuery($queryMethod, $repository, 'xpiInfo.department', $admin);
+$query = invokePreferenceQuery($queryMethod, $repository, 'xpiInfo.department', [
+    'adminId' => 42,
+    'super' => false,
+    'domainIds' => [11, 12],
+]);
 $parameters = preferenceQueryParameters($query);
 $uniqueMethod = new ReflectionMethod($repository, 'uniquePreferenceValues');
 $requiredRowsMethod = new ReflectionMethod($repository, 'requiredPreferenceValueRows');
+$authorizationRowMethod = new ReflectionMethod($repository, 'requiredAuthorizationRow');
 $values = $uniqueMethod->invoke(null, [
     ['value' => 'alpha'],
     ['value' => 'beta'],
@@ -116,17 +117,57 @@ $check(
     'preference rows reject a non-string value',
     $invalidPreferenceRows([['value' => null]]) === 'Preference query row has an invalid shape.'
 );
+$check(
+    'authorization rows preserve an empty scoped assignment',
+    $authorizationRowMethod->invoke(null, ['super' => 0, 'domain_id' => null])
+        === ['super' => false, 'domainId' => null]
+);
+$check(
+    'authorization rows normalize a persisted positive domain ID',
+    $authorizationRowMethod->invoke(null, ['super' => '1', 'domain_id' => '12'])
+        === ['super' => true, 'domainId' => 12]
+);
+$invalidAuthorizationRow = static function (mixed $row) use ($authorizationRowMethod): ?string {
+    try {
+        $authorizationRowMethod->invoke(null, $row);
+    } catch (Throwable $exception) {
+        return $exception->getMessage();
+    }
+    return null;
+};
+$check(
+    'authorization rows reject a malformed shape',
+    $invalidAuthorizationRow(['super' => 0]) === 'Preference authorization query returned an invalid shape.'
+);
+$check(
+    'authorization rows reject a malformed super flag',
+    $invalidAuthorizationRow(['super' => 2, 'domain_id' => null])
+        === 'Preference authorization query returned an invalid super flag.'
+);
+$check(
+    'authorization rows reject a malformed domain ID',
+    $invalidAuthorizationRow(['super' => 0, 'domain_id' => '01'])
+        === 'Preference authorization query returned an invalid domain identifier.'
+);
 $numericValues = $uniqueMethod->invoke(null, [['value' => '0'], ['value' => '00']]);
 $check('legacy loose duplicate comparison is preserved', $numericValues === ['0']);
 $check('attribute predicate is retained for a scoped admin', str_contains($query->getDQL(), 'mp.attribute = :attr'));
-$check('non-super admin joins mailbox and domain ownership', str_contains($query->getDQL(), 'JOIN mp.Mailbox m') && str_contains($query->getDQL(), 'JOIN d.Admins d2a'));
-$check('admin scope is appended instead of replacing the attribute predicate', str_contains($query->getDQL(), 'AND d2a = :admin'));
-$check('named parameters preserve both query inputs', ($parameters['attr'] ?? null) === 'xpiInfo.department' && ($parameters['admin'] ?? null) === $admin);
+$check('non-super admin joins mailbox and the captured domains', str_contains($query->getDQL(), 'JOIN mp.Mailbox m') && str_contains($query->getDQL(), 'JOIN m.Domain d'));
+$check('captured scope is appended instead of replacing the attribute predicate', str_contains($query->getDQL(), 'AND d.id IN (:authorizedDomainIds)'));
+$check('named parameters preserve both query inputs', ($parameters['attr'] ?? null) === 'xpiInfo.department' && ($parameters['authorizedDomainIds'] ?? null) === [11, 12]);
 
-$superAdmin = new \Entities\Admin();
-$superAdmin->setSuper(true);
-$assignId->invoke($superAdmin, 7);
-$superQuery = invokePreferenceQuery($queryMethod, $repository, 'quota', $superAdmin);
+$emptyScopeQuery = invokePreferenceQuery($queryMethod, $repository, 'quota', [
+    'adminId' => 42,
+    'super' => false,
+    'domainIds' => [],
+]);
+$check('empty captured scope is denied without an invalid array parameter', str_contains($emptyScopeQuery->getDQL(), 'AND 1 = 0'));
+
+$superQuery = invokePreferenceQuery($queryMethod, $repository, 'quota', [
+    'adminId' => 7,
+    'super' => true,
+    'domainIds' => [],
+]);
 $superParameters = preferenceQueryParameters($superQuery);
 $superValues = $uniqueMethod->invoke(null, [['value' => 'global']]);
 $check('super admin retains unscoped result values', $superValues === ['global']);

@@ -3,6 +3,7 @@
 namespace Repositories;
 
 use Doctrine\ORM\EntityRepository;
+use UnexpectedValueException;
 
 /**
  * MailboxPreference
@@ -18,13 +19,13 @@ class MailboxPreference extends EntityRepository
     private static function requiredPreferenceValueRows(mixed $rows): array
     {
         if (!is_array($rows)) {
-            throw new \UnexpectedValueException('Preference query result must be an array.');
+            throw new UnexpectedValueException('Preference query result must be an array.');
         }
         $result = [];
         foreach ($rows as $key => $row) {
             if (!is_int($key) || !is_array($row) || count($row) !== 1
                 || !isset($row['value']) || !is_string($row['value'])) {
-                throw new \UnexpectedValueException('Preference query row has an invalid shape.');
+                throw new UnexpectedValueException('Preference query row has an invalid shape.');
             }
             $result[$key] = ['value' => $row['value']];
         }
@@ -36,6 +37,80 @@ class MailboxPreference extends EntityRepository
      * @var string Cache key for loadPrefrenceValuesByAttribute() - defined so we can clear the cache if we add / edit / delete additional info
      */
     public const VALUES_CACHE_KEY = 'ViMbAdmin_Plugin_AdditionalInfo_autocomplete';
+
+    /** @return array{super:bool,domainId:?int} */
+    private static function requiredAuthorizationRow(mixed $row): array
+    {
+        if (!is_array($row) || count($row) !== 2
+            || !array_key_exists('super', $row) || !array_key_exists('domain_id', $row)) {
+            throw new UnexpectedValueException('Preference authorization query returned an invalid shape.');
+        }
+        $super = match ($row['super']) {
+            0, '0' => false,
+            1, '1' => true,
+            default => throw new UnexpectedValueException('Preference authorization query returned an invalid super flag.'),
+        };
+
+        if ($row['domain_id'] === null) {
+            return ['super' => $super, 'domainId' => null];
+        }
+        if ((!is_int($row['domain_id']) || $row['domain_id'] < 1)
+            && (!is_string($row['domain_id']) || preg_match('/^[1-9][0-9]*$/D', $row['domain_id']) !== 1)) {
+            throw new UnexpectedValueException('Preference authorization query returned an invalid domain identifier.');
+        }
+
+        return ['super' => $super, 'domainId' => (int) $row['domain_id']];
+    }
+
+    /** @return array{adminId:int,super:bool,domainIds:list<int>} */
+    private function persistedAuthorizationScope(\Entities\Admin $admin): array
+    {
+        $adminId = $admin->getId();
+        if (!is_int($adminId) || $adminId < 1) {
+            throw new UnexpectedValueException('Preference cache admin must have a persisted identifier.');
+        }
+
+        $rows = $this->getEntityManager()->getConnection()->fetchAllAssociative(
+            'SELECT a.super, da.Domain_id AS domain_id'
+            . ' FROM admin a'
+            . ' LEFT JOIN domain_admins da ON da.Admin_id = a.id'
+            . ' WHERE a.id = ? ORDER BY da.Domain_id',
+            [$adminId],
+        );
+        if ($rows === []) {
+            throw new UnexpectedValueException('Preference cache admin is missing from persistent storage.');
+        }
+
+        $super = null;
+        $domainIds = [];
+        foreach ($rows as $row) {
+            $authorization = self::requiredAuthorizationRow($row);
+            if ($super !== null && $super !== $authorization['super']) {
+                throw new UnexpectedValueException('Preference authorization query returned inconsistent super flags.');
+            }
+            $super = $authorization['super'];
+
+            if ($authorization['domainId'] === null) {
+                continue;
+            }
+            $domainId = $authorization['domainId'];
+            if (in_array($domainId, $domainIds, true)) {
+                throw new UnexpectedValueException('Preference authorization query returned a duplicate domain identifier.');
+            }
+            $domainIds[] = $domainId;
+        }
+
+        return ['adminId' => $adminId, 'super' => $super, 'domainIds' => $domainIds];
+    }
+
+    /** @param array{adminId:int,super:bool,domainIds:list<int>} $scope */
+    private static function preferenceValuesCacheKey(string $attribute, array $scope): string
+    {
+        $generation = $scope['super'] ? 'super' : 'scoped:' . implode(',', $scope['domainIds']);
+
+        return self::VALUES_CACHE_KEY . '_' . $scope['adminId'] . '_'
+            . hash('sha256', $attribute . "\0" . $generation);
+    }
 
     /**
      * Loads preferene values by attribute.
@@ -49,16 +124,20 @@ class MailboxPreference extends EntityRepository
      */
     public function loadPrefrenceValuesByAttribute($attribute, $admin)
     {
-        $qb = $this->preferenceValueQuery($attribute, $admin);
+        $scope = $this->persistedAuthorizationScope($admin);
+        $query = $this->preferenceValueQuery($attribute, $scope)->getQuery();
 
-        $data = $qb->getQuery()
-            ->enableResultCache(3600, self::VALUES_CACHE_KEY . '_' . $admin->getId() . '_' . $attribute)
-            ->getScalarResult();
+        if (!$this->getEntityManager()->getConnection()->isTransactionActive()) {
+            $query->enableResultCache(3600, self::preferenceValuesCacheKey($attribute, $scope));
+        }
+
+        $data = $query->getScalarResult();
 
         return self::uniquePreferenceValues(self::requiredPreferenceValueRows($data));
     }
 
-    private function preferenceValueQuery(string $attribute, \Entities\Admin $admin): \Doctrine\ORM\QueryBuilder
+    /** @param array{adminId:int,super:bool,domainIds:list<int>} $scope */
+    private function preferenceValueQuery(string $attribute, array $scope): \Doctrine\ORM\QueryBuilder
     {
         $qb = $this->getEntityManager()->createQueryBuilder()
                 ->select('mp.value')
@@ -66,17 +145,18 @@ class MailboxPreference extends EntityRepository
                 ->where('mp.attribute = :attr')
                 ->setParameter('attr', $attribute);
 
-        // Non-super admins are scoped to their own domains. NB: use andWhere +
-        // a distinct named param — the old code called where() again (which
-        // REPLACES the attribute filter) and reused ?1, so it returned every
-        // attribute's values across all domains. Join matches the other repos
-        // (d.Admins / d2a), not the stale d.DomainToAdmin / d2a.Admin.
-        if (!$admin->isSuper()) {
+        // Bind the query to the same persisted authorization snapshot as its
+        // cache key so rollback-stale managed entities cannot select one scope
+        // and publish the result under another.
+        if (!$scope['super']) {
             $qb->join('mp.Mailbox', 'm')
-                ->join('m.Domain', 'd')
-                ->join('d.Admins', 'd2a')
-                ->andWhere('d2a = :admin')
-                ->setParameter('admin', $admin);
+                ->join('m.Domain', 'd');
+            if ($scope['domainIds'] === []) {
+                $qb->andWhere('1 = 0');
+                return $qb;
+            }
+            $qb->andWhere('d.id IN (:authorizedDomainIds)')
+                ->setParameter('authorizedDomainIds', $scope['domainIds']);
         }
 
         return $qb;

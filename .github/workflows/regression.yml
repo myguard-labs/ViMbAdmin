@@ -555,6 +555,16 @@ jobs:
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-domain-capacity-atomic-mariadb.php
 
+      - name: Authorization-scoped preference caches follow access changes
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-access-cache-invalidation.php
+
       - name: Terminal task state remains fenced across cleanup and rollback
         env:
           DB_HOST: mariadb

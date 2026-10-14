@@ -90,6 +90,52 @@ final class AliasCreateRepositoryFactory implements RepositoryFactory
     }
 }
 
+/** @SuppressWarnings("PHPMD.MissingImport") Fixture diagnostics deliberately use global LogicException. */
+final class AliasCreateConnection extends \Doctrine\DBAL\Connection
+{
+    public int $transactionsStarted = 0;
+    public int $transactionsCommitted = 0;
+    public int $connectAttempts = 0;
+    private bool $transactionActive = false;
+
+    protected function connect(): \Doctrine\DBAL\Driver\Connection
+    {
+        $this->connectAttempts++;
+        throw new LogicException('Alias-create unit fixture attempted a real database connection');
+    }
+
+    public function beginTransaction(): void
+    {
+        if ($this->transactionActive) {
+            throw new LogicException('Alias-create unit fixture does not support nested transactions');
+        }
+        $this->transactionActive = true;
+        $this->transactionsStarted++;
+    }
+
+    public function commit(): void
+    {
+        if (!$this->transactionActive) {
+            throw new LogicException('Alias-create unit fixture has no active transaction to commit');
+        }
+        $this->transactionActive = false;
+        $this->transactionsCommitted++;
+    }
+
+    public function rollBack(): void
+    {
+        if (!$this->transactionActive) {
+            throw new LogicException('Alias-create unit fixture has no active transaction to roll back');
+        }
+        $this->transactionActive = false;
+    }
+
+    public function isTransactionActive(): bool
+    {
+        return $this->transactionActive;
+    }
+}
+
 final class AliasCreateManager extends EntityManager
 {
     /** @var list<object> */
@@ -97,6 +143,9 @@ final class AliasCreateManager extends EntityManager
     /** @var list<object> */
     public array $removed = [];
     public int $flushes = 0;
+    public int $refreshes = 0;
+    public ?object $lastRefreshed = null;
+    public \Doctrine\DBAL\LockMode|int|null $lastRefreshLock = null;
     public readonly AliasCreateRepositoryFactory $repositories;
 
     public function __construct(\Entities\Domain $domain)
@@ -113,7 +162,11 @@ final class AliasCreateManager extends EntityManager
             new AliasCreateAliasRepository(),
         );
         $configuration->setRepositoryFactory($this->repositories);
-        parent::__construct(DriverManager::getConnection(['driver' => 'pdo_mysql', 'serverVersion' => '8.0'], $configuration), $configuration);
+        parent::__construct(DriverManager::getConnection([
+            'driver' => 'pdo_mysql',
+            'serverVersion' => '8.0',
+            'wrapperClass' => AliasCreateConnection::class,
+        ], $configuration), $configuration);
     }
 
     public function persist(object $entity): void
@@ -127,6 +180,12 @@ final class AliasCreateManager extends EntityManager
     public function remove(object $entity): void
     {
         $this->removed[] = $entity;
+    }
+    public function refresh(object $object, \Doctrine\DBAL\LockMode|int|null $lockMode = \Doctrine\DBAL\LockMode::NONE): void
+    {
+        $this->refreshes++;
+        $this->lastRefreshed = $object;
+        $this->lastRefreshLock = $lockMode;
     }
 }
 
@@ -255,10 +314,16 @@ if (!$selfAlias instanceof \Entities\Alias) {
 }
 $selfManager->repositories->alias->setAlias($selfAlias);
 aliasDelete('self@example.test', $self);
+$selfConnection = $selfManager->getConnection();
 check(
-    'self-alias deletion does not decrement the persisted count',
+    'self-alias deletion uses the socketless transactional fixture without decrementing the persisted count',
     $selfManager->removed === [$selfAlias] && $selfManager->flushes === 2
         && $selfDomain->getAliasCount() === 2
+        && $selfManager->refreshes === 1 && $selfManager->lastRefreshed === $selfAlias
+        && $selfManager->lastRefreshLock === \Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE
+        && $selfConnection instanceof AliasCreateConnection
+        && $selfConnection->transactionsStarted === 1 && $selfConnection->transactionsCommitted === 1
+        && !$selfConnection->isTransactionActive() && $selfConnection->connectAttempts === 0 && !$selfConnection->isConnected()
 );
 
 [$deleting, $deletingManager, $deletingDomain] = aliasCreateFixture('example.test', 1, 2);
@@ -268,10 +333,16 @@ $forwardingAlias = (new \Entities\Alias())
     ->setDomain($deletingDomain);
 $deletingManager->repositories->alias->setAlias($forwardingAlias);
 aliasDelete('sales@example.test', $deleting);
+$deletingConnection = $deletingManager->getConnection();
 check(
-    'forwarding alias deletion decrements the persisted count',
+    'forwarding alias deletion uses the socketless transaction and decrements the persisted count',
     $deletingManager->removed === [$forwardingAlias] && $deletingManager->flushes === 1
         && $deletingDomain->getAliasCount() === 0
+        && $deletingManager->refreshes === 1 && $deletingManager->lastRefreshed === $forwardingAlias
+        && $deletingManager->lastRefreshLock === \Doctrine\DBAL\LockMode::PESSIMISTIC_WRITE
+        && $deletingConnection instanceof AliasCreateConnection
+        && $deletingConnection->transactionsStarted === 1 && $deletingConnection->transactionsCommitted === 1
+        && !$deletingConnection->isTransactionActive() && $deletingConnection->connectAttempts === 0 && !$deletingConnection->isConnected()
 );
 
 [$invalid, $invalidManager, $invalidDomain] = aliasCreateFixture('bad/domain.test', 1, 2);

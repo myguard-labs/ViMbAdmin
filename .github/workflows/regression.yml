@@ -324,6 +324,9 @@ jobs:
       - name: Second-factor guessing stops at the brute-force threshold
         run: php ci/test-second-factor-lockout.php
 
+      - name: Brute-force cleanup retains live replacement generations
+        run: php ci/test-maintenance-bruteforce-cleanup.php
+
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #

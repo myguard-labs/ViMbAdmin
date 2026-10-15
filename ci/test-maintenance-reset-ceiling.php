@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 require dirname(__DIR__) . '/vendor/autoload.php';
+require_once dirname(__DIR__) . '/tests/support/native-workflow-harness.php';
 foreach (glob(dirname(__DIR__) . '/application/Entities/*.php') ?: [] as $entityFile) {
     require_once $entityFile;
 }
@@ -13,9 +14,11 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\ORMSetup;
+use Doctrine\ORM\Proxy\ProxyFactory;
 use Doctrine\ORM\Repository\RepositoryFactory;
 use ViMbAdmin\Kernel\Container;
 use ViMbAdmin\Kernel\Controller\AuthController;
+use ViMbAdmin\Kernel\Mail\Mailer;
 use ViMbAdmin\Kernel\RouteMatch;
 use ViMbAdmin\Kernel\Security\Auth;
 use ViMbAdmin\Kernel\Session\SessionStorage;
@@ -55,6 +58,7 @@ final class ResetCeilingManager extends EntityManager
         } else {
             $configuration->setProxyDir(sys_get_temp_dir());
             $configuration->setProxyNamespace('ResetCeilingProxies');
+            $configuration->setAutoGenerateProxyClasses(ProxyFactory::AUTOGENERATE_EVAL);
         }
         $configuration->setRepositoryFactory(new ResetCeilingRepositoryFactory());
         parent::__construct(DriverManager::getConnection(['driver' => 'pdo_sqlite', 'memory' => true], $configuration), $configuration);
@@ -150,7 +154,7 @@ final class ResetCeilingBootstrap
     }
 }
 
-/** @return array{response:ViMbAdmin\Kernel\Http\Response,session:ResetCeilingSession,view:ResetCeilingView,manager:ResetCeilingManager,lookups:int} */
+/** @return array{response:ViMbAdmin\Kernel\Http\Response,session:ResetCeilingSession,view:ResetCeilingView,manager:ResetCeilingManager,transport:WorkflowTransport,lookups:int} */
 function resetCeilingRun(?int $tokenCount, bool $validCsrf = true): array
 {
     $manager = new ResetCeilingManager();
@@ -184,6 +188,10 @@ function resetCeilingRun(?int $tokenCount, bool $validCsrf = true): array
     ];
     OSS_Runtime::configure($options, '', $manager);
     $container = new Container(new ResetCeilingBootstrap($manager, $session, $view, $options), new Auth($session, static fn (int $id): ?Entities\Admin => null));
+    $transport = new WorkflowTransport();
+    $mailer = new Mailer([], getenv('VIMBADMIN_RESET_NOOP_MAILER') === '1');
+    (new ReflectionProperty(Mailer::class, 'transport'))->setValue($mailer, $transport);
+    (new ReflectionProperty(Container::class, 'mailer'))->setValue($container, $mailer);
     $controller = new AuthController($container, new RouteMatch('auth', 'lost-password', AuthController::class, 'lostPasswordAction', []));
     $savedMethod = $_SERVER['REQUEST_METHOD'] ?? null;
     $savedPost = $_POST;
@@ -199,7 +207,7 @@ function resetCeilingRun(?int $tokenCount, bool $validCsrf = true): array
             $_SERVER['REQUEST_METHOD'] = $savedMethod;
         }
     }
-    return compact('response', 'session', 'view', 'manager') + ['lookups' => ResetCeilingState::$lookups];
+    return compact('response', 'session', 'view', 'manager', 'transport') + ['lookups' => ResetCeilingState::$lookups];
 }
 
 $failures = 0;
@@ -223,9 +231,14 @@ $check('response parity: missing/below/at/above are indistinguishable', count(ar
     $results,
 ))) === 1);
 $check(
-    'mail: only a fresh existing account renders and sends the reset email',
-    count($results['below']['view']->renders) === 2 && count($results['missing']['view']->renders) === 0
-    && count($results['at']['view']->renders) === 0 && count($results['above']['view']->renders) === 0
+    'mail: the fresh existing account sends exactly one reset email',
+    count($results['below']['view']->renders) === 2 && count($results['below']['transport']->messages) === 1
+);
+$check(
+    'mail: missing and exhausted accounts send no reset email',
+    count($results['missing']['view']->renders) === 0 && count($results['missing']['transport']->messages) === 0
+    && count($results['at']['view']->renders) === 0 && count($results['at']['transport']->messages) === 0
+    && count($results['above']['view']->renders) === 0 && count($results['above']['transport']->messages) === 0
 );
 $check(
     'persistence: only the allowed request persists and flushes a token',
@@ -238,7 +251,8 @@ $csrf = resetCeilingRun(0, false);
 $check(
     'abuse guard: invalid CSRF reaches no account lookup, persistence, or mail',
     $csrf['lookups'] === 0 && $csrf['manager']->persists === 0 && $csrf['manager']->flushes === 0
-    && count($csrf['view']->renders) === 1 && $csrf['response']->status === 200
+    && count($csrf['view']->renders) === 1 && count($csrf['transport']->messages) === 0
+    && $csrf['response']->status === 200
 );
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

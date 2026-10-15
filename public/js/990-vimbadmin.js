@@ -400,13 +400,16 @@ function tt_openModalDialog(event) {
     tt_throbber( 100, 20, 1.8 ).appendTo( DataTable.Dom.select( '#throb' ).get(0) ).start();
 
     dialog = ossModal( '#modal_dialog_shell' );
-    modalShell.off( 'hide.bs.modal.vimbadmin-generation' ).on(
-        'hide.bs.modal.vimbadmin-generation',
-        function() {
-            if( modalGeneration === tt_openModalDialog.generation )
-                ++tt_openModalDialog.generation;
-        }
-    );
+    var modalElement = modalShell.get(0);
+    if( tt_openModalDialog.hideElement && tt_openModalDialog.hideHandler )
+        tt_openModalDialog.hideElement.removeEventListener( 'hide.bs.modal', tt_openModalDialog.hideHandler );
+    var hideHandler = function() {
+        if( modalGeneration === tt_openModalDialog.generation )
+            ++tt_openModalDialog.generation;
+    };
+    modalElement.addEventListener( 'hide.bs.modal', hideHandler );
+    tt_openModalDialog.hideElement = modalElement;
+    tt_openModalDialog.hideHandler = hideHandler;
 
     ossAjax({
         url: element.attr( 'href' ) ,

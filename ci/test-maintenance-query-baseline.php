@@ -151,26 +151,58 @@ $check(
     $counts[1] === $counts[50] && $counts[50] === $counts[500] && $usage['queries'] === 3
 );
 
-/** Execute operation-local production workflow observers under this exact PHP lane. */
-$productionFixture = static function (string $script) use ($check): void {
+/**
+ * Execute an operation-local production workflow observer under this PHP lane.
+ *
+ * Keep stderr out of a second pipe: a child can fill that pipe before writing
+ * stdout, while the parent is blocked draining stdout. A file preserves the
+ * diagnostics without imposing an ordering requirement on the child.
+ *
+ * @param list<string> $command
+ * @return array{status:int,stdout:string,stderr:string}
+ */
+$productionFixture = static function (array $command, string $label) use ($check): array {
     $started = hrtime(true);
-    $process = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__));
+    $stderrPath = tempnam(sys_get_temp_dir(), 'vimbadmin-workflow-stderr-');
+    if ($stderrPath === false) {
+        throw new RuntimeException('Could not allocate production workflow stderr capture');
+    }
+    /** @var list<string> $command */
+    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['file', $stderrPath, 'w']], $pipes, dirname(__DIR__));
     if (!is_resource($process)) {
+        unlink($stderrPath);
         throw new RuntimeException('Could not start production workflow observer');
     }
-    $stdout = stream_get_contents($pipes[1]);
-    fclose($pipes[1]);
-    $stderr = stream_get_contents($pipes[2]);
-    fclose($pipes[2]);
-    $status = proc_close($process);
+    try {
+        $stdout = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $status = proc_close($process);
+        $stderr = (string) file_get_contents($stderrPath);
+    } finally {
+        unlink($stderrPath);
+    }
     echo (string) $stdout;
     echo 'maintenance-production-workflow-suite ' . json_encode([
-        'exit' => $status, 'elapsed_ns' => hrtime(true) - $started,
+        'fixture' => $label, 'exit' => $status, 'elapsed_ns' => hrtime(true) - $started,
+        'stderr_bytes' => strlen($stderr),
         'output_sha256' => hash('sha256', (string) $stdout . (string) $stderr),
     ], JSON_THROW_ON_ERROR) . "\n";
-    $check('production workflows: operation-local observers', $status === 0);
+    if ($status !== 0 && $stderr !== '') {
+        fwrite(STDERR, $stderr);
+    }
+    $check("{$label}: operation-local observer exits successfully", $status === 0);
+    return compact('status', 'stdout', 'stderr');
 };
-$productionFixture('ci/test-maintenance-workflow-observers.php');
+$productionFixture([PHP_BINARY, 'ci/test-maintenance-workflow-observers.php'], 'production workflows');
+$largeStderr = $productionFixture([
+    PHP_BINARY,
+    '-r',
+    'fwrite(STDERR, str_repeat("E", 1024 * 1024)); fwrite(STDOUT, "large-stderr-ok\\n");',
+], 'large stderr before stdout');
+$check(
+    'large stderr before stdout: both streams are captured without deadlock',
+    $largeStderr['stdout'] === "large-stderr-ok\n" && strlen($largeStderr['stderr']) === 1024 * 1024
+);
 echo 'maintenance-production-meta ' . json_encode([
     'source_sha256' => hash_file('sha256', dirname(__DIR__) . '/application/Repositories/Mailbox.php'),
     'sizes' => $counts,

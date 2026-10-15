@@ -24,9 +24,11 @@ final class ScriptedDoveadm extends ViMbAdmin_Doveadm
             throw new RuntimeException('Unexpected scripted Doveadm request.');
         }
         $decoded = json_decode($payload, true);
+        $requestTag = null;
         if (is_array($decoded)) {
             $this->requests[] = $decoded;
             $command = $decoded[0] ?? null;
+            $requestTag = is_array($command) ? ($command[2] ?? null) : null;
             $parameters = is_array($command) ? ($command[1] ?? null) : null;
             $paths = is_array($parameters) ? ($parameters['path'] ?? null) : null;
             $path = is_array($paths) ? ($paths[0] ?? null) : null;
@@ -34,9 +36,10 @@ final class ScriptedDoveadm extends ViMbAdmin_Doveadm
         }
         $response = array_shift($this->responses);
         $body = json_decode($response[1], true, 512, JSON_THROW_ON_ERROR);
-        $requestTag = $decoded[0][2] ?? null;
-        if (is_array($body[0] ?? null) && is_string($requestTag)) {
-            $body[0][2] = $requestTag;
+        $responseEnvelope = is_array($body) ? ($body[0] ?? null) : null;
+        if (is_array($responseEnvelope) && is_string($requestTag)) {
+            $responseEnvelope[2] = $requestTag;
+            $body[0] = $responseEnvelope;
             $response[1] = json_encode($body, JSON_THROW_ON_ERROR);
         }
         return $response;

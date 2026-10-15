@@ -739,10 +739,7 @@ final class AuthController extends AbstractController
 
                 // Anti-enumeration: identical response whether or not the user exists.
                 if ($user === null) {
-                    $this->flash(
-                        'If your username was correct, then an email with a key to allow you to change your password below has been sent to you.'
-                    );
-                    return $this->redirect('auth/reset-password/username/' . rawurlencode($username));
+                    return $this->passwordResetRequestResponse($username);
                 }
 
                 if ($user->cleanExpiredPreferences()) {
@@ -773,11 +770,7 @@ final class AuthController extends AbstractController
                         5,
                     );
                 } catch (\OSS_Doctrine2_WithPreferences_IndexLimitException $e) {
-                    $this->flash(
-                        'The limit of password reset tokens has been reached. Please try again later when the existing ones will expire or contact support.',
-                        FlashMessages::ERROR
-                    );
-                    return $this->redirect('auth/lost-password');
+                    return $this->passwordResetRequestResponse($username);
                 }
 
                 $this->em()->flush();
@@ -789,16 +782,21 @@ final class AuthController extends AbstractController
                     ['token' => $token]
                 );
 
-                $this->flash(
-                    'If your username was correct, then an email with a key to allow you to change your password below has been sent to you.'
-                );
                 error_log(sprintf('%s requested a reset password token', $user->getUsername()));
 
-                return $this->redirect('auth/reset-password/username/' . rawurlencode($username));
+                return $this->passwordResetRequestResponse($username);
             }
         }
 
         return $this->renderLostPassword($form, $useCaptcha);
+    }
+
+    private function passwordResetRequestResponse(string $username): Response
+    {
+        $this->flash(
+            'If your username was correct, then an email with a key to allow you to change your password below has been sent to you.'
+        );
+        return $this->redirect('auth/reset-password/username/' . rawurlencode($username));
     }
 
     /**

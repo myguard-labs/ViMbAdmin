@@ -61,37 +61,6 @@ class ViMbAdmin_Service_QueueRunner
     /** @var array<string, mixed> */
     private $options;
 
-    private static function nonNegativeInteger(mixed $value, string $name): int
-    {
-        if (is_int($value) && $value >= 0) {
-            return $value;
-        }
-        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
-            $integer = filter_var($value, FILTER_VALIDATE_INT);
-            if (is_int($integer)) {
-                return $integer;
-            }
-        }
-        throw new \LogicException($name . ' must be a non-negative integer.');
-    }
-
-    private static function positiveInteger(mixed $value, string $name): int
-    {
-        $integer = self::nonNegativeInteger($value, $name);
-        if ($integer < 1) {
-            throw new \LogicException($name . ' must be greater than zero.');
-        }
-        return $integer;
-    }
-
-    private static function requiredString(mixed $value, string $name): string
-    {
-        if (!is_string($value)) {
-            throw new \LogicException($name . ' must be a string.');
-        }
-        return $value;
-    }
-
     private ?ViMbAdmin_ResourceClaim $resourceClaim = null;
 
     /** @param callable(?\Throwable):void $operation */
@@ -134,32 +103,14 @@ class ViMbAdmin_Service_QueueRunner
         return $this->resourceClaim->remote($operation);
     }
 
-    /** @return array{bool,mixed} */
-    private function option(string ...$path): array
-    {
-        $value = $this->options;
-        foreach ($path as $key) {
-            if (!is_array($value)) {
-                throw new \LogicException('QueueRunner configuration path must be an array.');
-            }
-            if (!array_key_exists($key, $value)) {
-                return [false, null];
-            }
-            $value = $value[$key];
-        }
-        return [true, $value];
-    }
-
     private function optionString(string $default, string ...$path): string
     {
-        [$found, $value] = $this->option(...$path);
-        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : $default;
+        return \ViMbAdmin\Kernel\Input\Reader::optionString($this->options, $default, array_values($path), true, 'QueueRunner configuration path');
     }
 
     private function optionNonNegativeInteger(int $default, string ...$path): int
     {
-        [$found, $value] = $this->option(...$path);
-        return $found ? self::nonNegativeInteger($value, 'Configuration ' . implode('.', $path)) : $default;
+        return \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger($this->options, $default, array_values($path), true, 'QueueRunner configuration path');
     }
 
     private function maildirRoot(): string
@@ -264,7 +215,7 @@ class ViMbAdmin_Service_QueueRunner
      */
     public function drain($max, $verbose = false)
     {
-        $max  = self::positiveInteger($max, 'Queue drain maximum');
+        $max  = \ViMbAdmin\Kernel\Input\Reader::positiveInteger($max, 'Queue drain maximum', true);
         $em   = $this->em;
         $repo = $em->getRepository('\\Entities\\MailboxTask');
         if (!$repo instanceof \Repositories\MailboxTask) {
@@ -787,7 +738,7 @@ class ViMbAdmin_Service_QueueRunner
      */
     private static function assertPathSafe(mixed $value): string
     {
-        $s = self::requiredString($value, 'Mailbox task path component');
+        $s = \ViMbAdmin\Kernel\Input\Reader::requiredString($value, 'Mailbox task path component', true);
         if ($s === '' || strpos($s, '/') !== false || strpos($s, "\0") !== false
             || $s === '..' || strpos($s, '..') !== false) {
             throw new ViMbAdmin_Exception('refusing unsafe path component in mailbox task: ' . $s);
@@ -835,7 +786,7 @@ class ViMbAdmin_Service_QueueRunner
             $this->remoteMutation(fn () => $doveadm->quotaRecalc($user));
             $bytes = $em->getConnection()->fetchOne('SELECT bytes FROM dovecot_quota WHERE username = ?', [$user]);
             if ($bytes !== false && $bytes !== null) {
-                $origSize = self::nonNegativeInteger($bytes, 'Dovecot quota bytes');
+                $origSize = \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($bytes, 'Dovecot quota bytes', true);
             }
         } catch (\Throwable $e) {
             error_log("QueueRunner::recordArchive quota {$user}: " . $e->getMessage());
@@ -870,7 +821,7 @@ class ViMbAdmin_Service_QueueRunner
             ->setParameter('t', \Entities\MailboxTask::TYPE_MEASURE_SIZE)
             ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
             ->getSingleScalarResult();
-        if (self::nonNegativeInteger($open, 'Open measure-size task count') === 0) {
+        if (\ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($open, 'Open measure-size task count', true) === 0) {
             $mt = new \Entities\MailboxTask();
             $mt->setType(\Entities\MailboxTask::TYPE_MEASURE_SIZE)
                ->setUsername($user)
@@ -1246,7 +1197,7 @@ class ViMbAdmin_Service_QueueRunner
 
         $home      = $root . '/' . $user;
         $localPart = strstr($user, '@', true) ?: $user;
-        $tempId    = is_array($existing) ? self::positiveInteger($existing['id'] ?? null, 'Orphan temp mailbox id') : null;
+        $tempId    = is_array($existing) ? \ViMbAdmin\Kernel\Input\Reader::positiveInteger($existing['id'] ?? null, 'Orphan temp mailbox id', true) : null;
         $keepDomain = false;   // set true once an Archive row references $domain
 
         try {
@@ -1276,7 +1227,7 @@ class ViMbAdmin_Service_QueueRunner
                         || !in_array($adopt['active'] ?? null, [0, '0', false], true)) {
                         throw $e;
                     }
-                    $tempId = self::positiveInteger($adopt['id'] ?? null, 'Orphan temp mailbox id');
+                    $tempId = \ViMbAdmin\Kernel\Input\Reader::positiveInteger($adopt['id'] ?? null, 'Orphan temp mailbox id', true);
                     $task->appendLog("backup-orphan: adopted temp user row #{$tempId}");
                 }
             } else {

@@ -36,10 +36,15 @@ final class MaintenanceOrphanBackend extends \ViMbAdmin_Doveadm
             throw new RuntimeException('orphan fixture request must be JSON');
         }
         $request = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
-        $command = $request[0][0] ?? null;
-        $parameters = $request[0][1] ?? null;
+        $envelope = is_array($request) && count($request) === 1 ? ($request[0] ?? null) : null;
+        if (!is_array($envelope)) {
+            throw new RuntimeException('unexpected orphan fixture request');
+        }
+        $command = $envelope[0] ?? null;
+        $parameters = $envelope[1] ?? null;
+        $tag = $envelope[2] ?? null;
         $path = is_array($parameters) ? ($parameters['path'] ?? null) : null;
-        if ($command !== 'fsIterDirs' || !is_string($path)) {
+        if ($command !== 'fsIterDirs' || !is_string($path) || !is_string($tag)) {
             throw new RuntimeException('unexpected orphan fixture request');
         }
         if ($this->listFailure !== null) {
@@ -48,7 +53,7 @@ final class MaintenanceOrphanBackend extends \ViMbAdmin_Doveadm
         $path = rtrim($path, '/');
         $this->calls[] = 'list:' . $path;
         $rows = array_map(static fn (string $name): array => ['path' => $name], $this->directories[$path] ?? []);
-        return [200, json_encode([['doveadmResponse', $rows, 'fixture']], JSON_THROW_ON_ERROR)];
+        return [200, json_encode([['doveadmResponse', $rows, $tag]], JSON_THROW_ON_ERROR)];
     }
 
     #[\Override]
@@ -112,7 +117,6 @@ final class MaintenanceOrphanBackend extends \ViMbAdmin_Doveadm
     {
         $this->calls[] = 'mailbox-delete:' . $user;
         $this->hasMail = false;
-        return [];
     }
 
     #[\Override]
@@ -349,13 +353,16 @@ foreach ([0, 499, 500, 501] as $count) {
     $task = maintenanceOrphanTask($em, \Entities\MailboxTask::TYPE_SCAN_ORPHANS, 'scan-' . $count . '@example.test');
     [$result, $error] = maintenanceOrphanRun($runner, $task);
     $data = json_decode($task->getData() ?? '', true);
+    $orphans = is_array($data) && isset($data['orphans']) && is_array($data['orphans'])
+        ? $data['orphans']
+        : null;
     $valid = $count <= 500;
     maintenanceTaskCheck(
         'orphan scan boundary ' . $count . ' rejects only values above 500',
         $result === \ViMbAdmin_Service_QueueRunner::RUN_ONE_COMPLETED
         && ($valid ? $error === null : $error instanceof \ViMbAdmin_Exception)
         && ($valid || str_contains((string) $error?->getMessage(), 'filesystem response exceeds 500 entries'))
-        && ($valid ? count($data['orphans'] ?? []) === $count : $task->getData() === null)
+        && ($valid ? is_array($orphans) && count($orphans) === $count : $task->getData() === null)
         && ($valid ? count($backend->calls) === $count + 1 : $backend->calls === ['list:/mail'])
     );
 }

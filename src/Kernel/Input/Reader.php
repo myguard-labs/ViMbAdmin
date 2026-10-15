@@ -6,20 +6,20 @@ namespace ViMbAdmin\Kernel\Input;
 
 final class Reader
 {
-    public static function requiredString(mixed $value, string $name): string
+    public static function requiredString(mixed $value, string $name, bool $terminalPeriod = false): string
     {
         if (!is_string($value)) {
-            throw new \LogicException("{$name} must be a string");
+            throw new \LogicException("{$name} must be a string" . ($terminalPeriod ? '.' : ''));
         }
 
         return $value;
     }
 
     /** @return array<string,mixed> */
-    public static function stringKeyedArray(mixed $value, string $name): array
+    public static function stringKeyedArray(mixed $value, string $name, bool $terminalPeriod = false): array
     {
         if (!is_array($value)) {
-            throw new \LogicException("{$name} must be an array");
+            throw new \LogicException("{$name} must be an array" . ($terminalPeriod ? '.' : ''));
         }
         foreach ($value as $key => $_item) {
             if (!is_string($key)) {
@@ -36,13 +36,20 @@ final class Reader
      */
     public static function option(array $options, string ...$path): array
     {
+        return self::optionPath($options, array_values($path));
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @param list<string> $path
+     * @return array{bool,mixed}
+     */
+    private static function optionPath(array $options, array $path, ?string $arrayName = null): array
+    {
         $value = $options;
         $walked = [];
         foreach ($path as $key) {
-            $value = self::stringKeyedArray(
-                $value,
-                'Configuration ' . ($walked === [] ? 'root' : implode('.', $walked)),
-            );
+            $value = self::stringKeyedArray($value, $arrayName ?: 'Configuration ' . ($walked === [] ? 'root' : implode('.', $walked)), $arrayName !== null && $arrayName !== '');
             $walked[] = $key;
             if (!array_key_exists($key, $value)) {
                 return [false, null];
@@ -51,5 +58,57 @@ final class Reader
         }
 
         return [true, $value];
+    }
+
+    public static function nonNegativeInteger(mixed $value, string $name, bool $terminalPeriod = false): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
+            $integer = filter_var($value, FILTER_VALIDATE_INT);
+            if (is_int($integer)) {
+                return $integer;
+            }
+        }
+
+        throw new \LogicException("{$name} must be a non-negative integer" . ($terminalPeriod ? '.' : ''));
+    }
+
+    public static function positiveInteger(mixed $value, string $name, bool $terminalPeriod = false): int
+    {
+        $integer = self::nonNegativeInteger($value, $name, $terminalPeriod);
+        if ($integer < 1) {
+            throw new \LogicException("{$name} must be greater than zero" . ($terminalPeriod ? '.' : ''));
+        }
+
+        return $integer;
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @param list<string> $path
+     */
+    public static function optionString(array $options, string $default, array $path, bool $terminalPeriod = false, ?string $pathArrayName = null): string
+    {
+        [$found, $value] = self::optionPath($options, $path, $pathArrayName);
+        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path), $terminalPeriod) : $default;
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @param list<string> $path
+     */
+    public static function optionNonNegativeInteger(
+        array $options,
+        int $default,
+        array $path,
+        bool $terminalPeriod = false,
+        ?string $pathArrayName = null,
+    ): int {
+        [$found, $value] = self::optionPath($options, $path, $pathArrayName);
+        return $found
+            ? self::nonNegativeInteger($value, 'Configuration ' . implode('.', $path), $terminalPeriod)
+            : $default;
     }
 }

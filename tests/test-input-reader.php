@@ -77,6 +77,11 @@ $check(
         ->invoke(null, [0 => 'bad'], 'outer'))
         === 'Configuration root must use string keys'
 );
+$check('option preserves a named arrayName path', Reader::option(['arrayName' => 7], arrayName: 'arrayName') === [true, 7]);
+$check(
+    'option preserves named path order when arrayName is not last',
+    Reader::option(['arrayName' => ['nested' => 7]], arrayName: 'arrayName', nested: 'nested') === [true, 7]
+);
 
 $controllers = [
     'MaintenanceController.php', 'ArchiveController.php', 'DomainController.php', 'AdminController.php',

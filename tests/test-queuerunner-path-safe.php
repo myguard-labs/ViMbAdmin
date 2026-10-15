@@ -74,11 +74,9 @@ check(
     $requiredUsernameError === 'Mailbox task username cannot be null.'
 );
 
-$positive = new ReflectionMethod('ViMbAdmin_Service_QueueRunner', 'positiveInteger');
-$positive->setAccessible(true);
-$positiveRejects = static function (mixed $value) use ($positive): bool {
+$positiveRejects = static function (mixed $value): bool {
     try {
-        $positive->invoke(null, $value, 'Queue drain maximum');
+        \ViMbAdmin\Kernel\Input\Reader::positiveInteger($value, 'Queue drain maximum');
         return false;
     } catch (\Throwable $e) {
         return true;
@@ -86,8 +84,8 @@ $positiveRejects = static function (mixed $value) use ($positive): bool {
 };
 check(
     'queue limit preserves canonical positive integers',
-    $positive->invoke(null, 2, 'Queue drain maximum') === 2
-        && $positive->invoke(null, '3', 'Queue drain maximum') === 3
+    \ViMbAdmin\Kernel\Input\Reader::positiveInteger(2, 'Queue drain maximum') === 2
+        && $positiveRejects('007')
 );
 check(
     'queue limit rejects lossy or non-positive coercion',

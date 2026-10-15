@@ -6,7 +6,7 @@ foreach (glob(dirname(__DIR__) . '/application/Entities/*.php') ?: [] as $entity
     require_once $entityFile;
 }
 foreach (glob(dirname(__DIR__) . '/application/Repositories/*.php') ?: [] as $repositoryFile) {
-    require_once $repositoryFile;
+    require_once substr($repositoryFile, 0, -4) . '.php';
 }
 
 use Doctrine\DBAL\Configuration;
@@ -20,6 +20,7 @@ final class MaintenanceProductionQueryLog extends AbstractLogger
 {
     /** @var list<string> */
     public array $sql = [];
+    #[\Override]
     public function log($level, string|Stringable $message, array $context = []): void
     {
         if (isset($context['sql']) && is_string($context['sql'])) {

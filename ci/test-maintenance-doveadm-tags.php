@@ -20,10 +20,18 @@ final class TaggedDoveadmFixture extends ViMbAdmin_Doveadm
     }
 
     /** @return array{int,string} */
+    #[\Override]
     protected function _post($payload)
     {
-        $request = json_decode((string) $payload, true, 512, JSON_THROW_ON_ERROR);
-        $tag = $request[0][2];
+        if (!is_string($payload)) {
+            throw new RuntimeException('tag fixture request must be JSON');
+        }
+        $request = json_decode($payload, true, 512, JSON_THROW_ON_ERROR);
+        $envelope = is_array($request) && count($request) === 1 ? ($request[0] ?? null) : null;
+        $tag = is_array($envelope) ? ($envelope[2] ?? null) : null;
+        if (!is_string($tag)) {
+            throw new RuntimeException('tag fixture request must contain one tagged command');
+        }
         $rows = [['name' => 'INBOX']];
         $body = match ($this->mode) {
             'matching' => [['doveadmResponse', $rows, $tag]],

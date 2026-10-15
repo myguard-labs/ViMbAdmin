@@ -108,6 +108,9 @@ class ViMbAdmin_Doveadm
     /** @var \CurlMultiHandle|null  Lazily initialized on first _post(), closed in __destruct() */
     private $_multi = null;
 
+    /** @var int|null Maximum bytes accepted for the current response. */
+    private ?int $_responseByteLimit = null;
+
     /**
      * @param string $url     Full endpoint URL, e.g. http://dovecot:8081/doveadm/v1
      * @param string $apiKey  The doveadm_api_key (sent base64-encoded as X-Dovecot-API)
@@ -203,6 +206,13 @@ class ViMbAdmin_Doveadm
 
         list($status, $body) = $this->_post($payload);
 
+        if ($this->_responseByteLimit !== null && strlen((string) $body) > $this->_responseByteLimit) {
+            throw new ViMbAdmin_Exception(sprintf(
+                _('doveadm HTTP: response exceeds the bounded limit of %d bytes'),
+                $this->_responseByteLimit
+            ));
+        }
+
         if ($status === 401 || $status === 403) {
             throw new ViMbAdmin_Exception(sprintf(_('doveadm HTTP auth rejected (HTTP %d) — check doveadm.http.api_key'), $status));
         }
@@ -233,6 +243,26 @@ class ViMbAdmin_Doveadm
             throw new ViMbAdmin_Exception(_('doveadm HTTP: response payload is not an array'));
         }
         return $content;
+    }
+
+    /**
+     * Run one command while bounding its response before JSON decoding.
+     *
+     * @param string $cmd
+     * @param array<string,mixed> $params
+     * @return array<mixed>
+     */
+    private function runBounded($cmd, array $params, int $maxResponseBytes): array
+    {
+        if ($maxResponseBytes < 1 || $this->_responseByteLimit !== null) {
+            throw new \LogicException('Doveadm response bound must be a positive, non-nested limit.');
+        }
+        $this->_responseByteLimit = $maxResponseBytes;
+        try {
+            return $this->run($cmd, $params);
+        } finally {
+            $this->_responseByteLimit = null;
+        }
     }
 
     /**
@@ -286,17 +316,33 @@ class ViMbAdmin_Doveadm
                 : curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS)
                     && curl_setopt($ch, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
+            $body = '';
+            $responseLimitExceeded = false;
             $configured = $protocolsPinned
                 && curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false)
                 && curl_setopt($ch, CURLOPT_URL, $this->_url)
                 && curl_setopt($ch, CURLOPT_POST, true)
                 && curl_setopt($ch, CURLOPT_POSTFIELDS, $payload)
-                && curl_setopt($ch, CURLOPT_RETURNTRANSFER, true)
                 && curl_setopt($ch, CURLOPT_TIMEOUT, $this->_timeout)
                 && curl_setopt($ch, CURLOPT_HTTPHEADER, [
                     'Content-Type: application/json',
                     'Authorization: ' . $authHeader,
                 ]);
+            if ($this->_responseByteLimit === null) {
+                $configured = $configured && curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            } else {
+                $limit = $this->_responseByteLimit;
+                $configured = $configured
+                    && curl_setopt($ch, CURLOPT_RETURNTRANSFER, false)
+                    && curl_setopt($ch, CURLOPT_WRITEFUNCTION, static function ($handle, string $chunk) use (&$body, &$responseLimitExceeded, $limit): int {
+                        if (strlen($body) + strlen($chunk) > $limit) {
+                            $responseLimitExceeded = true;
+                            return 0;
+                        }
+                        $body .= $chunk;
+                        return strlen($chunk);
+                    });
+            }
             if (!$configured) {
                 throw new ViMbAdmin_Exception(_('doveadm HTTP: failed to configure cURL request'));
             }
@@ -364,7 +410,9 @@ class ViMbAdmin_Doveadm
                     $err = curl_error($ch);
                 }
 
-                $body   = curl_multi_getcontent($ch);
+                if ($this->_responseByteLimit === null) {
+                    $body = curl_multi_getcontent($ch);
+                }
                 $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
             } finally {
                 if ($added) {
@@ -372,6 +420,12 @@ class ViMbAdmin_Doveadm
                 }
             }
 
+            if ($responseLimitExceeded) {
+                throw new ViMbAdmin_Exception(sprintf(
+                    _('doveadm HTTP: response exceeds the bounded limit of %d bytes'),
+                    $this->_responseByteLimit
+                ));
+            }
             if (!is_string($body) || $errno !== CURLE_OK) {
                 throw new ViMbAdmin_Exception(_('doveadm HTTP request failed (curl): ') . $err);
             }
@@ -565,6 +619,57 @@ class ViMbAdmin_Doveadm
         $path = rtrim($path, '/');
 
         return $this->_fsList('fsIterDirs', $path, $filter);
+    }
+
+    /**
+     * List at most $maxEntries directory names without accepting an unbounded
+     * HTTP response or building an unbounded second PHP array.
+     *
+     * The method rejects an over-limit result; it never truncates it.
+     *
+     * @return string[]
+     */
+    public function fsListDirsBounded(
+        string $path,
+        int $maxEntries,
+        int $maxNameBytes,
+        int $maxResponseBytes,
+        string $filter = 'posix'
+    ): array {
+        if ($maxEntries < 0 || $maxNameBytes < 1 || $maxResponseBytes < 1) {
+            throw new \LogicException('Doveadm filesystem bounds are invalid.');
+        }
+        $path = self::_stripDriverPrefix($path);
+        $path = rtrim($path, '/');
+        $rows = $this->runBounded(
+            'fsIterDirs',
+            ['filterName' => $filter, 'path' => $path . '/'],
+            $maxResponseBytes
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $name = is_array($row) ? ($row['path'] ?? null) : $row;
+            if ($name === null || $name === '' || $name === '.' || $name === '..') {
+                continue;
+            }
+            if (!is_string($name)) {
+                throw new ViMbAdmin_Exception('doveadm HTTP: filesystem response name must be a string');
+            }
+            if (strlen($name) > $maxNameBytes) {
+                throw new ViMbAdmin_Exception(sprintf(
+                    'doveadm HTTP: filesystem response name exceeds %d bytes',
+                    $maxNameBytes
+                ));
+            }
+            $out[] = $name;
+            if (count($out) > $maxEntries) {
+                throw new ViMbAdmin_Exception(sprintf(
+                    'doveadm HTTP: filesystem response exceeds %d entries',
+                    $maxEntries
+                ));
+            }
+        }
+        return $out;
     }
 
     /**

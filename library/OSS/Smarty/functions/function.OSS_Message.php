@@ -168,6 +168,17 @@ function smarty_function_OSS_Message($params, &$smarty)
     /** @var int $nextId */
     static $nextId = 0;
     $message = '';
+    $renderAlert = static function (string $class, string $text) use (&$nextId): string {
+        $count = $nextId++;
+        return <<<END_MESSAGE
+
+        <div class="alert alert-{$class} fade in" id="oss-message-{$count}">
+            <a class="close" href="#" data-bs-dismiss="alert">×</a>
+            {$text}
+        </div>
+
+END_MESSAGE;
+    };
 
     foreach ($ossms as $ossm) {
         if (isset($params['randomid']) && !is_scalar($params['randomid'])) {
@@ -255,16 +266,7 @@ END_MESSAGE;
             $class = $classValue($ossm->getClass());
 
             foreach ($items as $item) {
-                $count = $nextId;
-                ++$nextId;
-                $message .= <<<END_MESSAGE
-
-        <div class="alert alert-{$class} fade in" id="oss-message-{$count}">
-            <a class="close" href="#" data-bs-dismiss="alert">×</a>
-            {$item}
-        </div>
-
-END_MESSAGE;
+                $message .= $renderAlert($class, $item);
             }
         } // end inner foreach
 
@@ -280,8 +282,6 @@ END_MESSAGE;
     // unaffected and a page can carry both.
     if ($flashMessages !== []) {
         foreach ($flashMessages as $fm) {
-            $count = $nextId;
-            ++$nextId;
             $fmClass = isset($fm['level']) ? $classValue($fm['level']) : 'success';
             $fmText  = isset($fm['text']) ? $fm['text'] : '';
             if (!is_string($fmText)) {
@@ -293,14 +293,7 @@ END_MESSAGE;
             }
             $fmOutput = $fmIsHtml ? $fmText : htmlspecialchars($fmText, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-            $message .= <<<END_MESSAGE
-
-        <div class="alert alert-{$fmClass} fade in" id="oss-message-{$count}">
-            <a class="close" href="#" data-bs-dismiss="alert">×</a>
-            {$fmOutput}
-        </div>
-
-END_MESSAGE;
+            $message .= $renderAlert($fmClass, $fmOutput);
         }
 
         unset($application['flashMessages']);

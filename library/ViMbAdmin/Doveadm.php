@@ -226,8 +226,15 @@ class ViMbAdmin_Doveadm
             throw new ViMbAdmin_Exception(sprintf(_('doveadm HTTP: unparseable response: %s'), substr((string) $body, 0, 500)));
         }
 
-        $type    = isset($decoded[0][0]) && is_string($decoded[0][0]) ? $decoded[0][0] : '';
-        $content = isset($decoded[0][1]) ? $decoded[0][1] : null;
+        if (count($decoded) !== 1 || count($decoded[0]) !== 3) {
+            throw new ViMbAdmin_Exception(_('doveadm HTTP: response must contain exactly one tagged result'));
+        }
+        $type        = isset($decoded[0][0]) && is_string($decoded[0][0]) ? $decoded[0][0] : '';
+        $content     = $decoded[0][1] ?? null;
+        $responseTag = isset($decoded[0][2]) && is_string($decoded[0][2]) ? $decoded[0][2] : '';
+        if (!hash_equals($tag, $responseTag)) {
+            throw new ViMbAdmin_Exception(_('doveadm HTTP: response tag does not match request'));
+        }
 
         if ($type === 'error') {
             $msg = is_array($content) && is_string($content['type'] ?? null) ? $content['type'] : 'unknown';

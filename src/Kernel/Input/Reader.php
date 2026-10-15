@@ -52,4 +52,48 @@ final class Reader
 
         return [true, $value];
     }
+
+    public static function nonNegativeInteger(mixed $value, string $name): int
+    {
+        if (is_int($value) && $value >= 0) {
+            return $value;
+        }
+        if (is_string($value) && preg_match('/^(?:0|[1-9][0-9]*)$/D', $value) === 1) {
+            $integer = filter_var($value, FILTER_VALIDATE_INT);
+            if (is_int($integer)) {
+                return $integer;
+            }
+        }
+
+        throw new \LogicException("{$name} must be a non-negative integer");
+    }
+
+    public static function positiveInteger(mixed $value, string $name): int
+    {
+        $integer = self::nonNegativeInteger($value, $name);
+        if ($integer < 1) {
+            throw new \LogicException("{$name} must be greater than zero");
+        }
+
+        return $integer;
+    }
+
+    /** @param array<string,mixed> $options */
+    public static function optionString(array $options, string $default, string ...$path): string
+    {
+        [$found, $value] = self::option($options, ...$path);
+        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : $default;
+    }
+
+    /** @param array<string,mixed> $options */
+    public static function optionNonNegativeInteger(
+        array $options,
+        int $default,
+        string ...$path,
+    ): int {
+        [$found, $value] = self::option($options, ...$path);
+        return $found
+            ? self::nonNegativeInteger($value, 'Configuration ' . implode('.', $path))
+            : $default;
+    }
 }

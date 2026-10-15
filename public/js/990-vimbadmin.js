@@ -386,6 +386,8 @@ function tt_openModalDialog(event) {
     }
 
     var modalShell = DataTable.Dom.select( '#modal_dialog_shell' );
+    tt_openModalDialog.generation = ( tt_openModalDialog.generation || 0 ) + 1;
+    var modalGeneration = tt_openModalDialog.generation;
     var loadingLabel = element.attr( 'aria-label' ) || element.attr( 'title' )
         || element.attr( 'data-bs-original-title' );
     if( typeof loadingLabel !== 'string' || loadingLabel.trim() === '' )
@@ -398,6 +400,13 @@ function tt_openModalDialog(event) {
     tt_throbber( 100, 20, 1.8 ).appendTo( DataTable.Dom.select( '#throb' ).get(0) ).start();
 
     dialog = ossModal( '#modal_dialog_shell' );
+    modalShell.off( 'hide.bs.modal.vimbadmin-generation' ).on(
+        'hide.bs.modal.vimbadmin-generation',
+        function() {
+            if( modalGeneration === tt_openModalDialog.generation )
+                ++tt_openModalDialog.generation;
+        }
+    );
 
     ossAjax({
         url: element.attr( 'href' ) ,
@@ -406,6 +415,8 @@ function tt_openModalDialog(event) {
         type: 'POST',
         timeout: 10000,
         success:    function(data) {
+                        if( modalGeneration !== tt_openModalDialog.generation )
+                            return;
                         DataTable.Dom.select('#modal_dialog').html( data );
                         var modalTitle = modalShell.find( '.modal-title' ).first();
                         var modalTitleId = modalTitle.attr( 'id' );
@@ -421,11 +432,16 @@ function tt_openModalDialog(event) {
                             modalShell.attr( 'aria-labelledby', modalTitleId ).attrRemove( 'aria-label' );
                         DataTable.Dom.select( '.modal-body' ).scrollTop( 0 );
                         DataTable.Dom.select( '#modal_dialog_cancel' ).on( 'click', function(){
+                            if( modalGeneration === tt_openModalDialog.generation )
+                                ++tt_openModalDialog.generation;
                             dialog.hide();
                         });
                      },
 
-        error:     ossAjaxErrorHandler
+        error:     function( XMLHttpRequest, textStatus, errorThrown ) {
+                       if( modalGeneration === tt_openModalDialog.generation )
+                           ossAjaxErrorHandler( XMLHttpRequest, textStatus, errorThrown );
+                   }
     });
 };
 

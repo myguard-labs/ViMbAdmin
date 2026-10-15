@@ -1008,7 +1008,7 @@ foreach ([
 ] as $invalidBounds) {
     $boundsRejected = false;
     try {
-        controllerAliasIdentityMcpInvoke($pagedMcp, '_listBounds', $invalidBounds);
+        (new ViMbAdmin_Mcp_ReadOperations())->listBounds($invalidBounds);
     } catch (ViMbAdmin_Mcp_Exception|LogicException $e) {
         $boundsRejected = true;
     }

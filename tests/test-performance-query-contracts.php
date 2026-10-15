@@ -95,12 +95,13 @@ $check(
     && str_contains($domain, '$query->getArrayResult()')
 );
 
-$mcp = $source('application/controllers/McpController.php');
+$mcp = $source('library/ViMbAdmin/Mcp/ReadOperations.php');
 $check(
     'all MCP list abilities use validated bounded repository queries',
-    substr_count($mcp, '$this->_listBounds($params)') === 3
+    substr_count($mcp, '$this->listBounds($params)') === 3
     && preg_match_all('/\],\s*\$limit\s*\+\s*1,\s*\$offset/', $mcp) === 2
-    && str_contains($mcp, '->setFirstResult($offset)->setMaxResults($limit + 1)')
+    && str_contains($mcp, '$query->setFirstResult($offset);')
+    && str_contains($mcp, '$query->setMaxResults($limit + 1);')
     && str_contains($mcp, 'LOWER(d.domain) IN (:allowed)')
     && !str_contains($mcp, 'LIST_MAX_OFFSET')
 );

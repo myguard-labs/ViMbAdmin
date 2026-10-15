@@ -229,7 +229,7 @@ function persistedAlias(McpMailboxPolicyManager $manager): ?\Entities\Alias
 }
 
 [$allowed, $allowedManager, $allowedDomain] = mcpMailboxPolicyFixture(1, 2, 256, 1000);
-$created = mcpMailboxCreate($allowed);
+$created = mcpMailboxCreate($allowed, ['active' => false, 'name' => 'Inactive MCP mailbox']);
 $allowedMailbox = persistedMailbox($allowedManager);
 mcpMailboxCheck(
     'ordinary MCP password reaches the mailbox hash unchanged',
@@ -244,6 +244,10 @@ mcpMailboxCheck(
     'below-limit MCP creation preserves an allowed quota',
     $created['created'] === true && $allowedMailbox?->getQuota() === 500
         && $allowedDomain->getMailboxCount() === 2 && $allowedManager->flushes === 1,
+);
+mcpMailboxCheck(
+    'MCP creation preserves its inactive flag and caller-specific name',
+    $allowedMailbox?->getActive() === false && $allowedMailbox?->getName() === 'Inactive MCP mailbox',
 );
 
 $boundaryBytes = " \tleading and trailing\r\n";
@@ -369,4 +373,4 @@ mcpMailboxCheck(
         && $automaticAliasManager->flushes === 1,
 );
 
-echo "ALL PASSED (16 checks)\n";
+echo "ALL PASSED (17 checks)\n";

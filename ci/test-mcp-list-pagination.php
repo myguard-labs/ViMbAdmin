@@ -14,13 +14,11 @@ $check = static function (string $label, bool $ok) use (&$failures): void {
 
 echo "== MCP list pagination contract ==\n";
 
-$controller = (new ReflectionClass(McpController::class))->newInstanceWithoutConstructor();
-$pagination = new ReflectionMethod($controller, '_pagination');
-$bounds = new ReflectionMethod($controller, '_listBounds');
+$reads = new ViMbAdmin_Mcp_ReadOperations();
 
 $check(
     'a full page with one look-ahead row advertises the next page',
-    $pagination->invoke($controller, 3, 2, 2, 0) === [
+    $reads->pagination(3, 2, 2, 0) === [
         'limit' => 2,
         'offset' => 0,
         'returned' => 2,
@@ -30,7 +28,7 @@ $check(
 );
 $check(
     'an exact final page is explicitly complete',
-    $pagination->invoke($controller, 2, 2, 2, 8) === [
+    $reads->pagination(2, 2, 2, 8) === [
         'limit' => 2,
         'offset' => 8,
         'returned' => 2,
@@ -40,7 +38,7 @@ $check(
 );
 $check(
     'an empty page beyond the former offset cap remains a bounded complete response',
-    $pagination->invoke($controller, 0, 0, 200, 10200) === [
+    $reads->pagination(0, 0, 200, 10200) === [
         'limit' => 200,
         'offset' => 10200,
         'returned' => 0,
@@ -50,14 +48,14 @@ $check(
 );
 $check(
     'omitted paging parameters retain the documented defaults',
-    $bounds->invoke($controller, []) === [100, 0],
+    $reads->listBounds([]) === [100, 0],
 );
-$boundaryPage = $pagination->invoke($controller, 201, 200, 200, 10000);
+$boundaryPage = $reads->pagination(201, 200, 200, 10000);
 $nextOffset = is_array($boundaryPage) ? ($boundaryPage['next_offset'] ?? null) : null;
 $continuationAccepted = false;
 try {
     $continuationAccepted = $nextOffset === 10200
-        && $bounds->invoke($controller, ['limit' => 200, 'offset' => $nextOffset]) === [200, 10200];
+        && $reads->listBounds(['limit' => 200, 'offset' => $nextOffset]) === [200, 10200];
 } catch (ViMbAdmin_Mcp_Exception) {
     $continuationAccepted = false;
 }
@@ -67,7 +65,7 @@ $check(
 );
 $check(
     'the input parser accepts its maximum native non-negative offset',
-    $bounds->invoke($controller, ['offset' => PHP_INT_MAX]) === [100, PHP_INT_MAX],
+    $reads->listBounds(['offset' => PHP_INT_MAX]) === [100, PHP_INT_MAX],
 );
 
 foreach ([
@@ -79,33 +77,12 @@ foreach ([
 ] as $label => $params) {
     $rejected = false;
     try {
-        $bounds->invoke($controller, $params);
+        $reads->listBounds($params);
     } catch (ViMbAdmin_Mcp_Exception $error) {
         $rejected = str_contains($error->getMessage(), 'param');
     }
     $check("{$label} is rejected", $rejected);
 }
-
-$source = file_get_contents(__DIR__ . '/../application/controllers/McpController.php');
-if (!is_string($source)) {
-    throw new RuntimeException('Cannot read MCP controller source.');
-}
-$check(
-    'all three public list methods retain their legacy item keys and add pagination metadata',
-    substr_count($source, "'pagination' => \$this->_pagination") === 3
-        && str_contains($source, "'domains' => \$out")
-        && str_contains($source, "'mailboxes' => \$out")
-        && str_contains($source, "'aliases' => \$out"),
-);
-$check(
-    'all three list queries fetch exactly one bounded look-ahead row',
-    substr_count($source, '$limit + 1') === 3
-        && substr_count($source, 'array_slice($') >= 3,
-);
-$check(
-    'list bounds have no artificial offset ceiling',
-    !str_contains($source, 'LIST_MAX_OFFSET'),
-);
 
 $documentation = file_get_contents(__DIR__ . '/../docs/mcp-auth.md');
 if (!is_string($documentation)) {

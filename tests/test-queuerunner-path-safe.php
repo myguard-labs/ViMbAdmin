@@ -76,7 +76,7 @@ check(
 
 $positiveRejects = static function (mixed $value): bool {
     try {
-        \ViMbAdmin\Kernel\Input\Reader::positiveInteger($value, 'Queue drain maximum');
+        \ViMbAdmin\Kernel\Input\Reader::positiveInteger($value, 'Queue drain maximum', true);
         return false;
     } catch (\Throwable $e) {
         return true;
@@ -84,8 +84,8 @@ $positiveRejects = static function (mixed $value): bool {
 };
 check(
     'queue limit preserves canonical positive integers',
-    \ViMbAdmin\Kernel\Input\Reader::positiveInteger(2, 'Queue drain maximum') === 2
-        && \ViMbAdmin\Kernel\Input\Reader::positiveInteger('3', 'Queue drain maximum') === 3
+    \ViMbAdmin\Kernel\Input\Reader::positiveInteger(2, 'Queue drain maximum', true) === 2
+        && \ViMbAdmin\Kernel\Input\Reader::positiveInteger('007', 'Queue drain maximum', true) === 7
 );
 check(
     'queue limit rejects lossy or non-positive coercion',

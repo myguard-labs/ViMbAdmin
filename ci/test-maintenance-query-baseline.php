@@ -14,27 +14,15 @@ use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\ORMSetup;
-use Psr\Log\AbstractLogger;
 
-final class MaintenanceProductionQueryLog extends AbstractLogger
-{
-    /** @var list<string> */
-    public array $sql = [];
-    #[\Override]
-    public function log($level, string|Stringable $message, array $context = []): void
-    {
-        if (isset($context['sql']) && is_string($context['sql'])) {
-            $this->sql[] = $context['sql'];
-        }
-    }
-}
+require_once __DIR__ . '/maintenance-operation-observer.php';
 
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {
     echo ($ok ? '  ok   ' : '  FAIL ') . $label . "\n";
     $failures += $ok ? 0 : 1;
 };
-$logger = new MaintenanceProductionQueryLog();
+$logger = new MaintenanceOperationObserver();
 $orm = ORMSetup::createAttributeMetadataConfiguration([dirname(__DIR__) . '/application/Entities'], true);
 if (PHP_VERSION_ID >= 80400) {
     $orm->enableNativeLazyObjects(true);
@@ -65,21 +53,13 @@ $inject = getenv('VIMBADMIN_BASELINE_INJECT_EXTRA') === '1';
  * @return array{result:mixed,queries:int,elapsed:int,memory:int,failed:bool}
  */
 $observe = static function (string $name, callable $operation, int $ceiling) use ($logger, $inject, $db, $check): array {
-    $logger->sql = [];
-    $before = memory_get_usage(true);
-    $started = hrtime(true);
-    try {
-        $result = $operation();
-        $failed = false;
-    } catch (Throwable $error) {
-        $result = $error;
-        $failed = true;
-    }
-    if ($inject) {
+    $sample = $logger->measure($operation, null, $inject ? static function () use ($db): void {
         $db->fetchOne('SELECT COUNT(*) FROM mailbox');
-    }
-    $receipt = ['workflow' => $name, 'queries' => count($logger->sql), 'elapsed_ns' => hrtime(true) - $started,
-        'memory_delta_bytes' => max(0, memory_get_usage(true) - $before), 'failed' => $failed];
+    } : null);
+    $result = $sample['result'];
+    $failed = $sample['failed'];
+    $receipt = ['workflow' => $name, 'queries' => $sample['queries'], 'elapsed_ns' => $sample['elapsed'],
+        'memory_delta_bytes' => $sample['memory'], 'failed' => $failed];
     echo 'maintenance-production-baseline ' . json_encode($receipt, JSON_THROW_ON_ERROR) . "\n";
     $check("{$name}: production query ceiling", $receipt['queries'] <= $ceiling);
     return ['result' => $result, 'queries' => $receipt['queries'], 'elapsed' => $receipt['elapsed_ns'],
@@ -136,10 +116,11 @@ $search = $observe('mailbox-search', fn () => $repository->pagedForMailboxList($
 $check('search: production count and page remain bounded', count($pageResult($search['result'])['rows']) <= 200);
 $usage = $observe('mailbox-usage', fn () => $repository->loadForMailboxList($admin, $domain), 3);
 $check('usage: production bulk merge has no per-row growth', count($rowResult($usage['result'])) === 501 && $usage['queries'] === 3);
-$unauthorized = $observe('mailbox-unauthorized', static function (): never {
-    throw new RuntimeException('authorization rejected before repository');
+$rejected = $observe('observer-rejected-operation', static function (): never {
+    throw new RuntimeException('observer failure-capture control');
 }, 0);
-$check('unauthorized: production repository is not reached', $unauthorized['failed'] && $unauthorized['queries'] === 0);
+$check('observer failure capture does not fabricate a query', $rejected['failed'] && $rejected['queries'] === 0);
+// Actual authorization is exercised by test-refactor-runtime-baseline.php.
 $failure = $observe('mailbox-failure', function () use ($repository, $admin, $domain, $db): mixed {
     $db->executeStatement('DROP TABLE dovecot_quota');
     return $repository->loadForMailboxList($admin, $domain);

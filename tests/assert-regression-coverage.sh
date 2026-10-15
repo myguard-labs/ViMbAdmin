@@ -9,6 +9,7 @@ readonly unit_runner=tests/run-unit-tests.sh
 readonly phpstan_runner=tests/run-phpstan-tests.sh
 readonly static_workflow=.github/workflows/static-analysis.yml
 readonly regression_workflow=.github/workflows/regression.yml
+readonly ci_workflow=.github/workflows/ci.yml
 
 static_workflow_has_phpstan_runtime_contract() {
   local trust_line owner_line required
@@ -247,6 +248,29 @@ workflow_has_unconditional_owner_step "$regression_workflow" command \
 workflow_has_unconditional_owner_step "$static_workflow" command \
   'bash tests/run-phpstan-tests.sh' || {
   printf 'Static-analysis workflow does not invoke the PHPStan test runner.\n' >&2
+  exit 1
+}
+workflow_has_unconditional_owner_step "$static_workflow" php \
+  'ci/test-formatter-selection.php' || {
+  printf 'Static-analysis workflow does not invoke the formatter selection regression.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$static_workflow" command \
+  'bash ci/test-refactor-metrics.sh' || {
+  printf 'Static-analysis workflow does not invoke the refactor metrics regression.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-runtime-baseline.php' || {
+  printf 'Regression workflow does not invoke the real adapter runtime baseline.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$ci_workflow" php \
+  'ci/test-dependency-refresh.php' || {
+  printf 'CI workflow does not invoke the dependency refresh regression.\n' >&2
   exit 1
 }
 

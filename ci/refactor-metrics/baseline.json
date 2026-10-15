@@ -1,0 +1,73 @@
+{
+  "candidate_fingerprint_exclusions": [
+    "ci/refactor-metrics/baseline.json",
+    "ci/refactor-metrics/tracked-manifest.tsv"
+  ],
+  "candidate_manifest": "candidate-manifest.json",
+  "clone_dataset_sha256": "2fea602ef34158a027d235b16a1ef10effe91d0201f32c2fca00fe29ff00be0c",
+  "command": [
+    "jscpd",
+    "--format",
+    "php",
+    "--mode",
+    "weak",
+    "--min-lines",
+    "8",
+    "--min-tokens",
+    "70",
+    "--ignore",
+    "**/Proxies/**",
+    "--reporters",
+    "json",
+    "--no-colors",
+    "--output",
+    "<new-output-dir>",
+    "src",
+    "application",
+    "library"
+  ],
+  "commit": "841144d0cb300ac2e3bca3af3c3874e0d091d958",
+  "exclusions": [
+    "**/Proxies/**"
+  ],
+  "history_policy": "last 100 non-merge commits touching roots at recorded HEAD",
+  "history_sha256": "add4e647336d3206c75ee54a45cf5d0f2150edaf81f8d65b0061c61128dbf09a",
+  "input_policy": "current bytes of tracked regular files only; no licenses removed",
+  "measurement": "code_lines are PHP lexer non-comment/non-whitespace token-bearing physical lines; includes declarations/braces/template HTML, not runtime statements",
+  "scan_input_sha256": "06d5bfe26f73fba056d2580777f0f07f39132ff98fa82b853016d6cd041a81d1",
+  "schema": 1,
+  "source_roots": [
+    "src",
+    "application",
+    "library"
+  ],
+  "statistics": {
+    "clones": 125,
+    "duplicatedLines": 2868,
+    "duplicatedTokens": 14274,
+    "lines": 40268,
+    "newClones": 0,
+    "newDuplicatedLines": 0,
+    "percentage": 7.122280719181484,
+    "percentageTokens": 7.286593770100157,
+    "sources": 177,
+    "tokens": 195894
+  },
+  "token_bearing_source_lines": {
+    "attributed_oss_vendor": 1912,
+    "first_party_including_mapping": 22247,
+    "generated": 0
+  },
+  "tools": {
+    "git": "git version 2.55.0",
+    "jscpd": "cpd 5.0.12",
+    "jscpd_package_sha256": "a97a5e0ac164d937d12c5f0c878229683d683b271f80e2b9e1c5db3acc7b3158",
+    "node": "v22.23.1",
+    "php": "8.4.26",
+    "python": "3.13.5"
+  },
+  "tracked_manifest_sha256": "3043699c0191aceb49ca086a03365163a3972d800fec1c7deac5b1955c99d005",
+  "tracked_source_files": 234,
+  "tracked_working_candidate_sha256": "1680604bdfe587d7dca8601de70332fb82f3e6284fa3be11c2b13f47df45c0fd",
+  "tree": "497455ce5f5ba57017eaa95b58f59223b6f56752"
+}

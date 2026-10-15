@@ -59,6 +59,17 @@ jobs:
       - name: Workflow runtime contract self-test
         run: bash tests/test-assert-workflow-runtime.sh
 
+      - name: Test dependency refresh contracts
+        run: php ci/test-dependency-refresh.php
+
+      - name: Check dependency refresh for Dependabot
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.user.login == 'dependabot[bot]'
+        env:
+          DEPENDENCY_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/scripts/check-dependency-refresh.sh
+
       - name: Validate composer.json / composer.lock
         run: |
           composer validate --strict

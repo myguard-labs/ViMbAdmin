@@ -1,0 +1,539 @@
+{
+  "schema": 1,
+  "commit": "841144d0cb300ac2e3bca3af3c3874e0d091d958",
+  "tree": "497455ce5f5ba57017eaa95b58f59223b6f56752",
+  "source_sha256": {
+    "ci/maintenance-operation-observer.php": "af4e1b72c3a277a5987c131d810c4eda427291c05ef93596ebc437f1313303d0",
+    "ci/test-refactor-runtime-baseline.php": "3db9ddc2b2cf4e62ac39e4f7b20dba492e90ae9bc7025c6ab09b4c61bc5abd1a",
+    "ci/test-maintenance-query-baseline.php": "1dac732581a9f6a73d807ba1dfc367115a220c9819e3970737926747ccb426e3",
+    "ci/test-maintenance-workflow-observers.php": "3b43b1581b1f59a618e2f953aa7c708bc01a32a5581bdf4aed0e907e8cc8896c"
+  },
+  "datasets": {
+    "1": {
+      "fixture_rows": 1,
+      "row_counts": {
+        "authorized_domains": 1,
+        "foreign_domains": 1,
+        "all_domains": 2,
+        "mailboxes": 1,
+        "archives": 1
+      },
+      "backend_normal_items": 2,
+      "backend_rejection_items": 501,
+      "server_settings": {
+        "buffer_pool_bytes": 134217728,
+        "query_cache_type": "OFF",
+        "thread_handling": "one-thread-per-connection"
+      },
+      "dataset_sha256": "4cee1651f7eac42d67ef2701f5a076646a68834a47cf890165642f110141d3b9",
+      "mariadb": "11.4.13-MariaDB-ubu2404",
+      "isolation": "REPEATABLE-READ"
+    },
+    "50": {
+      "fixture_rows": 50,
+      "row_counts": {
+        "authorized_domains": 50,
+        "foreign_domains": 1,
+        "all_domains": 51,
+        "mailboxes": 50,
+        "archives": 50
+      },
+      "backend_normal_items": 51,
+      "backend_rejection_items": 501,
+      "server_settings": {
+        "buffer_pool_bytes": 134217728,
+        "query_cache_type": "OFF",
+        "thread_handling": "one-thread-per-connection"
+      },
+      "dataset_sha256": "da4cd042ebd141483bdad34440f18162ab2a2a2afd0f07b6ac64e23df37a56f6",
+      "mariadb": "11.4.13-MariaDB-ubu2404",
+      "isolation": "REPEATABLE-READ"
+    },
+    "500": {
+      "fixture_rows": 500,
+      "row_counts": {
+        "authorized_domains": 500,
+        "foreign_domains": 1,
+        "all_domains": 501,
+        "mailboxes": 500,
+        "archives": 500
+      },
+      "backend_normal_items": 500,
+      "backend_rejection_items": 501,
+      "server_settings": {
+        "buffer_pool_bytes": 134217728,
+        "query_cache_type": "OFF",
+        "thread_handling": "one-thread-per-connection"
+      },
+      "dataset_sha256": "43439df894d181d2df8a38caa4964fff8924f2617abfeb6fdadd1adbc380273e",
+      "mariadb": "11.4.13-MariaDB-ubu2404",
+      "isolation": "REPEATABLE-READ"
+    },
+    "1000": {
+      "fixture_rows": 1000,
+      "row_counts": {
+        "authorized_domains": 1000,
+        "foreign_domains": 1,
+        "all_domains": 1001,
+        "mailboxes": 1000,
+        "archives": 1000
+      },
+      "backend_normal_items": 500,
+      "backend_rejection_items": 501,
+      "server_settings": {
+        "buffer_pool_bytes": 134217728,
+        "query_cache_type": "OFF",
+        "thread_handling": "one-thread-per-connection"
+      },
+      "dataset_sha256": "e1c524f0a10843dd812d6e6c4080120318b8857370cad3f41ce64ed05fa02875",
+      "mariadb": "11.4.13-MariaDB-ubu2404",
+      "isolation": "REPEATABLE-READ"
+    }
+  },
+  "contracts": {
+    "mailbox-http": {
+      "cold_sql": 5,
+      "warm_sql": 3,
+      "backend_calls": 0
+    },
+    "domain-http": {
+      "cold_sql": 4,
+      "warm_sql": 1,
+      "backend_calls": 0
+    },
+    "archive-http": {
+      "cold_sql": 3,
+      "warm_sql": 1,
+      "backend_calls": 0
+    },
+    "mailbox-mcp": {
+      "cold_sql": 3,
+      "warm_sql": 3,
+      "backend_calls": 0
+    },
+    "domain-mcp": {
+      "cold_sql": 2,
+      "warm_sql": 2,
+      "backend_calls": 0
+    },
+    "queue": {
+      "cold_sql": 1,
+      "warm_sql": 1,
+      "backend_calls": 2
+    }
+  },
+  "boundary": "In-process real action/dispatcher or queue scan; process/bootstrap/Container construction excluded from timings; no HTTP network latency claim.",
+  "cache": "Fresh process/EM/ArrayAdapter for each paired trial; same EM/result cache/Auth within cold-warm pair. CLI opcache off. Fixed future last-used token suppresses best-effort touch writes.",
+  "database_cache": "Owned MariaDB buffer pool is prewarmed by fixture creation and retained across pairs/minors; not a cold database benchmark. Serial PHP CLI child processes, one operation at a time.",
+  "rss": "Linux getrusage ru_maxrss process-lifetime KiB high-water, including bootstrap and previous cold result; not per-operation allocation delta.",
+  "results": [
+    {
+      "php": "8.3.35",
+      "unit": "mailbox-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1508614,
+        46058781
+      ],
+      "p95_ns_range": [
+        1561129,
+        50731300
+      ],
+      "peak_rss_kib_max": 49528,
+      "max_observed_spread_ratio": 0.245154275836878
+    },
+    {
+      "php": "8.3.35",
+      "unit": "domain-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        773515,
+        27125985
+      ],
+      "p95_ns_range": [
+        845915,
+        27443497
+      ],
+      "peak_rss_kib_max": 49156,
+      "max_observed_spread_ratio": 0.09359870202904921
+    },
+    {
+      "php": "8.3.35",
+      "unit": "archive-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        778832,
+        24593545
+      ],
+      "p95_ns_range": [
+        798609,
+        26055704
+      ],
+      "peak_rss_kib_max": 48584,
+      "max_observed_spread_ratio": 0.08504807619695438
+    },
+    {
+      "php": "8.3.35",
+      "unit": "mailbox-mcp",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1894034,
+        35425182
+      ],
+      "p95_ns_range": [
+        2044926,
+        36898994
+      ],
+      "peak_rss_kib_max": 47400,
+      "max_observed_spread_ratio": 0.41404514135483667
+    },
+    {
+      "php": "8.3.35",
+      "unit": "domain-mcp",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1496558,
+        53826971
+      ],
+      "p95_ns_range": [
+        1824756,
+        56078745
+      ],
+      "peak_rss_kib_max": 49480,
+      "max_observed_spread_ratio": 0.21930189140681483
+    },
+    {
+      "php": "8.3.35",
+      "unit": "queue",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        536679,
+        19239058
+      ],
+      "p95_ns_range": [
+        778202,
+        20261165
+      ],
+      "peak_rss_kib_max": 47464,
+      "max_observed_spread_ratio": 0.4500325147807162
+    },
+    {
+      "php": "8.4.26",
+      "unit": "mailbox-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1559553,
+        30861550
+      ],
+      "p95_ns_range": [
+        1687733,
+        33077820
+      ],
+      "peak_rss_kib_max": 50468,
+      "max_observed_spread_ratio": 0.3857630359963522
+    },
+    {
+      "php": "8.4.26",
+      "unit": "domain-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        833994,
+        27304060
+      ],
+      "p95_ns_range": [
+        1261248,
+        36148304
+      ],
+      "peak_rss_kib_max": 49904,
+      "max_observed_spread_ratio": 0.6794695953654314
+    },
+    {
+      "php": "8.4.26",
+      "unit": "archive-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        870123,
+        24797273
+      ],
+      "p95_ns_range": [
+        1174315,
+        31296993
+      ],
+      "peak_rss_kib_max": 49796,
+      "max_observed_spread_ratio": 0.39839961244970473
+    },
+    {
+      "php": "8.4.26",
+      "unit": "mailbox-mcp",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1343660,
+        33404129
+      ],
+      "p95_ns_range": [
+        1589785,
+        34411743
+      ],
+      "peak_rss_kib_max": 48728,
+      "max_observed_spread_ratio": 0.1831750591667535
+    },
+    {
+      "php": "8.4.26",
+      "unit": "domain-mcp",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1135913,
+        52962094
+      ],
+      "p95_ns_range": [
+        1625708,
+        54570986
+      ],
+      "peak_rss_kib_max": 50540,
+      "max_observed_spread_ratio": 0.6317344976669458
+    },
+    {
+      "php": "8.4.26",
+      "unit": "queue",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        461073,
+        16138979
+      ],
+      "p95_ns_range": [
+        492343,
+        18092928
+      ],
+      "peak_rss_kib_max": 48904,
+      "max_observed_spread_ratio": 0.12107017426567071
+    },
+    {
+      "php": "8.5.11",
+      "unit": "mailbox-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1491545,
+        31415120
+      ],
+      "p95_ns_range": [
+        1672203,
+        36722814
+      ],
+      "peak_rss_kib_max": 51244,
+      "max_observed_spread_ratio": 0.35307510004052095
+    },
+    {
+      "php": "8.5.11",
+      "unit": "domain-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        816937,
+        27538055
+      ],
+      "p95_ns_range": [
+        891557,
+        32893158
+      ],
+      "peak_rss_kib_max": 50804,
+      "max_observed_spread_ratio": 0.2335214413557368
+    },
+    {
+      "php": "8.5.11",
+      "unit": "archive-http",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        829695,
+        24941709
+      ],
+      "p95_ns_range": [
+        887211,
+        35371138
+      ],
+      "peak_rss_kib_max": 50468,
+      "max_observed_spread_ratio": 0.4216992477334735
+    },
+    {
+      "php": "8.5.11",
+      "unit": "mailbox-mcp",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1415953,
+        33662907
+      ],
+      "p95_ns_range": [
+        1883074,
+        42943771
+      ],
+      "peak_rss_kib_max": 49140,
+      "max_observed_spread_ratio": 0.5469791328534853
+    },
+    {
+      "php": "8.5.11",
+      "unit": "domain-mcp",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        1185678,
+        53957490
+      ],
+      "p95_ns_range": [
+        1443821,
+        54802124
+      ],
+      "peak_rss_kib_max": 51052,
+      "max_observed_spread_ratio": 0.21771762653941457
+    },
+    {
+      "php": "8.5.11",
+      "unit": "queue",
+      "sizes": [
+        1,
+        50,
+        500,
+        1000
+      ],
+      "paired_trials_per_size": 7,
+      "p50_ns_range": [
+        392349,
+        16355554
+      ],
+      "p95_ns_range": [
+        465795,
+        20129070
+      ],
+      "peak_rss_kib_max": 49780,
+      "max_observed_spread_ratio": 0.48595682657029243
+    }
+  ],
+  "archive_mcp_list": {
+    "disposition": "absent adapter; evidence-closed VC-B02f",
+    "path": "application/controllers/McpController.php",
+    "source_sha256": "2b69b0071b7f2cd54f1a2271a266efdfccdb6723539d073e9286b4d7b34d4328",
+    "method_table_lines": [
+      166,
+      182
+    ],
+    "archive_methods": [
+      "archive.restore",
+      "archive.delete"
+    ]
+  },
+  "detail_reports": [
+    {
+      "php": "8.3.35",
+      "sha256": "1256a51775d298a4b13c768cb76742b26ae2be5ec13f62c6ffa9e2c6fd1ebda9",
+      "local_path": "/tmp/vimbadmin-c67-runtime/matrix-typed-reports/php-8.3.35/report.json"
+    },
+    {
+      "php": "8.4.26",
+      "sha256": "082d46e023c40514aecdaccecabd5e6297a3d81fc1f01571625b49bfe588ba0d",
+      "local_path": "/tmp/vimbadmin-c67-runtime/matrix-typed-reports/php-8.4.26/report.json"
+    },
+    {
+      "php": "8.5.11",
+      "sha256": "5a6209210c3d4b0be02db5eb36bf5695ea5ab45aebd683b8dc4f9b41f0bf67ec",
+      "local_path": "/tmp/vimbadmin-c67-runtime/matrix-typed-reports/php-8.5.11/report.json"
+    }
+  ]
+}

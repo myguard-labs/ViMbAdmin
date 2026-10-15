@@ -17,20 +17,8 @@ use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\ORMSetup;
 use Doctrine\ORM\Tools\SchemaTool;
-use Psr\Log\AbstractLogger;
 
-final class MaintenanceWorkflowSqlLog extends AbstractLogger
-{
-    /** @var list<string> */
-    public array $sql = [];
-
-    public function log($level, string|Stringable $message, array $context = []): void
-    {
-        if (isset($context['sql']) && is_string($context['sql'])) {
-            $this->sql[] = $context['sql'];
-        }
-    }
-}
+require_once __DIR__ . '/maintenance-operation-observer.php';
 
 final class MaintenanceWorkflowDoveadm extends ViMbAdmin_Doveadm
 {
@@ -77,7 +65,7 @@ $check = static function (string $label, bool $ok) use (&$failures): void {
 $inject = getenv('VIMBADMIN_BASELINE_INJECT_EXTRA') === '1';
 $injectOrphanBackend = $inject || getenv('VIMBADMIN_BASELINE_INJECT_ORPHAN_BACKEND') === '1';
 $discardOrphans = getenv('VIMBADMIN_BASELINE_INJECT_ORPHAN_DISCARD') === '1';
-$logger = new MaintenanceWorkflowSqlLog();
+$logger = new MaintenanceOperationObserver();
 $orm = ORMSetup::createAttributeMetadataConfiguration([dirname(__DIR__) . '/application/Entities'], true);
 if (PHP_VERSION_ID >= 80400) {
     $orm->enableNativeLazyObjects(true);
@@ -114,25 +102,24 @@ $observe = static function (
     int $backendCeiling,
     ?MaintenanceWorkflowDoveadm $backend = null,
 ) use ($logger, $db, $inject, $injectOrphanBackend, $check): mixed {
-    $logger->sql = [];
-    $backendBefore = $backend === null ? 0 : $backend->calls;
-    $memoryBefore = memory_get_usage(true);
-    $started = hrtime(true);
-    $result = $operation();
-    if ($backend !== null) {
-        if ($injectOrphanBackend) {
-            $backend->fsListDirs('/mail/injected');
-        }
-    } elseif ($inject) {
-        $db->fetchOne('SELECT COUNT(*) FROM mailbox');
+    $sample = $logger->measure(
+        $operation,
+        $backend === null ? null : static fn (): int => $backend->calls,
+        static function () use ($backend, $injectOrphanBackend, $inject, $db): void {
+            if ($backend !== null && $injectOrphanBackend) {
+                $backend->fsListDirs('/mail/injected');
+            } elseif ($backend === null && $inject) {
+                $db->fetchOne('SELECT COUNT(*) FROM mailbox');
+            }
+        },
+    );
+    if ($sample['failed'] && $sample['result'] instanceof Throwable) {
+        throw $sample['result'];
     }
-    $receipt = [
-        'workflow' => $workflow,
-        'sql' => count($logger->sql),
-        'backend' => ($backend === null ? 0 : $backend->calls) - $backendBefore,
-        'elapsed_ns' => hrtime(true) - $started,
-        'memory_delta_bytes' => max(0, memory_get_usage(true) - $memoryBefore),
-    ];
+    $result = $sample['result'];
+    $receipt = ['workflow' => $workflow, 'sql' => $sample['queries'],
+        'backend' => $sample['backend'], 'elapsed_ns' => $sample['elapsed'],
+        'memory_delta_bytes' => $sample['memory']];
     echo 'maintenance-production-workflow ' . json_encode($receipt, JSON_THROW_ON_ERROR) . "\n";
     $check("{$workflow}: operation-local SQL ceiling", $receipt['sql'] <= $sqlCeiling);
     $check("{$workflow}: operation-local backend ceiling", $receipt['backend'] <= $backendCeiling);

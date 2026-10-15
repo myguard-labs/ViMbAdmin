@@ -92,8 +92,8 @@ awk '
     if (per_job_failed) {
       print "Every PR-triggered job must use ubuntu-24.04, pin the PR head, and run the isolation guard exactly once." > "/dev/stderr"
     }
-    if (jobs != 11) {
-      printf "PR-triggered job count is %d; expected 11.\n", jobs > "/dev/stderr"
+    if (jobs != 12) {
+      printf "PR-triggered job count is %d; expected 12.\n", jobs > "/dev/stderr"
       failed = 1
     }
     exit (per_job_failed || failed) ? 1 : 0

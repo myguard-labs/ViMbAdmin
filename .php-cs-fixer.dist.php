@@ -20,6 +20,13 @@ $finder = (new PhpCsFixer\Finder())
         __DIR__ . '/tests',
         __DIR__ . '/tools',
     ])
+    ->filter(static function (SplFileInfo $file): bool {
+        $generatedProxies = __DIR__ . '/application/Proxies';
+        $path = $file->getPathname();
+
+        return $path !== $generatedProxies
+            && !str_starts_with($path, $generatedProxies . DIRECTORY_SEPARATOR);
+    })
     ->append([__DIR__ . '/preload.php', __FILE__])
     // `.github/scripts` holds tracked CI helpers; the finder skips dot
     // directories unless it is told not to.

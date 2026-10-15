@@ -36,7 +36,16 @@ final class Reader
      */
     public static function option(array $options, string ...$path): array
     {
-        $arrayName = array_key_exists('arrayName', $path) ? array_pop($path) : null;
+        return self::optionPath($options, array_values($path));
+    }
+
+    /**
+     * @param array<string,mixed> $options
+     * @param list<string> $path
+     * @return array{bool,mixed}
+     */
+    private static function optionPath(array $options, array $path, ?string $arrayName = null): array
+    {
         $value = $options;
         $walked = [];
         foreach ($path as $key) {
@@ -82,7 +91,7 @@ final class Reader
      */
     public static function optionString(array $options, string $default, array $path, bool $terminalPeriod = false, ?string $pathArrayName = null): string
     {
-        [$found, $value] = self::option($options, ...$path, arrayName: $pathArrayName ?? '');
+        [$found, $value] = self::optionPath($options, $path, $pathArrayName);
         return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path), $terminalPeriod) : $default;
     }
 
@@ -97,7 +106,7 @@ final class Reader
         bool $terminalPeriod = false,
         ?string $pathArrayName = null,
     ): int {
-        [$found, $value] = self::option($options, ...$path, arrayName: $pathArrayName ?? '');
+        [$found, $value] = self::optionPath($options, $path, $pathArrayName);
         return $found
             ? self::nonNegativeInteger($value, 'Configuration ' . implode('.', $path), $terminalPeriod)
             : $default;

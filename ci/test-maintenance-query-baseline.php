@@ -97,28 +97,44 @@ $resetRows = static function (int $count) use ($db): void {
         $db->insert('dovecot_last_login', ['username' => $username, 'last_login' => 1700000000 + $id]);
     }
 };
+/** @return array{rows:list<array<string,mixed>>,total:int,filtered:int} */
+$pageResult = static function (mixed $result): array {
+    if (!is_array($result) || !isset($result['rows'], $result['total'], $result['filtered']) || !is_array($result['rows'])) {
+        throw new RuntimeException('Production page result has an invalid shape');
+    }
+    return $result;
+};
+/** @return list<array<string,mixed>> */
+$rowResult = static function (mixed $result): array {
+    if (!is_array($result)) {
+        throw new RuntimeException('Production row result has an invalid shape');
+    }
+    return $result;
+};
 
 $counts = [];
 foreach ([0, 1, 50, 500] as $size) {
     $resetRows($size);
     $cold = $observe("mailbox-list-{$size}-cold", fn () => $repository->pagedForMailboxList($admin, $domain, '', false, 'username', 'ASC', 0, 500), $size === 0 ? 2 : 4);
     $warm = $observe("mailbox-list-{$size}-warm", fn () => $repository->pagedForMailboxList($admin, $domain, '', false, 'username', 'ASC', 0, 500), $size === 0 ? 1 : 3);
+    $coldPage = $pageResult($cold['result']);
+    $firstRow = $coldPage['rows'][0] ?? null;
     $counts[$size] = [$cold['queries'], $warm['queries']];
     $check(
         "mailbox-list {$size}: production rows and usage merge are complete",
-        is_array($cold['result']) && count($cold['result']['rows'] ?? []) === $size
-        && ($size === 0 || isset($cold['result']['rows'][0]['quota_bytes'], $cold['result']['rows'][0]['last_login']))
+        count($coldPage['rows']) === $size
+        && ($size === 0 || (is_array($firstRow) && isset($firstRow['quota_bytes'], $firstRow['last_login'])))
     );
 }
 $resetRows(501);
 $over = $observe('mailbox-list-over-cap', fn () => $repository->pagedForMailboxList($admin, $domain, '', false, 'username', 'ASC', 0, 500), 3);
-$check('over-cap: production repository returns one bounded page', count($over['result']['rows'] ?? []) === 500);
+$check('over-cap: production repository returns one bounded page', count($pageResult($over['result'])['rows']) === 500);
 $last = $observe('mailbox-list-max-page', fn () => $repository->pagedForMailboxList($admin, $domain, '', false, 'username', 'ASC', 1000000, 500), 1);
-$check('max-page: terminal production page is empty', ($last['result']['rows'] ?? null) === []);
+$check('max-page: terminal production page is empty', $pageResult($last['result'])['rows'] === []);
 $search = $observe('mailbox-search', fn () => $repository->pagedForMailboxList($admin, $domain, 'user4', true, 'username', 'ASC', 0, 200), 4);
-$check('search: production count and page remain bounded', is_array($search['result']) && count($search['result']['rows'] ?? []) <= 200);
+$check('search: production count and page remain bounded', count($pageResult($search['result'])['rows']) <= 200);
 $usage = $observe('mailbox-usage', fn () => $repository->loadForMailboxList($admin, $domain), 3);
-$check('usage: production bulk merge has no per-row growth', count($usage['result'] ?? []) === 501 && $usage['queries'] === 3);
+$check('usage: production bulk merge has no per-row growth', count($rowResult($usage['result'])) === 501 && $usage['queries'] === 3);
 $unauthorized = $observe('mailbox-unauthorized', static function (): never {
     throw new RuntimeException('authorization rejected before repository');
 }, 0);
@@ -134,37 +150,30 @@ $check(
     $counts[1] === $counts[50] && $counts[50] === $counts[500] && $usage['queries'] === 3
 );
 
-/** Execute the maintained production-service fixtures under this exact PHP lane. */
-$workflowCalls = [];
-$productionFixture = static function (string $workflow, string $script) use ($check, &$workflowCalls): void {
-    $workflowCalls[$workflow] = ($workflowCalls[$workflow] ?? 0) + 1;
+/** Execute operation-local production workflow observers under this exact PHP lane. */
+$productionFixture = static function (string $script) use ($check): void {
     $started = hrtime(true);
     $process = proc_open([PHP_BINARY, $script], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__));
     if (!is_resource($process)) {
-        throw new RuntimeException("Could not start {$workflow} fixture");
+        throw new RuntimeException('Could not start production workflow observer');
     }
     $stdout = stream_get_contents($pipes[1]);
     fclose($pipes[1]);
     $stderr = stream_get_contents($pipes[2]);
     fclose($pipes[2]);
     $status = proc_close($process);
-    echo 'maintenance-production-workflow ' . json_encode([
-        'workflow' => $workflow, 'exit' => $status, 'elapsed_ns' => hrtime(true) - $started,
+    echo (string) $stdout;
+    echo 'maintenance-production-workflow-suite ' . json_encode([
+        'exit' => $status, 'elapsed_ns' => hrtime(true) - $started,
         'output_sha256' => hash('sha256', (string) $stdout . (string) $stderr),
     ], JSON_THROW_ON_ERROR) . "\n";
-    $check("{$workflow}: maintained production workflow fixture", $status === 0);
+    $check('production workflows: operation-local observers', $status === 0);
 };
-$productionFixture('web-and-mcp-create', 'ci/test-maintenance-mailbox-create-parity.php');
-$productionFixture('web-and-mcp-purge', 'tests/test-repository-mailbox-alias-identity.php');
-$productionFixture('task-and-prune', 'tests/test-performance-query-contracts.php');
-$productionFixture('orphan-backend', 'tests/test-doveadm-orphan-queue.php');
-if ($inject) {
-    $productionFixture('orphan-backend', 'tests/test-doveadm-orphan-queue.php');
-}
-$check('orphan-backend: exactly one production backend workflow invocation', ($workflowCalls['orphan-backend'] ?? 0) === 1);
+$productionFixture('ci/test-maintenance-workflow-observers.php');
 echo 'maintenance-production-meta ' . json_encode([
     'source_sha256' => hash_file('sha256', dirname(__DIR__) . '/application/Repositories/Mailbox.php'),
-    'sizes' => $counts, 'rf_q01' => 'no-change: production list and usage queries are constant',
+    'sizes' => $counts,
+    'rf_q01' => 'no-change: list/usage remain constant, prune scales only at its 500-item batch boundary, and create/purge/orphan operations are bounded',
 ], JSON_THROW_ON_ERROR) . "\n";
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

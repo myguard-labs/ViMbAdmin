@@ -113,7 +113,6 @@ class ViMbAdmin_Service_QueueRunner
         return \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger(
             $this->options,
             $default,
-            true,
             ...$path,
         );
     }
@@ -220,7 +219,7 @@ class ViMbAdmin_Service_QueueRunner
      */
     public function drain($max, $verbose = false)
     {
-        $max  = \ViMbAdmin\Kernel\Input\Reader::positiveInteger($max, 'Queue drain maximum', true);
+        $max  = \ViMbAdmin\Kernel\Input\Reader::positiveInteger($max, 'Queue drain maximum');
         $em   = $this->em;
         $repo = $em->getRepository('\\Entities\\MailboxTask');
         if (!$repo instanceof \Repositories\MailboxTask) {
@@ -791,7 +790,7 @@ class ViMbAdmin_Service_QueueRunner
             $this->remoteMutation(fn () => $doveadm->quotaRecalc($user));
             $bytes = $em->getConnection()->fetchOne('SELECT bytes FROM dovecot_quota WHERE username = ?', [$user]);
             if ($bytes !== false && $bytes !== null) {
-                $origSize = \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($bytes, 'Dovecot quota bytes', true);
+                $origSize = \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($bytes, 'Dovecot quota bytes');
             }
         } catch (\Throwable $e) {
             error_log("QueueRunner::recordArchive quota {$user}: " . $e->getMessage());
@@ -826,7 +825,7 @@ class ViMbAdmin_Service_QueueRunner
             ->setParameter('t', \Entities\MailboxTask::TYPE_MEASURE_SIZE)
             ->setParameter('open', [\Entities\MailboxTask::STATUS_PENDING, \Entities\MailboxTask::STATUS_RUNNING])
             ->getSingleScalarResult();
-        if (\ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($open, 'Open measure-size task count', true) === 0) {
+        if (\ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($open, 'Open measure-size task count') === 0) {
             $mt = new \Entities\MailboxTask();
             $mt->setType(\Entities\MailboxTask::TYPE_MEASURE_SIZE)
                ->setUsername($user)
@@ -1202,7 +1201,7 @@ class ViMbAdmin_Service_QueueRunner
 
         $home      = $root . '/' . $user;
         $localPart = strstr($user, '@', true) ?: $user;
-        $tempId    = is_array($existing) ? \ViMbAdmin\Kernel\Input\Reader::positiveInteger($existing['id'] ?? null, 'Orphan temp mailbox id', true) : null;
+        $tempId    = is_array($existing) ? \ViMbAdmin\Kernel\Input\Reader::positiveInteger($existing['id'] ?? null, 'Orphan temp mailbox id') : null;
         $keepDomain = false;   // set true once an Archive row references $domain
 
         try {
@@ -1232,7 +1231,7 @@ class ViMbAdmin_Service_QueueRunner
                         || !in_array($adopt['active'] ?? null, [0, '0', false], true)) {
                         throw $e;
                     }
-                    $tempId = \ViMbAdmin\Kernel\Input\Reader::positiveInteger($adopt['id'] ?? null, 'Orphan temp mailbox id', true);
+                    $tempId = \ViMbAdmin\Kernel\Input\Reader::positiveInteger($adopt['id'] ?? null, 'Orphan temp mailbox id');
                     $task->appendLog("backup-orphan: adopted temp user row #{$tempId}");
                 }
             } else {

@@ -170,5 +170,32 @@ jobs:
       - name: Formatting contract self-test
         run: bash tests/test-php-cs-fixer-contract.sh
 
+      - name: Formatter source selection regression
+        run: php ci/test-formatter-selection.php
+
       - name: PSR-12 formatting check
         run: php-cs-fixer check --diff --show-progress=none
+
+  refactor-metrics:
+    name: Tracked refactor metrics contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # actions/checkout v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Assert pull-request runner isolation
+        run: bash .github/scripts/assert-pr-runner-isolation.sh
+
+      - name: Install PHP lexer and pinned clone detector
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes php-cli python3
+          npm ci --ignore-scripts --prefix ci/refactor-metrics
+          echo "$PWD/ci/refactor-metrics/node_modules/.bin" >>"$GITHUB_PATH"
+
+      - name: Refactor metrics contract regression
+        run: bash ci/test-refactor-metrics.sh

@@ -1,0 +1,342 @@
+{
+  "clones": {
+    "04b9c3d4b400428f": "list-templates",
+    "0662d830e20ce249": "entity-associations",
+    "0822c5aa0dfee18e": "admin-domain-guards",
+    "099ddf0fbbaa5fcb": "alias-mutation-actions",
+    "0b21b5068dde56ce": "audit-log-services",
+    "0b87b569d9f9fcb9": "entity-mapping",
+    "0bc09aefca61a573": "request-input-adapters",
+    "0d883e4db01a3f06": "auth-form-templates",
+    "0e465d80ad3968c0": "string-maps",
+    "12bf7558ac49d74e": "plugin-lifecycle",
+    "1a06f140c4893039": "alias-identity",
+    "1ff66389d9292d3f": "request-input-adapters",
+    "2310fb00fca92acb": "option-int-quota",
+    "239647721befaad3": "preference-accessors",
+    "271e7c32a12def9f": "controller-resource-access",
+    "2855f68dc0141c31": "list-actions",
+    "292a36565a939e78": "entity-associations",
+    "2b7a0ef632a79846": "skin-footer",
+    "2f73376515a7b6bc": "string-maps",
+    "2fe075ab0d3af507": "plugin-lifecycle",
+    "316fc7f190b9f8a4": "mailbox-mutations",
+    "3230952cf03f6b6d": "mailbox-mutations",
+    "32dfc2bca3573530": "super-post-guard",
+    "33a1a5c268a4ad2c": "skin-footer",
+    "3415280725d7a364": "option-booleans",
+    "396dcdd5ef6a112f": "imports-and-docblocks",
+    "397dc96e2c3aa628": "auth-form-templates",
+    "3ab20710d34eaa4c": "mailbox-forms",
+    "3ad0905a159f568d": "integer-readers",
+    "40ff5c6119cbfb9b": "controller-resource-access",
+    "423486a99b4dc9a1": "option-int-quota",
+    "43a7645b4a3251a1": "domain-admin-guards",
+    "43d0d5e91cbfcc97": "admin-domain-guards",
+    "47ce876e04298545": "controller-resource-access",
+    "4894b55684aa5322": "alias-identity",
+    "499a5708bf3abf82": "list-actions",
+    "4a09c938208b380b": "request-input-adapters",
+    "4ab7d55d4ac20f46": "controller-resource-access",
+    "4b3bb413372f23e3": "list-actions",
+    "4b77d973d9aa197a": "request-input-adapters",
+    "4be2ae78b2aa914a": "validator-specifics",
+    "4d437cd6e4cadce0": "session-write",
+    "4dca7b19e9349eb8": "preference-forwarders",
+    "4f6b47f7d767d465": "entity-mapping",
+    "4fd5fe86e5c33301": "list-templates",
+    "509a6d7e2d58578f": "list-templates",
+    "50ac47f9ba02d184": "mailbox-mutations",
+    "52614b12149d7730": "skin-footer",
+    "52f41785f7cea785": "entity-mapping",
+    "56ab0bf0eb1f47e3": "entity-value-methods",
+    "587fd12a5368e036": "option-int-quota",
+    "58ee2f4286389b0f": "alias-identity",
+    "5c29c5a84ed1b598": "oss-password-attribution",
+    "5c2d098778ae4301": "purge-actions",
+    "5c46713fe1e0c932": "list-actions",
+    "5f2da0349052fc04": "entity-value-methods",
+    "603c92a7c7c7c6d3": "domain-admin-guards",
+    "6869f55816f24aab": "entity-mapping",
+    "687d6201dc0448b6": "mailbox-forms",
+    "6bf5ff5b509dd061": "request-input-adapters",
+    "6cefc69bae00514b": "list-templates",
+    "6df539add651a187": "option-booleans",
+    "6fc48dbe105dfe56": "safe-maildir-name",
+    "702be6eeceadcbba": "integer-readers",
+    "7285eb329cad69e3": "request-input-adapters",
+    "73b5d14042ee802d": "controller-resource-access",
+    "745a8d1e33d78bcc": "entity-mapping",
+    "74c865b1beb0d122": "plugin-lifecycle",
+    "77267d294eb7e9cf": "request-input-adapters",
+    "77dae39391661bf9": "integer-readers",
+    "7abfe37848f3166e": "list-actions",
+    "7cb79ca60dd7993d": "imports-and-docblocks",
+    "8205e4c6bd6f046f": "preference-accessors",
+    "829cb21100e2ccbc": "alias-mutation-actions",
+    "83f47fae5fee5d9d": "alias-mutation-actions",
+    "8b1aa399b6e7f0d5": "option-booleans",
+    "8c329c7a0958d9ed": "archive-mutations",
+    "92085fcb2ef22311": "entity-mapping",
+    "97ff0eee6968b365": "entity-mapping",
+    "9a9818ee94262362": "alias-identity",
+    "9b4b47131ba9995e": "list-templates",
+    "9c0165a36917e585": "entity-value-methods",
+    "9c1d2b7faaafdbbd": "imports-and-docblocks",
+    "a1e6f3a6cd766f3a": "alias-mutation-actions",
+    "a79b4a6ad93a4fca": "plugin-enabled",
+    "aa0eca729b038449": "alias-repository-filters",
+    "ac027e668a603601": "option-booleans",
+    "ad92219fa0b9d4f5": "request-input-adapters",
+    "ae82975d09f13986": "audit-log-services",
+    "aeaacd955a1d29f0": "request-input-adapters",
+    "b0bad03f333df785": "alias-mutation-actions",
+    "b0e47b2c02238d01": "mailbox-forms",
+    "b2f95982c054b3f2": "preference-forwarders",
+    "b690bed89a923fb5": "list-templates",
+    "b88346a777515e6b": "domain-admin-guards",
+    "ba4475617e19522e": "validator-specifics",
+    "ba7a2f704731c399": "plugin-lifecycle",
+    "bb4e3cdb01ce830c": "option-int-quota",
+    "c0b98190c5cad184": "validator-specifics",
+    "c0e69cc0236b63cd": "alias-mutation-actions",
+    "c6139d86ece843c0": "list-templates",
+    "c81aca1b8f52bccd": "request-input-adapters",
+    "cb4a4d1edbfc46f7": "alias-repository-filters",
+    "cb8bec83f78909ae": "admin-domain-guards",
+    "cbeaa216374981e1": "list-templates",
+    "d00a95da7eb46a83": "optional-string",
+    "d4dbc0a3a12afb68": "alias-mutation-actions",
+    "d9f2a7e2e23288d0": "controller-resource-access",
+    "da657fdcc8e368c7": "two-factor-actions",
+    "dcbb05a17fc2315f": "list-templates",
+    "de61dda27987a778": "plugin-lifecycle",
+    "df402b6f9979fa70": "list-templates",
+    "e1291e75e42690c1": "integer-readers",
+    "e5ab27781c153d5b": "request-input-adapters",
+    "e9e5b3f40bfd0644": "mailbox-mutations",
+    "ea1d9cd2809ea008": "entity-value-methods",
+    "ed543a50267c976b": "alias-identity",
+    "ed738c169495c48d": "preference-forwarders",
+    "ef8d48f3e743cf39": "alias-identity",
+    "f3fb85a2a9de9f08": "archive-mutations",
+    "f5e5843d1d13846b": "preference-forwarders",
+    "f6141e4e8d3e17a0": "preference-accessors",
+    "fb31338c853042ba": "list-actions",
+    "ff65b5c48f35c350": "controller-resource-access",
+    "ffbe6a8202e4fca2": "list-templates"
+  },
+  "groups": {
+    "admin-domain-guards": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: Admin manageTwoFactor/domains/assignDomain/removeDomain repeat some authorization/target checks. Compare exact target lookup and CSRF/order first; keep action-specific policy and return routes in controller, no generic CRUD action framework."
+    },
+    "alias-identity": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: requiredAliasIdentity repeated in repository/plugin/service/HTTP/MCP. Compare exact id/address/domain null/error behavior and reuse existing ResultValidator/Reader where equivalent; preserve transport errors and resource ownership, no universal repository."
+    },
+    "alias-mutation-actions": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain add/edit/delete/toggle/restore and form construction fragments: target entity/ownership checks, plugin lifecycle, alias/mailbox rules, errors and CSRF actions differ. Service/MailboxCreationPolicy/Recipients reuse exists; do not introduce generic mutation dispatch."
+    },
+    "alias-repository-filters": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain loadWithMailbox versus alias-id loading and pagedForAliasList versus filteredAliasListQuery: tenant/ownership predicates, lock context and pagination/count semantics differ. Reuse existing query helpers without dropping ownership checks."
+    },
+    "archive-mutations": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain archive toggle/delete/restore response fragments: backend I/O, resource claims, cleanup/failure handling and lifecycle differ. Similar redirect/error scaffolding is not equivalent transaction or orphan work."
+    },
+    "audit-log-services": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: Admin/Alias/Mailbox service log methods repeat entity construction/persist. Preserve actor/domain binding, action/message bytes and transaction/flush ordering. An existing logger/direct helper is preferable to a new service framework."
+    },
+    "auth-form-templates": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain login/lost-password/reset-password form similarity: endpoint, CSRF action, recovery token, captcha and password field behavior differ. A generic auth form would hide security-relevant distinctions for a small shared fragment."
+    },
+    "controller-resource-access": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 12,
+      "reason": "Investigation: em/admin access and some typed repository guards repeat across controllers (including Admin/Domain 45-line match). Reuse existing AbstractController resources where signatures/visibility agree; concrete repository types and failure text remain adapter-specific. Partial common methods only, not whole reported spans."
+    },
+    "domain-admin-guards": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: Domain edit/admins/assignAdmin/removeAdmin repeat scope/target checks. Preserve ownership query, CSRF ordering, missing-target response and admin/domain actor; factor only an exactly equivalent guard if helper overhead is justified."
+    },
+    "entity-associations": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain concrete Log/Archive collection add/remove/get methods: association ownership, entity type and ORM hydration remain explicit on each mapped owner. Shared collection machinery is not established as a net reduction."
+    },
+    "entity-mapping": {
+      "class": "mapping",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain ORM property attributes, generated-id assignment and concrete table/association declarations. Similar scalar fields do not authorize moving mapping or changing schema/identity; partial methods at range edges are not separable savings."
+    },
+    "entity-value-methods": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain concrete entity username/active/timestamp/id methods: overlap crosses method boundaries and return contracts differ by mapped entity. A generic entity base would couple schema/identity/fluent APIs for trivial accessors."
+    },
+    "imports-and-docblocks": {
+      "class": "attribution",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain use declarations and controller documentation at these exact ranges. Weak mode still matches token/import or surrounding block structure: no executable policy body to eliminate, and copyright/context documentation must not be deleted for a metric."
+    },
+    "integer-readers": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: nonNegativeInt/nonNegativeInteger and related option-int adapters. Existing Kernel/Input/Reader already implements the primitive; preserve overflow, numeric-string, default and exact error punctuation differences before replacing wrappers."
+    },
+    "list-actions": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain alias/archive/mailbox/domain list adapter orchestration: domain context, displayed columns, scope, sorting, view and response mappings differ. Existing DataTableQuery/DataTableResult and Reader are already reuse points; raw overlap is not removable full actions."
+    },
+    "list-templates": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 20,
+      "reason": "Investigation: repeated list header/table/pager fragments across admin/domain/alias/mailbox. VC-S02 must select one narrow existing Smarty include/partial with exact escaping, subpath URLs, row actions and skin overrides; these fragments contain distinct fields and no deletion is yet proven."
+    },
+    "mailbox-forms": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain add/edit/password form/action fragments: creation versus editing field/default/password handling and persistence differ. Existing MailboxCreationPolicy and form validators are reuse points; do not erase distinct password-byte and plugin contracts."
+    },
+    "mailbox-mutations": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain purge/aliases/deleteAlias/queueMailboxTask fragments: mailbox ownership, task/resource tokens, generation fencing, service calls and error routes differ. QueueRunner already separates backupOrphan/performOrphanBackup/cleanupOrphanBackup; no whole-method deletion follows from similarity."
+    },
+    "option-booleans": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: optionBoolean/optionBool and adjacent option-array fragments across MCP/Archive/Mailbox/Auth/Domain. Compare missing/null/coercion/default/error punctuation before direct existing Reader reuse; adjacent fragments are not fully equivalent methods."
+    },
+    "option-int-quota": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: optionInt/optionArray/quotaMultiplier overlap among Auth/Domain/Mailbox/Maintenance/Queue (Mailbox/Queue 37 lines). Compare overflow/absence/defaults and quota units; reuse existing Reader/MailboxCreationPolicy primitives, preserve list-sort boundaries and queue claims."
+    },
+    "optional-string": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 6,
+      "reason": "Investigation: Bootstrap and EntityManagerFactory optionalString repeat configuration reading; compare missing/null/default and exact error messages before existing Reader reuse. Preserve independent bootstrap entry paths."
+    },
+    "oss-password-attribution": {
+      "class": "vendor",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain attributed OSS Framework password hash/verify code (BSD/Open Source Solutions header). Hash creation versus verification use different inputs/security semantics. Never count third-party/attribution deletion as first-party savings."
+    },
+    "plugin-enabled": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 6,
+      "reason": "Investigation: FormPluginHost/PluginHost pluginEnabled repeat options/null/type/enabled checks. Compare options-source lifetime and error parity, reuse a narrow existing primitive if equivalent, retain plugin order/veto and extension APIs."
+    },
+    "plugin-lifecycle": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain mailbox/alias add/delete/toggle hook bodies: phases target different entities and active states, callback ordering and plugin veto/audit actor are extension contracts. Matching fragments do not make entire lifecycle hooks interchangeable."
+    },
+    "preference-accessors": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 8,
+      "reason": "Investigation: four concrete preference entities repeat attribute/ix/op/value/expire/id accessors. Compare method-only trait and explicit methods in VC-E01; retain mapping/associations, owner identity, fluent returns and concrete schema. Estimate includes trait/use overhead; semantic/ORM proof still required."
+    },
+    "preference-forwarders": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 12,
+      "reason": "Investigation: getIndexedPreference/getAssocPreference/_processKey repeat across Admin/Alias/Domain/Mailbox. Reuse existing OSS_Doctrine2_WithPreferences; preserve entity-manager binding, expiry/index and owner-specific preference class. No competing preference framework."
+    },
+    "purge-actions": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain Admin versus Domain purge action orchestration: distinct target/ownership lookups, authorization, service/plugin behavior and result routes. Similar scaffolding is not one equivalent mutation policy."
+    },
+    "request-input-adapters": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 12,
+      "reason": "Investigation: requestArray/positiveIntegerOrNull/stringKeyedArray/option wrappers repeat across controllers (Archive/Domain 47-line match). Reuse Reader directly after VC-C01 missing/null/empty/array/numeric/overflow/whitespace contract proof. Preserve transport-specific errors/defaults and request DataTables scalar guard."
+    },
+    "safe-maildir-name": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 6,
+      "reason": "Investigation: QueueRunner and Maintenance safeMaildirName guards appear alike. Reuse existing Reader only after maildir path/error parity proof; no queue lifecycle/resource-claim redesign, and QueueRunner size alone is not a defect."
+    },
+    "session-write": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 6,
+      "reason": "Investigation: NativeSessionStorage.set versus SessionNamespace.__set repeat namespace normalization and assignment. Compare existing SessionStorage/MagicPropertyStorage adapters for direct reuse; preserve public magic/explicit interfaces and session lifecycle, no new storage framework."
+    },
+    "skin-footer": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain myskin footer as a custom-skin override example: default/override asset ordering and extension point are intentional. License/attribution and skin customization must survive; copying similarity is not removable policy."
+    },
+    "string-maps": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 6,
+      "reason": "Investigation: Container/LogController/AbstractController stringMap guards repeat. Check array-key/error-name parity then reuse existing Reader, preserving container resource and request validation boundaries."
+    },
+    "super-post-guard": {
+      "class": "first-party",
+      "disposition": "candidate",
+      "helper_overhead_code_lines": 6,
+      "reason": "Investigation: Maintenance/Queue guardSuperPost repeats super-admin/POST/CSRF checking. Compare denial response/status and order, then use existing AbstractController/security primitives if identical; preserve mutation authorization before effects."
+    },
+    "two-factor-actions": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain totpAction versus totpSetupAction: verification and enrollment use distinct secret/session lifecycle and trust states. A shared form fragment does not prove identical security policy or safe action consolidation."
+    },
+    "validator-specifics": {
+      "class": "first-party",
+      "disposition": "retained",
+      "helper_overhead_code_lines": 0,
+      "reason": "Retain localPart/hostname/noControlChars/nonNegativeNumber/nonNegativeInt validator closures: shared empty/scalar scaffolding precedes different length/pattern/numeric rules and messages. Reader is available; a configurable generic validator would obscure these contracts."
+    }
+  },
+  "schema": 1
+}

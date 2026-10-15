@@ -20,6 +20,17 @@ chmod +x "$test_root/tests/assert-regression-coverage.sh" \
   "$test_root/tests/run-unit-tests.sh" \
   "$test_root/tests/run-phpstan-tests.sh"
 
+cat >"$test_root/.github/workflows/ci.yml" <<'YAML'
+name: Dependency fixture
+on: push
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: php ci/test-dependency-refresh.php
+YAML
+cp -- "$test_root/.github/workflows/ci.yml" "$test_root/.github/workflows/ci.yml.valid"
+
 cat >"$test_root/.github/workflows/regression.yml" <<'YAML'
 name: Regression fixture
 on: push
@@ -28,6 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: bash tests/run-unit-tests.sh
+      - run: php ci/test-refactor-runtime-baseline.php
       - run: bash tests/test-resolve-bundle-v.sh
   cache:
     runs-on: ubuntu-latest
@@ -85,6 +97,8 @@ jobs:
       - name: Assert every tracked PHP test has a CI owner
         run: bash tests/assert-regression-coverage.sh
       - run: bash tests/run-phpstan-tests.sh
+      - run: php ci/test-formatter-selection.php
+      - run: bash ci/test-refactor-metrics.sh
 YAML
 
 cp -- "$test_root/.github/workflows/regression.yml" "$test_root/regression.yml.valid"
@@ -351,6 +365,25 @@ expect_owner_rejected 'disabled PHPStan test runner' \
   'Static-analysis workflow does not invoke the PHPStan test runner.'
 
 cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+sed -i 's|php ci/test-formatter-selection.php|echo php ci/test-formatter-selection.php|' \
+  "$test_root/.github/workflows/static-analysis.yml"
+expect_owner_rejected 'disabled formatter selection regression' \
+  'Static-analysis workflow does not invoke the formatter selection regression.'
+
+cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+sed -i 's|bash ci/test-refactor-metrics.sh|echo bash ci/test-refactor-metrics.sh|' \
+  "$test_root/.github/workflows/static-analysis.yml"
+expect_owner_rejected 'disabled refactor metrics regression' \
+  'Static-analysis workflow does not invoke the refactor metrics regression.'
+
+cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i 's|php ci/test-refactor-runtime-baseline.php|echo php ci/test-refactor-runtime-baseline.php|' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'disabled real adapter runtime baseline' \
+  'Regression workflow does not invoke the real adapter runtime baseline.'
+
+cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
 cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
 sed -i 's|php tests/test-cache-bootstrap.php|echo php tests/test-cache-bootstrap.php|' \
   "$test_root/.github/workflows/regression.yml"
@@ -444,3 +477,15 @@ sed -i '/readonly excluded_tests=(/a\  tests/test-date.php' \
 expect_unreachable tests/test-date.php
 
 printf 'Regression coverage guard rejects an excluded test without an owner.\n'
+
+# A disabled dependency refresh owner must not count as execution.
+sed -i 's|php ci/test-dependency-refresh.php|echo php ci/test-dependency-refresh.php|' \
+  "$test_root/.github/workflows/ci.yml"
+run_guard
+[[ $guard_status -ne 0 ]] || {
+  printf 'Coverage guard accepted a disabled dependency refresh owner.\n' >&2
+  exit 1
+}
+grep -qF 'CI workflow does not invoke the dependency refresh regression.' \
+  "$test_root/output"
+cp -- "$test_root/.github/workflows/ci.yml.valid" "$test_root/.github/workflows/ci.yml"

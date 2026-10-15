@@ -1,0 +1,7 @@
+{
+  "name": "vimbadmin-refactor-metrics",
+  "private": true,
+  "devDependencies": {
+    "jscpd": "5.0.12"
+  }
+}

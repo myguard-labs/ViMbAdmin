@@ -27,10 +27,10 @@ cat >>"$fixture/workflows/regression.yml" <<'YAML'
       - run: bash .github/scripts/assert-pr-runner-isolation.sh
 YAML
 if run_guard; then
-  printf 'Isolation guard accepted a twelfth PR job.\n' >&2
+  printf 'Isolation guard accepted a thirteenth PR job.\n' >&2
   exit 1
 fi
-grep -qFx 'PR-triggered job count is 12; expected 11.' "$fixture/output"
+grep -qFx 'PR-triggered job count is 13; expected 12.' "$fixture/output"
 if grep -qF 'Every PR-triggered job must use ubuntu-24.04' "$fixture/output"; then
   printf 'A valid extra job was misreported as a per-job defect.\n' >&2
   exit 1

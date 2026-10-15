@@ -229,44 +229,30 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         $m->setLocalPart($localPart);
         $m->setUsername($username);
         $m->setName($this->_str($params, 'name') ?: $username);
-        $m->setDomain($domain);
         $m->setQuota(ViMbAdmin_Mcp_Input::optionalInteger($params, 'quota', 0));
         $m->setActive(ViMbAdmin_Mcp_Input::optionalBoolean($params, 'active', true));
-        $m->setDeletePending(false);
-        $m->setCreated(new \DateTime());
+        $m->setPassword($password);
+
         try {
             ViMbAdmin_Service_Mailbox::applyCreationPolicy($m, $domain);
         } catch (ViMbAdmin_Service_Exception $e) {
             throw new ViMbAdmin_Mcp_DomainException($e->getMessage(), 0, $e);
         }
-        $m->setPassword(OSS_Auth_Password::hash($password, [
-            'pwhash'    => ViMbAdmin_Mcp_Input::string(
-                ViMbAdmin_Mcp_Input::option($this->options(), 'defaults', 'mailbox', 'password_scheme')[1],
-                'configuration defaults.mailbox.password_scheme',
-                true
-            ),
-            'username'  => $username,
-        ]));
 
-        $em = $this->em();
-        $em->persist($m);
-
-        // Auto mailbox-alias (address -> address). Reuse an existing alias with
-        // that address rather than inserting a duplicate (which would violate
-        // the unique key and roll the whole create back -- e.g. an orphan alias
-        // left by an earlier failed attempt).
-        if (ViMbAdmin_Mcp_Input::optionBoolean($this->options(), false, 'mailboxAliases')
-            && !$em->getRepository('\\Entities\\Alias')->findOneBy([ 'address' => $username ])) {
-            $a = new \Entities\Alias();
-            $a->setAddress($username);
-            $a->setGoto($username);
-            $a->setDomain($domain);
-            $a->setActive(true);
-            $a->setCreated(new \DateTime());
-            $em->persist($a);
-        }
-        $domain->setMailboxCount($domain->getMailboxCount() + 1);
-        $em->flush();
+        $options = $this->options();
+        $passwordScheme = ViMbAdmin_Mcp_Input::string(
+            ViMbAdmin_Mcp_Input::option($options, 'defaults', 'mailbox', 'password_scheme')[1],
+            'configuration defaults.mailbox.password_scheme',
+            true
+        );
+        $mailboxAliases = ViMbAdmin_Mcp_Input::optionBoolean($options, false, 'mailboxAliases');
+        (new ViMbAdmin_Service_Mailbox($this->em()))->createWithPolicy(
+            $m,
+            $domain,
+            $passwordScheme,
+            $mailboxAliases,
+            ViMbAdmin_Service_MailboxCreationPolicy::mcp(),
+        );
         return [ 'created' => true, 'username' => $username ];
     }
 

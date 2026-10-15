@@ -242,8 +242,8 @@ class ViMbAdmin_Service_Mailbox
         ?callable $preFlush = null,
         ?callable $postFlush = null
     ): \Entities\Mailbox {
-        $username = $mailbox->requiredUsername();
-        $password = $mailbox->requiredPassword();
+        $mailbox->requiredUsername();
+        $mailbox->requiredPassword();
         if (!array_key_exists('defaults', $options) || !is_array($options['defaults'])) {
             throw new \TypeError('defaults options must be an array');
         }
@@ -267,13 +267,60 @@ class ViMbAdmin_Service_Mailbox
         }
         $mailboxAliases = $mailboxAliases === true || $mailboxAliases === 1 || $mailboxAliases === '1';
 
+        $created = $this->createWithPolicy(
+            $mailbox,
+            $domain,
+            $mb['password_scheme'],
+            $mailboxAliases,
+            ViMbAdmin_Service_MailboxCreationPolicy::web($actor),
+            null,
+            $preFlush,
+            $postFlush,
+        );
+        if (!$created instanceof \Entities\Mailbox) {
+            throw new \LogicException('Web mailbox creation cannot be vetoed without a veto hook.');
+        }
+        return $created;
+    }
+
+    /**
+     * Shared persistence core for characterized mailbox-creation callers.
+     *
+     * The caller owns transport/form validation, uniqueness, name and quota
+     * units. The policy makes the remaining intentional differences explicit:
+     * web creation forces active=true and writes an actor log, while MCP keeps
+     * the requested active state and has no session actor or plugin hooks.
+     *
+     * @param callable():bool|null $preCreate veto before any entity mutation
+     * @param callable():void|null $preFlush fires after persistence staging
+     * @param callable():void|null $postFlush fires after a successful flush
+     */
+    public function createWithPolicy(
+        \Entities\Mailbox $mailbox,
+        \Entities\Domain $domain,
+        string $passwordScheme,
+        bool $mailboxAliases,
+        ViMbAdmin_Service_MailboxCreationPolicy $policy,
+        ?callable $preCreate = null,
+        ?callable $preFlush = null,
+        ?callable $postFlush = null,
+    ): ?\Entities\Mailbox {
+        if ($preCreate !== null && $preCreate() === false) {
+            return null;
+        }
+
+        $username = $mailbox->requiredUsername();
+        $password = $mailbox->requiredPassword();
+
         $mailbox->setDomain($domain);
-        $mailbox->setActive(true);
+        if ($policy->mailboxActive() !== null) {
+            $mailbox->setActive($policy->mailboxActive());
+        }
         $mailbox->setDeletePending(false);
         $mailbox->setCreated(new \DateTime());
 
         $mailbox->setPassword(\OSS_Auth_Password::hash($password, [
-            'pwhash'   => $mb['password_scheme'],
+            'pwhash'   => $passwordScheme,
             'username' => $username,
         ]));
 
@@ -290,18 +337,21 @@ class ViMbAdmin_Service_Mailbox
             $alias->setAddress($username);
             $alias->setGoto($username);
             $alias->setDomain($domain);
-            $alias->setActive(true);
+            $alias->setActive($policy->selfAliasActive());
             $alias->setCreated(new \DateTime());
             $this->em->persist($alias);
         }
 
         $domain->setMailboxCount($domain->getMailboxCount() + 1);
 
-        $this->log(
-            $actor,
-            \Entities\Log::ACTION_MAILBOX_ADD,
-            "{$actor->getFormattedName()} added mailbox {$username}"
-        );
+        $actor = $policy->auditActor();
+        if ($actor !== null) {
+            $this->log(
+                $actor,
+                \Entities\Log::ACTION_MAILBOX_ADD,
+                "{$actor->getFormattedName()} added mailbox {$username}"
+            );
+        }
 
         if ($preFlush !== null) {
             $preFlush();

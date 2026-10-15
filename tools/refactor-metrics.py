@@ -114,9 +114,13 @@ echo json_encode($out, JSON_THROW_ON_ERROR);
 
 
 def capture(repo, output):
+    repo = repo.resolve()
+    output = output.resolve()
     tool_version = version()
     if output.exists():
         raise ValueError(f"output must be a new directory: {output}")
+    if output == repo or repo in output.parents:
+        raise ValueError(f"output must be outside the checkout: {output}")
     entries = [file_entry(repo, p) for p in tracked(repo) if p.split("/")[0] in ROOTS]
     if not entries:
         raise ValueError("tracked source roots are empty")

@@ -64,11 +64,19 @@ check 'configuration never enables risky fixers' \
   lacks "$config_source" 'setRiskyAllowed(true)'
 
 # 2. Every tracked PHP path must be covered by the finder.
+tracked_php=$(git ls-files '*.php') || {
+  printf 'Could not enumerate tracked PHP source files.\n' >&2
+  exit 1
+}
+[[ -n $tracked_php ]] || {
+  printf 'Tracked PHP source list is empty.\n' >&2
+  exit 1
+}
 missing_dirs=()
 while IFS= read -r dir; do
   [[ -n $dir ]] || continue
   contains "$config_source" "/$dir" || missing_dirs+=("$dir")
-done < <(git ls-files '*.php' | awk -F/ 'NF > 1 {print $1}' | sort -u)
+done < <(printf '%s\n' "$tracked_php" | awk -F/ 'NF > 1 {print $1}' | sort -u)
 
 check "finder covers every tracked PHP directory (missing: ${missing_dirs[*]:-none})" \
   is_empty "${missing_dirs[@]}"
@@ -79,7 +87,7 @@ while IFS= read -r file; do
   # The configuration file is the contract itself, not a source it formats.
   [[ $file == "$config" ]] && continue
   contains "$config_source" "/$file" || missing_files+=("$file")
-done < <(git ls-files '*.php' | awk -F/ 'NF == 1 {print $1}' | sort -u)
+done < <(printf '%s\n' "$tracked_php" | awk -F/ 'NF == 1 {print $1}' | sort -u)
 
 check "finder covers every tracked root-level PHP file (missing: ${missing_files[*]:-none})" \
   is_empty "${missing_files[@]}"
@@ -90,7 +98,7 @@ check "finder covers every tracked root-level PHP file (missing: ${missing_files
 control_dir=$(mktemp -d)
 # shellcheck disable=SC2317  # invoked indirectly by the EXIT trap
 cleanup() {
-  rm -rf "$control_dir"
+  rm -rf "${control_dir:?}"
 }
 trap cleanup EXIT
 

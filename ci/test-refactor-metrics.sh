@@ -108,6 +108,12 @@ python3 "$tool" census --report "$scratch/empty-report.json" \
   --classification "$scratch/empty-policy.json" --output "$scratch/empty.json" >/dev/null
 expect_error 'output must be a new directory' \
   python3 "$tool" capture --repo "$fixture" --output "$scratch/first"
+expect_error 'output must be outside the checkout' \
+  python3 "$tool" capture --repo "$fixture" --output "$fixture/metrics-output"
+[[ ! -e $fixture/metrics-output ]] || {
+  printf 'Rejected metrics output created a directory inside the checkout.\n' >&2
+  exit 1
+}
 expect_error 'No such file' census "$scratch/missing.json"
 printf '{broken' >"$scratch/bad.json"
 expect_error 'Expecting property name' census "$scratch/bad.json"

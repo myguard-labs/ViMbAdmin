@@ -358,6 +358,45 @@ SH;
         }
         $reset();
     }
+
+    file_put_contents($directory . '/composer.lock', $changedLock);
+    $beforeRestoreFailure = dependencyInputs($directory);
+    $guard = $directory . '/.github/scripts/assert-composer-lock.php';
+    $originalGuard = dependencyRead($guard);
+    $locked = $directory . '/composer.lock';
+    $savedLock = $directory . '/composer.lock.saved';
+    $injection = "declare(strict_types=1);\nrename(" . var_export($locked, true) . ', ' . var_export($savedLock, true)
+        . ");\nmkdir(" . var_export($locked, true) . ");\nexit(37);";
+    file_put_contents($guard, str_replace('declare(strict_types=1);', $injection, $originalGuard));
+    try {
+        $restoreFailure = null;
+        try {
+            refreshDependencies($directory, $basePath, false, $fetch);
+        } catch (Throwable $error) {
+            $restoreFailure = $error;
+        }
+        dependencyTest(
+            $restoreFailure instanceof RuntimeException
+            && str_contains($restoreFailure->getMessage(), 'Could not restore dependency-refresh input')
+            && $restoreFailure->getPrevious() instanceof RuntimeException
+            && str_contains($restoreFailure->getPrevious()->getMessage(), 'Dependency guard failed'),
+            'restore failure retains the guard failure as its cause'
+        );
+        dependencyTest(
+            dependencyRead($directory . '/docs/ORM3-UPGRADE.md') === $beforeRestoreFailure['docs/ORM3-UPGRADE.md']
+            && dependencyRead($directory . '/CHANGELOG') === $beforeRestoreFailure['CHANGELOG'],
+            'restore continues to later inputs after the first failure'
+        );
+    } finally {
+        if (is_dir($locked)) {
+            rmdir($locked);
+        }
+        if (is_file($savedLock)) {
+            rename($savedLock, $locked);
+        }
+        file_put_contents($guard, $originalGuard);
+        $reset();
+    }
     echo "ALL PASSED\n";
 } finally {
     dependencyRemoveFixture($directory);

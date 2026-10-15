@@ -217,10 +217,14 @@ function refreshDependencies(string $root, string $baseLock, bool $check = false
         $completed = true;
     } finally {
         if ($check || !$completed) {
+            $restoreFailures = [];
             foreach ($original as $path => $bytes) {
                 if (@file_put_contents($root . '/' . $path, $bytes, LOCK_EX) !== strlen($bytes)) {
-                    throw new RuntimeException('Could not restore dependency-refresh input');
+                    $restoreFailures[] = $path;
                 }
+            }
+            if ($restoreFailures !== []) {
+                throw new RuntimeException('Could not restore dependency-refresh input: ' . implode(', ', $restoreFailures));
             }
         }
     }

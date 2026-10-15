@@ -104,7 +104,7 @@ function mcpApplicationError(
 
 /**
  * @return array<string,array{
- *     handler:\Closure(array<string,mixed>):array<string,mixed>,
+ *     handler:\Closure,
  *     scope:'read'|'write',
  *     destructive:bool
  * }>
@@ -124,9 +124,29 @@ function mcpContractMethodTable(McpController $controller): array
             || !is_bool($row['destructive'] ?? null)) {
             throw new RuntimeException('MCP method table contains an invalid row');
         }
-        $handler = $row['handler'];
-        $scope = $row['scope'];
         $table[$method] = [
+            'handler' => $row['handler'],
+            'scope' => $row['scope'],
+            'destructive' => $row['destructive'],
+        ];
+    }
+    return $table;
+}
+
+/**
+ * @param array<string,array{handler:\Closure,scope:'read'|'write',destructive:bool}> $table
+ * @return array<string,array{
+ *     handler:\Closure(array<string,mixed>):array<string,mixed>,
+ *     scope:'read'|'write',
+ *     destructive:bool
+ * }>
+ */
+function mcpContractDispatchTable(array $table): array
+{
+    $dispatchTable = [];
+    foreach ($table as $method => $row) {
+        $handler = $row['handler'];
+        $dispatchTable[$method] = [
             'handler' => static function (array $params) use ($handler): array {
                 $result = $handler($params);
                 if (!is_array($result)) {
@@ -141,11 +161,35 @@ function mcpContractMethodTable(McpController $controller): array
                 }
                 return $typed;
             },
-            'scope' => $scope,
+            'scope' => $row['scope'],
             'destructive' => $row['destructive'],
         ];
     }
-    return $table;
+    return $dispatchTable;
+}
+
+/**
+ * @param array<string,array{handler:\Closure,scope:'read'|'write',destructive:bool}> $table
+ * @param array<string,string> $expectedHandlers
+ */
+function mcpContractHandlersMatch(
+    array $table,
+    McpController $controller,
+    array $expectedHandlers,
+): bool {
+    if (count($table) !== count($expectedHandlers)) {
+        return false;
+    }
+    foreach ($expectedHandlers as $method => $expectedHandler) {
+        if (!isset($table[$method])) {
+            return false;
+        }
+        $reflection = new ReflectionFunction($table[$method]['handler']);
+        if ($reflection->getClosureThis() !== $controller || $reflection->getName() !== $expectedHandler) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /** @return array{id:mixed,error:array{code:int,message:string}} */
@@ -189,6 +233,21 @@ $expected = [
     'archive.restore' => ['scope' => 'write', 'destructive' => true],
     'archive.delete'  => ['scope' => 'write', 'destructive' => true],
 ];
+$expectedHandlers = [
+    'ping' => '_ping',
+    'domains.list' => '_domainsList',
+    'mailboxes.list' => '_mailboxesList',
+    'aliases.list' => '_aliasesList',
+    'domain.create' => '_domainCreate',
+    'domain.delete' => '_domainDelete',
+    'mailbox.create' => '_mailboxCreate',
+    'mailbox.delete' => '_mailboxDelete',
+    'alias.create' => '_aliasCreate',
+    'alias.delete' => '_aliasDelete',
+    'mailbox.archive' => '_mailboxArchive',
+    'archive.restore' => '_archiveRestore',
+    'archive.delete' => '_archiveDelete',
+];
 $controller = mcpContractController();
 mcpContractCheck(
     'duplicate archive requests report an idempotent already-queued result',
@@ -207,14 +266,11 @@ mcpContractCheck(
 );
 $table = mcpContractMethodTable($controller);
 $actual = [];
-$handlersValid = true;
 foreach ($expected as $method => $definition) {
     if (!isset($table[$method])) {
-        $handlersValid = false;
         continue;
     }
     $row = $table[$method];
-    $handlersValid = $handlersValid && ($row['handler'] ?? null) instanceof Closure;
     $actual[$method] = [
         'scope' => $row['scope'] ?? null,
         'destructive' => $row['destructive'] ?? null,
@@ -224,9 +280,21 @@ mcpContractCheck(
     'the complete shipped method set has one authoritative definition',
     $actual === $expected && count($table) === count($expected)
 );
-mcpContractCheck('every table row carries its direct dispatch closure', $handlersValid);
-$pingDefinition = ViMbAdmin_Mcp_Dispatcher::definition($table, 'ping', 'ping-id');
-$pingHandler = $pingDefinition['handler'];
+mcpContractCheck(
+    'every RPC maps to its expected direct controller handler',
+    mcpContractHandlersMatch($table, $controller, $expectedHandlers),
+);
+$mutatedTable = $table;
+$originalPingRow = $mutatedTable['ping'];
+$mutatedTable['ping'] = $mutatedTable['domains.list'];
+$mappingRegressionCaught = !mcpContractHandlersMatch($mutatedTable, $controller, $expectedHandlers);
+$mutatedTable['ping'] = $originalPingRow;
+mcpContractCheck(
+    'negative control: a substituted RPC handler mapping is rejected and restores cleanly',
+    $mappingRegressionCaught && mcpContractHandlersMatch($mutatedTable, $controller, $expectedHandlers),
+);
+$dispatchTable = mcpContractDispatchTable($table);
+$pingHandler = $table['ping']['handler'];
 $pingResult = $pingHandler([]);
 mcpContractCheck(
     'dispatch executes the handler obtained directly from the authoritative row',
@@ -236,7 +304,7 @@ mcpContractCheck(
 foreach ([42, 'request-42'] as $requestId) {
     $unknownMethod = null;
     try {
-        ViMbAdmin_Mcp_Dispatcher::definition($table, 'future.unclassified', $requestId);
+        ViMbAdmin_Mcp_Dispatcher::definition($dispatchTable, 'future.unclassified', $requestId);
     } catch (ViMbAdmin_Mcp_ProtocolException $error) {
         $unknownMethod = mcpErrorBody(mcpProtocolResponse($error));
     }

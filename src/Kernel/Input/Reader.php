@@ -6,10 +6,10 @@ namespace ViMbAdmin\Kernel\Input;
 
 final class Reader
 {
-    public static function requiredString(mixed $value, string $name): string
+    public static function requiredString(mixed $value, string $name, bool $terminalPeriod = false): string
     {
         if (!is_string($value)) {
-            throw new \LogicException("{$name} must be a string");
+            throw new \LogicException("{$name} must be a string" . ($terminalPeriod ? '.' : ''));
         }
 
         return $value;
@@ -53,7 +53,7 @@ final class Reader
         return [true, $value];
     }
 
-    public static function nonNegativeInteger(mixed $value, string $name): int
+    public static function nonNegativeInteger(mixed $value, string $name, bool $terminalPeriod = false): int
     {
         if (is_int($value) && $value >= 0) {
             return $value;
@@ -65,35 +65,42 @@ final class Reader
             }
         }
 
-        throw new \LogicException("{$name} must be a non-negative integer");
+        throw new \LogicException("{$name} must be a non-negative integer" . ($terminalPeriod ? '.' : ''));
     }
 
-    public static function positiveInteger(mixed $value, string $name): int
+    public static function positiveInteger(mixed $value, string $name, bool $terminalPeriod = false): int
     {
-        $integer = self::nonNegativeInteger($value, $name);
+        $integer = self::nonNegativeInteger($value, $name, $terminalPeriod);
         if ($integer < 1) {
-            throw new \LogicException("{$name} must be greater than zero");
+            throw new \LogicException("{$name} must be greater than zero" . ($terminalPeriod ? '.' : ''));
         }
 
         return $integer;
     }
 
-    /** @param array<string,mixed> $options */
-    public static function optionString(array $options, string $default, string ...$path): string
+    /**
+     * @param array<string,mixed> $options
+     * @param list<string> $path
+     */
+    public static function optionString(array $options, string $default, array $path, bool $terminalPeriod = false): string
     {
         [$found, $value] = self::option($options, ...$path);
-        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : $default;
+        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path), $terminalPeriod) : $default;
     }
 
-    /** @param array<string,mixed> $options */
+    /**
+     * @param array<string,mixed> $options
+     * @param list<string> $path
+     */
     public static function optionNonNegativeInteger(
         array $options,
         int $default,
-        string ...$path,
+        array $path,
+        bool $terminalPeriod = false,
     ): int {
         [$found, $value] = self::option($options, ...$path);
         return $found
-            ? self::nonNegativeInteger($value, 'Configuration ' . implode('.', $path))
+            ? self::nonNegativeInteger($value, 'Configuration ' . implode('.', $path), $terminalPeriod)
             : $default;
     }
 }

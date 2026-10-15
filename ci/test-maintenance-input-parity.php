@@ -19,6 +19,14 @@ $rejects = static function (callable $operation): bool {
         return true;
     }
 };
+$message = static function (callable $operation): string {
+    try {
+        $operation();
+    } catch (LogicException $error) {
+        return $error->getMessage();
+    }
+    return '';
+};
 
 $check('positive: integer and canonical decimal IDs are accepted', Reader::positiveInteger(7, 'id') === 7 && Reader::positiveInteger('7', 'id') === 7);
 $check('negative: consumers reject leading-zero coercion', $rejects(fn () => Reader::positiveInteger('007', 'id')));
@@ -32,16 +40,36 @@ $check('malformed: arrays, NULs, signs, and whitespace do not coerce', array_red
 ));
 
 $options = ['doveadm' => ['maildir_root' => '/srv/mail'], 'queue' => ['runner' => ['max_concurrent' => '7']]];
-$check('config: string reader returns the exact configured value', Reader::optionString($options, '/default', 'doveadm', 'maildir_root') === '/srv/mail');
-$check('config: missing string reader returns its caller default', Reader::optionString($options, '/default', 'doveadm', 'missing') === '/default');
-$check('config: QueueRunner numeric reader retains digit-only input', Reader::optionNonNegativeInteger($options, 1, 'queue', 'runner', 'max_concurrent') === 7);
+$check('config: string reader returns the exact configured value', Reader::optionString($options, '/default', ['doveadm', 'maildir_root']) === '/srv/mail');
+$check('config: missing string reader returns its caller default', Reader::optionString($options, '/default', ['doveadm', 'missing']) === '/default');
+$check('config: QueueRunner numeric reader retains digit-only input', Reader::optionNonNegativeInteger($options, 1, ['queue', 'runner', 'max_concurrent']) === 7);
 $check('config: QueueRunner numeric reader rejects leading zeros', $rejects(
-    fn () => Reader::optionNonNegativeInteger(['queue' => ['runner' => ['max_concurrent' => '007']]], 1, 'queue', 'runner', 'max_concurrent')
+    fn () => Reader::optionNonNegativeInteger(['queue' => ['runner' => ['max_concurrent' => '007']]], 1, ['queue', 'runner', 'max_concurrent'])
 ));
 $check(
     'config error: scalar intermediate paths and non-string leaves are rejected',
-    $rejects(fn () => Reader::optionString(['doveadm' => 'bad'], '', 'doveadm', 'url'))
-    && $rejects(fn () => Reader::optionString(['doveadm' => ['url' => []]], '', 'doveadm', 'url')),
+    $rejects(fn () => Reader::optionString(['doveadm' => 'bad'], '', ['doveadm', 'url']))
+    && $rejects(fn () => Reader::optionString(['doveadm' => ['url' => []]], '', ['doveadm', 'url'])),
+);
+
+$runner = (new ReflectionClass(ViMbAdmin_Service_QueueRunner::class))->newInstanceWithoutConstructor();
+(new ReflectionProperty($runner, 'options'))->setValue($runner, ['queue' => ['autoprune' => ['days' => '007']]]);
+$check(
+    'QueueRunner integer errors retain exact punctuation',
+    $message(fn () => $runner->drain('007')) === 'Queue drain maximum must be a non-negative integer.'
+    && $message(fn () => (new ReflectionMethod($runner, 'autopruneDays'))->invoke($runner))
+        === 'Configuration queue.autoprune.days must be a non-negative integer.'
+);
+$check(
+    'QueueRunner positive and string errors retain exact punctuation',
+    $message(fn () => $runner->drain(0)) === 'Queue drain maximum must be greater than zero.'
+    && $message(fn () => (new ReflectionMethod($runner, 'assertPathSafe'))->invoke(null, []))
+        === 'Mailbox task path component must be a string.'
+);
+$check(
+    'Reader defaults retain unpunctuated messages',
+    $message(fn () => Reader::positiveInteger(0, 'id')) === 'id must be greater than zero'
+    && $message(fn () => Reader::requiredString([], 'value')) === 'value must be a string'
 );
 
 $consumer = file_get_contents(dirname(__DIR__) . '/library/ViMbAdmin/Service/QueueRunner.php');

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 require __DIR__ . '/../application/Entities/McpToken.php';
+require_once __DIR__ . '/../application/Entities/Domain.php';
+require_once __DIR__ . '/../application/Entities/Mailbox.php';
+require_once __DIR__ . '/../application/Entities/Alias.php';
 
 final class MaintenanceMcpParityState
 {
@@ -144,6 +147,199 @@ function maintenanceMcpParityError(\ViMbAdmin\Kernel\Http\Response $response): a
         throw new RuntimeException('MCP fixture response has no valid error object');
     }
     return [ 'code' => $error['code'], 'message' => $error['message'] ];
+}
+
+final class MaintenanceMcpParityDomain extends Entities\Domain
+{
+    public function __construct(private readonly int $fixtureId, string $name)
+    {
+        parent::__construct();
+        $this->setDomain($name)
+            ->setActive(true)
+            ->setTransport('virtual')
+            ->setQuota(1024)
+            ->setMaxQuota(4096)
+            ->setMailboxCount(2)
+            ->setAliasCount(3);
+    }
+
+    public function requiredId(): int
+    {
+        return $this->fixtureId;
+    }
+}
+
+final class MaintenanceMcpParityDomainQuery
+{
+    private int $offset = 0;
+    private ?int $limit = null;
+    /** @var list<string>|null */
+    private ?array $allowed = null;
+
+    /** @param list<Entities\Domain> $domains */
+    public function __construct(private readonly array $domains)
+    {
+    }
+
+    public function orderBy(string $field, string $direction): self
+    {
+        if ($field !== 'd.domain' || $direction !== 'ASC') {
+            throw new LogicException('Domain fixture requires ascending domain order.');
+        }
+        return $this;
+    }
+
+    public function setFirstResult(int $offset): self
+    {
+        $this->offset = $offset;
+        return $this;
+    }
+
+    public function setMaxResults(int $limit): self
+    {
+        $this->limit = $limit;
+        return $this;
+    }
+
+    public function andWhere(string $expression): self
+    {
+        if ($expression !== 'LOWER(d.domain) IN (:allowed)') {
+            throw new LogicException('Unexpected domain fixture filter.');
+        }
+        return $this;
+    }
+
+    /** @param list<string> $allowed */
+    public function setParameter(string $name, array $allowed): self
+    {
+        if ($name !== 'allowed') {
+            throw new LogicException('Unexpected domain fixture parameter.');
+        }
+        $this->allowed = $allowed;
+        return $this;
+    }
+
+    public function getQuery(): self
+    {
+        return $this;
+    }
+
+    /** @return list<Entities\Domain> */
+    public function getResult(): array
+    {
+        $domains = $this->domains;
+        usort($domains, static fn (Entities\Domain $left, Entities\Domain $right): int =>
+            strcmp($left->requiredDomainName(), $right->requiredDomainName()));
+        if ($this->allowed !== null) {
+            $domains = array_values(array_filter(
+                $domains,
+                fn (Entities\Domain $domain): bool => in_array(
+                    ViMbAdmin_Identity::canonical($domain->requiredDomainName()),
+                    $this->allowed,
+                    true,
+                ),
+            ));
+        }
+        return array_slice($domains, $this->offset, $this->limit);
+    }
+}
+
+final class MaintenanceMcpParityDomainRepository
+{
+    /** @param list<Entities\Domain> $domains */
+    public function __construct(private readonly array $domains)
+    {
+    }
+
+    public function createQueryBuilder(string $alias): MaintenanceMcpParityDomainQuery
+    {
+        if ($alias !== 'd') {
+            throw new LogicException('Unexpected domain fixture alias.');
+        }
+        return new MaintenanceMcpParityDomainQuery($this->domains);
+    }
+
+    /** @param array<string,mixed> $criteria */
+    public function findOneBy(array $criteria): ?Entities\Domain
+    {
+        foreach ($this->domains as $domain) {
+            if ($domain->requiredDomainName() === ($criteria['domain'] ?? null)) {
+                return $domain;
+            }
+        }
+        return null;
+    }
+}
+
+final class MaintenanceMcpParityListRepository
+{
+    public int $findCalls = 0;
+
+    /** @param list<Entities\Mailbox>|list<Entities\Alias> $rows */
+    public function __construct(private readonly array $rows, private readonly string $orderField)
+    {
+    }
+
+    /**
+     * @param array<string,mixed> $criteria
+     * @param array<string,string> $orderBy
+     * @return list<Entities\Mailbox>|list<Entities\Alias>
+     */
+    public function findBy(array $criteria, array $orderBy, int $limit, int $offset): array
+    {
+        $this->findCalls++;
+        if (!($criteria['Domain'] ?? null) instanceof Entities\Domain
+            || $orderBy !== [$this->orderField => 'ASC']) {
+            throw new LogicException('Unexpected list fixture query.');
+        }
+        $rows = $this->rows;
+        usort($rows, function (object $left, object $right): int {
+            $leftValue = $left instanceof Entities\Mailbox ? $left->requiredUsername() : $left->getAddress();
+            $rightValue = $right instanceof Entities\Mailbox ? $right->requiredUsername() : $right->getAddress();
+            return strcmp((string) $leftValue, (string) $rightValue);
+        });
+        return array_slice($rows, $offset, $limit);
+    }
+}
+
+final class MaintenanceMcpParityEntityManager
+{
+    public function __construct(
+        public readonly MaintenanceMcpParityDomainRepository $domains,
+        public readonly MaintenanceMcpParityListRepository $mailboxes,
+        public readonly MaintenanceMcpParityListRepository $aliases,
+    ) {
+    }
+
+    public function getRepository(string $class): object
+    {
+        return match (ltrim($class, '\\')) {
+            Entities\Domain::class => $this->domains,
+            Entities\Mailbox::class => $this->mailboxes,
+            Entities\Alias::class => $this->aliases,
+            default => throw new LogicException('Unexpected fixture repository ' . $class),
+        };
+    }
+}
+
+function maintenanceMcpParityMailbox(Entities\Domain $domain, string $localPart, bool $active, int $quota): Entities\Mailbox
+{
+    return (new Entities\Mailbox())
+        ->setDomain($domain)
+        ->setUsername($localPart . '@' . $domain->requiredDomainName())
+        ->setLocalPart($localPart)
+        ->setName(ucfirst($localPart))
+        ->setActive($active)
+        ->setQuota($quota);
+}
+
+function maintenanceMcpParityAlias(Entities\Domain $domain, string $localPart, string $goto, bool $active): Entities\Alias
+{
+    return (new Entities\Alias())
+        ->setDomain($domain)
+        ->setAddress($localPart . '@' . $domain->requiredDomainName())
+        ->setGoto($goto)
+        ->setActive($active);
 }
 
 echo "== maintenance MCP request dispatcher parity ==\n";
@@ -301,6 +497,112 @@ maintenanceMcpParityCheck(
         && ($internalBody['id'] ?? null) === 'internal-id'
         && maintenanceMcpParityError($internal) === [ 'code' => -32603, 'message' => 'internal error' ],
 );
+
+echo "\n== maintenance MCP read-operation parity ==\n";
+$allowedDomain = new MaintenanceMcpParityDomain(2, 'allowed.test');
+$hiddenDomain = new MaintenanceMcpParityDomain(3, 'hidden.test');
+$alphaDomain = new MaintenanceMcpParityDomain(1, 'alpha.test');
+$mailboxes = new MaintenanceMcpParityListRepository([
+    maintenanceMcpParityMailbox($allowedDomain, 'zoe', true, 300),
+    maintenanceMcpParityMailbox($allowedDomain, 'alice', true, 100),
+    maintenanceMcpParityMailbox($allowedDomain, 'bob', false, 200),
+], 'username');
+$aliases = new MaintenanceMcpParityListRepository([
+    maintenanceMcpParityAlias($allowedDomain, 'sales', 'alice@allowed.test', true),
+    maintenanceMcpParityAlias($allowedDomain, 'abuse', 'bob@allowed.test', false),
+    maintenanceMcpParityAlias($allowedDomain, 'postmaster', 'zoe@allowed.test', true),
+], 'address');
+$manager = new MaintenanceMcpParityEntityManager(
+    new MaintenanceMcpParityDomainRepository([$hiddenDomain, $allowedDomain, $alphaDomain]),
+    $mailboxes,
+    $aliases,
+);
+$reads = new ViMbAdmin_Mcp_ReadOperations();
+$allDomainsToken = (new Entities\McpToken())->setAllowedDomains(null);
+$allowedToken = (new Entities\McpToken())->setAllowedDomains('ALLOWED.test');
+
+$ping = $reads->ping(['ignored' => true]);
+maintenanceMcpParityCheck(
+    'ping retains its result shape and UTC timestamp',
+    $ping['pong'] === true && preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$/D', $ping['time']) === 1,
+);
+
+$domainPage = $reads->domainsList($manager, $allDomainsToken, ['limit' => 2, 'offset' => 0]);
+maintenanceMcpParityCheck(
+    'domains.list retains ordering, fields and look-ahead pagination',
+    $domainPage === [
+        'domains' => [
+            [ 'id' => 2, 'domain' => 'allowed.test', 'active' => true, 'transport' => 'virtual', 'quota' => 1024,
+                'maxquota' => 4096, 'mailboxes' => 2, 'aliases' => 3 ],
+            [ 'id' => 1, 'domain' => 'alpha.test', 'active' => true, 'transport' => 'virtual', 'quota' => 1024,
+                'maxquota' => 4096, 'mailboxes' => 2, 'aliases' => 3 ],
+        ],
+        'pagination' => [ 'limit' => 2, 'offset' => 0, 'returned' => 2, 'has_more' => true, 'next_offset' => 2 ],
+    ],
+);
+$restrictedDomains = $reads->domainsList($manager, $allowedToken, []);
+maintenanceMcpParityCheck(
+    'domains.list applies the token domain allowlist before returning data',
+    array_column($restrictedDomains['domains'], 'domain') === ['allowed.test']
+        && $restrictedDomains['pagination']['returned'] === 1,
+);
+
+$mailboxPage = $reads->mailboxesList($manager, $allowedToken, [
+    'domain' => 'allowed.test', 'limit' => 2, 'offset' => 0,
+]);
+maintenanceMcpParityCheck(
+    'mailboxes.list retains data shape, ordering and pagination',
+    $mailboxPage === [
+        'domain' => 'allowed.test',
+        'mailboxes' => [
+            [ 'username' => 'alice@allowed.test', 'name' => 'Alice', 'active' => true, 'quota' => 100, 'local_part' => 'alice' ],
+            [ 'username' => 'bob@allowed.test', 'name' => 'Bob', 'active' => false, 'quota' => 200, 'local_part' => 'bob' ],
+        ],
+        'pagination' => [ 'limit' => 2, 'offset' => 0, 'returned' => 2, 'has_more' => true, 'next_offset' => 2 ],
+    ],
+);
+
+$aliasPage = $reads->aliasesList($manager, $allowedToken, [
+    'domain' => 'allowed.test', 'limit' => 1, 'offset' => 1,
+]);
+maintenanceMcpParityCheck(
+    'aliases.list retains data shape, ordering, offset and pagination',
+    $aliasPage === [
+        'domain' => 'allowed.test',
+        'aliases' => [
+            [ 'address' => 'postmaster@allowed.test', 'goto' => 'zoe@allowed.test', 'active' => true ],
+        ],
+        'pagination' => [ 'limit' => 1, 'offset' => 1, 'returned' => 1, 'has_more' => true, 'next_offset' => 2 ],
+    ],
+);
+
+$beforeUnauthorizedRead = $mailboxes->findCalls;
+$unauthorizedRejected = false;
+try {
+    $reads->mailboxesList($manager, $allowedToken, ['domain' => 'hidden.test']);
+} catch (ViMbAdmin_Mcp_DomainException $error) {
+    $unauthorizedRejected = $error->getMessage() === 'unknown domain';
+}
+maintenanceMcpParityCheck(
+    'unauthorized domain cannot reach read repositories',
+    $unauthorizedRejected && $mailboxes->findCalls === $beforeUnauthorizedRead,
+);
+
+$unknownRejected = false;
+try {
+    $reads->aliasesList($manager, $allDomainsToken, ['domain' => 'missing.test']);
+} catch (ViMbAdmin_Mcp_DomainException $error) {
+    $unknownRejected = $error->getMessage() === 'unknown domain';
+}
+maintenanceMcpParityCheck('unknown domains retain their domain-error message', $unknownRejected);
+
+$limitRejected = false;
+try {
+    $reads->domainsList($manager, $allDomainsToken, ['limit' => 201]);
+} catch (ViMbAdmin_Mcp_Exception $error) {
+    $limitRejected = $error->getMessage() === 'param "limit" must be between 1 and 200';
+}
+maintenanceMcpParityCheck('read methods retain invalid pagination errors', $limitRejected);
 
 $failures = MaintenanceMcpParityAssertions::$failures;
 echo $failures === 0 ? "\nALL PASSED\n" : "\n{$failures} FAILED\n";

@@ -19,7 +19,6 @@
  */
 class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
 {
-    private const LIST_MAX = 200;
     /** @var \Entities\McpToken|null  the authenticated token for this request */
     private $_token = null;
 
@@ -45,8 +44,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      */
     private function _ping(array $params): array
     {
-        unset($params);
-        return [ 'pong' => true, 'time' => gmdate('c') ];
+        return (new ViMbAdmin_Mcp_ReadOperations())->ping($params);
     }
 
     /**
@@ -55,49 +53,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      */
     private function _domainsList(array $params): array
     {
-        [$limit, $offset] = $this->_listBounds($params);
-        $criteria = [];
-        if ($this->_token) {
-            $allowed = trim((string) $this->_token->getAllowedDomains());
-            if ($allowed !== '') {
-                $criteria['domain'] = array_map(
-                    static fn (string $domain): string => ViMbAdmin_Identity::canonical($domain),
-                    preg_split('/[\s,]+/', $allowed, -1, PREG_SPLIT_NO_EMPTY) ?: []
-                );
-            }
-        }
-        $out = [];
-        $repository = $this->em()->getRepository('\\Entities\\Domain');
-        $query = $repository->createQueryBuilder('d')->orderBy('d.domain', 'ASC')
-            ->setFirstResult($offset)->setMaxResults($limit + 1);
-        if (isset($criteria['domain'])) {
-            $query->andWhere('LOWER(d.domain) IN (:allowed)')->setParameter('allowed', $criteria['domain']);
-        }
-        $domains = \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $query->getQuery()->getResult(),
-            \Entities\Domain::class,
-            'MCP domain list query'
-        );
-        foreach (array_slice($domains, 0, $limit) as $d) {
-            $domainName = $d->requiredDomainName();
-            if ($this->_token && !$this->_token->allowsDomain($domainName)) {
-                continue;
-            }
-            $out[] = [
-                'id'        => $d->requiredId(),
-                'domain'    => $domainName,
-                'active'    => (bool) $d->getActive(),
-                'transport' => $d->getTransport(),
-                'quota'     => $d->requiredQuota(),
-                'maxquota'  => $d->getMaxQuota(),
-                'mailboxes' => $d->getMailboxCount(),
-                'aliases'   => $d->getAliasCount(),
-            ];
-        }
-        return [
-            'domains' => $out,
-            'pagination' => $this->_pagination(count($domains), count($out), $limit, $offset),
-        ];
+        return (new ViMbAdmin_Mcp_ReadOperations())->domainsList($this->em(), $this->_token, $params);
     }
 
     /**
@@ -106,34 +62,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      */
     private function _mailboxesList(array $params): array
     {
-        $domain = $this->_requireDomain($params);
-        [$limit, $offset] = $this->_listBounds($params);
-        $domainName = $domain->requiredDomainName();
-        $out = [];
-        $mailboxes = \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $this->em()->getRepository('\\Entities\\Mailbox')->findBy(
-                [ 'Domain' => $domain ],
-                [ 'username' => 'ASC' ],
-                $limit + 1,
-                $offset
-            ),
-            \Entities\Mailbox::class,
-            'MCP mailbox list query'
-        );
-        foreach (array_slice($mailboxes, 0, $limit) as $m) {
-            $out[] = [
-                'username'   => $m->requiredUsername(),
-                'name'       => $m->getName(),
-                'active'     => (bool) $m->getActive(),
-                'quota'      => $m->getQuota(),
-                'local_part' => $m->getLocalPart(),
-            ];
-        }
-        return [
-            'domain' => $domainName,
-            'mailboxes' => $out,
-            'pagination' => $this->_pagination(count($mailboxes), count($out), $limit, $offset),
-        ];
+        return (new ViMbAdmin_Mcp_ReadOperations())->mailboxesList($this->em(), $this->_token, $params);
     }
 
     /**
@@ -142,33 +71,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      */
     private function _aliasesList(array $params): array
     {
-        $domain = $this->_requireDomain($params);
-        [$limit, $offset] = $this->_listBounds($params);
-        $domainName = $domain->requiredDomainName();
-        $out = [];
-        $aliases = \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $this->em()->getRepository('\\Entities\\Alias')->findBy(
-                [ 'Domain' => $domain ],
-                [ 'address' => 'ASC' ],
-                $limit + 1,
-                $offset
-            ),
-            \Entities\Alias::class,
-            'MCP alias list query'
-        );
-        foreach (array_slice($aliases, 0, $limit) as $a) {
-            $identity = $this->requiredAliasIdentity($a);
-            $out[] = [
-                'address' => $identity['address'],
-                'goto'    => $identity['goto'],
-                'active'  => (bool) $a->getActive(),
-            ];
-        }
-        return [
-            'domain' => $domainName,
-            'aliases' => $out,
-            'pagination' => $this->_pagination(count($aliases), count($out), $limit, $offset),
-        ];
+        return (new ViMbAdmin_Mcp_ReadOperations())->aliasesList($this->em(), $this->_token, $params);
     }
 
     /**
@@ -177,12 +80,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      */
     private function _listBounds(array $params): array
     {
-        $limit = ViMbAdmin_Mcp_Input::optionalInteger($params, 'limit', 100);
-        $offset = ViMbAdmin_Mcp_Input::optionalInteger($params, 'offset', 0);
-        if ($limit < 1 || $limit > self::LIST_MAX) {
-            throw new ViMbAdmin_Mcp_Exception('param "limit" must be between 1 and ' . self::LIST_MAX);
-        }
-        return [ $limit, $offset ];
+        return (new ViMbAdmin_Mcp_ReadOperations())->listBounds($params);
     }
 
     /**
@@ -190,14 +88,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      */
     private function _pagination(int $fetched, int $returned, int $limit, int $offset): array
     {
-        $hasMore = $fetched > $limit;
-        return [
-            'limit' => $limit,
-            'offset' => $offset,
-            'returned' => $returned,
-            'has_more' => $hasMore,
-            'next_offset' => $hasMore ? $offset + $limit : null,
-        ];
+        return (new ViMbAdmin_Mcp_ReadOperations())->pagination($fetched, $returned, $limit, $offset);
     }
 
     /** @return array{address:string,goto:string} */

@@ -62,6 +62,7 @@ final class MaintenanceWorkflowDoveadm extends ViMbAdmin_Doveadm
     public function fsListDirs($path, $filter = 'posix')
     {
         if ($path === '/mail/orphan@example.test') {
+            ++$this->calls;
             return ['cur'];
         }
         return parent::fsListDirs($path, $filter);
@@ -199,7 +200,7 @@ $em->persist($known);
 $em->flush();
 $doveadm = new MaintenanceWorkflowDoveadm();
 $scanOrphans = new ReflectionMethod($runner, 'scanOrphans');
-$orphans = $observe('orphan-scan', static fn () => $scanOrphans->invoke($runner, $doveadm), 1, 1, $doveadm);
+$orphans = $observe('orphan-scan', static fn () => $scanOrphans->invoke($runner, $doveadm), 1, 2, $doveadm);
 $orphans = $discardOrphans ? [] : $orphans;
 $check('orphan-scan: production SQL/backend correlation returns only the orphan', $orphans === ['orphan@example.test']);
 

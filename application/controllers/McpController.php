@@ -29,61 +29,12 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
 
     public function indexAction(): \ViMbAdmin\Kernel\Http\Response
     {
-        if (!$this->_mcpEnabled()) {
-            return $this->_http(404, 'mcp disabled');
-        }
-
-        $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-        if (!is_string($requestMethod) || strtoupper($requestMethod) !== 'POST') {
-            return $this->_http(405, 'POST required');
-        }
-
-        $body = file_get_contents('php://input');
-        if (!is_string($body)) {
-            return $this->_rpcError(null, -32700, 'parse error');
-        }
-        try {
-            $req = ViMbAdmin_Mcp_Request::parse($body);
-            $id = $req['id'];
-            $method = $req['method'];
-            $params = $req['params'];
-            $definition = $this->_methodDefinition($method, $id);
-        } catch (ViMbAdmin_Mcp_ProtocolException $e) {
-            return $this->_protocolError($e);
-        }
-
-        // ---- authenticate (bearer + ip + scope) -------------------------
-        try {
-            $options = $this->options();
-            [$trustedProxyFound, $trustedProxyValue] = ViMbAdmin_Mcp_Input::option($options, 'trustedproxy');
-            $trustedProxy = ViMbAdmin_Mcp_Input::trustedProxy(
-                $trustedProxyFound ? $trustedProxyValue : null
-            );
-            $server = ViMbAdmin_Mcp_Input::map($_SERVER, 'server environment');
-            $auth  = new ViMbAdmin_Mcp_Auth($this->em(), $trustedProxy);
-            $token = $this->_token = $auth->authenticate($server, $definition['scope']);
-
-            // Destructive methods are additionally per-token rate-limited.
-            if ($definition['destructive']) {
-                $this->_rateLimiter()->hit($token->getId());
-            }
-        } catch (ViMbAdmin_Mcp_Exception $e) {
-            return $this->_http((int) $e->getCode() ?: 403, $e->getMessage(), $id);
-        }
-
-        // ---- dispatch ---------------------------------------------------
-        try {
-            $result = ($definition['handler'])($params);
-        } catch (ViMbAdmin_Mcp_DomainException $e) {
-            return $this->_applicationError($id, $e);
-        } catch (ViMbAdmin_Mcp_Exception $e) {
-            return $this->_applicationError($id, $e);
-        } catch (\Throwable $e) {
-            error_log('MCP ' . $method . ': ' . $e->getMessage());
-            return $this->_rpcError($id, -32603, 'internal error');
-        }
-
-        return $this->_rpcResult($id, $result);
+        return $this->_dispatcher()->dispatch(
+            $this->_mcpEnabled(),
+            $_SERVER['REQUEST_METHOD'] ?? 'GET',
+            static fn (): string|false => file_get_contents('php://input'),
+            $_SERVER,
+        );
     }
 
     // ---- abilities -----------------------------------------------------
@@ -832,12 +783,32 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
      */
     private function _methodDefinition(string $method, mixed $id): array
     {
-        $table = $this->_methodTable();
-        if (!array_key_exists($method, $table)) {
-            throw new ViMbAdmin_Mcp_ProtocolException("unknown method '{$method}'", -32601, $id);
-        }
+        return ViMbAdmin_Mcp_Dispatcher::definition($this->_methodTable(), $method, $id);
+    }
 
-        return $table[$method];
+    private function _dispatcher(): ViMbAdmin_Mcp_Dispatcher
+    {
+        $dispatcher = new ViMbAdmin_Mcp_Dispatcher(
+            $this->_methodTable(),
+            function (array $server, string $scope): \Entities\McpToken {
+                $options = $this->options();
+                [$trustedProxyFound, $trustedProxyValue] = ViMbAdmin_Mcp_Input::option($options, 'trustedproxy');
+                $trustedProxy = ViMbAdmin_Mcp_Input::trustedProxy(
+                    $trustedProxyFound ? $trustedProxyValue : null,
+                );
+                $auth = new ViMbAdmin_Mcp_Auth($this->em(), $trustedProxy);
+                $token = $auth->authenticate(
+                    ViMbAdmin_Mcp_Input::map($server, 'server environment'),
+                    $scope,
+                );
+                $this->_token = $token;
+                return $token;
+            },
+            function (\Entities\McpToken $token): void {
+                $this->_rateLimiter()->hit($token->getId());
+            },
+        );
+        return $dispatcher;
     }
 
     private function _rateLimiter(): ViMbAdmin_Mcp_RateLimit
@@ -865,50 +836,14 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         }
     }
 
-    private function _json(mixed $payload, int $httpStatus = 200): \ViMbAdmin\Kernel\Http\Response
-    {
-        return $this->json($payload, $httpStatus);
-    }
-
-    private function _rpcResult(mixed $id, mixed $result): \ViMbAdmin\Kernel\Http\Response
-    {
-        return $this->_json([ 'jsonrpc' => '2.0', 'id' => $id, 'result' => $result ]);
-    }
-
-    private function _rpcError(mixed $id, int $code, string $message, int $httpStatus = 200): \ViMbAdmin\Kernel\Http\Response
-    {
-        return $this->_json([ 'jsonrpc' => '2.0', 'id' => $id, 'error' => [ 'code' => $code, 'message' => $message ] ], $httpStatus);
-    }
-
     private function _protocolError(ViMbAdmin_Mcp_ProtocolException $error): \ViMbAdmin\Kernel\Http\Response
     {
-        if (!$error->shouldRespond()) {
-            return new \ViMbAdmin\Kernel\Http\Response('', 400, 'text/plain; charset=utf-8');
-        }
-
-        return $this->_rpcError($error->rpcId(), $error->rpcCode(), $error->getMessage());
+        return ViMbAdmin_Mcp_Dispatcher::protocolError($error);
     }
 
     private function _applicationError(mixed $id, ViMbAdmin_Mcp_Exception $error): \ViMbAdmin\Kernel\Http\Response
     {
-        $code = $error instanceof ViMbAdmin_Mcp_DomainException ? -32010 : -32602;
-        return $this->_rpcError($id, $code, $error->getMessage());
-    }
-
-    /** Auth/transport-level failure: HTTP status + JSON-RPC error envelope. */
-    private function _http(int $status, string $message, mixed $id = null): \ViMbAdmin\Kernel\Http\Response
-    {
-        $response = $this->_rpcError($id, -32000, $message, $status);
-        if ($status !== 401) {
-            return $response;
-        }
-
-        return new \ViMbAdmin\Kernel\Http\Response(
-            $response->body,
-            $response->status,
-            $response->contentType,
-            [ 'WWW-Authenticate' => 'Bearer' ]
-        );
+        return ViMbAdmin_Mcp_Dispatcher::applicationError($id, $error);
     }
 
     /** @return array<string,mixed> */

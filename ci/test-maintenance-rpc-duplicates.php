@@ -53,6 +53,38 @@ maintenanceRpcDuplicateCheck(
         && $unique['params']['Name'] === 'second'
 );
 
+$separateScopes = maintenanceRpcDuplicateParse(
+    '{"jsonrpc":"2.0","id":"scopes","method":"ping","params":{'
+    . '"siblings":{"left":{"name":"left"},"right":{"\\u006eame":"right"}},'
+    . '"elements":[{"id":"first"},{"\\u0069d":"second"}],'
+    . '"name":"parent","child":{"\\u006eame":"child"}}}'
+);
+$siblings = $separateScopes['params']['siblings'] ?? null;
+maintenanceRpcDuplicateCheck(
+    'equal decoded member names in sibling objects remain accepted',
+    $siblings instanceof stdClass
+        && $siblings->left instanceof stdClass
+        && $siblings->right instanceof stdClass
+        && $siblings->left->name === 'left'
+        && $siblings->right->name === 'right'
+);
+$elements = $separateScopes['params']['elements'] ?? null;
+maintenanceRpcDuplicateCheck(
+    'equal decoded member names in separate array-element objects remain accepted',
+    is_array($elements)
+        && ($elements[0] ?? null) instanceof stdClass
+        && ($elements[1] ?? null) instanceof stdClass
+        && $elements[0]->id === 'first'
+        && $elements[1]->id === 'second'
+);
+$child = $separateScopes['params']['child'] ?? null;
+maintenanceRpcDuplicateCheck(
+    'equal decoded member names in parent and child objects remain accepted',
+    ($separateScopes['params']['name'] ?? null) === 'parent'
+        && $child instanceof stdClass
+        && $child->name === 'child'
+);
+
 $largeValue = str_repeat('x', 262144);
 $large = maintenanceRpcDuplicateParse((string) json_encode([
     'jsonrpc' => '2.0',

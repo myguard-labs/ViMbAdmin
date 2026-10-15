@@ -16,10 +16,10 @@ final class Reader
     }
 
     /** @return array<string,mixed> */
-    public static function stringKeyedArray(mixed $value, string $name): array
+    public static function stringKeyedArray(mixed $value, string $name, bool $terminalPeriod = false): array
     {
         if (!is_array($value)) {
-            throw new \LogicException("{$name} must be an array");
+            throw new \LogicException("{$name} must be an array" . ($terminalPeriod ? '.' : ''));
         }
         foreach ($value as $key => $_item) {
             if (!is_string($key)) {
@@ -36,13 +36,11 @@ final class Reader
      */
     public static function option(array $options, string ...$path): array
     {
+        $arrayName = array_key_exists('arrayName', $path) ? array_pop($path) : null;
         $value = $options;
         $walked = [];
         foreach ($path as $key) {
-            $value = self::stringKeyedArray(
-                $value,
-                'Configuration ' . ($walked === [] ? 'root' : implode('.', $walked)),
-            );
+            $value = self::stringKeyedArray($value, $arrayName ?: 'Configuration ' . ($walked === [] ? 'root' : implode('.', $walked)), $arrayName !== null && $arrayName !== '');
             $walked[] = $key;
             if (!array_key_exists($key, $value)) {
                 return [false, null];
@@ -82,9 +80,9 @@ final class Reader
      * @param array<string,mixed> $options
      * @param list<string> $path
      */
-    public static function optionString(array $options, string $default, array $path, bool $terminalPeriod = false): string
+    public static function optionString(array $options, string $default, array $path, bool $terminalPeriod = false, ?string $pathArrayName = null): string
     {
-        [$found, $value] = self::option($options, ...$path);
+        [$found, $value] = self::option($options, ...$path, arrayName: $pathArrayName ?? '');
         return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path), $terminalPeriod) : $default;
     }
 
@@ -97,8 +95,9 @@ final class Reader
         int $default,
         array $path,
         bool $terminalPeriod = false,
+        ?string $pathArrayName = null,
     ): int {
-        [$found, $value] = self::option($options, ...$path);
+        [$found, $value] = self::option($options, ...$path, arrayName: $pathArrayName ?? '');
         return $found
             ? self::nonNegativeInteger($value, 'Configuration ' . implode('.', $path), $terminalPeriod)
             : $default;

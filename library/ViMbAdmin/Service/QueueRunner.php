@@ -105,17 +105,12 @@ class ViMbAdmin_Service_QueueRunner
 
     private function optionString(string $default, string ...$path): string
     {
-        return \ViMbAdmin\Kernel\Input\Reader::optionString($this->options, $default, array_values($path), true);
+        return \ViMbAdmin\Kernel\Input\Reader::optionString($this->options, $default, array_values($path), true, 'QueueRunner configuration path');
     }
 
     private function optionNonNegativeInteger(int $default, string ...$path): int
     {
-        return \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger(
-            $this->options,
-            $default,
-            array_values($path),
-            true,
-        );
+        return \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger($this->options, $default, array_values($path), true, 'QueueRunner configuration path');
     }
 
     private function maildirRoot(): string

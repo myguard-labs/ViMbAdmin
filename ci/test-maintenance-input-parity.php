@@ -60,6 +60,12 @@ $check(
     && $message(fn () => (new ReflectionMethod($runner, 'autopruneDays'))->invoke($runner))
         === 'Configuration queue.autoprune.days must be a non-negative integer.'
 );
+(new ReflectionProperty($runner, 'options'))->setValue($runner, ['queue' => 'bad']);
+$check(
+    'QueueRunner scalar configuration path retains its exact legacy message',
+    $message(fn () => (new ReflectionMethod($runner, 'leaseOptions'))->invoke($runner))
+        === 'QueueRunner configuration path must be an array.'
+);
 $check(
     'QueueRunner positive and string errors retain exact punctuation',
     $message(fn () => $runner->drain(0)) === 'Queue drain maximum must be greater than zero.'

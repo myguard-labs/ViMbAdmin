@@ -14,6 +14,8 @@ final class MaintenanceMcpParityState
     public int $authCalls = 0;
     public int $rateCalls = 0;
     public int $handlerCalls = 0;
+    public int $mutationAttempts = 0;
+    public int $mutationCommits = 0;
     /** @var list<string> */
     public array $events = [];
     public ?ViMbAdmin_Mcp_Exception $authError = null;
@@ -46,6 +48,16 @@ function maintenanceMcpParityMethods(MaintenanceMcpParityState $state): array
         return static function (array $params) use ($state, $name): array {
             $state->events[] = 'handler:' . $name;
             $state->handlerCalls++;
+            if (in_array($name, [
+                'domain.create', 'domain.delete', 'mailbox.create', 'mailbox.delete',
+                'alias.create', 'alias.delete', 'mailbox.archive', 'archive.restore', 'archive.delete',
+            ], true)) {
+                $state->mutationAttempts++;
+                if (($params['fixture'] ?? null) === 'rollback') {
+                    throw new ViMbAdmin_Mcp_DomainException('fixture mutation rolled back');
+                }
+                $state->mutationCommits++;
+            }
             if ($name === 'invalid') {
                 throw new ViMbAdmin_Mcp_Exception('invalid fixture params');
             }
@@ -62,6 +74,15 @@ function maintenanceMcpParityMethods(MaintenanceMcpParityState $state): array
     return [
         'ping' => [ 'handler' => $handler('ping'), 'scope' => 'read', 'destructive' => false ],
         'danger' => [ 'handler' => $handler('danger'), 'scope' => 'write', 'destructive' => true ],
+        'domain.create' => [ 'handler' => $handler('domain.create'), 'scope' => 'write', 'destructive' => false ],
+        'domain.delete' => [ 'handler' => $handler('domain.delete'), 'scope' => 'write', 'destructive' => true ],
+        'mailbox.create' => [ 'handler' => $handler('mailbox.create'), 'scope' => 'write', 'destructive' => false ],
+        'mailbox.delete' => [ 'handler' => $handler('mailbox.delete'), 'scope' => 'write', 'destructive' => true ],
+        'alias.create' => [ 'handler' => $handler('alias.create'), 'scope' => 'write', 'destructive' => false ],
+        'alias.delete' => [ 'handler' => $handler('alias.delete'), 'scope' => 'write', 'destructive' => false ],
+        'mailbox.archive' => [ 'handler' => $handler('mailbox.archive'), 'scope' => 'write', 'destructive' => true ],
+        'archive.restore' => [ 'handler' => $handler('archive.restore'), 'scope' => 'write', 'destructive' => true ],
+        'archive.delete' => [ 'handler' => $handler('archive.delete'), 'scope' => 'write', 'destructive' => true ],
         'invalid' => [ 'handler' => $handler('invalid'), 'scope' => 'write', 'destructive' => false ],
         'conflict' => [ 'handler' => $handler('conflict'), 'scope' => 'write', 'destructive' => false ],
         'explode' => [ 'handler' => $handler('explode'), 'scope' => 'read', 'destructive' => false ],
@@ -496,6 +517,108 @@ maintenanceMcpParityCheck(
     $internal->status === 200
         && ($internalBody['id'] ?? null) === 'internal-id'
         && maintenanceMcpParityError($internal) === [ 'code' => -32603, 'message' => 'internal error' ],
+);
+
+echo "\n== maintenance MCP mutation dispatch parity ==\n";
+$mutationState = new MaintenanceMcpParityState();
+$mutationDispatcher = maintenanceMcpParityDispatcher($mutationState);
+$mutationDefinitions = [
+    'domain.create' => false,
+    'domain.delete' => true,
+    'mailbox.create' => false,
+    'mailbox.delete' => true,
+    'alias.create' => false,
+    'alias.delete' => false,
+    'mailbox.archive' => true,
+    'archive.restore' => true,
+    'archive.delete' => true,
+];
+foreach ($mutationDefinitions as $mutationMethod => $destructive) {
+    $eventOffset = count($mutationState->events);
+    $rateOffset = $mutationState->rateCalls;
+    $mutationResponse = $mutationDispatcher->dispatch(
+        true,
+        'POST',
+        maintenanceMcpParityBody(
+            $mutationState,
+            maintenanceMcpParityRequest($mutationMethod, $mutationMethod . '-id', ['fixture' => $mutationMethod]),
+        ),
+        [],
+    );
+    $mutationBody = maintenanceMcpParityJson($mutationResponse);
+    $expectedEvents = ['body', 'auth:write'];
+    if ($destructive) {
+        $expectedEvents[] = 'rate';
+    }
+    $expectedEvents[] = 'handler:' . $mutationMethod;
+    maintenanceMcpParityCheck(
+        $mutationMethod . ' authenticates before its handler and preserves result/id mapping',
+        $mutationResponse->status === 200
+            && ($mutationBody['id'] ?? null) === $mutationMethod . '-id'
+            && ($mutationBody['result'] ?? null) === [
+                'method' => $mutationMethod,
+                'params' => ['fixture' => $mutationMethod],
+            ]
+            && array_slice($mutationState->events, $eventOffset) === $expectedEvents
+            && $mutationState->rateCalls === $rateOffset + ($destructive ? 1 : 0),
+    );
+}
+
+foreach ($mutationDefinitions as $mutationMethod => $destructive) {
+    $eventOffset = count($mutationState->events);
+    $commitOffset = $mutationState->mutationCommits;
+    $mutationError = $mutationDispatcher->dispatch(
+        true,
+        'POST',
+        maintenanceMcpParityBody(
+            $mutationState,
+            maintenanceMcpParityRequest($mutationMethod, $mutationMethod . '-rollback-id', ['fixture' => 'rollback']),
+        ),
+        [],
+    );
+    $mutationErrorBody = maintenanceMcpParityJson($mutationError);
+    $expectedEvents = ['body', 'auth:write'];
+    if ($destructive) {
+        $expectedEvents[] = 'rate';
+    }
+    $expectedEvents[] = 'handler:' . $mutationMethod;
+    maintenanceMcpParityCheck(
+        $mutationMethod . ' rolls back handler errors with the same id/error mapping',
+        $mutationError->status === 200
+            && ($mutationErrorBody['id'] ?? null) === $mutationMethod . '-rollback-id'
+            && maintenanceMcpParityError($mutationError) === [
+                'code' => -32010,
+                'message' => 'fixture mutation rolled back',
+            ]
+            && array_slice($mutationState->events, $eventOffset) === $expectedEvents
+            && $mutationState->mutationCommits === $commitOffset,
+    );
+}
+
+$unauthorizedMutationState = new MaintenanceMcpParityState();
+$unauthorizedMutationState->authError = new ViMbAdmin_Mcp_Exception('mutation authorization rejected', 403);
+$unauthorizedMutationDispatcher = maintenanceMcpParityDispatcher($unauthorizedMutationState);
+$unauthorizedMutation = $unauthorizedMutationDispatcher->dispatch(
+    true,
+    'POST',
+    maintenanceMcpParityBody(
+        $unauthorizedMutationState,
+        maintenanceMcpParityRequest('mailbox.delete', 'unauthorized-mutation-id', ['username' => 'hidden@example.test']),
+    ),
+    [],
+);
+$unauthorizedMutationBody = maintenanceMcpParityJson($unauthorizedMutation);
+maintenanceMcpParityCheck(
+    'unauthorized mutation cannot reach repository service or backend handlers',
+    $unauthorizedMutation->status === 403
+        && ($unauthorizedMutationBody['id'] ?? null) === 'unauthorized-mutation-id'
+        && maintenanceMcpParityError($unauthorizedMutation) === [
+            'code' => -32000,
+            'message' => 'mutation authorization rejected',
+        ]
+        && $unauthorizedMutationState->events === ['body', 'auth:write']
+        && $unauthorizedMutationState->handlerCalls === 0
+        && $unauthorizedMutationState->rateCalls === 0,
 );
 
 echo "\n== maintenance MCP read-operation parity ==\n";

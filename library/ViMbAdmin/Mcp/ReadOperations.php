@@ -29,14 +29,34 @@ final class ViMbAdmin_Mcp_ReadOperations
             }
         }
 
-        $repository = $entityManager->getRepository('\\Entities\\Domain');
-        $query = $repository->createQueryBuilder('d')->orderBy('d.domain', 'ASC')
-            ->setFirstResult($offset)->setMaxResults($limit + 1);
+        $repository = self::repository($entityManager, '\\Entities\\Domain');
+        if (!method_exists($repository, 'createQueryBuilder')) {
+            throw new \LogicException('MCP domain repository cannot build queries');
+        }
+        $query = $repository->createQueryBuilder('d');
+        if (!is_object($query)
+            || !method_exists($query, 'orderBy')
+            || !method_exists($query, 'setFirstResult')
+            || !method_exists($query, 'setMaxResults')
+            || !method_exists($query, 'getQuery')) {
+            throw new \LogicException('MCP domain query builder has an invalid type');
+        }
+        $query->orderBy('d.domain', 'ASC');
+        $query->setFirstResult($offset);
+        $query->setMaxResults($limit + 1);
         if (isset($criteria['domain'])) {
-            $query->andWhere('LOWER(d.domain) IN (:allowed)')->setParameter('allowed', $criteria['domain']);
+            if (!method_exists($query, 'andWhere') || !method_exists($query, 'setParameter')) {
+                throw new \LogicException('MCP domain query builder cannot apply an allowlist');
+            }
+            $query->andWhere('LOWER(d.domain) IN (:allowed)');
+            $query->setParameter('allowed', $criteria['domain']);
+        }
+        $domainQuery = $query->getQuery();
+        if (!is_object($domainQuery) || !method_exists($domainQuery, 'getResult')) {
+            throw new \LogicException('MCP domain query has an invalid type');
         }
         $domains = \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $query->getQuery()->getResult(),
+            $domainQuery->getResult(),
             \Entities\Domain::class,
             'MCP domain list query'
         );
@@ -71,7 +91,9 @@ final class ViMbAdmin_Mcp_ReadOperations
         [$limit, $offset] = $this->listBounds($params);
         $domainName = $domain->requiredDomainName();
         $mailboxes = \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $entityManager->getRepository('\\Entities\\Mailbox')->findBy(
+            self::findBy(
+                $entityManager,
+                '\\Entities\\Mailbox',
                 [ 'Domain' => $domain ],
                 [ 'username' => 'ASC' ],
                 $limit + 1,
@@ -105,7 +127,9 @@ final class ViMbAdmin_Mcp_ReadOperations
         [$limit, $offset] = $this->listBounds($params);
         $domainName = $domain->requiredDomainName();
         $aliases = \ViMbAdmin\Kernel\Doctrine\ResultValidator::entityList(
-            $entityManager->getRepository('\\Entities\\Alias')->findBy(
+            self::findBy(
+                $entityManager,
+                '\\Entities\\Alias',
                 [ 'Domain' => $domain ],
                 [ 'address' => 'ASC' ],
                 $limit + 1,
@@ -162,7 +186,11 @@ final class ViMbAdmin_Mcp_ReadOperations
             throw new ViMbAdmin_Mcp_Exception('param "domain" required');
         }
         $name = ViMbAdmin_Mcp_Input::identity($params['domain'], 'param "domain"', true);
-        $domain = $entityManager->getRepository('\\Entities\\Domain')->findOneBy([ 'domain' => $name ]);
+        $repository = self::repository($entityManager, '\\Entities\\Domain');
+        if (!method_exists($repository, 'findOneBy')) {
+            throw new \LogicException('MCP domain repository cannot find domains');
+        }
+        $domain = $repository->findOneBy([ 'domain' => $name ]);
         if (!$domain instanceof \Entities\Domain) {
             throw new ViMbAdmin_Mcp_DomainException('unknown domain');
         }
@@ -184,5 +212,37 @@ final class ViMbAdmin_Mcp_ReadOperations
             throw new \LogicException('Alias goto cannot be null.');
         }
         return [ 'address' => $address, 'goto' => $goto ];
+    }
+
+    private static function repository(object $entityManager, string $entity): object
+    {
+        if (!method_exists($entityManager, 'getRepository')) {
+            throw new \LogicException('MCP read entity manager cannot provide repositories');
+        }
+        $repository = $entityManager->getRepository($entity);
+        if (!is_object($repository)) {
+            throw new \LogicException('MCP read repository has an invalid type');
+        }
+        return $repository;
+    }
+
+    /**
+     * @param array<string,mixed> $criteria
+     * @param array<string,string> $orderBy
+     * @return mixed
+     */
+    private static function findBy(
+        object $entityManager,
+        string $entity,
+        array $criteria,
+        array $orderBy,
+        int $limit,
+        int $offset,
+    ): mixed {
+        $repository = self::repository($entityManager, $entity);
+        if (!method_exists($repository, 'findBy')) {
+            throw new \LogicException('MCP read repository cannot list entities');
+        }
+        return $repository->findBy($criteria, $orderBy, $limit, $offset);
     }
 }

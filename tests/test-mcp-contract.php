@@ -90,27 +90,62 @@ function mcpProtocolFailure(string $json): array
     ];
 }
 
-function mcpProtocolResponse(
-    McpController $controller,
-    ViMbAdmin_Mcp_ProtocolException $error,
-): Response {
-    $response = (new ReflectionMethod($controller, '_protocolError'))->invoke($controller, $error);
-    if (!$response instanceof Response) {
-        throw new RuntimeException('MCP protocol error did not return a response');
-    }
-    return $response;
+function mcpProtocolResponse(ViMbAdmin_Mcp_ProtocolException $error): Response
+{
+    return ViMbAdmin_Mcp_Dispatcher::protocolError($error);
 }
 
 function mcpApplicationError(
-    McpController $controller,
     mixed $id,
     ViMbAdmin_Mcp_Exception $error,
 ): Response {
-    $response = (new ReflectionMethod($controller, '_applicationError'))->invoke($controller, $id, $error);
-    if (!$response instanceof Response) {
-        throw new RuntimeException('MCP application error did not return a response');
+    return ViMbAdmin_Mcp_Dispatcher::applicationError($id, $error);
+}
+
+/**
+ * @return array<string,array{
+ *     handler:\Closure(array<string,mixed>):array<string,mixed>,
+ *     scope:'read'|'write',
+ *     destructive:bool
+ * }>
+ */
+function mcpContractMethodTable(McpController $controller): array
+{
+    $rawTable = (new ReflectionMethod($controller, '_methodTable'))->invoke($controller);
+    if (!is_array($rawTable)) {
+        throw new RuntimeException('MCP method table is not an array');
     }
-    return $response;
+    $table = [];
+    foreach ($rawTable as $method => $row) {
+        if (!is_string($method)
+            || !is_array($row)
+            || !($row['handler'] ?? null) instanceof Closure
+            || !in_array($row['scope'] ?? null, ['read', 'write'], true)
+            || !is_bool($row['destructive'] ?? null)) {
+            throw new RuntimeException('MCP method table contains an invalid row');
+        }
+        $handler = $row['handler'];
+        $scope = $row['scope'];
+        $table[$method] = [
+            'handler' => static function (array $params) use ($handler): array {
+                $result = $handler($params);
+                if (!is_array($result)) {
+                    throw new RuntimeException('MCP handler result is not an array');
+                }
+                $typed = [];
+                foreach ($result as $key => $value) {
+                    if (!is_string($key)) {
+                        throw new RuntimeException('MCP handler result contains a non-string key');
+                    }
+                    $typed[$key] = $value;
+                }
+                return $typed;
+            },
+            'scope' => $scope,
+            'destructive' => $row['destructive'],
+        ];
+    }
+    return $table;
 }
 
 /** @return array{id:mixed,error:array{code:int,message:string}} */
@@ -155,10 +190,9 @@ $expected = [
     'archive.delete'  => ['scope' => 'write', 'destructive' => true],
 ];
 $controller = mcpContractController();
-$archiveResult = new ReflectionMethod($controller, '_mailboxArchiveResult');
 mcpContractCheck(
     'duplicate archive requests report an idempotent already-queued result',
-    $archiveResult->invoke(null, false, 'user@example.test') === [
+    ViMbAdmin_Mcp_MutationOperations::mailboxArchiveResult(false, 'user@example.test') === [
         'queued' => false,
         'already_queued' => true,
         'username' => 'user@example.test',
@@ -166,16 +200,16 @@ mcpContractCheck(
 );
 mcpContractCheck(
     'new archive requests retain the existing queued response',
-    $archiveResult->invoke(null, true, 'user@example.test') === [
+    ViMbAdmin_Mcp_MutationOperations::mailboxArchiveResult(true, 'user@example.test') === [
         'queued' => 'ARCHIVE',
         'username' => 'user@example.test',
     ]
 );
-$table = (new ReflectionMethod($controller, '_methodTable'))->invoke($controller);
+$table = mcpContractMethodTable($controller);
 $actual = [];
-$handlersValid = is_array($table);
+$handlersValid = true;
 foreach ($expected as $method => $definition) {
-    if (!is_array($table) || !isset($table[$method]) || !is_array($table[$method])) {
+    if (!isset($table[$method])) {
         $handlersValid = false;
         continue;
     }
@@ -188,24 +222,23 @@ foreach ($expected as $method => $definition) {
 }
 mcpContractCheck(
     'the complete shipped method set has one authoritative definition',
-    $actual === $expected && is_array($table) && count($table) === count($expected)
+    $actual === $expected && count($table) === count($expected)
 );
 mcpContractCheck('every table row carries its direct dispatch closure', $handlersValid);
-$pingDefinition = (new ReflectionMethod($controller, '_methodDefinition'))->invoke($controller, 'ping', 'ping-id');
-$pingHandler = is_array($pingDefinition) ? ($pingDefinition['handler'] ?? null) : null;
-$pingResult = $pingHandler instanceof Closure ? $pingHandler([]) : null;
+$pingDefinition = ViMbAdmin_Mcp_Dispatcher::definition($table, 'ping', 'ping-id');
+$pingHandler = $pingDefinition['handler'];
+$pingResult = $pingHandler([]);
 mcpContractCheck(
     'dispatch executes the handler obtained directly from the authoritative row',
     is_array($pingResult) && ($pingResult['pong'] ?? null) === true
 );
 
-$methodDefinition = new ReflectionMethod($controller, '_methodDefinition');
 foreach ([42, 'request-42'] as $requestId) {
     $unknownMethod = null;
     try {
-        $methodDefinition->invoke($controller, 'future.unclassified', $requestId);
+        ViMbAdmin_Mcp_Dispatcher::definition($table, 'future.unclassified', $requestId);
     } catch (ViMbAdmin_Mcp_ProtocolException $error) {
-        $unknownMethod = mcpErrorBody(mcpProtocolResponse($controller, $error));
+        $unknownMethod = mcpErrorBody(mcpProtocolResponse($error));
     }
     mcpContractCheck(
         "unknown methods preserve the {$requestId} request id in their error response",
@@ -265,7 +298,7 @@ foreach ([
             && $invalidMissingId['id'] === null
     );
 }
-$invalidObjectResponse = mcpProtocolResponse($controller, mcpProtocolException('{}'));
+$invalidObjectResponse = mcpProtocolResponse(mcpProtocolException('{}'));
 $invalidObjectBody = mcpErrorBody($invalidObjectResponse);
 mcpContractCheck(
     'invalid missing-id objects retain an HTTP 200 JSON-RPC envelope',
@@ -279,7 +312,7 @@ foreach ([
     'unsupported positional params' => '{"jsonrpc":"2.0","method":"ping","params":[1]}',
 ] as $shape => $request) {
     $notificationError = mcpProtocolException($request);
-    $notificationResponse = mcpProtocolResponse($controller, $notificationError);
+    $notificationResponse = mcpProtocolResponse($notificationError);
     mcpContractCheck(
         "notification-shaped calls with {$shape} are rejected without a JSON-RPC response",
         $notificationError->rpcCode() === -32600
@@ -353,12 +386,10 @@ mcpContractCheck(
 );
 
 $invalidParamsResponse = mcpApplicationError(
-    $controller,
     'params-id',
     new ViMbAdmin_Mcp_Exception('param "domain" must be a string'),
 );
 $stateResponse = mcpApplicationError(
-    $controller,
     'state-id',
     new ViMbAdmin_Mcp_DomainException('unknown domain'),
 );

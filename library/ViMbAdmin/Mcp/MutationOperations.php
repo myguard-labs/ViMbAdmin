@@ -27,13 +27,21 @@ final class ViMbAdmin_Mcp_MutationOperations
         $domain->setActive(ViMbAdmin_Mcp_Input::optionalBoolean($params, 'active', true));
         $transport = $this->string($params, 'transport');
         $domain->setTransport($transport !== '' ? $transport : ViMbAdmin_Mcp_Input::optionString(
-            $this->options, 'virtual', 'defaults', 'domain', 'transport'
+            $this->options,
+            'virtual',
+            'defaults',
+            'domain',
+            'transport'
         ));
         $domain->setQuota(ViMbAdmin_Mcp_Input::optionalInteger(
-            $params, 'quota', self::domainDefaultQuotaBytes($this->options, 'quota')
+            $params,
+            'quota',
+            self::domainDefaultQuotaBytes($this->options, 'quota')
         ));
         $domain->setMaxQuota(ViMbAdmin_Mcp_Input::optionalInteger(
-            $params, 'maxquota', self::domainDefaultQuotaBytes($this->options, 'maxquota')
+            $params,
+            'maxquota',
+            self::domainDefaultQuotaBytes($this->options, 'maxquota')
         ));
         $domain->setMaxMailboxes(ViMbAdmin_Mcp_Input::optionalInteger(
             $params,
@@ -325,7 +333,11 @@ final class ViMbAdmin_Mcp_MutationOperations
             throw new ViMbAdmin_Mcp_Exception("{$name} must be a non-negative number");
         }
         $multiplier = strtoupper(ViMbAdmin_Mcp_Input::optionString(
-            $options, OSS_Filter_FileSize::SIZE_KILOBYTES, 'defaults', 'quota', 'multiplier'
+            $options,
+            OSS_Filter_FileSize::SIZE_KILOBYTES,
+            'defaults',
+            'quota',
+            'multiplier'
         ));
         if (!array_key_exists($multiplier, OSS_Filter_FileSize::$SIZE_MULTIPLIERS)) {
             throw new ViMbAdmin_Mcp_Exception('configuration defaults.quota.multiplier is unsupported');

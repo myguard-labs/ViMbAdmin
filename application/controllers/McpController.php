@@ -74,86 +74,73 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         return (new ViMbAdmin_Mcp_ReadOperations())->aliasesList($this->em(), $this->_token, $params);
     }
 
-    /**
-     * @param array<string,mixed> $params
-     * @return array{int,int}
-     */
-    private function _listBounds(array $params): array
-    {
-        return (new ViMbAdmin_Mcp_ReadOperations())->listBounds($params);
-    }
-
-    /**
-     * @return array{limit:int,offset:int,returned:int,has_more:bool,next_offset:int|null}
-     */
-    private function _pagination(int $fetched, int $returned, int $limit, int $offset): array
-    {
-        return (new ViMbAdmin_Mcp_ReadOperations())->pagination($fetched, $returned, $limit, $offset);
-    }
-
     // ---- write abilities (scope: write) --------------------------------
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _domainCreate(array $params): array
     {
         return $this->_mutations()->domainCreate($params);
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _domainDelete(array $params): array
     {
         return $this->_mutations()->domainDelete($params);
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _mailboxCreate(array $params): array
     {
         return $this->_mutations()->mailboxCreate($params);
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _mailboxDelete(array $params): array
     {
         return $this->_mutations()->mailboxDelete($params);
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _aliasCreate(array $params): array
     {
         return $this->_mutations()->aliasCreate($params);
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _aliasDelete(array $params): array
     {
         return $this->_mutations()->aliasDelete($params);
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _mailboxArchive(array $params): array
     {
         return $this->_mutations()->mailboxArchive($params);
     }
 
-    /** @return array<string,mixed> */
-    private static function _mailboxArchiveResult(bool $queued, string $username): array
-    {
-        return ViMbAdmin_Mcp_MutationOperations::mailboxArchiveResult($queued, $username);
-    }
-
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _archiveRestore(array $params): array
     {
-        return $this->_mutations()->archiveRestore($params);
+        return $this->_archiveState($params, 'restore');
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _archiveDelete(array $params): array
     {
-        return $this->_mutations()->archiveDelete($params);
+        return $this->_archiveState($params, 'delete');
     }
 
-    /** @param array<string,mixed> $params */
+    /** @param array<string,mixed> $params
+     *  @return array<string,mixed> */
     private function _archiveState(array $params, string $operation): array
     {
         return $this->_mutations()->archiveState($params, $operation);
@@ -193,18 +180,6 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             'archive.restore' => [ 'handler' => $this->_archiveRestore(...), 'scope' => 'write', 'destructive' => true  ],
             'archive.delete'  => [ 'handler' => $this->_archiveDelete(...),  'scope' => 'write', 'destructive' => true  ],
         ];
-    }
-
-    /**
-     * @return array{
-     *     handler:\Closure(array<string,mixed>):array<string,mixed>,
-     *     scope:'read'|'write',
-     *     destructive:bool
-     * }
-     */
-    private function _methodDefinition(string $method, mixed $id): array
-    {
-        return ViMbAdmin_Mcp_Dispatcher::definition($this->_methodTable(), $method, $id);
     }
 
     private function _dispatcher(): ViMbAdmin_Mcp_Dispatcher
@@ -255,16 +230,6 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
             error_log('MCP configuration rejected: ' . $e->getMessage());
             return false;
         }
-    }
-
-    private function _protocolError(ViMbAdmin_Mcp_ProtocolException $error): \ViMbAdmin\Kernel\Http\Response
-    {
-        return ViMbAdmin_Mcp_Dispatcher::protocolError($error);
-    }
-
-    private function _applicationError(mixed $id, ViMbAdmin_Mcp_Exception $error): \ViMbAdmin\Kernel\Http\Response
-    {
-        return ViMbAdmin_Mcp_Dispatcher::applicationError($id, $error);
     }
 
     /** @return array<string,mixed> */

@@ -261,6 +261,9 @@ jobs:
       - name: MCP list responses expose complete pagination
         run: php ci/test-mcp-list-pagination.php
 
+      - name: MCP requests reject duplicate JSON object members
+        run: php ci/test-maintenance-rpc-duplicates.php
+
       - name: Empty INI parent sections retain inheritance shape
         run: php ci/test-ini-config-empty-parent.php
 

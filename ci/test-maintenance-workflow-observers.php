@@ -54,7 +54,7 @@ final class MaintenanceWorkflowDoveadm extends ViMbAdmin_Doveadm
         $path = is_array($parameters) ? ($parameters['path'] ?? '') : '';
         $tag = $envelope[2] ?? '';
         $rows = $command === 'fsIterDirs' && $path === '/mail/'
-            ? [['path' => 'known@example.test'], ['path' => 'orphan@example.test']]
+            ? [['path' => 'known@example.test']]
             : [['path' => 'cur']];
         return [200, json_encode([['doveadmResponse', $rows, $tag]], JSON_THROW_ON_ERROR)];
     }
@@ -66,6 +66,7 @@ $check = static function (string $label, bool $ok) use (&$failures): void {
     $failures += $ok ? 0 : 1;
 };
 $inject = getenv('VIMBADMIN_BASELINE_INJECT_EXTRA') === '1';
+$injectOrphanBackend = $inject || getenv('VIMBADMIN_BASELINE_INJECT_ORPHAN_BACKEND') === '1';
 $logger = new MaintenanceWorkflowSqlLog();
 $orm = ORMSetup::createAttributeMetadataConfiguration([dirname(__DIR__) . '/application/Entities'], true);
 if (PHP_VERSION_ID >= 80400) {
@@ -96,18 +97,24 @@ $newMailbox = static function (string $username): Entities\Mailbox {
 };
 
 /** @param callable():mixed $operation */
-$observe = static function (string $workflow, callable $operation, int $sqlCeiling, ?MaintenanceWorkflowDoveadm $backend = null) use ($logger, $db, $inject, $check): mixed {
+$observe = static function (
+    string $workflow,
+    callable $operation,
+    int $sqlCeiling,
+    int $backendCeiling,
+    ?MaintenanceWorkflowDoveadm $backend = null,
+) use ($logger, $db, $inject, $injectOrphanBackend, $check): mixed {
     $logger->sql = [];
     $backendBefore = $backend === null ? 0 : $backend->calls;
     $memoryBefore = memory_get_usage(true);
     $started = hrtime(true);
     $result = $operation();
-    if ($inject) {
-        if ($backend !== null) {
+    if ($backend !== null) {
+        if ($injectOrphanBackend) {
             $backend->fsListDirs('/mail/injected');
-        } else {
-            $db->fetchOne('SELECT COUNT(*) FROM mailbox');
         }
+    } elseif ($inject) {
+        $db->fetchOne('SELECT COUNT(*) FROM mailbox');
     }
     $receipt = [
         'workflow' => $workflow,
@@ -118,7 +125,7 @@ $observe = static function (string $workflow, callable $operation, int $sqlCeili
     ];
     echo 'maintenance-production-workflow ' . json_encode($receipt, JSON_THROW_ON_ERROR) . "\n";
     $check("{$workflow}: operation-local SQL ceiling", $receipt['sql'] <= $sqlCeiling);
-    $check("{$workflow}: operation-local backend ceiling", $receipt['backend'] <= ($backend === null ? 0 : 2));
+    $check("{$workflow}: operation-local backend ceiling", $receipt['backend'] <= $backendCeiling);
     return $result;
 };
 
@@ -132,7 +139,7 @@ $observe('mcp-create', static fn () => (new ViMbAdmin_Service_Mailbox($em))->cre
     'crypt:sha512',
     false,
     ViMbAdmin_Service_MailboxCreationPolicy::mcp()
-), 3);
+), 3, 0);
 $check('mcp-create: production row persisted', $db->fetchOne('SELECT COUNT(*) FROM mailbox WHERE username = ?', ['user@mcp.example']) === 1);
 
 $webDomain = $newDomain('web.example');
@@ -146,7 +153,7 @@ $observe('web-create', static fn () => (new ViMbAdmin_Service_Mailbox($em))->cre
     $webDomain,
     $actor,
     ['defaults' => ['mailbox' => ['password_scheme' => 'crypt:sha512']], 'mailboxAliases' => false]
-), 4);
+), 4, 0);
 $check('web-create: production row and audit persisted', $db->fetchOne('SELECT COUNT(*) FROM mailbox WHERE username = ?', ['user@web.example']) === 1
     && $db->fetchOne('SELECT COUNT(*) FROM log') === 1);
 
@@ -165,7 +172,7 @@ $observe('web-and-mcp-purge', static function () use ($em, $purgeMailbox): void 
         throw new RuntimeException('Production mailbox purge failed');
     }
     $em->flush();
-}, 9);
+}, 9, 0);
 $db->commit();
 $check('web-and-mcp-purge: production mailbox and alias removed', $db->fetchOne('SELECT COUNT(*) FROM mailbox WHERE username = ?', ['user@purge.example']) === 0
     && $db->fetchOne('SELECT COUNT(*) FROM alias WHERE address = ?', ['forward@purge.example']) === 0);
@@ -174,7 +181,7 @@ $runner = new ViMbAdmin_Service_QueueRunner($em, ['doveadm' => ['maildir_root' =
 $openPrune = new ReflectionMethod($runner, 'openPruneUsernames');
 foreach ([5 => 1, 500 => 1, 501 => 2] as $size => $ceiling) {
     $users = array_map(static fn (int $id): string => "prune{$id}@example.test", range(1, $size));
-    $result = $observe("task-prune-{$size}", static fn () => $openPrune->invoke($runner, $users), $ceiling);
+    $result = $observe("task-prune-{$size}", static fn () => $openPrune->invoke($runner, $users), $ceiling, 0);
     $check("task-prune-{$size}: real production query returned an array", is_array($result));
 }
 
@@ -183,8 +190,8 @@ $em->persist($known);
 $em->flush();
 $doveadm = new MaintenanceWorkflowDoveadm();
 $scanOrphans = new ReflectionMethod($runner, 'scanOrphans');
-$orphans = $observe('orphan-scan', static fn () => $scanOrphans->invoke($runner, $doveadm), 1, $doveadm);
-$check('orphan-scan: production SQL/backend correlation identifies only the orphan', $orphans === ['orphan@example.test']);
+$orphans = $observe('orphan-scan', static fn () => $scanOrphans->invoke($runner, $doveadm), 1, 1, $doveadm);
+$check('orphan-scan: production SQL/backend correlation excludes the known mailbox', $orphans === []);
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

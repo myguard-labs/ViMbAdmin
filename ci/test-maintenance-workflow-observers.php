@@ -54,9 +54,17 @@ final class MaintenanceWorkflowDoveadm extends ViMbAdmin_Doveadm
         $path = is_array($parameters) ? ($parameters['path'] ?? '') : '';
         $tag = $envelope[2] ?? '';
         $rows = $command === 'fsIterDirs' && $path === '/mail/'
-            ? [['path' => 'known@example.test']]
+            ? [['path' => 'known@example.test'], ['path' => 'orphan@example.test']]
             : [['path' => 'cur']];
         return [200, json_encode([['doveadmResponse', $rows, $tag]], JSON_THROW_ON_ERROR)];
+    }
+
+    public function fsListDirs($path, $filter = 'posix')
+    {
+        if ($path === '/mail/orphan@example.test') {
+            return ['cur'];
+        }
+        return parent::fsListDirs($path, $filter);
     }
 }
 
@@ -67,6 +75,7 @@ $check = static function (string $label, bool $ok) use (&$failures): void {
 };
 $inject = getenv('VIMBADMIN_BASELINE_INJECT_EXTRA') === '1';
 $injectOrphanBackend = $inject || getenv('VIMBADMIN_BASELINE_INJECT_ORPHAN_BACKEND') === '1';
+$discardOrphans = getenv('VIMBADMIN_BASELINE_INJECT_ORPHAN_DISCARD') === '1';
 $logger = new MaintenanceWorkflowSqlLog();
 $orm = ORMSetup::createAttributeMetadataConfiguration([dirname(__DIR__) . '/application/Entities'], true);
 if (PHP_VERSION_ID >= 80400) {
@@ -191,7 +200,8 @@ $em->flush();
 $doveadm = new MaintenanceWorkflowDoveadm();
 $scanOrphans = new ReflectionMethod($runner, 'scanOrphans');
 $orphans = $observe('orphan-scan', static fn () => $scanOrphans->invoke($runner, $doveadm), 1, 1, $doveadm);
-$check('orphan-scan: production SQL/backend correlation excludes the known mailbox', $orphans === []);
+$orphans = $discardOrphans ? [] : $orphans;
+$check('orphan-scan: production SQL/backend correlation returns only the orphan', $orphans === ['orphan@example.test']);
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";
 exit($failures === 0 ? 0 : 1);

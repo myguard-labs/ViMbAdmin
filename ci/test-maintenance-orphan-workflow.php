@@ -32,6 +32,8 @@ final class MaintenanceOrphanBackend extends \ViMbAdmin_Doveadm
     #[\Override]
     protected function _post($payload)
     {
+        $request = json_decode((string) $payload, true, 512, JSON_THROW_ON_ERROR);
+        $tag = $request[0][2] ?? '';
         if (!is_string($payload)) {
             throw new RuntimeException('orphan fixture request must be JSON');
         }
@@ -48,7 +50,7 @@ final class MaintenanceOrphanBackend extends \ViMbAdmin_Doveadm
         $path = rtrim($path, '/');
         $this->calls[] = 'list:' . $path;
         $rows = array_map(static fn (string $name): array => ['path' => $name], $this->directories[$path] ?? []);
-        return [200, json_encode([['doveadmResponse', $rows, 'fixture']], JSON_THROW_ON_ERROR)];
+        return [200, json_encode([['doveadmResponse', $rows, $tag]], JSON_THROW_ON_ERROR)];
     }
 
     #[\Override]

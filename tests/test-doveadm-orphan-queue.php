@@ -32,7 +32,14 @@ final class ScriptedDoveadm extends ViMbAdmin_Doveadm
             $path = is_array($paths) ? ($paths[0] ?? null) : null;
             $this->firstPath ??= is_string($path) ? $path : null;
         }
-        return array_shift($this->responses);
+        $response = array_shift($this->responses);
+        $body = json_decode($response[1], true, 512, JSON_THROW_ON_ERROR);
+        $requestTag = $decoded[0][2] ?? null;
+        if (is_array($body[0] ?? null) && is_string($requestTag)) {
+            $body[0][2] = $requestTag;
+            $response[1] = json_encode($body, JSON_THROW_ON_ERROR);
+        }
+        return $response;
     }
 }
 

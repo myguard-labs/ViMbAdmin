@@ -64,6 +64,12 @@ foreach ($paths as $name => $path) {
     $check("error: shipped {$name} is readable", is_string($value));
     $contents[$name] = is_string($value) ? $value : '';
 }
+$quotaMutation = getenv('VIMBADMIN_QUOTA_MUTATION');
+if ($quotaMutation === 'passdb') {
+    $contents['config'] = str_replace(' AS userdb_quota_rule', ' AS removed_passdb_quota_rule', $contents['config']);
+} elseif ($quotaMutation === 'userdb') {
+    $contents['config'] = str_replace(' AS quota_rule', ' AS removed_userdb_quota_rule', $contents['config']);
+}
 
 $queries = [];
 try {
@@ -99,6 +105,18 @@ $check(
 );
 
 $queryText = implode("\n", $queries);
+$check(
+    'positive: passdb exposes the quota rule through userdb_quota_rule',
+    preg_match('/\bAS\s+userdb_quota_rule\b/i', $queries[0] ?? '') === 1,
+);
+$check(
+    'positive: userdb exposes the quota rule through quota_rule',
+    preg_match('/\bAS\s+quota_rule\b/i', $queries[1] ?? '') === 1,
+);
+$check(
+    'boundary: iterate query remains valid without a quota alias',
+    preg_match('/\bAS\s+(?:userdb_)?quota_rule\b/i', $queries[2] ?? '') !== 1,
+);
 $retiredReferences = array_values(array_filter(
     $droppedStorageColumns,
     static fn (string $column): bool => preg_match(

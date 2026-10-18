@@ -267,6 +267,9 @@ jobs:
       - name: Queue lifecycle destructive fixtures require a dedicated database
         run: php ci/test-refactor-queue-database-guard.php
 
+      - name: Concrete controller resources retain one typed guard policy
+        run: php ci/test-refactor-controller-resources.php
+
       - name: MCP domain defaults match GUI quota bytes
         run: php ci/test-mcp-domain-default-quota.php
 

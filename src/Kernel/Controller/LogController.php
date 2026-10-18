@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
-use Doctrine\ORM\EntityManager;
 use Entities\Admin;
 use Entities\Domain;
 use LogicException;
@@ -41,6 +40,8 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class LogController extends AbstractController
 {
+    use ConcreteControllerResources;
+
     /**
      * GET /log and /log/index — the auth-gated landing forwards to the list
      * (the native equivalent of the ZF1 indexAction `_forward('list')`).
@@ -185,24 +186,6 @@ final class LogController extends AbstractController
         }
 
         return [$targetAdmin, $domain];
-    }
-
-    protected function em(): EntityManager
-    {
-        $em = parent::em();
-        if (!$em instanceof EntityManager) {
-            throw new LogicException('Doctrine entity manager resource has an invalid type');
-        }
-        return $em;
-    }
-
-    protected function admin(): ?Admin
-    {
-        $admin = parent::admin();
-        if ($admin !== null && !$admin instanceof Admin) {
-            throw new LogicException('Authenticated admin has an invalid type');
-        }
-        return $admin;
     }
 
     private function logRepository(): LogRepository

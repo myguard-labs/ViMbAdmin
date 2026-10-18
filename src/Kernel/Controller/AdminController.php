@@ -37,11 +37,6 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class AdminController extends AbstractController
 {
-    private static function requiredString(mixed $value, string $name): string
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
-    }
-
     private static function postStringOrEmpty(mixed $value): string
     {
         return is_string($value) ? $value : '';
@@ -94,13 +89,6 @@ final class AdminController extends AbstractController
     private static function option(array $options, string ...$path): array
     {
         return \ViMbAdmin\Kernel\Input\Reader::option($options, ...$path);
-    }
-
-    /** @param array<string,mixed> $options */
-    private static function optionString(array $options, string $default, string ...$path): string
-    {
-        [$found, $value] = self::option($options, ...$path);
-        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : $default;
     }
 
     /**
@@ -209,8 +197,8 @@ final class AdminController extends AbstractController
             $values = $form->values();
 
             (new \ViMbAdmin_Service_Admin($this->em()))->create(
-                self::requiredString($values['username'] ?? null, 'Admin username'),
-                self::requiredString($values['password'] ?? null, 'Admin password'),
+                \ViMbAdmin\Kernel\Input\Reader::requiredString($values['username'] ?? null, 'Admin username'),
+                \ViMbAdmin\Kernel\Input\Reader::requiredString($values['password'] ?? null, 'Admin password'),
                 self::checkboxBoolean($values['super'] ?? null, 'Super administrator flag'),
                 $admin,
                 self::requiredOptionArray($this->container->options(), 'resources', 'auth', 'oss')
@@ -242,7 +230,7 @@ final class AdminController extends AbstractController
             return $this->redirect('auth/login');
         }
 
-        $tfa     = new \ViMbAdmin_TwoFactor('ViMbAdmin', self::optionString($this->container->options(), '', 'securitysalt'));
+        $tfa     = new \ViMbAdmin_TwoFactor('ViMbAdmin', \ViMbAdmin\Kernel\Input\Reader::optionString($this->container->options(), '', ['securitysalt']));
         $session = new MagicPropertyStorage($this->session());
 
         if ($this->isPost() && $this->postCsrfValid()) {
@@ -325,7 +313,7 @@ final class AdminController extends AbstractController
             return $this->redirect('admin/two-factor');
         }
 
-        $tfa = new \ViMbAdmin_TwoFactor('ViMbAdmin', self::optionString($this->container->options(), '', 'securitysalt'));
+        $tfa = new \ViMbAdmin_TwoFactor('ViMbAdmin', \ViMbAdmin\Kernel\Input\Reader::optionString($this->container->options(), '', ['securitysalt']));
 
         if ($this->isPost() && $this->postCsrfValid()) {
             $op = self::postStringOrEmpty($this->postData()['op'] ?? null);
@@ -454,7 +442,7 @@ final class AdminController extends AbstractController
         if ($this->isPost() && $form->isValid($this->postData())) {
             (new \ViMbAdmin_Service_Admin($this->em()))->changePassword(
                 $target,
-                self::requiredString($form->values()['password'] ?? null, 'Admin password'),
+                \ViMbAdmin\Kernel\Input\Reader::requiredString($form->values()['password'] ?? null, 'Admin password'),
                 $admin,
                 $self,
                 $authOptions
@@ -497,7 +485,7 @@ final class AdminController extends AbstractController
                     return null; // required() reports the empty case
                 }
 
-                return self::adminPasswordMatches($target, self::requiredString($value, 'Current password'), $authOptions)
+                return self::adminPasswordMatches($target, \ViMbAdmin\Kernel\Input\Reader::requiredString($value, 'Current password'), $authOptions)
                     ? null
                     : 'Invalid password.';
             };

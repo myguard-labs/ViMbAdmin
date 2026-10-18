@@ -40,6 +40,8 @@ jobs:
     steps:
       - run: bash tests/run-unit-tests.sh
       - run: php ci/test-refactor-runtime-baseline.php
+      - run: php ci/test-refactor-input-contract.php
+      - run: php ci/test-refactor-list-contract.php
       - run: bash tests/test-resolve-bundle-v.sh
   cache:
     runs-on: ubuntu-latest
@@ -319,6 +321,95 @@ expect_owner_rejected() {
     exit 1
   }
 }
+
+# This owner must run in the supported PHP unit matrix, not just somewhere in
+# the workflow. Each defect is observed by the actual maintained guard, then
+# restored to a green fixture before trying the next independent defect.
+for input_owner_defect in missing conditional masked echoed wrong-job wrong-workflow conditional-job; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$input_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-input-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-input-contract.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  masked)
+    sed -i '\|run: php ci/test-refactor-input-contract.php|a\        continue-on-error: true' "$test_root/.github/workflows/regression.yml"
+    ;;
+  echoed)
+    sed -i 's|run: php ci/test-refactor-input-contract.php|run: echo php ci/test-refactor-input-contract.php|' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-input-contract.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-input-contract.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-workflow)
+    sed -i '\|run: php ci/test-refactor-input-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    sed -i '/run: php ci\/test-formatter-selection.php/a\      - run: php ci/test-refactor-input-contract.php' "$test_root/.github/workflows/static-analysis.yml"
+    ;;
+  conditional-job)
+    sed -i '/^  unit:$/a\    if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'Controller input owner mutation matched nothing: %s\n' "$input_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "controller input $input_owner_defect" \
+    'Regression unit job does not invoke the controller string input contract.'
+  printf 'Controller input owner rejected %s (guard exit %d).\n' "$input_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
+# VC-C03's source-row contract must remain an unconditional unit-matrix owner.
+# Each named defect is observed red through the maintained coverage guard and
+# the exact valid fixture is restored before the next mutation.
+for list_owner_defect in missing conditional masked echoed wrong-job wrong-workflow; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$list_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-list-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-list-contract.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  masked)
+    sed -i '\|run: php ci/test-refactor-list-contract.php|a\        continue-on-error: true' "$test_root/.github/workflows/regression.yml"
+    ;;
+  echoed)
+    sed -i 's|run: php ci/test-refactor-list-contract.php|run: echo php ci/test-refactor-list-contract.php|' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-list-contract.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-list-contract.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-workflow)
+    sed -i '\|run: php ci/test-refactor-list-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    sed -i '/run: php ci\/test-formatter-selection.php/a\      - run: php ci/test-refactor-list-contract.php' "$test_root/.github/workflows/static-analysis.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'List pagination owner mutation matched nothing: %s\n' "$list_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "list pagination $list_owner_defect" \
+    'Regression unit job does not invoke the list pagination contract.'
+  printf 'List pagination owner rejected %s (guard exit %d).\n' "$list_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
 
 sed -i "s|php tests/test-cache-bootstrap.php|php -r 'echo \\\"tests/test-cache-bootstrap.php\\\";'|" \
   "$test_root/.github/workflows/regression.yml"

@@ -33,11 +33,6 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class QueueController extends AbstractController
 {
-    private static function requiredString(mixed $value, string $name): string
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
-    }
-
     private static function positiveIntegerOrNull(mixed $value): ?int
     {
         if (is_int($value) && $value > 0) {
@@ -64,33 +59,6 @@ final class QueueController extends AbstractController
     private static function option(array $options, string ...$path): array
     {
         return \ViMbAdmin\Kernel\Input\Reader::option($options, ...$path);
-    }
-
-    /** @param array<string,mixed> $options */
-    private static function optionString(array $options, string $default, string ...$path): string
-    {
-        [$found, $value] = self::option($options, ...$path);
-        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : $default;
-    }
-
-    /** @param array<string,mixed> $options */
-    private static function optionInt(array $options, int $default, string ...$path): int
-    {
-        [$found, $value] = self::option($options, ...$path);
-        if (!$found) {
-            return $default;
-        }
-        if (is_int($value) && $value >= 0) {
-            return $value;
-        }
-        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
-            $integer = filter_var($value, FILTER_VALIDATE_INT);
-            if (is_int($integer)) {
-                return $integer;
-            }
-        }
-
-        throw new \LogicException('Configuration ' . implode('.', $path) . ' must be a non-negative integer');
     }
 
     /**
@@ -133,7 +101,7 @@ final class QueueController extends AbstractController
     private static function serverString(string $key): string
     {
         $value = self::serverParams()[$key] ?? '';
-        return $value === '' ? '' : self::requiredString($value, "Server parameter {$key}");
+        return $value === '' ? '' : \ViMbAdmin\Kernel\Input\Reader::requiredString($value, "Server parameter {$key}");
     }
 
     private static function postStringOrEmpty(mixed $value): string
@@ -294,7 +262,7 @@ final class QueueController extends AbstractController
         }
 
         $options = $this->container->options();
-        $max = self::optionInt($options, 5, 'queue', 'runner', 'max_per_run');
+        $max = \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger($options, 5, ['queue', 'runner', 'max_per_run']);
         if ($max < 1) {
             throw new \LogicException('Configuration queue.runner.max_per_run must be greater than zero');
         }
@@ -379,7 +347,7 @@ final class QueueController extends AbstractController
     {
         $options = $this->container->options();
 
-        $key = self::optionString($options, '', 'queue', 'runner', 'key');
+        $key = \ViMbAdmin\Kernel\Input\Reader::optionString($options, '', ['queue', 'runner', 'key']);
         if ($key === '') {
             return $this->json(['error' => 'queue trigger disabled'], 404);
         }
@@ -397,11 +365,11 @@ final class QueueController extends AbstractController
         [$proxyListFound, $proxyList] = self::option($proxy, 'proxies');
         $ip    = \ViMbAdmin_Net::clientIp(
             self::serverParams(),
-            self::optionString($proxy, 'auto', 'mode'),
+            \ViMbAdmin\Kernel\Input\Reader::optionString($proxy, 'auto', ['mode']),
             self::proxyList($proxyListFound ? $proxyList : null)
         );
 
-        if (!\ViMbAdmin_Net::ipInList($ip, self::optionString($options, '', 'queue', 'runner', 'allowed_ips'))) {
+        if (!\ViMbAdmin_Net::ipInList($ip, \ViMbAdmin\Kernel\Input\Reader::optionString($options, '', ['queue', 'runner', 'allowed_ips']))) {
             return $this->json(['error' => "source IP {$ip} not allowed"], 403);
         }
 
@@ -410,7 +378,7 @@ final class QueueController extends AbstractController
         // batch is lease-throttled), so one trigger autonomously empties the
         // queue. The EntityManager + options are captured for the detached run.
         $em      = $this->em();
-        $max = self::optionInt($options, 5, 'queue', 'runner', 'max_per_run');
+        $max = \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger($options, 5, ['queue', 'runner', 'max_per_run']);
         if ($max < 1) {
             throw new \LogicException('Configuration queue.runner.max_per_run must be greater than zero');
         }

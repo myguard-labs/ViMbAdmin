@@ -239,15 +239,13 @@ final class LogController extends AbstractController
      */
     private static function listSortField(int $index, bool $domainScoped): string
     {
-        $columns = array_values(array_filter([
+        return DataTableQuery::orderField($index, [
             'action',                          // Action
             '',                                // Log / data (not sortable)
             'admin',                           // Admin
             $domainScoped ? null : 'domain',   // Domain (hidden while domain-scoped)
             'timestamp',                       // Occurred At
-        ], static fn (?string $c): bool => $c !== null));
-
-        return ($columns[$index] ?? '') ?: 'timestamp';
+        ], 'timestamp');
     }
 
     private function domainRepository(): DomainRepository

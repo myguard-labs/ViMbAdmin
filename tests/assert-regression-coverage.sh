@@ -152,9 +152,9 @@ if ! grep -qF "git ls-files 'tests/test-phpstan-*.php'" "$phpstan_runner" ||
 fi
 
 workflow_has_unconditional_owner_step() {
-  local workflow=$1 kind=$2 target=$3
+  local workflow=$1 kind=$2 target=$3 owner_job=${4:-}
 
-  awk -v kind="$kind" -v target="$target" '
+  awk -v kind="$kind" -v target="$target" -v owner_job="$owner_job" '
     function indent(line, leading) {
       leading = line
       sub(/[^ ].*$/, "", leading)
@@ -195,7 +195,10 @@ workflow_has_unconditional_owner_step() {
     }
     function finish_step() {
       if (in_step && approved_shape && run_count == 1 &&
-          matches_owner(run)) found = 1
+          matches_owner(run)) {
+        if (owner_job == "") found = 1
+        else if (current_job == owner_job) job_found = 1
+      }
       in_step = 0
     }
     {
@@ -203,6 +206,12 @@ workflow_has_unconditional_owner_step() {
 
       if (in_step && $0 !~ /^[[:space:]]*$/ &&
           current_indent <= step_indent) finish_step()
+      if ($0 ~ /^  [A-Za-z0-9_-]+:[[:space:]]*$/) {
+        current_job = normalize($0)
+        sub(/:$/, "", current_job)
+      }
+      if (owner_job != "" && current_job == owner_job &&
+          current_indent == 4 && normalize($0) ~ /^(if|"if"|\047if\047):/) job_disabled = 1
       if (in_steps && $0 !~ /^[[:space:]]*$/ &&
           current_indent <= steps_indent) in_steps = 0
 
@@ -230,7 +239,7 @@ workflow_has_unconditional_owner_step() {
     }
     END {
       finish_step()
-      exit found ? 0 : 1
+      exit (owner_job == "" ? found : job_found && !job_disabled) ? 0 : 1
     }
   ' "$workflow"
 }
@@ -265,6 +274,18 @@ workflow_has_unconditional_owner_step "$static_workflow" command \
 workflow_has_unconditional_owner_step "$regression_workflow" php \
   'ci/test-refactor-runtime-baseline.php' || {
   printf 'Regression workflow does not invoke the real adapter runtime baseline.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-input-contract.php' unit || {
+  printf 'Regression unit job does not invoke the controller string input contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-list-contract.php' unit || {
+  printf 'Regression unit job does not invoke the list pagination contract.\n' >&2
   exit 1
 }
 

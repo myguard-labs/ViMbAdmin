@@ -67,18 +67,13 @@ final class AuthController extends AbstractController
     /** Default ceiling for that budget (bruteforce.lost_password_max_attempts). */
     private const LOST_PASSWORD_MAX_ATTEMPTS = 30;
 
-    private static function requiredString(mixed $value, string $name): string
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
-    }
-
     private static function stringOrDefault(mixed $value, string $default, string $name): string
     {
         if ($value === null) {
             return $default;
         }
 
-        return self::requiredString($value, $name);
+        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
     }
 
     private static function applicationPathOrDefault(mixed $value, string $default): string
@@ -136,9 +131,14 @@ final class AuthController extends AbstractController
     private static function optionNullableString(array $options, string ...$path): ?string
     {
         $value = self::option($options, ...$path);
-        return $value === null
-            ? null
-            : self::requiredString($value, 'Configuration ' . implode('.', $path));
+        if ($value === null) {
+            return null;
+        }
+        if (!is_string($value)) {
+            throw new \LogicException('Configuration ' . implode('.', $path) . ' must be a string');
+        }
+
+        return $value;
     }
 
     /**
@@ -267,11 +267,11 @@ final class AuthController extends AbstractController
 
             if ($form->isValid($post)) {
                 $values   = $form->values();
-                $username = self::requiredString($values['username'] ?? null, 'Login username');
+                $username = \ViMbAdmin\Kernel\Input\Reader::requiredString($values['username'] ?? null, 'Login username');
                 $admin    = $this->adminRepository()->findOneBy(['username' => $username]);
                 $authOpts = self::option($options, 'resources', 'auth', 'oss');
 
-                $plainPassword = self::requiredString($values['password'] ?? null, 'Login password');
+                $plainPassword = \ViMbAdmin\Kernel\Input\Reader::requiredString($values['password'] ?? null, 'Login password');
                 $verifiedHash = $admin === null
                     ? null
                     : self::verifiedAdminPassword($admin, $plainPassword, $authOpts);
@@ -338,16 +338,16 @@ final class AuthController extends AbstractController
         if ($this->isPost() && $form->isValid($this->postData())) {
             $values = $form->values();
 
-            if (!hash_equals($salt, self::requiredString($values['salt'] ?? null, 'Setup salt'))) {
+            if (!hash_equals($salt, \ViMbAdmin\Kernel\Input\Reader::requiredString($values['salt'] ?? null, 'Setup salt'))) {
                 $this->flash('Incorrect security salt provided. Please copy and paste it from the application.ini file.', FlashMessages::INFO);
                 return $this->redirect('auth/login');
             }
 
             $admin = new \Entities\Admin();
-            $admin->setUsername(self::requiredString($values['username'] ?? null, 'Setup username'));
+            $admin->setUsername(\ViMbAdmin\Kernel\Input\Reader::requiredString($values['username'] ?? null, 'Setup username'));
             $admin->setPassword(
                 \OSS_Auth_Password::hash(
-                    self::requiredString($values['password'] ?? null, 'Setup password'),
+                    \ViMbAdmin\Kernel\Input\Reader::requiredString($values['password'] ?? null, 'Setup password'),
                     self::passwordOptions($options),
                 )
             );
@@ -414,7 +414,7 @@ final class AuthController extends AbstractController
             $post = $this->postData();
             if ($form->isValid($post)) {
                 $tfa  = new \ViMbAdmin_TwoFactor('ViMbAdmin', self::optionString($options, '', 'securitysalt'));
-                $code = self::requiredString($form->values()['code'] ?? null, 'Authentication code');
+                $code = \ViMbAdmin\Kernel\Input\Reader::requiredString($form->values()['code'] ?? null, 'Authentication code');
                 $bf   = $this->bruteForce($options);
 
                 // The password step leaves its pending attempt in place until
@@ -592,7 +592,7 @@ final class AuthController extends AbstractController
 
             if ($form->isValid($post)) {
                 $v        = $form->values();
-                $username = self::requiredString($v['username'] ?? null, 'Mailbox username');
+                $username = \ViMbAdmin\Kernel\Input\Reader::requiredString($v['username'] ?? null, 'Mailbox username');
                 $mailbox  = $this->mailboxRepository()->findOneBy(['username' => $username]);
 
                 $pwOpts = [
@@ -603,11 +603,11 @@ final class AuthController extends AbstractController
                 if ($mailbox !== null
                     && self::mailboxPasswordMatches(
                         $mailbox,
-                        self::requiredString($v['current_password'] ?? null, 'Current mailbox password'),
+                        \ViMbAdmin\Kernel\Input\Reader::requiredString($v['current_password'] ?? null, 'Current mailbox password'),
                         $pwOpts,
                     )) {
                     $mailbox->setPassword(\OSS_Auth_Password::hash(
-                        self::requiredString($v['new_password'] ?? null, 'New mailbox password'),
+                        \ViMbAdmin\Kernel\Input\Reader::requiredString($v['new_password'] ?? null, 'New mailbox password'),
                         $pwOpts,
                     ));
                     $this->em()->flush();
@@ -731,7 +731,7 @@ final class AuthController extends AbstractController
             }
 
             if ($form->isValid($post)) {
-                $username = self::requiredString(
+                $username = \ViMbAdmin\Kernel\Input\Reader::requiredString(
                     $form->values()['username'] ?? null,
                     'Password-reset username',
                 );
@@ -818,8 +818,8 @@ final class AuthController extends AbstractController
 
         if ($this->isPost() && $form->isValid($this->postData())) {
             $v    = $form->values();
-            $username = self::requiredString($v['username'] ?? null, 'Password-reset username');
-            $submittedToken = self::requiredString($v['token'] ?? null, 'Password-reset token');
+            $username = \ViMbAdmin\Kernel\Input\Reader::requiredString($v['username'] ?? null, 'Password-reset username');
+            $submittedToken = \ViMbAdmin\Kernel\Input\Reader::requiredString($v['token'] ?? null, 'Password-reset token');
             $token = \ViMbAdmin_PasswordResetToken::verifier($submittedToken);
             $user = $this->em()->getRepository($entityClass)->findOneBy(['username' => $username]);
 
@@ -845,7 +845,7 @@ final class AuthController extends AbstractController
                     $this->flash('Invalid username / token combination. Please check your details and try again.', FlashMessages::ERROR);
                 } else {
                     $replacement = \OSS_Auth_Password::hash(
-                        self::requiredString($v['password'] ?? null, 'New admin password'),
+                        \ViMbAdmin\Kernel\Input\Reader::requiredString($v['password'] ?? null, 'New admin password'),
                         self::passwordOptions($options),
                     );
                     if (!$this->adminRepository()->resetPasswordWithToken($user, $submittedToken, $replacement)) {

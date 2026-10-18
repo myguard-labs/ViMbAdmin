@@ -9,6 +9,7 @@ foreach (glob(__DIR__ . '/../application/Entities/*.php') ?: [] as $entityFile) 
 
 use ViMbAdmin\Kernel\Controller\DomainController;
 use ViMbAdmin\Kernel\Container;
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
 use ViMbAdmin\Kernel\Form\Form;
 use ViMbAdmin\Kernel\RouteMatch;
 use ViMbAdmin\Kernel\Security\Auth;
@@ -137,13 +138,13 @@ $check(
         && $invoke('positiveIntegerOrNull', ['12']) === null
 );
 
-$request = $invoke('requestArray', ['draw' => '2', 'search' => ['value' => 'mail'], 0 => 'ignored']);
+$request = DataTableQuery::requestArray(['draw' => '2', 'search' => ['value' => 'mail'], 0 => 'ignored']);
 $check(
     'DataTables boundary retains modern scalar and nested parameters',
     $request === ['draw' => '2', 'search' => ['value' => 'mail']]
 );
 $check('DataTables container values fail before query parsing', $fails(
-    static fn (): mixed => $invoke('requestArray', ['length' => ['500']]),
+    static fn (): mixed => DataTableQuery::requestArray(['length' => ['500']]),
     'DataTables parameter length must be a string',
 ));
 
@@ -213,10 +214,10 @@ $check('truthy containers cannot enable a domain flag', $fails(
 ));
 $check(
     'non-negative integer parsing rejects lossy coercion',
-    $invoke('nonNegativeInteger', '0', 'Maximum aliases') === 0
-        && $invoke('nonNegativeInteger', 9, 'Maximum aliases') === 9
+    \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger('0', 'Maximum aliases') === 0
+        && \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger(9, 'Maximum aliases') === 9
         && $fails(
-            static fn (): mixed => $invoke('nonNegativeInteger', '9junk', 'Maximum aliases'),
+            static fn (): mixed => \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger('9junk', 'Maximum aliases'),
             'Maximum aliases must be a non-negative integer',
         )
 );
@@ -244,7 +245,7 @@ $check(
 );
 $check(
     'explicit null domain defaults cannot masquerade as absent',
-    $fails(static fn (): mixed => $invoke('requiredString', null, 'Configuration defaults.domain.transport'), 'Configuration defaults.domain.transport must be a string')
+    $fails(static fn (): mixed => \ViMbAdmin\Kernel\Input\Reader::requiredString(null, 'Configuration defaults.domain.transport'), 'Configuration defaults.domain.transport must be a string')
         && $fails(static fn (): mixed => $invoke('nonNegativeIntegerDefault', null, 'Configuration defaults.domain.aliases'), 'Configuration defaults.domain.aliases must be a non-negative integer')
         && $fails(static fn (): mixed => $invoke('nonNegativeNumberDefault', null, 'Configuration defaults.domain.quota'), 'Configuration defaults.domain.quota must be a non-negative number')
 );

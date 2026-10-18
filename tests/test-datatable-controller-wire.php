@@ -95,15 +95,17 @@ $check = static function (string $label, bool $ok) use (&$failures): void {
 };
 
 foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
-    $boundary = new ReflectionMethod(
-        'ViMbAdmin\\Kernel\\Controller\\' . $name . 'Controller',
-        $name === 'Log' ? 'stringMap' : 'requestArray'
-    );
+    $class = new ReflectionClass('ViMbAdmin\\Kernel\\Controller\\' . $name . 'Controller');
+    $boundary = in_array($name, ['Domain', 'Mailbox', 'Archive'], true)
+        ? null
+        : new ReflectionMethod($class->getName(), $name === 'Log' ? 'stringMap' : 'requestArray');
     $parse = static function (string $encoded) use ($boundary, $name): DataTableQuery {
         parse_str($encoded, $request);
-        $parameters = $name === 'Log'
-            ? $boundary->invoke(null, $request, 'GET data')
-            : $boundary->invoke(null, $request);
+        $parameters = match ($name) {
+            'Log' => $boundary?->invoke(null, $request, 'GET data'),
+            'Alias' => $boundary?->invoke(null, $request),
+            default => DataTableQuery::requestArray($request),
+        };
         if (!is_array($parameters)) {
             throw new RuntimeException('Controller boundary must return an array');
         }
@@ -139,7 +141,6 @@ foreach (['Domain', 'Mailbox', 'Alias', 'Archive', 'Log'] as $name) {
     $resources = new DataTableWireResources($session);
     $admin = (new Entities\Admin())->setUsername('admin@example.test')->setSuper(true)->setActive(true);
     $container = new Container($resources, new Auth($session, static fn (int $id): Entities\Admin => $admin));
-    $class = $boundary->getDeclaringClass();
     $controller = $class->newInstance(
         $container,
         new RouteMatch(strtolower($name), 'list-data', $class->getName(), 'listDataAction', [])

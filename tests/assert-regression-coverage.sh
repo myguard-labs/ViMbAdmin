@@ -302,6 +302,12 @@ workflow_has_unconditional_owner_step "$regression_workflow" php \
 }
 
 workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-controller-resources.php' unit || {
+  printf 'Regression unit job does not invoke the concrete controller resource contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
   'ci/test-refactor-preference-contract.php' schema-drift || {
   printf 'Regression schema-drift job does not invoke the preference reuse contract.\n' >&2
   exit 1

@@ -44,6 +44,7 @@ jobs:
       - run: php ci/test-refactor-list-contract.php
       - run: php ci/test-refactor-doveadm-contract.php
       - run: php ci/test-refactor-queue-database-guard.php
+      - run: php ci/test-refactor-controller-resources.php
       - run: bash tests/test-resolve-bundle-v.sh
   cache:
     runs-on: ubuntu-latest
@@ -473,6 +474,41 @@ for queue_database_guard_owner_defect in missing conditional wrong-job; do
     'Regression unit job does not invoke the queue database guard contract.'
   printf 'Queue database guard owner rejected %s (guard exit %d).\n' \
     "$queue_database_guard_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
+# The four-controller concrete-resource contract must remain an unconditional
+# owner in the supported PHP unit matrix. Observe missing, conditional and
+# misdirected owner shapes, restoring green each time.
+for controller_resource_owner_defect in missing conditional wrong-job; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$controller_resource_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-controller-resources.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-controller-resources.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-controller-resources.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-controller-resources.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'Concrete controller resource owner mutation matched nothing: %s\n' \
+      "$controller_resource_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "concrete controller resource $controller_resource_owner_defect" \
+    'Regression unit job does not invoke the concrete controller resource contract.'
+  printf 'Concrete controller resource owner rejected %s (guard exit %d).\n' \
+    "$controller_resource_owner_defect" "$guard_status"
   cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
   cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
   run_guard

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace ViMbAdmin\Kernel\Controller;
 
-use Doctrine\ORM\EntityManager;
-use Entities\Admin;
 use LogicException;
 use Repositories\Archive as ArchiveRepository;
 use ViMbAdmin\Kernel\Flash\FlashMessages;
@@ -37,6 +35,8 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class MaintenanceController extends AbstractController
 {
+    use ConcreteControllerResources;
+
     private static function binaryFlag(mixed $value, string $name): bool
     {
         if ($value === true || $value === 1 || $value === '1') {
@@ -545,26 +545,6 @@ final class MaintenanceController extends AbstractController
         ];
 
         return $this->view('maintenance/index.phtml', $extra + $vars);
-    }
-
-    protected function em(): EntityManager
-    {
-        $em = parent::em();
-        if (!$em instanceof EntityManager) {
-            throw new LogicException('Doctrine entity manager resource has an invalid type');
-        }
-
-        return $em;
-    }
-
-    protected function admin(): ?Admin
-    {
-        $admin = parent::admin();
-        if ($admin !== null && !$admin instanceof Admin) {
-            throw new LogicException('Authenticated admin has an invalid type');
-        }
-
-        return $admin;
     }
 
     private function archiveRepository(): ArchiveRepository

@@ -33,6 +33,8 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class QueueController extends AbstractController
 {
+    use ConcreteControllerResources;
+
     private static function positiveIntegerOrNull(mixed $value): ?int
     {
         if (is_int($value) && $value > 0) {
@@ -454,24 +456,6 @@ final class QueueController extends AbstractController
 
         $task = $this->mailboxTaskRepository()->find($id);
         return $task instanceof \Entities\MailboxTask ? $task : null;
-    }
-
-    protected function em(): \Doctrine\ORM\EntityManager
-    {
-        $em = parent::em();
-        if (!$em instanceof \Doctrine\ORM\EntityManager) {
-            throw new \LogicException('Doctrine entity manager resource has an invalid type');
-        }
-        return $em;
-    }
-
-    protected function admin(): ?\Entities\Admin
-    {
-        $admin = parent::admin();
-        if ($admin !== null && !$admin instanceof \Entities\Admin) {
-            throw new \LogicException('Authenticated admin has an invalid type');
-        }
-        return $admin;
     }
 
     private function mailboxTaskRepository(): \Repositories\MailboxTask

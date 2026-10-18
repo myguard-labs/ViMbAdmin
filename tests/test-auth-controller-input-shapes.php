@@ -243,6 +243,52 @@ function authInputShapeCheck(string $label, bool $condition): void
     }
 }
 
+function authInputShapeTemporaryBase(): string
+{
+    $base = getenv('PHPTEST_TMPDIR');
+    if (!is_string($base) || $base === '') {
+        $base = sys_get_temp_dir();
+    }
+
+    return rtrim($base, DIRECTORY_SEPARATOR);
+}
+
+function authInputShapeCreateFixtureRoot(): string
+{
+    $base = authInputShapeTemporaryBase();
+    for ($attempt = 0; $attempt < 10; $attempt++) {
+        $root = $base . '/vimbadmin-auth-input-' . bin2hex(random_bytes(8));
+        if (@mkdir($root, 0700)) {
+            return $root;
+        }
+    }
+
+    throw new RuntimeException('could not create auth input fixture root under ' . $base);
+}
+
+function authInputShapeRemoveTree(string $directory): bool
+{
+    if (!is_dir($directory)) {
+        return !file_exists($directory);
+    }
+    $entries = scandir($directory);
+    if (!is_array($entries)) {
+        return false;
+    }
+    foreach (array_diff($entries, ['.', '..']) as $entry) {
+        $path = $directory . DIRECTORY_SEPARATOR . $entry;
+        if (is_dir($path) && !is_link($path)) {
+            if (!authInputShapeRemoveTree($path)) {
+                return false;
+            }
+        } elseif (!unlink($path)) {
+            return false;
+        }
+    }
+
+    return rmdir($directory);
+}
+
 /**
  * @param array<string,mixed>|null $options
  * @return array{controller:AuthController,container:Container,entityManager:EntityManager,session:AuthInputShapeSession,listener:AuthInputShapeFlushListener,repository:AuthInputShapeAdminRepository}
@@ -535,8 +581,20 @@ $testIp = '192.0.2.41';
 $_SERVER['REMOTE_ADDR'] = $testIp;
 unset($_SERVER['HTTP_X_FORWARDED_FOR']);
 
-$inactiveState = __DIR__ . '/../var/tmp/test-inactive-admin-' . getmypid();
-$wrongState = __DIR__ . '/../var/tmp/test-wrong-admin-' . getmypid();
+$authFixtureRoot = authInputShapeCreateFixtureRoot();
+register_shutdown_function(static function () use ($authFixtureRoot): void {
+    if (is_dir($authFixtureRoot)) {
+        authInputShapeRemoveTree($authFixtureRoot);
+    }
+});
+authInputShapeCheck(
+    'auth fixtures use a unique root beneath the matrix run temporary directory',
+    str_starts_with($authFixtureRoot, authInputShapeTemporaryBase() . DIRECTORY_SEPARATOR)
+        && preg_match('/^vimbadmin-auth-input-[a-f0-9]{16}$/D', basename($authFixtureRoot)) === 1
+);
+
+$inactiveState = $authFixtureRoot . '/inactive-admin';
+$wrongState = $authFixtureRoot . '/wrong-admin';
 
 $inactive = authInputShapeController(
     null,
@@ -586,7 +644,7 @@ authInputShapeCheck(
         && $inactive['listener']->flushes === 0
 );
 
-$persistenceParent = sys_get_temp_dir() . '/vimbadmin-bruteforce-denied-' . bin2hex(random_bytes(8));
+$persistenceParent = $authFixtureRoot . '/persistence-denied';
 if (file_put_contents($persistenceParent, 'not a directory') === false) {
     throw new RuntimeException('could not create brute-force persistence fault fixture');
 }
@@ -620,7 +678,7 @@ authInputShapeCheck(
         && $persistenceFault['repository']->findOneByCalls === 0
 );
 
-$latePersistenceState = sys_get_temp_dir() . '/vimbadmin-bruteforce-late-denied-' . bin2hex(random_bytes(8));
+$latePersistenceState = $authFixtureRoot . '/late-persistence-denied';
 $latePersistenceAdmin = authInputShapeAdmin(true);
 $latePersistenceAdmin->breakBruteForceStateOnPasswordRead($latePersistenceState);
 $latePersistenceFault = authInputShapeController(
@@ -918,7 +976,7 @@ foreach (['totp', 'totp-setup'] as $pendingAction) {
     );
 }
 
-$totpClearState = __DIR__ . '/../var/tmp/test-totp-clear-failure-' . getmypid();
+$totpClearState = $authFixtureRoot . '/totp-clear-failure';
 if (!mkdir($totpClearState, 0700, true)) {
     throw new RuntimeException('could not create TOTP clear-failure fixture');
 }
@@ -952,14 +1010,6 @@ try {
     $totpClearFailure['controller']->totpSetupAction();
 } catch (RuntimeException $exception) {
     $totpClearException = $exception;
-} finally {
-    rmdir($totpClearStateFile);
-    foreach (['/.lock', '/.reap-lock', '/.reap-stamp', '/.reap-cursor'] as $sidecar) {
-        if (is_file($totpClearState . $sidecar)) {
-            unlink($totpClearState . $sidecar);
-        }
-    }
-    rmdir($totpClearState);
 }
 authInputShapeCheck(
     'TOTP enrolment remains untouched when brute-force state cannot be cleared',
@@ -1003,7 +1053,13 @@ authInputShapeCheck(
         && !str_contains($deactivatedDuringSetupResponse->body, 'Two-factor is now enabled.')
 );
 
-authInputShapeCheck('fixed assertion count', AuthInputShapeState::$checks === 33);
+$authFixtureCleanup = authInputShapeRemoveTree($authFixtureRoot);
+authInputShapeCheck(
+    'auth fixture cleanup removes every exact-owned state and sidecar path',
+    $authFixtureCleanup && !file_exists($authFixtureRoot)
+);
+
+authInputShapeCheck('fixed assertion count', AuthInputShapeState::$checks === 35);
 
 echo AuthInputShapeState::$failures === 0
     ? "ALL PASSED\n"

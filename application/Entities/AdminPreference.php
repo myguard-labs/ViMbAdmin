@@ -4,6 +4,8 @@ namespace Entities;
 
 use Doctrine\ORM\Mapping as ORM;
 
+require_once __DIR__ . '/PreferenceScalarAccessors.php';
+
 /**
  * Entities\AdminPreference
  */
@@ -12,6 +14,8 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(name: 'IX_AdminPreference_1', columns: ['Admin_id', 'attribute', 'ix'])]
 class AdminPreference
 {
+    use PreferenceScalarAccessors;
+
     /**
      * @var string $attribute
      */
@@ -60,121 +64,6 @@ class AdminPreference
      */
     private $Preferences;
 
-
-    /**
-     * Set attribute
-     *
-     * @param string $attribute
-     * @return AdminPreference
-     */
-    public function setAttribute($attribute)
-    {
-        $this->attribute = $attribute;
-
-        return $this;
-    }
-
-    /**
-     * Get attribute
-     *
-     * @return string|null
-     */
-    public function getAttribute()
-    {
-        return $this->attribute;
-    }
-
-    /**
-     * Set ix
-     *
-     * @param integer $ix
-     * @return AdminPreference
-     */
-    public function setIx($ix)
-    {
-        $this->ix = $ix;
-
-        return $this;
-    }
-
-    /**
-     * Get ix
-     *
-     * @return integer|null
-     */
-    public function getIx()
-    {
-        return $this->ix;
-    }
-
-    /**
-     * Set op
-     *
-     * @param string $op
-     * @return AdminPreference
-     */
-    public function setOp($op)
-    {
-        $this->op = $op;
-
-        return $this;
-    }
-
-    /**
-     * Get op
-     *
-     * @return string|null
-     */
-    public function getOp()
-    {
-        return $this->op;
-    }
-
-    /**
-     * Set value
-     *
-     * @param string $value
-     * @return AdminPreference
-     */
-    public function setValue($value)
-    {
-        $this->value = $value;
-
-        return $this;
-    }
-
-    /**
-     * Get value
-     *
-     * @return string|null
-     */
-    public function getValue()
-    {
-        return $this->value;
-    }
-
-    /**
-     * Set expire
-     *
-     * @param integer $expire
-     * @return AdminPreference
-     */
-    public function setExpire($expire)
-    {
-        $this->expire = $expire;
-
-        return $this;
-    }
-
-    /**
-     * Get expire
-     *
-     * @return integer|null
-     */
-    public function getExpire()
-    {
-        return $this->expire;
-    }
 
     /**
      * Get id

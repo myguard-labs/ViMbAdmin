@@ -289,6 +289,12 @@ workflow_has_unconditional_owner_step "$regression_workflow" php \
   exit 1
 }
 
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-preference-contract.php' schema-drift || {
+  printf 'Regression schema-drift job does not invoke the preference reuse contract.\n' >&2
+  exit 1
+}
+
 workflow_has_unconditional_owner_step "$ci_workflow" php \
   'ci/test-dependency-refresh.php' || {
   printf 'CI workflow does not invoke the dependency refresh regression.\n' >&2

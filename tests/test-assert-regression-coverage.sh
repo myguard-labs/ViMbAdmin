@@ -50,10 +50,11 @@ jobs:
       - run: php tests/test-kernel-em-factory.php
       - run: php tests/test-kernel-smarty-view.php
       - run: php tests/test-oss-message.php
-  schema:
+  schema-drift:
     runs-on: ubuntu-latest
     steps:
       - run: php tests/test-schema-no-pending.php
+      - run: php ci/test-refactor-preference-contract.php
   mailbox-queue:
     runs-on: ubuntu-latest
     steps:
@@ -402,6 +403,52 @@ for list_owner_defect in missing conditional masked echoed wrong-job wrong-workf
   expect_owner_rejected "list pagination $list_owner_defect" \
     'Regression unit job does not invoke the list pagination contract.'
   printf 'List pagination owner rejected %s (guard exit %d).\n' "$list_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
+# VC-E02's real persistence contract must remain an unconditional owner in the
+# MariaDB-backed schema job. Each disabled/misdirected shape is observed red,
+# then the exact valid fixture is restored before the next mutation.
+for preference_owner_defect in missing conditional masked echoed wrong-job wrong-workflow conditional-job; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$preference_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-preference-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-preference-contract.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  masked)
+    sed -i '\|run: php ci/test-refactor-preference-contract.php|a\        continue-on-error: true' "$test_root/.github/workflows/regression.yml"
+    ;;
+  echoed)
+    sed -i 's|run: php ci/test-refactor-preference-contract.php|run: echo php ci/test-refactor-preference-contract.php|' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-preference-contract.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-preference-contract.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-workflow)
+    sed -i '\|run: php ci/test-refactor-preference-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    sed -i '/run: php ci\/test-formatter-selection.php/a\      - run: php ci/test-refactor-preference-contract.php' "$test_root/.github/workflows/static-analysis.yml"
+    ;;
+  conditional-job)
+    sed -i '/^  schema-drift:$/a\    if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'Preference reuse owner mutation matched nothing: %s\n' "$preference_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "preference reuse $preference_owner_defect" \
+    'Regression schema-drift job does not invoke the preference reuse contract.'
+  printf 'Preference reuse owner rejected %s (guard exit %d).\n' "$preference_owner_defect" "$guard_status"
   cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
   cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
   run_guard

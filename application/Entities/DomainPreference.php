@@ -4,6 +4,8 @@ namespace Entities;
 
 use Doctrine\ORM\Mapping as ORM;
 
+require_once __DIR__ . '/PreferenceScalarAccessors.php';
+
 /**
  * DomainPreference
  */
@@ -12,6 +14,8 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Index(name: 'IX_DomainPreference_1', columns: ['Domain_id', 'attribute', 'ix'])]
 class DomainPreference
 {
+    use PreferenceScalarAccessors;
+
     /**
      * @var string
      */
@@ -62,121 +66,6 @@ class DomainPreference
     #[ORM\JoinColumn(name: 'Domain_id', referencedColumnName: 'id')]
     private ?\Entities\Domain $Domain = null;
 
-
-    /**
-     * Set attribute
-     *
-     * @param string $attribute
-     * @return DomainPreference
-     */
-    public function setAttribute($attribute)
-    {
-        $this->attribute = $attribute;
-
-        return $this;
-    }
-
-    /**
-     * Get attribute
-     *
-     * @return string|null
-     */
-    public function getAttribute()
-    {
-        return $this->attribute;
-    }
-
-    /**
-     * Set ix
-     *
-     * @param integer $ix
-     * @return DomainPreference
-     */
-    public function setIx($ix)
-    {
-        $this->ix = $ix;
-
-        return $this;
-    }
-
-    /**
-     * Get ix
-     *
-     * @return integer|null
-     */
-    public function getIx()
-    {
-        return $this->ix;
-    }
-
-    /**
-     * Set op
-     *
-     * @param string $op
-     * @return DomainPreference
-     */
-    public function setOp($op)
-    {
-        $this->op = $op;
-
-        return $this;
-    }
-
-    /**
-     * Get op
-     *
-     * @return string|null
-     */
-    public function getOp()
-    {
-        return $this->op;
-    }
-
-    /**
-     * Set value
-     *
-     * @param string $value
-     * @return DomainPreference
-     */
-    public function setValue($value)
-    {
-        $this->value = $value;
-
-        return $this;
-    }
-
-    /**
-     * Get value
-     *
-     * @return string|null
-     */
-    public function getValue()
-    {
-        return $this->value;
-    }
-
-    /**
-     * Set expire
-     *
-     * @param integer $expire
-     * @return DomainPreference
-     */
-    public function setExpire($expire)
-    {
-        $this->expire = $expire;
-
-        return $this;
-    }
-
-    /**
-     * Get expire
-     *
-     * @return integer|null
-     */
-    public function getExpire()
-    {
-        return $this->expire;
-    }
 
     /**
      * Get id

@@ -663,3 +663,12 @@ jobs:
           DB_PASS: ci
           VIMBADMIN_RUNTIME_FIXTURE: '1'
         run: php ci/test-refactor-runtime-baseline.php
+
+      - name: Concrete preference persistence and reuse contract
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-refactor-preference-contract.php

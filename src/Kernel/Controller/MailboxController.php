@@ -52,23 +52,18 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class MailboxController extends AbstractController
 {
-    private static function requiredString(mixed $value, string $name): string
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
-    }
-
     private static function optionalString(mixed $value, string $name): ?string
     {
         if ($value === null || $value === '') {
             return null;
         }
 
-        return self::requiredString($value, $name);
+        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
     }
 
     private static function stringOrDefault(mixed $value, string $default, string $name): string
     {
-        return $value === null ? $default : self::requiredString($value, $name);
+        return $value === null ? $default : \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
     }
 
     private static function renderStringOrDefault(mixed $value, string $default): string
@@ -148,30 +143,6 @@ final class MailboxController extends AbstractController
     }
 
     /**
-     * @param array<mixed> $value
-     * @return array<string,mixed>
-     */
-    private static function requestArray(array $value): array
-    {
-        $scalarKeys = [
-            'draw',
-            'start',
-            'length',
-        ];
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (is_string($key)) {
-                if (in_array($key, $scalarKeys, true) && !is_string($item)) {
-                    throw new \LogicException("DataTables parameter {$key} must be a string");
-                }
-                $result[$key] = $item;
-            }
-        }
-
-        return $result;
-    }
-
-    /**
      * @param array<string,mixed> $options
      * @return array{bool,mixed}
      */
@@ -181,37 +152,10 @@ final class MailboxController extends AbstractController
     }
 
     /** @param array<string,mixed> $options */
-    private static function optionString(array $options, string $default, string ...$path): string
-    {
-        [$found, $value] = self::option($options, ...$path);
-        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : $default;
-    }
-
-    /** @param array<string,mixed> $options */
     private static function optionNullableString(array $options, string ...$path): ?string
     {
         [$found, $value] = self::option($options, ...$path);
-        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : null;
-    }
-
-    /** @param array<string,mixed> $options */
-    private static function optionInt(array $options, int $default, string ...$path): int
-    {
-        [$found, $value] = self::option($options, ...$path);
-        if (!$found) {
-            return $default;
-        }
-        if (is_int($value) && $value >= 0) {
-            return $value;
-        }
-        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
-            $integer = filter_var($value, FILTER_VALIDATE_INT);
-            if (is_int($integer)) {
-                return $integer;
-            }
-        }
-
-        throw new \LogicException('Configuration ' . implode('.', $path) . ' must be a non-negative integer');
+        return $found ? \ViMbAdmin\Kernel\Input\Reader::requiredString($value, 'Configuration ' . implode('.', $path)) : null;
     }
 
     /** @param array<string,mixed> $options */
@@ -229,7 +173,7 @@ final class MailboxController extends AbstractController
      */
     private static function listSortField(int $index, bool $domainColumn): string
     {
-        $columns = array_values(array_filter([
+        return DataTableQuery::orderField($index, [
             'username',                        // Email
             'name',                            // Name
             '',                                // Used / Quota (not sortable)
@@ -237,9 +181,7 @@ final class MailboxController extends AbstractController
             $domainColumn ? 'domain' : null,   // Domain
             '',                                // Active (not sortable)
             '',                                // controls (not sortable)
-        ], static fn (?string $c): bool => $c !== null));
-
-        return ($columns[$index] ?? '') ?: 'username';
+        ], 'username');
     }
 
     /** @param array<string,mixed> $options */
@@ -273,13 +215,7 @@ final class MailboxController extends AbstractController
     /** @param array<string,mixed> $options */
     private static function quotaMultiplier(array $options): string
     {
-        $multiplier = strtoupper(self::optionString(
-            $options,
-            \OSS_Filter_FileSize::SIZE_KILOBYTES,
-            'defaults',
-            'quota',
-            'multiplier',
-        ));
+        $multiplier = strtoupper(\ViMbAdmin\Kernel\Input\Reader::optionString($options, \OSS_Filter_FileSize::SIZE_KILOBYTES, ['defaults', 'quota', 'multiplier']));
         if (!in_array($multiplier, [
             \OSS_Filter_FileSize::SIZE_BYTES,
             \OSS_Filter_FileSize::SIZE_KILOBYTES,
@@ -309,7 +245,7 @@ final class MailboxController extends AbstractController
         if ((!is_int($filtered) && !is_float($filtered))
             || !is_finite((float) $filtered)
             || $filtered < 0
-            || $filtered > PHP_INT_MAX) {
+            || $filtered >= PHP_INT_MAX + 1.0) {
             throw new \LogicException('Mailbox quota produced an invalid byte value');
         }
 
@@ -320,7 +256,7 @@ final class MailboxController extends AbstractController
     private static function queueRunnerKey(array $options): string
     {
         return self::controlSafeString(
-            self::optionString($options, '', 'queue', 'runner', 'key'),
+            \ViMbAdmin\Kernel\Input\Reader::optionString($options, '', ['queue', 'runner', 'key']),
             'Configuration queue.runner.key',
         );
     }
@@ -336,7 +272,7 @@ final class MailboxController extends AbstractController
         $https = ($httpsString !== '' && $httpsString !== '0' && strtolower($httpsString) !== 'off')
             || $reportedPort === 443;
         $configuredHost = self::controlSafeString(
-            self::optionString($options, '', 'queue', 'runner', 'host'),
+            \ViMbAdmin\Kernel\Input\Reader::optionString($options, '', ['queue', 'runner', 'host']),
             'Configuration queue.runner.host',
         );
         $hasOpeningBracket = str_starts_with($configuredHost, '[');
@@ -393,7 +329,7 @@ final class MailboxController extends AbstractController
             return new Response('ko');
         }
         try {
-            $request = self::requestArray($_GET);
+            $request = DataTableQuery::requestArray($_GET);
         } catch (\LogicException $e) {
             foreach (['draw', 'start', 'length'] as $key) {
                 if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
@@ -485,13 +421,7 @@ final class MailboxController extends AbstractController
         ];
 
         if (!self::optionBool($opts, false, 'defaults', 'list_size', 'disabled')) {
-            $key = strtoupper(self::optionString(
-                $opts,
-                \OSS_Filter_FileSize::SIZE_KILOBYTES,
-                'defaults',
-                'list_size',
-                'multiplier',
-            ));
+            $key = strtoupper(\ViMbAdmin\Kernel\Input\Reader::optionString($opts, \OSS_Filter_FileSize::SIZE_KILOBYTES, ['defaults', 'list_size', 'multiplier']));
             if (!in_array($key, [
                 \OSS_Filter_FileSize::SIZE_BYTES,
                 \OSS_Filter_FileSize::SIZE_KILOBYTES,
@@ -706,7 +636,7 @@ final class MailboxController extends AbstractController
         $em      = $this->em();
         $options = $this->container->options();
         $mult    = self::quotaMultiplier($options);
-        $minPw   = self::optionInt($options, 8, 'defaults', 'mailbox', 'min_password_length');
+        $minPw   = \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger($options, 8, ['defaults', 'mailbox', 'min_password_length']);
 
         // The domains this admin may add a mailbox to (id => name); super sees all.
         $choices = $this->domainRepository()->loadForAdminAsArray($admin, true);
@@ -740,7 +670,7 @@ final class MailboxController extends AbstractController
                 $this->flash('You have used all of your allocated mailboxes.', FlashMessages::ERROR);
             } else {
                 $localPart = \ViMbAdmin_Identity::canonical(
-                    self::requiredString($v['local_part'] ?? null, 'Mailbox local part'),
+                    \ViMbAdmin\Kernel\Input\Reader::requiredString($v['local_part'] ?? null, 'Mailbox local part'),
                 );
                 $username  = sprintf('%s@%s', $localPart, $domain->requiredDomainName());
 
@@ -752,7 +682,7 @@ final class MailboxController extends AbstractController
                     $mailbox->setUsername($username);
                     $mailbox->setName(self::stringOrDefault($v['name'] ?? null, '', 'Mailbox name'));
                     $mailbox->setAltEmail(self::optionalString($v['alt_email'] ?? null, 'Alternative email'));
-                    $mailbox->setPassword(self::requiredString($v['password'] ?? null, 'Mailbox password')); // plaintext; the service hashes it
+                    $mailbox->setPassword(\ViMbAdmin\Kernel\Input\Reader::requiredString($v['password'] ?? null, 'Mailbox password')); // plaintext; the service hashes it
                     $mailbox->setQuota(self::quotaBytes(
                         self::stringOrDefault($v['quota'] ?? null, '', 'Mailbox quota'),
                         $mult,
@@ -1106,7 +1036,7 @@ final class MailboxController extends AbstractController
         }
 
         $options = $this->container->options();
-        $minPw   = self::optionInt($options, 8, 'defaults', 'mailbox', 'min_password_length');
+        $minPw   = \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger($options, 8, ['defaults', 'mailbox', 'min_password_length']);
 
         $form = new Form(new Csrf(new MagicPropertyStorage($this->container->session())));
         $form->add(new Field('password', 'Password', 'text', [
@@ -1122,7 +1052,7 @@ final class MailboxController extends AbstractController
                 'username' => $username,
             ];
             $mailbox->setPassword(\OSS_Auth_Password::hash(
-                self::requiredString($form->values()['password'] ?? null, 'Mailbox password'),
+                \ViMbAdmin\Kernel\Input\Reader::requiredString($form->values()['password'] ?? null, 'Mailbox password'),
                 $pwOpts,
             ));
 
@@ -1517,7 +1447,7 @@ final class MailboxController extends AbstractController
             if (!$form->isValid($post)) {
                 $error = $form->errors()['_form'] ?? $form->errors()['type'] ?? 'Invalid submission.';
             } else {
-                $type = self::requiredString($form->values()['type'] ?? null, 'Email recipient type');
+                $type = \ViMbAdmin\Kernel\Input\Reader::requiredString($form->values()['type'] ?? null, 'Email recipient type');
 
                 if ($type === 'other') {
                     $raw = trim(self::stringOrDefault($post['email'] ?? null, '', 'Other email recipients'));
@@ -1601,11 +1531,11 @@ final class MailboxController extends AbstractController
         $username = $mailbox->requiredUsername();
 
         $senderAddress = self::controlSafeString(
-            self::optionString($options, 'support@localhost', 'server', 'email', 'address'),
+            \ViMbAdmin\Kernel\Input\Reader::optionString($options, 'support@localhost', ['server', 'email', 'address']),
             'Configuration server.email.address',
         );
         $senderName = self::controlSafeString(
-            self::optionString($options, '', 'server', 'email', 'name'),
+            \ViMbAdmin\Kernel\Input\Reader::optionString($options, '', ['server', 'email', 'name']),
             'Configuration server.email.name',
         );
 

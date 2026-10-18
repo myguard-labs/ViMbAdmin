@@ -48,11 +48,6 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class AliasController extends AbstractController
 {
-    private static function requiredString(mixed $value, string $name): string
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
-    }
-
     private static function positiveIntegerOrNull(mixed $value): ?int
     {
         if (is_int($value) && $value > 0) {
@@ -222,7 +217,7 @@ final class AliasController extends AbstractController
         }
         // Column index -> sortable field (matches JS column order; goto/controls
         // fall back to address).
-        $sortField = [0 => 'address', 1 => 'domain', 2 => 'active'][$q->sortColumn] ?? 'address';
+        $sortField = DataTableQuery::orderField($q->sortColumn, ['address', 'domain', 'active'], 'address');
 
         $r = $this->aliasRepository()
             ->pagedForAliasList($admin, $domain, (bool) $ima, $q->searchTerm, $q->contains, $sortField, $q->sortDir, $q->start, $q->length);
@@ -362,7 +357,7 @@ final class AliasController extends AbstractController
                 && $domain->getAliasCount() >= $domain->getMaxAliases()) {
                 $this->flash('You have used all of your allocated aliases.', FlashMessages::ERROR);
             } else {
-                [$gotos, $gErr] = $this->parseGotos(self::requiredString($v['goto'] ?? null, 'Alias destinations'));
+                [$gotos, $gErr] = $this->parseGotos(\ViMbAdmin\Kernel\Input\Reader::requiredString($v['goto'] ?? null, 'Alias destinations'));
 
                 if ($gErr !== null) {
                     $this->flash($gErr, FlashMessages::ERROR);
@@ -370,7 +365,7 @@ final class AliasController extends AbstractController
                     // _setAddress: assemble local_part@domain (blank local part is
                     // a catch-all @domain alias, which ZF1 does not email-validate).
                     $localPart = \ViMbAdmin_Identity::canonical(
-                        self::requiredString($v['local_part'] ?? null, 'Alias local part'),
+                        \ViMbAdmin\Kernel\Input\Reader::requiredString($v['local_part'] ?? null, 'Alias local part'),
                     );
                     $address   = sprintf('%s@%s', $localPart, $domain->requiredDomainName());
 
@@ -466,7 +461,7 @@ final class AliasController extends AbstractController
         if ($this->isPost() && $form->isValid($this->postData())) {
             $v = $form->values();
 
-            [$gotos, $gErr] = $this->parseGotos(self::requiredString($v['goto'] ?? null, 'Alias destinations'));
+            [$gotos, $gErr] = $this->parseGotos(\ViMbAdmin\Kernel\Input\Reader::requiredString($v['goto'] ?? null, 'Alias destinations'));
 
             if ($gErr !== null) {
                 $this->flash($gErr, FlashMessages::ERROR);

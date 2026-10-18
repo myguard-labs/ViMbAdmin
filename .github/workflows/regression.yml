@@ -255,6 +255,12 @@ jobs:
       - name: MCP mailbox creation enforces domain policy
         run: php ci/test-mcp-mailbox-create-policy.php
 
+      - name: Controller string inputs preserve their transport contracts
+        run: php ci/test-refactor-input-contract.php
+
+      - name: Equal list pagination adapters share one policy owner
+        run: php ci/test-refactor-list-contract.php
+
       - name: MCP domain defaults match GUI quota bytes
         run: php ci/test-mcp-domain-default-quota.php
 

@@ -70,7 +70,8 @@ foreach ($lists as $list => $contract) {
             $controller,
         ) === 1
         && (preg_match('/DataTableQuery::fromArray\(\s*\$request/', $controller) !== 1
-            || str_contains($controller, '$request = self::requestArray($_GET);')));
+            || str_contains($controller, '$request = self::requestArray($_GET);')
+            || str_contains($controller, '$request = DataTableQuery::requestArray($_GET);')));
 }
 
 echo $failures === 0 ? "ALL PASSED\n" : "{$failures} FAILED\n";

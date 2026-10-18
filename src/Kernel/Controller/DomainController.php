@@ -46,14 +46,9 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class DomainController extends AbstractController
 {
-    private static function requiredString(mixed $value, string $name): string
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
-    }
-
     private static function stringOrDefault(mixed $value, string $default, string $name): string
     {
-        return $value === null ? $default : self::requiredString($value, $name);
+        return $value === null ? $default : \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
     }
 
     private static function positiveIntegerOrNull(mixed $value): ?int
@@ -74,27 +69,6 @@ final class DomainController extends AbstractController
         return self::positiveIntegerOrNull($this->param($key));
     }
 
-    /**
-     * @param array<mixed> $value
-     * @return array<string,mixed>
-     */
-    private static function requestArray(array $value): array
-    {
-        $scalarKeys = ['draw', 'start', 'length'];
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (!is_string($key)) {
-                continue;
-            }
-            if (in_array($key, $scalarKeys, true) && !is_string($item)) {
-                throw new LogicException("DataTables parameter {$key} must be a string");
-            }
-            $result[$key] = $item;
-        }
-
-        return $result;
-    }
-
     /** @return array<string,mixed> */
     private static function stringKeyedArray(mixed $value, string $name): array
     {
@@ -108,13 +82,6 @@ final class DomainController extends AbstractController
     private static function option(array $options, string ...$path): array
     {
         return \ViMbAdmin\Kernel\Input\Reader::option($options, ...$path);
-    }
-
-    /** @param array<string,mixed> $options */
-    private static function optionString(array $options, string $default, string ...$path): string
-    {
-        [$found, $value] = self::option($options, ...$path);
-        return $found ? self::requiredString($value, 'Configuration ' . implode('.', $path)) : $default;
     }
 
     /** @param array<string,mixed> $options */
@@ -134,7 +101,7 @@ final class DomainController extends AbstractController
      */
     private static function listSortField(int $index, bool $sizeColumn): string
     {
-        $columns = array_values(array_filter([
+        return DataTableQuery::orderField($index, [
             'domain',                    // Domain
             'mailboxes',                 // Mailboxes
             'aliases',                   // Aliases
@@ -145,9 +112,7 @@ final class DomainController extends AbstractController
             '',                          // Backup MX (not sortable)
             'created',                   // Created
             '',                          // controls (not sortable)
-        ], static fn (?string $c): bool => $c !== null));
-
-        return ($columns[$index] ?? '') ?: 'domain';
+        ], 'domain');
     }
 
     /** @param array<string,mixed> $options */
@@ -181,13 +146,7 @@ final class DomainController extends AbstractController
     /** @param array<string,mixed> $options */
     private static function quotaMultiplier(array $options): string
     {
-        $multiplier = strtoupper(self::optionString(
-            $options,
-            \OSS_Filter_FileSize::SIZE_KILOBYTES,
-            'defaults',
-            'quota',
-            'multiplier',
-        ));
+        $multiplier = strtoupper(\ViMbAdmin\Kernel\Input\Reader::optionString($options, \OSS_Filter_FileSize::SIZE_KILOBYTES, ['defaults', 'quota', 'multiplier']));
         if (!array_key_exists($multiplier, \OSS_Filter_FileSize::$SIZE_MULTIPLIERS)) {
             throw new LogicException('Configuration defaults.quota.multiplier is unsupported');
         }
@@ -207,35 +166,20 @@ final class DomainController extends AbstractController
         throw new LogicException("{$name} must be boolean");
     }
 
-    private static function nonNegativeInteger(mixed $value, string $name): int
-    {
-        if (is_int($value) && $value >= 0) {
-            return $value;
-        }
-        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
-            $integer = filter_var($value, FILTER_VALIDATE_INT);
-            if (is_int($integer)) {
-                return $integer;
-            }
-        }
-
-        throw new LogicException("{$name} must be a non-negative integer");
-    }
-
     private static function nonNegativeIntegerOrDefault(mixed $value, int $default, string $name): int
     {
         return $value === null || $value === ''
             ? $default
-            : self::nonNegativeInteger($value, $name);
+            : \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($value, $name);
     }
 
     private static function quotaBytes(mixed $value, \OSS_Filter_FileSize $filter, string $name): int
     {
-        $filtered = $filter->filter(self::requiredString($value, $name));
+        $filtered = $filter->filter(\ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name));
         if ((!is_int($filtered) && !is_float($filtered))
             || !is_finite((float) $filtered)
             || $filtered < 0
-            || $filtered > PHP_INT_MAX) {
+            || $filtered >= PHP_INT_MAX + 1.0) {
             throw new LogicException("{$name} produced an invalid byte value");
         }
 
@@ -244,7 +188,7 @@ final class DomainController extends AbstractController
 
     private static function nonNegativeIntegerDefault(mixed $value, string $name): string
     {
-        return (string) self::nonNegativeInteger($value, $name);
+        return (string) \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($value, $name);
     }
 
     private static function nonNegativeNumberDefault(mixed $value, string $name): string
@@ -280,7 +224,7 @@ final class DomainController extends AbstractController
     {
         $result = [];
         foreach ($values as $key => $value) {
-            $result[$key] = self::requiredString($value, "{$name} label");
+            $result[$key] = \ViMbAdmin\Kernel\Input\Reader::requiredString($value, "{$name} label");
         }
 
         return $result;
@@ -322,13 +266,7 @@ final class DomainController extends AbstractController
         // The size column is shown unless explicitly disabled; the template
         // divides by $multiplier, so always expose it when the column is on.
         if (!self::optionBoolean($opts, false, 'defaults', 'list_size', 'disabled')) {
-            $configured = self::optionString(
-                $opts,
-                \OSS_Filter_FileSize::SIZE_KILOBYTES,
-                'defaults',
-                'list_size',
-                'multiplier',
-            );
+            $configured = \ViMbAdmin\Kernel\Input\Reader::optionString($opts, \OSS_Filter_FileSize::SIZE_KILOBYTES, ['defaults', 'list_size', 'multiplier']);
             $key = array_key_exists($configured, \OSS_Filter_FileSize::$SIZE_MULTIPLIERS)
                 ? $configured
                 : \OSS_Filter_FileSize::SIZE_KILOBYTES;
@@ -355,7 +293,7 @@ final class DomainController extends AbstractController
 
         $minimum = $this->dataTableMinimumSearchLength('domain');
         try {
-            $request = self::requestArray($_GET);
+            $request = DataTableQuery::requestArray($_GET);
         } catch (LogicException $e) {
             foreach (['draw', 'start', 'length'] as $key) {
                 if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
@@ -435,7 +373,7 @@ final class DomainController extends AbstractController
             $domain->setMailboxCount(0);
             $domain->setCreated(new \DateTime());
             $domain->setDomain(\ViMbAdmin_Identity::canonical(
-                self::requiredString($v['domain'] ?? null, 'Domain name'),
+                \ViMbAdmin\Kernel\Input\Reader::requiredString($v['domain'] ?? null, 'Domain name'),
             ));
             $this->applyFormFields($domain, $v, $filter);
 
@@ -723,7 +661,7 @@ final class DomainController extends AbstractController
         // Validate the complete request before mutating the managed entity. A
         // malformed late field must not leave an in-memory partial update.
         $description = self::stringOrDefault($v['description'] ?? null, '', 'Domain description');
-        $transport = self::requiredString($v['transport'] ?? null, 'Domain transport');
+        $transport = \ViMbAdmin\Kernel\Input\Reader::requiredString($v['transport'] ?? null, 'Domain transport');
         $backupmx = self::checkboxBoolean($v['backupmx'] ?? false, 'Backup MX');
         $active = self::checkboxBoolean($v['active'] ?? false, 'Active');
         $maxAliases = self::nonNegativeIntegerOrDefault($v['max_aliases'] ?? null, 0, 'Maximum aliases');
@@ -774,10 +712,10 @@ final class DomainController extends AbstractController
         self::requiredField($form, 'transport')->setValue($domain->getTransport());
         self::requiredField($form, 'backupmx')->setValue($domain->getBackupmx() === true);
         self::requiredField($form, 'active')->setValue($domain->getActive() === true);
-        self::requiredField($form, 'max_aliases')->setValue((string) self::nonNegativeInteger($domain->getMaxAliases(), 'Maximum aliases'));
-        self::requiredField($form, 'max_mailboxes')->setValue((string) self::nonNegativeInteger($domain->getMaxMailboxes(), 'Maximum mailboxes'));
+        self::requiredField($form, 'max_aliases')->setValue((string) \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($domain->getMaxAliases(), 'Maximum aliases'));
+        self::requiredField($form, 'max_mailboxes')->setValue((string) \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($domain->getMaxMailboxes(), 'Maximum mailboxes'));
         self::requiredField($form, 'max_quota')->setValue((string) \OSS_Filter_FileSize::unfilter(
-            self::nonNegativeInteger($domain->getMaxQuota(), 'Maximum mailbox quota'),
+            \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($domain->getMaxQuota(), 'Maximum mailbox quota'),
         ));
         self::requiredField($form, 'quota')->setValue((string) \OSS_Filter_FileSize::unfilter($domain->requiredQuota()));
     }
@@ -798,7 +736,7 @@ final class DomainController extends AbstractController
             }
             $existing = $this->domainRepository()->findOneBy([
                 'domain' => \ViMbAdmin_Identity::canonical(
-                    self::requiredString($value, 'Domain name'),
+                    \ViMbAdmin\Kernel\Input\Reader::requiredString($value, 'Domain name'),
                 ),
             ]);
             return $existing !== null ? 'A domain with that name already exists.' : null;
@@ -816,7 +754,7 @@ final class DomainController extends AbstractController
         $form->add(new Field('description', 'Description', 'textarea', [Validators::string(), Validators::noControlChars()]));
         $form->add($this->defaulted(
             new Field('transport', 'Transport', 'text', [Validators::string(), Validators::required(), Validators::noControlChars()]),
-            self::requiredString(
+            \ViMbAdmin\Kernel\Input\Reader::requiredString(
                 array_key_exists('transport', $d) ? $d['transport'] : 'virtual',
                 'Configuration defaults.domain.transport',
             ),

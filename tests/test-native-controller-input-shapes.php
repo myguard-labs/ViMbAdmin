@@ -11,6 +11,7 @@ use ViMbAdmin\Kernel\Controller\ArchiveController;
 use ViMbAdmin\Kernel\Controller\MaintenanceController;
 use ViMbAdmin\Kernel\Controller\QueueController;
 use ViMbAdmin\Kernel\Container;
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
 use ViMbAdmin\Kernel\RouteMatch;
 use ViMbAdmin\Kernel\Security\Auth;
 use ViMbAdmin\Kernel\Session\SessionStorage;
@@ -109,10 +110,10 @@ $check(
 );
 $check(
     'queue runner defaults are retained but malformed values fail closed',
-    $invoke(QueueController::class, 'optionInt', [], 5, 'queue', 'runner', 'max_per_run') === 5
-    && $invoke(QueueController::class, 'optionInt', ['queue' => ['runner' => ['max_per_run' => '8']]], 5, 'queue', 'runner', 'max_per_run') === 8
+    \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger([], 5, ['queue', 'runner', 'max_per_run']) === 5
+    && \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger(['queue' => ['runner' => ['max_per_run' => '8']]], 5, ['queue', 'runner', 'max_per_run']) === 8
     && $fails(
-        static fn (): mixed => $invoke(QueueController::class, 'optionInt', ['queue' => ['runner' => ['max_per_run' => null]]], 5, 'queue', 'runner', 'max_per_run'),
+        static fn (): mixed => \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger(['queue' => ['runner' => ['max_per_run' => null]]], 5, ['queue', 'runner', 'max_per_run']),
         'Configuration queue.runner.max_per_run must be a non-negative integer',
     )
 );
@@ -133,7 +134,7 @@ $check(
     && $invoke(ArchiveController::class, 'positiveIntegerOrNull', '01') === null
 );
 $check('archive DataTables containers fail before query parsing', $fails(
-    static fn (): mixed => $invoke(ArchiveController::class, 'requestArray', ['length' => ['100']]),
+    static fn (): mixed => DataTableQuery::requestArray(['length' => ['100']]),
     'DataTables parameter length must be a string',
 ));
 $snapshot = $invoke(ArchiveController::class, 'mailboxSnapshot', [

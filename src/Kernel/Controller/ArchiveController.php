@@ -50,27 +50,6 @@ final class ArchiveController extends AbstractController
         return null;
     }
 
-    /**
-     * @param array<array-key,mixed> $value
-     * @return array<string,mixed>
-     */
-    private static function requestArray(array $value): array
-    {
-        $scalarKeys = ['draw', 'start', 'length'];
-        $result = [];
-        foreach ($value as $key => $item) {
-            if (!is_string($key)) {
-                continue;
-            }
-            if (in_array($key, $scalarKeys, true) && !is_string($item)) {
-                throw new LogicException("DataTables parameter {$key} must be a string");
-            }
-            $result[$key] = $item;
-        }
-
-        return $result;
-    }
-
     /** @return array<string,mixed> */
     private static function stringKeyedArray(mixed $value, string $name): array
     {
@@ -103,21 +82,6 @@ final class ArchiveController extends AbstractController
         throw new LogicException('Configuration ' . implode('.', $path) . ' must be boolean');
     }
 
-    private static function nonNegativeInteger(mixed $value, string $name): int
-    {
-        if (is_int($value) && $value >= 0) {
-            return $value;
-        }
-        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
-            $integer = filter_var($value, FILTER_VALIDATE_INT);
-            if (is_int($integer)) {
-                return $integer;
-            }
-        }
-
-        throw new LogicException("{$name} must be a non-negative integer");
-    }
-
     /** @return array{username:string,local_part:string,name:?string,password:string,quota:int,active:bool} */
     private static function mailboxSnapshot(mixed $value): array
     {
@@ -148,7 +112,7 @@ final class ArchiveController extends AbstractController
             'local_part' => $snapshot['local_part'],
             'name' => $snapshot['name'],
             'password' => $snapshot['password'],
-            'quota' => self::nonNegativeInteger($snapshot['quota'], 'Archive mailbox snapshot quota'),
+            'quota' => \ViMbAdmin\Kernel\Input\Reader::nonNegativeInteger($snapshot['quota'], 'Archive mailbox snapshot quota'),
             'active' => $snapshot['active'],
         ];
     }
@@ -234,7 +198,7 @@ final class ArchiveController extends AbstractController
 
         $minimum = $this->dataTableMinimumSearchLength('archive');
         try {
-            $request = self::requestArray($_GET);
+            $request = DataTableQuery::requestArray($_GET);
         } catch (LogicException $e) {
             foreach (['draw', 'start', 'length'] as $key) {
                 if (array_key_exists($key, $_GET) && is_array($_GET[$key])) {
@@ -255,7 +219,7 @@ final class ArchiveController extends AbstractController
         }
         // Column index -> sortable field (matches JS column order; size / user-exists
         // / autoprune / controls fall back to archived date).
-        $sortField = [0 => 'username', 1 => 'status', 2 => 'domain', 4 => 'archived_at'][$q->sortColumn] ?? 'archived_at';
+        $sortField = DataTableQuery::orderField($q->sortColumn, ['username', 'status', 'domain', '', 'archived_at'], 'archived_at');
 
         $r = $this->archiveRepository()
             ->pagedForArchiveList($admin, $domain, $q->searchTerm, $q->contains, $sortField, $q->sortDir, $q->start, $q->length);

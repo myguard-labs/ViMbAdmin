@@ -5,6 +5,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use ViMbAdmin\Kernel\Controller\MailboxController;
+use ViMbAdmin\Kernel\DataTable\DataTableQuery;
 use ViMbAdmin\Kernel\Form\Validators;
 
 final class ShortWriteStream
@@ -87,10 +88,10 @@ $check(
         && $invoke('positiveIntegerOrNull', ['7']) === null
 );
 
-$request = $invoke('requestArray', ['draw' => '2', 7 => 'ignored']);
+$request = DataTableQuery::requestArray(['draw' => '2', 7 => 'ignored']);
 $check('request boundary retains only string-keyed DataTables values', $request === ['draw' => '2']);
 $check('DataTables containers fail closed instead of reaching scalar casts', $fails(
-    static fn (): mixed => $invoke('requestArray', ['draw' => ['2']]),
+    static fn (): mixed => DataTableQuery::requestArray(['draw' => ['2']]),
     'DataTables parameter draw must be a string',
 ));
 $check('string-key assertion rejects nested numeric configuration keys', $fails(
@@ -100,16 +101,13 @@ $check('string-key assertion rejects nested numeric configuration keys', $fails(
 
 $check(
     'absent integer configuration alone receives its shipped default',
-    $invoke('optionInt', [], 8, 'defaults', 'mailbox', 'min_password_length') === 8
+    \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger([], 8, ['defaults', 'mailbox', 'min_password_length']) === 8
 );
 $check('explicit null cannot masquerade as absent configuration', $fails(
-    static fn (): mixed => $invoke(
-        'optionInt',
+    static fn (): mixed => \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger(
         ['defaults' => ['mailbox' => ['min_password_length' => null]]],
         8,
-        'defaults',
-        'mailbox',
-        'min_password_length',
+        ['defaults', 'mailbox', 'min_password_length'],
     ),
     'Configuration defaults.mailbox.min_password_length must be a non-negative integer',
 ));

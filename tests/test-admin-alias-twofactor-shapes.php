@@ -151,10 +151,10 @@ $check(
 );
 $check(
     'admin form strings and booleans reject container truthiness',
-    $invoke(AdminController::class, 'requiredString', '0', 'Field') === '0'
+    \ViMbAdmin\Kernel\Input\Reader::requiredString('0', 'Field') === '0'
         && $invoke(AdminController::class, 'checkboxBoolean', false, 'Flag') === false
         && $invoke(AdminController::class, 'checkboxBoolean', '1', 'Flag') === true
-        && $fails(static fn (): mixed => $invoke(AdminController::class, 'requiredString', [], 'Field'))
+        && $fails(static fn (): mixed => \ViMbAdmin\Kernel\Input\Reader::requiredString([], 'Field'))
         && $fails(static fn (): mixed => $invoke(AdminController::class, 'checkboxBoolean', ['1'], 'Flag'))
 );
 $check(
@@ -183,9 +183,9 @@ $check(
 );
 $check(
     'security salt defaults only when absent and rejects containers',
-    $invoke(AdminController::class, 'optionString', [], '', 'securitysalt') === ''
-        && $invoke(AdminController::class, 'optionString', ['securitysalt' => 'salt'], '', 'securitysalt') === 'salt'
-        && $fails(static fn (): mixed => $invoke(AdminController::class, 'optionString', ['securitysalt' => ['salt']], '', 'securitysalt'))
+    \ViMbAdmin\Kernel\Input\Reader::optionString([], '', ['securitysalt']) === ''
+        && \ViMbAdmin\Kernel\Input\Reader::optionString(['securitysalt' => 'salt'], '', ['securitysalt']) === 'salt'
+        && $fails(static fn (): mixed => \ViMbAdmin\Kernel\Input\Reader::optionString(['securitysalt' => ['salt']], '', ['securitysalt']))
 );
 [$invalidAdminController, $adminBootstrap] = boundaryController(
     AdminController::class,

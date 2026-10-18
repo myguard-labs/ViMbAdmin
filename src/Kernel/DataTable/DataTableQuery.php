@@ -29,6 +29,36 @@ final class DataTableQuery
     public const MAX_LENGTH = 500;
 
     /**
+     * Preserve the HTTP query boundary used by the paged list controllers.
+     *
+     * PHP supplies scalar query-string values as strings. Numeric array keys
+     * are discarded, while the three pagination leaves fail before parsing if
+     * a crafted request turns one into a container. Search/order containers
+     * remain intact for {@see fromArray()} to validate with their precise
+     * protocol errors.
+     *
+     * @param array<array-key,mixed> $value
+     * @return array<string,mixed>
+     * @throws \LogicException when a pagination leaf is not a string
+     */
+    public static function requestArray(array $value): array
+    {
+        $scalarKeys = ['draw', 'start', 'length'];
+        $result = [];
+        foreach ($value as $key => $item) {
+            if (!is_string($key)) {
+                continue;
+            }
+            if (in_array($key, $scalarKeys, true) && !is_string($item)) {
+                throw new \LogicException("DataTables parameter {$key} must be a string");
+            }
+            $result[$key] = $item;
+        }
+
+        return $result;
+    }
+
+    /**
      * @param string $search     The raw trimmed request value, sigil included. Kept for
      *                           callers that need to echo back what the user typed;
      *                           repositories must NOT bind this.
@@ -59,6 +89,19 @@ final class DataTableQuery
     {
         $escaped = addcslashes($searchTerm, '%_\\');
         return $contains ? '%' . $escaped . '%' : $escaped . '%';
+    }
+
+    /**
+     * Resolve a clicked column against a controller-owned rendered layout.
+     *
+     * `null` omits a conditional column; an empty string preserves a rendered
+     * but unsortable column and therefore selects the controller's fallback.
+     *
+     * @param list<string|null> $renderedColumns
+     */
+    public static function orderField(int $index, array $renderedColumns, string $fallback): string
+    {
+        return (array_values(array_filter($renderedColumns, static fn (?string $field): bool => $field !== null))[$index] ?? '') ?: $fallback;
     }
 
     /**

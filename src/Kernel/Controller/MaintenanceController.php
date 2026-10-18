@@ -37,40 +37,6 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 final class MaintenanceController extends AbstractController
 {
-    private static function requiredString(mixed $value, string $name): string
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::requiredString($value, $name);
-    }
-
-    /**
-     * @param array<string,mixed> $options
-     * @return array{bool,mixed}
-     */
-    private static function option(array $options, string ...$path): array
-    {
-        return \ViMbAdmin\Kernel\Input\Reader::option($options, ...$path);
-    }
-
-    /** @param array<string,mixed> $options */
-    private static function optionInt(array $options, int $default, string ...$path): int
-    {
-        [$found, $value] = self::option($options, ...$path);
-        if (!$found) {
-            return $default;
-        }
-        if (is_int($value) && $value >= 0) {
-            return $value;
-        }
-        if (is_string($value) && preg_match('/^[0-9]+$/D', $value) === 1) {
-            $integer = filter_var($value, FILTER_VALIDATE_INT);
-            if (is_int($integer)) {
-                return $integer;
-            }
-        }
-
-        throw new LogicException('Configuration ' . implode('.', $path) . ' must be a non-negative integer');
-    }
-
     private static function binaryFlag(mixed $value, string $name): bool
     {
         if ($value === true || $value === 1 || $value === '1') {
@@ -89,7 +55,7 @@ final class MaintenanceController extends AbstractController
             throw new LogicException("{$name} must contain a username");
         }
 
-        return self::requiredString($row['username'], $name);
+        return \ViMbAdmin\Kernel\Input\Reader::requiredString($row['username'], $name);
     }
 
     private static function postStringOrEmpty(mixed $value): string
@@ -236,7 +202,7 @@ final class MaintenanceController extends AbstractController
             return $guard;
         }
 
-        $days = self::optionInt($this->container->options(), 90, 'queue', 'autoprune', 'days');
+        $days = \ViMbAdmin\Kernel\Input\Reader::optionNonNegativeInteger($this->container->options(), 90, ['queue', 'autoprune', 'days']);
         $cutoff = (new \DateTime())->modify('-' . $days . ' days');
         $candidates = $this->archiveRepository()->findAutoprune($cutoff);
 

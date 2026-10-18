@@ -107,11 +107,11 @@ adminAuthCheck(
 
 adminAuthCheck(
     'required string preserves exact input',
-    adminAuthControllerHelper('requiredString', '', 'Field') === ''
+    \ViMbAdmin\Kernel\Input\Reader::requiredString('', 'Field') === ''
 );
 adminAuthCheck(
     'required string rejects non-string input',
-    adminAuthFailure(static fn (): mixed => adminAuthControllerHelper('requiredString', [], 'Field'))
+    adminAuthFailure(static fn (): mixed => \ViMbAdmin\Kernel\Input\Reader::requiredString([], 'Field'))
         === 'Field must be a string'
 );
 adminAuthCheck(

@@ -63,33 +63,6 @@ class ViMbAdmin_Service_QueueRunner
 
     private ?ViMbAdmin_ResourceClaim $resourceClaim = null;
 
-    /** @param callable(?\Throwable):void $operation */
-    private function withTaskResource(\Entities\MailboxTask $task, callable $operation): void
-    {
-        if (!in_array($task->getType(), [\Entities\MailboxTask::TYPE_ARCHIVE,
-            \Entities\MailboxTask::TYPE_DELETE, \Entities\MailboxTask::TYPE_PRUNE,
-            \Entities\MailboxTask::TYPE_BACKUP_ORPHAN, \Entities\MailboxTask::TYPE_REPAIR,
-            \Entities\MailboxTask::TYPE_OPTIMIZE, \Entities\MailboxTask::TYPE_QUOTA_RECALC], true)) {
-            $operation(null);
-            return;
-        }
-        // Acquisition failures have made no remote change and use the normal
-        // task error mapping. Errors after acquisition must never replay work.
-        try {
-            $claim = ViMbAdmin_ResourceClaim::acquire($this->em->getConnection(), $task->requiredUsername());
-        } catch (\Throwable $error) {
-            $operation($error);
-            return;
-        }
-        $this->resourceClaim = $claim;
-        try {
-            $operation(null);
-        } finally {
-            $this->resourceClaim = null;
-            $claim->close();
-        }
-    }
-
     /**
      * @template T
      * @param callable():T $operation
@@ -204,6 +177,70 @@ class ViMbAdmin_Service_QueueRunner
     }
 
     /**
+     * Execute and publish a task after its repository claim has succeeded.
+     *
+     * The repository retains terminal transaction ownership, ResourceClaim
+     * retains backend ownership, and the caller retains terminal task policy.
+     *
+     * @param bool $prepareBackendOnClaimFailure Preserve the batch drain's
+     *        backend-configuration error precedence after a resource conflict
+     * @param callable(?\Throwable):void $complete
+     * @param null|callable(\Throwable):void $reportError
+     */
+    private function executeAndPublishClaimedTask(
+        \Repositories\MailboxTask $repo,
+        \Entities\MailboxTask $task,
+        \Entities\QueueRunner $lease,
+        bool $prepareBackendOnClaimFailure,
+        callable $complete,
+        ?callable $reportError = null
+    ): bool {
+        $claim = null;
+        $error = null;
+        if (in_array($task->getType(), [\Entities\MailboxTask::TYPE_ARCHIVE,
+            \Entities\MailboxTask::TYPE_DELETE, \Entities\MailboxTask::TYPE_PRUNE,
+            \Entities\MailboxTask::TYPE_BACKUP_ORPHAN, \Entities\MailboxTask::TYPE_REPAIR,
+            \Entities\MailboxTask::TYPE_OPTIMIZE, \Entities\MailboxTask::TYPE_QUOTA_RECALC], true)) {
+            try {
+                $claim = ViMbAdmin_ResourceClaim::acquire($this->em->getConnection(), $task->requiredUsername());
+            } catch (\Throwable $claimError) {
+                // No remote change occurred, so publish the normal task error.
+                $error = $claimError;
+            }
+        }
+
+        $this->resourceClaim = $claim;
+        try {
+            try {
+                if ($error === null) {
+                    $this->execute($task, $this->doveadmForLease($lease));
+                    $claim?->assertReady();
+                } elseif ($prepareBackendOnClaimFailure) {
+                    $this->doveadmForLease($lease);
+                }
+            } catch (\Throwable $executionError) {
+                $error = $executionError;
+            }
+            // Long doveadm calls can outlive the database wait_timeout.
+            // Recover before publishing either outcome; otherwise a failed
+            // command can leave its task stranded RUNNING too.
+            $this->ensureDatabaseConnection();
+            if ($error !== null && $reportError !== null) {
+                $reportError($error);
+            }
+
+            ($this->leaseProgress($lease))();
+            return $repo->publishIfOwned($task, $lease, function () use ($complete, $error): void {
+                $this->resourceClaim?->releaseInTransaction($this->em->getConnection());
+                $complete($error);
+            });
+        } finally {
+            $this->resourceClaim = null;
+            $claim?->close();
+        }
+    }
+
+    /**
      * Lease-gated batch drain: process up to $max PENDING tasks.
      *
      * Returns the number processed, or -1 if every runner slot
@@ -246,44 +283,30 @@ class ViMbAdmin_Service_QueueRunner
                     continue;
                 }
 
-                $this->withTaskResource($task, function (?\Throwable $claimError) use ($em, $repo, $task, $lease, $verbose, &$processed): void {
-                    $error = $claimError;
-                    try {
-                        $doveadm = $this->doveadmForLease($lease);
-                        if ($error === null) {
-                            $this->execute($task, $doveadm);
-                            $this->resourceClaim?->assertReady();
-                        }
-                    } catch (\Throwable $e) {
-                        $error = $e;
-                    }
-                    // Long doveadm calls can outlive the database wait_timeout.
-                    // Recover before publishing either outcome; otherwise a
-                    // failed command can leave its task stranded RUNNING too.
-                    $this->ensureDatabaseConnection();
-                    if ($error !== null) {
-                        error_log("QueueRunner task {$task->getId()} ({$task->getType()} {$task->getUsername()}): " . $error->getMessage());
-                    }
-
-                    ($this->leaseProgress($lease))();
-                    $published = $repo->publishIfOwned($task, $lease, function () use ($task, $error): void {
-                        $this->resourceClaim?->releaseInTransaction($this->em->getConnection());
+                $published = $this->executeAndPublishClaimedTask(
+                    $repo,
+                    $task,
+                    $lease,
+                    true,
+                    function (?\Throwable $error) use ($task): void {
                         $task->setStatus($error === null ? \Entities\MailboxTask::STATUS_DONE : \Entities\MailboxTask::STATUS_FAILED);
                         $task->setRunner(null);
                         $task->appendLog($error === null ? 'done' : 'FAILED: ' . $error->getMessage());
                         $task->setFinishedAt(new \DateTime());
-                    });
-                    if (!$published) {
-                        $em->clear();
-                        error_log("QueueRunner task ownership lost before terminal publication.");
-                        return;
+                    },
+                    static function (\Throwable $error) use ($task): void {
+                        error_log("QueueRunner task {$task->getId()} ({$task->getType()} {$task->getUsername()}): " . $error->getMessage());
                     }
-                    if ($verbose) {
-                        echo " - #{$task->getId()} {$task->getType()} {$task->getUsername()}: {$task->getStatus()}\n";
-                    }
+                );
+                if (!$published) {
+                    error_log("QueueRunner task ownership lost before terminal publication.");
+                    continue;
+                }
+                if ($verbose) {
+                    echo " - #{$task->getId()} {$task->getType()} {$task->getUsername()}: {$task->getStatus()}\n";
+                }
 
-                    $processed++;
-                });
+                $processed++;
             }
         });
 
@@ -319,28 +342,9 @@ class ViMbAdmin_Service_QueueRunner
                 return;
             }
 
-            $this->withTaskResource($task, function (?\Throwable $claimError) use ($repo, $task, $lease, $complete, &$result): void {
-                $error = $claimError;
-                try {
-                    if ($error === null) {
-                        $this->execute($task, $this->doveadmForLease($lease));
-                        $this->resourceClaim?->assertReady();
-                    }
-                } catch (\Throwable $e) {
-                    $error = $e;
-                }
-                $this->ensureDatabaseConnection();
-                ($this->leaseProgress($lease))();
-                if ($repo->publishIfOwned($task, $lease, function () use ($complete, $error): void {
-                    $this->resourceClaim?->releaseInTransaction($this->em->getConnection());
-                    $complete($error);
-                })) {
-                    $result = self::RUN_ONE_COMPLETED;
-                } else {
-                    $this->em->clear();
-                    $result = self::RUN_ONE_NOT_CLAIMED;
-                }
-            });
+            $result = $this->executeAndPublishClaimedTask($repo, $task, $lease, false, $complete)
+                ? self::RUN_ONE_COMPLETED
+                : self::RUN_ONE_NOT_CLAIMED;
         });
 
         return $acquired ? $result : self::RUN_ONE_BUSY;

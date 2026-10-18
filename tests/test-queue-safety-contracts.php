@@ -115,19 +115,38 @@ $check('orphan temp cleanup targets only sentinel rows without a live task', is_
     && str_contains($runner, 'm.active = 0 AND m.password LIKE ? AND t.id IS NULL')
     && str_contains($runner, 'UniqueConstraintViolationException')
     && str_contains($runner, 'adopted temp user row'));
-$drainMarker = strpos($runnerText, 'Recover before publishing either outcome');
-$drainRecovery = strpos($runnerText, '$this->ensureDatabaseConnection();', $drainMarker === false ? 0 : $drainMarker);
-$drainPublish = strpos($runnerText, '$published = $repo->publishIfOwned', $drainRecovery === false ? 0 : $drainRecovery);
+$sharedStart = strpos($runnerText, 'private function executeAndPublishClaimedTask(');
+$drainStart = strpos($runnerText, 'public function drain(');
 $manualStart = strpos($runnerText, 'public function runOne');
-$manualCatch = strpos($runnerText, '} catch (\Throwable $e) {', $manualStart === false ? 0 : $manualStart);
-$manualRecovery = strpos($runnerText, '$this->ensureDatabaseConnection();', $manualCatch === false ? 0 : $manualCatch);
-$manualPublish = strpos($runnerText, 'if ($repo->publishIfOwned', $manualRecovery === false ? 0 : $manualRecovery);
+$engineStart = strpos($runnerText, '//  Engine (moved verbatim from the ZF1 QueueController)');
+$ensureStart = strpos($runnerText, 'private function ensureDatabaseConnection(): void');
+$ensureEnd = strpos($runnerText, "/**\n     * Encode queue/archive metadata", $ensureStart === false ? 0 : $ensureStart);
+$sharedBody = is_int($sharedStart) && is_int($drainStart) && $sharedStart < $drainStart
+    ? substr($runnerText, $sharedStart, $drainStart - $sharedStart) : '';
+$drainBody = is_int($drainStart) && is_int($manualStart) && $drainStart < $manualStart
+    ? substr($runnerText, $drainStart, $manualStart - $drainStart) : '';
+$manualBody = is_int($manualStart) && is_int($engineStart) && $manualStart < $engineStart
+    ? substr($runnerText, $manualStart, $engineStart - $manualStart) : '';
+$ensureBody = is_int($ensureStart) && is_int($ensureEnd) && $ensureStart < $ensureEnd
+    ? substr($runnerText, $ensureStart, $ensureEnd - $ensureStart) : '';
+$sharedRecovery = strpos($sharedBody, '$this->ensureDatabaseConnection();');
+$sharedPublish = strpos($sharedBody, '$repo->publishIfOwned');
+$initialProbe = strpos($ensureBody, '$connection->fetchOne(\'SELECT 1\');');
+$connectionClose = strpos($ensureBody, '$connection->close();');
+$reconnectProbe = strpos($ensureBody, '$connection->fetchOne(\'SELECT 1\');', $initialProbe === false ? 0 : $initialProbe + 1);
 $check('failed doveadm work reconnects before batch and manual publication', is_string($runner)
-    && substr_count($runner, '$this->ensureDatabaseConnection();') >= 5
-    && is_int($drainRecovery) && is_int($drainPublish) && $drainRecovery < $drainPublish
-    && is_int($manualCatch) && is_int($manualRecovery) && is_int($manualPublish)
-    && $manualCatch < $manualRecovery && $manualRecovery < $manualPublish
-    && str_contains($runner, '$connection->close()'));
+    && substr_count($runnerText, 'private function executeAndPublishClaimedTask(') === 1
+    && substr_count($drainBody, '$this->executeAndPublishClaimedTask(') === 1
+    && substr_count($manualBody, '$this->executeAndPublishClaimedTask(') === 1
+    && !str_contains($drainBody, '$this->ensureDatabaseConnection();')
+    && !str_contains($manualBody, '$this->ensureDatabaseConnection();')
+    && !str_contains($drainBody, '$repo->publishIfOwned')
+    && !str_contains($manualBody, '$repo->publishIfOwned')
+    && substr_count($sharedBody, '$this->ensureDatabaseConnection();') === 1
+    && substr_count($sharedBody, '$repo->publishIfOwned') === 1
+    && is_int($sharedRecovery) && is_int($sharedPublish) && $sharedRecovery < $sharedPublish
+    && is_int($initialProbe) && is_int($connectionClose) && is_int($reconnectProbe)
+    && $initialProbe < $connectionClose && $connectionClose < $reconnectProbe);
 $check('orphan temp finalization uses an exact compare-and-delete guard', is_string($runner)
     && str_contains($runner, 'DELETE FROM mailbox WHERE id = ? AND password = ? AND active = 0')
     && str_contains($runner, 'temp user row retained (changed concurrently)')

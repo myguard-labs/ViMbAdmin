@@ -290,8 +290,26 @@ workflow_has_unconditional_owner_step "$regression_workflow" php \
 }
 
 workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-doveadm-contract.php' unit || {
+  printf 'Regression unit job does not invoke the Doveadm transport contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-queue-database-guard.php' unit || {
+  printf 'Regression unit job does not invoke the queue database guard contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
   'ci/test-refactor-preference-contract.php' schema-drift || {
   printf 'Regression schema-drift job does not invoke the preference reuse contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-queue-lifecycle.php' schema-drift || {
+  printf 'Regression schema-drift job does not invoke the queue lifecycle contract.\n' >&2
   exit 1
 }
 

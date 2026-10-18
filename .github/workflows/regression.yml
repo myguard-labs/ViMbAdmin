@@ -261,6 +261,12 @@ jobs:
       - name: Equal list pagination adapters share one policy owner
         run: php ci/test-refactor-list-contract.php
 
+      - name: Doveadm backend results retain one fail-closed transport owner
+        run: php ci/test-refactor-doveadm-contract.php
+
+      - name: Queue lifecycle destructive fixtures require a dedicated database
+        run: php ci/test-refactor-queue-database-guard.php
+
       - name: MCP domain defaults match GUI quota bytes
         run: php ci/test-mcp-domain-default-quota.php
 
@@ -583,6 +589,22 @@ jobs:
           DB_PASS: ci
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-maintenance-task-ownership.php
+
+      - name: Provision dedicated queue lifecycle database
+        run: >-
+          mysql -hmariadb -P3306 -uroot -pci -e
+          "CREATE DATABASE \`vimbadmin_queue_lifecycle_test\`
+          CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+      - name: Actual queue execution retains ownership
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin_queue_lifecycle_test
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
+        run: php ci/test-refactor-queue-lifecycle.php
 
       - name: Retry requires the exact safely failed task generation
         env:

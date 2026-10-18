@@ -42,6 +42,8 @@ jobs:
       - run: php ci/test-refactor-runtime-baseline.php
       - run: php ci/test-refactor-input-contract.php
       - run: php ci/test-refactor-list-contract.php
+      - run: php ci/test-refactor-doveadm-contract.php
+      - run: php ci/test-refactor-queue-database-guard.php
       - run: bash tests/test-resolve-bundle-v.sh
   cache:
     runs-on: ubuntu-latest
@@ -55,6 +57,7 @@ jobs:
     steps:
       - run: php tests/test-schema-no-pending.php
       - run: php ci/test-refactor-preference-contract.php
+      - run: php ci/test-refactor-queue-lifecycle.php
   mailbox-queue:
     runs-on: ubuntu-latest
     steps:
@@ -412,6 +415,73 @@ for list_owner_defect in missing conditional masked echoed wrong-job wrong-workf
   }
 done
 
+# VC-Q03's backend-result characterization must remain an unconditional owner
+# in the supported PHP unit matrix. Observe the missing, conditional and
+# misdirected owner shapes, restoring the exact valid fixture after each one.
+for doveadm_owner_defect in missing conditional wrong-job; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$doveadm_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-doveadm-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-doveadm-contract.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-doveadm-contract.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-doveadm-contract.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'Doveadm transport owner mutation matched nothing: %s\n' "$doveadm_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "Doveadm transport $doveadm_owner_defect" \
+    'Regression unit job does not invoke the Doveadm transport contract.'
+  printf 'Doveadm transport owner rejected %s (guard exit %d).\n' "$doveadm_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
+# The destructive lifecycle fixture's target guard must remain an
+# unconditional owner in the supported PHP unit matrix. Observe representative
+# missing, conditional and misdirected owner shapes, restoring green each time.
+for queue_database_guard_owner_defect in missing conditional wrong-job; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$queue_database_guard_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-queue-database-guard.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-queue-database-guard.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-queue-database-guard.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-queue-database-guard.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'Queue database guard owner mutation matched nothing: %s\n' "$queue_database_guard_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "queue database guard $queue_database_guard_owner_defect" \
+    'Regression unit job does not invoke the queue database guard contract.'
+  printf 'Queue database guard owner rejected %s (guard exit %d).\n' \
+    "$queue_database_guard_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
 # VC-E02's real persistence contract must remain an unconditional owner in the
 # MariaDB-backed schema job. Each disabled/misdirected shape is observed red,
 # then the exact valid fixture is restored before the next mutation.
@@ -449,6 +519,39 @@ for preference_owner_defect in missing conditional masked echoed wrong-job wrong
   expect_owner_rejected "preference reuse $preference_owner_defect" \
     'Regression schema-drift job does not invoke the preference reuse contract.'
   printf 'Preference reuse owner rejected %s (guard exit %d).\n' "$preference_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
+# VC-Q01's execution characterization must remain an unconditional owner in
+# the MariaDB-backed schema job. Exercise the maintained coverage guard against
+# the representative missing, conditional and misdirected owner shapes.
+for queue_owner_defect in missing conditional wrong-job; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$queue_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-queue-lifecycle.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-queue-lifecycle.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-queue-lifecycle.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-queue-lifecycle.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'Queue lifecycle owner mutation matched nothing: %s\n' "$queue_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "queue lifecycle $queue_owner_defect" \
+    'Regression schema-drift job does not invoke the queue lifecycle contract.'
+  printf 'Queue lifecycle owner rejected %s (guard exit %d).\n' "$queue_owner_defect" "$guard_status"
   cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
   cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
   run_guard

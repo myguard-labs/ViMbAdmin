@@ -60,7 +60,8 @@ cp tests/support/datatables-event-ownership.js "$tmp/"
 bundle_file=$(resolve_bundle_v) || exit $?
 cp "public/js/$bundle_file" "$tmp/bundle.js"
 cp public/css/800-bootstrap.css "$tmp/bootstrap.css"
-cp "public/css/${bundle_file%.js}.css" "$tmp/bundle.css"
+css_bundle_file=$(resolve_bundle_v css) || exit $?
+cp "public/css/$css_bundle_file" "$tmp/bundle.css"
 # Extract the production toggle wrapper and document delegate, replacing only
 # server-rendered URL/token literals with fixed fixture values.
 # The token placeholder is Smarty syntax, not a shell variable.

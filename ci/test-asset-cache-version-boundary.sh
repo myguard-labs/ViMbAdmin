@@ -6,7 +6,9 @@
 # immutable response. The current header's distinct URL must load fresh.
 set -Eeuo pipefail
 
-cd "$(dirname "$0")/.."
+script_path=$(realpath "${BASH_SOURCE[0]}")
+readonly script_path
+cd "$(dirname "$script_path")/.."
 
 # The path is resolved after changing to the repository root.
 # shellcheck disable=SC1091
@@ -42,6 +44,58 @@ trap cleanup EXIT
 
 readonly fixture="$tmp/vimbadmin/subpath"
 mkdir -p "$fixture/js"
+
+# JS-only releases intentionally keep CSS on its independently versioned URL.
+# Exercise the real resolver in private roots, including direct-call shell state.
+check_asset_kinds() (
+  local root="$tmp/asset-kinds" initial kind expected status saved_flags saved_nullglob
+  mkdir -p "$root/public/js" "$root/public/css"
+  _resolve_bundle_v_repo_root=$root
+  for initial in off on; do
+    shopt -u nullglob
+    [[ "$initial" == off ]] || shopt -s nullglob
+    saved_flags=$-
+    saved_nullglob=$(shopt -p nullglob || true)
+    for kind in js css; do
+      expected=min.bundle-v30.js
+      [[ "$kind" == js ]] || expected=min.bundle-v29.css
+      : >"$root/public/$kind/$expected"
+      if resolve_bundle_v "$kind" >"$root/output" 2>"$root/error"; then status=0; else status=$?; fi
+      [[ $(shopt -p nullglob || true) == "$saved_nullglob" && "$-" == "$saved_flags" ]] || fail 'resolver changed shell options'
+      [[ "$status" == 0 && $(<"$root/output") == "$expected" ]] || fail "$kind must resolve its independent version"
+      rm "$root/public/$kind/$expected"
+      if resolve_bundle_v "$kind" >"$root/output" 2>"$root/error"; then status=0; else status=$?; fi
+      [[ $(shopt -p nullglob || true) == "$saved_nullglob" && "$-" == "$saved_flags" ]] || fail 'resolver changed shell options'
+      [[ "$status" == 2 && ! -s "$root/output" ]] || fail "missing $kind must fail closed"
+      grep -qF "no ${kind^^} bundle found" "$root/error" || fail "missing $kind diagnostic changed"
+      : >"$root/public/$kind/$expected"
+      : >"$root/public/$kind/min.bundle-v28.$kind"
+      if resolve_bundle_v "$kind" >"$root/output" 2>"$root/error"; then status=0; else status=$?; fi
+      [[ $(shopt -p nullglob || true) == "$saved_nullglob" && "$-" == "$saved_flags" ]] || fail 'resolver changed shell options'
+      [[ "$status" == 2 && ! -s "$root/output" ]] || fail "ambiguous $kind must fail closed"
+      grep -qF 'multiple matches found' "$root/error" || fail "ambiguous $kind diagnostic changed"
+      rm "$root/public/$kind/min.bundle-v28.$kind"
+      if shopt -q nullglob; then
+        [[ "$initial" == on ]] || fail 'resolver changed nullglob from off'
+      else
+        [[ "$initial" == off ]] || fail 'resolver changed nullglob from on'
+      fi
+      [[ "$-" == "$saved_flags" ]] || fail 'resolver changed shell option flags'
+    done
+    [[ $(resolve_bundle_v) == min.bundle-v30.js ]] || fail 'default resolver must remain JS'
+    for kind in invalid ''; do
+      if resolve_bundle_v "$kind" >"$root/output" 2>"$root/error"; then status=0; else status=$?; fi
+      [[ $(shopt -p nullglob || true) == "$saved_nullglob" && "$-" == "$saved_flags" ]] || fail 'resolver changed shell options'
+      [[ "$status" == 2 && ! -s "$root/output" ]] || fail 'invalid asset kind must fail closed'
+    done
+    if resolve_bundle_v js css >"$root/output" 2>"$root/error"; then status=0; else status=$?; fi
+    [[ $(shopt -p nullglob || true) == "$saved_nullglob" && "$-" == "$saved_flags" ]] || fail 'resolver changed shell options'
+    [[ "$status" == 2 && ! -s "$root/output" ]] || fail 'multiple asset-kind arguments must fail closed'
+    rm "$root/public/js/min.bundle-v30.js" "$root/public/css/min.bundle-v29.css"
+  done
+  echo 'ok   independent JS v30/CSS v29 resolution; missing, ambiguous and malformed kinds fail closed'
+)
+check_asset_kinds
 
 bundle_file=$(resolve_bundle_v) || exit $?
 header_bundle_list="$tmp/header-bundles"
@@ -350,7 +404,7 @@ grep -qxF "$bundle_file-network" "$fixture/requests.log" ||
 
 if [[ ${VIMBADMIN_CACHE_BOUNDARY_REUSE_STALE_URL:-0} != 1 ]]; then
   mutation_log="$tmp/reused-stale-url.log"
-  if VIMBADMIN_CACHE_BOUNDARY_REUSE_STALE_URL=1 bash "$0" >"$mutation_log" 2>&1; then
+  if VIMBADMIN_CACHE_BOUNDARY_REUSE_STALE_URL=1 bash "$script_path" >"$mutation_log" 2>&1; then
     fail 'negative control passed when the fixed page reused the stale v29 URL'
   fi
   grep -qF 'fixed error: ReferenceError: vmDataTableRememberPageLength is not defined' "$mutation_log" ||

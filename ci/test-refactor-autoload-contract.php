@@ -80,13 +80,13 @@ function autoloadContractRemoveTree(string $root): void
 }
 
 $scratch = sys_get_temp_dir() . '/vimbadmin-autoload-contract-' . bin2hex(random_bytes(8));
-foreach (['config', 'templates', 'compiled', 'cache', 'smarty-config', 'smarty-plugins'] as $directory) {
-    if (!mkdir($scratch . '/' . $directory, 0770, true) && !is_dir($scratch . '/' . $directory)) {
-        throw new RuntimeException('Unable to create autoload-contract fixture directory.');
-    }
-}
-
 try {
+    foreach (['config', 'templates', 'compiled', 'cache', 'smarty-config', 'smarty-plugins'] as $directory) {
+        if (!mkdir($scratch . '/' . $directory, 0770, true) && !is_dir($scratch . '/' . $directory)) {
+            throw new RuntimeException('Unable to create autoload-contract fixture directory.');
+        }
+    }
+
     echo "== VC-S01/VC-S01b autoload and discovery contract ==\n";
 
     $mailboxFile = $loader->findFile(MailboxController::class);

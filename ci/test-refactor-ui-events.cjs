@@ -1,9 +1,10 @@
 'use strict';
 
-/* global EventTarget, URL, __dirname, console, process, require */
+/* global EventTarget, URL, __dirname, __filename, console, process, require */
 
 const fs = require('fs');
 const vm = require('vm');
+const {spawnSync} = require('node:child_process');
 
 const root = process.env.VIMBADMIN_SOURCE_ROOT || `${__dirname}/..`;
 const assets = [
@@ -57,6 +58,14 @@ function mutateFunction(source, name) {
       .replace(/if\s*\(\s*modalGeneration\s*!==\s*tt_openModalDialog\.generation\s*\)\s*return;/g, '')
       .replace(/if\s*\(\s*modalGeneration\s*===\s*tt_openModalDialog\.generation\s*\)/g, 'if (true)');
     if (mutated === body) throw new Error('modal stale-response mutation did not apply');
+    body = mutated;
+  }
+  if (name === 'tt_openModalDialog' && process.env.VIMBADMIN_UI_EVENTS_INVERT_ERROR_GUARD === '1') {
+    const mutated = body.replace(
+      /if\s*\(\s*modalGeneration\s*===\s*tt_openModalDialog\.generation\s*\)(\s*ossAjaxErrorHandler\s*\()/,
+      'if (modalGeneration !== tt_openModalDialog.generation)$1'
+    );
+    if (mutated === body) throw new Error('modal error-only generation mutation did not apply');
     body = mutated;
   }
   return body;
@@ -303,7 +312,7 @@ function runModalStaleness(asset, source) {
   const htmlWrites = [];
   const modalElement = new ModalElement();
   const clickHandlers = new Map();
-  let visibleErrors = 0;
+  const visibleErrors = [];
 
   function selection(selector) {
     const api = {
@@ -335,7 +344,7 @@ function runModalStaleness(asset, source) {
     tt_throbber: () => ({appendTo() { return this; }, start() {}}),
     ossModal: () => ({hide() {}}),
     ossAjax: options => requests.push(options),
-    ossAjaxErrorHandler: () => { visibleErrors += 1; },
+    ossAjaxErrorHandler: xhr => visibleErrors.push(xhr),
   };
   vm.createContext(context);
   vm.runInContext(mutateFunction(source, 'tt_openModalDialog'), context);
@@ -353,10 +362,13 @@ function runModalStaleness(asset, source) {
     !htmlWrites.includes('<div>stale hostile</div>') && htmlWrites.includes('<div>current safe</div>'));
   open('/failed-old');
   open('/failed-current');
-  requests[2].error({}, 'error', 'old');
-  requests[3].error({}, 'error', 'current');
-  check(`${asset}: only the current failed request becomes visible`, visibleErrors === 1,
-    `visible-errors=${visibleErrors}`);
+  const olderFailure = {request: 'older-failure'};
+  const currentFailure = {request: 'current-failure'};
+  requests[2].error(olderFailure, 'error', 'old');
+  requests[3].error(currentFailure, 'error', 'current');
+  check(`${asset}: only the current failed request becomes visible`,
+    visibleErrors.length === 1 && visibleErrors[0] === currentFailure,
+    `visible-errors=${visibleErrors.map(xhr => xhr.request).join()}`);
 }
 
 function runMissingElement(asset, source) {
@@ -373,6 +385,29 @@ function runMissingElement(asset, source) {
     context.ossToggle(missing, '/toggle', {}) === undefined && state.requests === 0);
 }
 
+function runErrorIdentityControl() {
+  const flag = 'VIMBADMIN_UI_EVENTS_INVERT_ERROR_GUARD';
+  const mutationFlags = [
+    'VIMBADMIN_UI_EVENTS_DISABLE_FINISH_GUARD',
+    'VIMBADMIN_UI_EVENTS_DISABLE_STALE_GUARD',
+    flag,
+  ];
+  // Mutant children run the same observable tests once, without spawning again.
+  if (mutationFlags.some(name => process.env[name] === '1')) return;
+  const result = spawnSync(process.execPath, [__filename], {
+    env: {...process.env, [flag]: '1'},
+    encoding: 'utf8', timeout: 30000, maxBuffer: 256 * 1024,
+  });
+  const expected = assets.map(asset => `${asset}: only the current failed request becomes visible`);
+  const observed = (result.stdout || '').split('\n').filter(line => line.startsWith('  FAIL '));
+  check('error-only generation mutation fails at the current-request identity assertion for both assets',
+    !result.error && result.signal === null && result.status === 1 && result.stderr === ''
+      && /2 FAILED \(42 checks\)\s*$/.test(result.stdout)
+      && observed.length === expected.length
+      && expected.every(label => observed.filter(line => line.startsWith(`  FAIL ${label}: `)).length === 1),
+    `expected=${expected.length}, observed=${observed.length}, status=${result.status}`);
+}
+
 for (const asset of assets) {
   const source = fs.readFileSync(`${root}/${asset}`, 'utf8');
   runTransport(asset, source);
@@ -382,5 +417,6 @@ for (const asset of assets) {
   runMissingElement(asset, source);
 }
 
+if (failures === 0) runErrorIdentityControl();
 console.log(failures === 0 ? `ALL PASSED (${checks} checks)` : `${failures} FAILED (${checks} checks)`);
 process.exit(failures === 0 ? 0 : 1);

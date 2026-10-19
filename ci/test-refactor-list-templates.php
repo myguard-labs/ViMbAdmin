@@ -160,7 +160,7 @@ function putString(string $path, string $value): void
 
 function removeTree(string $path): void
 {
-    if (!is_dir($path)) {
+    if (is_link($path) || !is_dir($path)) {
         return;
     }
     $iterator = new RecursiveIteratorIterator(
@@ -179,6 +179,50 @@ function removeTree(string $path): void
         }
     }
     rmdir($path);
+}
+
+/**
+ * Only successful exclusive creation transfers root ownership to the caller.
+ * Children are created inside this private root; failed acquisition must never
+ * clean an existing path. Root symlinks are never traversed during cleanup.
+ */
+function createTemplateRoot(?string $candidate = null): string
+{
+    $path = $candidate ?? sys_get_temp_dir() . '/vimbadmin-list-template-' . bin2hex(random_bytes(16));
+    if (is_link($path) || file_exists($path)) {
+        throw new RuntimeException("temporary root already exists: {$path}");
+    }
+    if (!mkdir($path, 0700)) {
+        throw new RuntimeException("could not acquire temporary root: {$path}");
+    }
+    return $path;
+}
+
+function checkTemplateRootOwnership(string $ownedRoot): void
+{
+    check((fileperms($ownedRoot) & 0777) === 0700, 'temporary root is private to its owner');
+    $existing = $ownedRoot . '/existing-root';
+    putString($existing . '/sentinel', 'owned fixture survives');
+    $rejected = false;
+    try {
+        createTemplateRoot($existing);
+    } catch (RuntimeException $error) {
+        $rejected = str_starts_with($error->getMessage(), 'temporary root already exists:');
+    }
+    check($rejected && requireString($existing . '/sentinel') === 'owned fixture survives', 'existing root is refused without changing its sentinel');
+
+    $link = $ownedRoot . '/root-link';
+    symlink($existing, $link);
+    $rejected = false;
+    try {
+        createTemplateRoot($link);
+    } catch (RuntimeException $error) {
+        $rejected = str_starts_with($error->getMessage(), 'temporary root already exists:');
+    }
+    check($rejected, 'symlink root cannot be acquired');
+    removeTree($link);
+    check(is_link($link) && is_file($existing . '/sentinel') && requireString($existing . '/sentinel') === 'owned fixture survives', 'cleanup refuses a symlink root and preserves its target sentinel');
+    unlink($link);
 }
 
 /** @return array<string,mixed> */
@@ -313,18 +357,20 @@ function domSignature(string $html): string
     return $signature;
 }
 
-$tmp = sys_get_temp_dir() . '/vimbadmin-list-template-' . getmypid();
-$originalRoot = $tmp . '/original';
-$currentRoot = $tmp . '/current';
+$tmp = null;
 $capture = $argc === 3 && $argv[1] === '--capture-original' ? $argv[2] : null;
 $evidenceDir = getenv('VIMBADMIN_LIST_TEMPLATE_EVIDENCE') ?: null;
 
 try {
+    $tmp = createTemplateRoot();
+    $originalRoot = $tmp . '/original';
+    $currentRoot = $tmp . '/current';
     foreach ([$originalRoot, $currentRoot, $tmp . '/compiled-original', $tmp . '/compiled-current'] as $dir) {
-        if (!mkdir($dir, 0770, true) && !is_dir($dir)) {
+        if (!mkdir($dir, 0700)) {
             throw new RuntimeException("could not create {$dir}");
         }
     }
+    checkTemplateRootOwnership($tmp);
     foreach ([$originalRoot, $currentRoot] as $templateRoot) {
         putString($templateRoot . '/header.phtml', '<!doctype html><html><body>');
         putString($templateRoot . '/footer.phtml', '</body></html>');
@@ -466,7 +512,9 @@ try {
     ListTemplateTestState::$failures++;
     fwrite(STDERR, 'ERROR: ' . get_class($error) . ': ' . $error->getMessage() . "\n");
 } finally {
-    removeTree($tmp);
+    if ($tmp !== null) {
+        removeTree($tmp);
+    }
 }
 
 if (ListTemplateTestState::$failures !== 0) {

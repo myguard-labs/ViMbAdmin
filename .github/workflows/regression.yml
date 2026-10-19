@@ -130,6 +130,9 @@ jobs:
       - name: Request helper behavior remains source and bundle equivalent
         run: node ci/test-refactor-ui-events.cjs
 
+      - name: UI mutation controls reject false passing child results
+        run: node ci/test-refactor-ui-controls.cjs
+
       - name: Containerized Chrome runner hardening
         run: >-
           VIMBADMIN_BROWSER=chrome bash tests/test-headless-chrome-container.sh

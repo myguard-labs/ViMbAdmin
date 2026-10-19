@@ -385,27 +385,76 @@ function runMissingElement(asset, source) {
     context.ossToggle(missing, '/toggle', {}) === undefined && state.requests === 0);
 }
 
-function runErrorIdentityControl() {
-  const flag = 'VIMBADMIN_UI_EVENTS_INVERT_ERROR_GUARD';
-  const mutationFlags = [
-    'VIMBADMIN_UI_EVENTS_DISABLE_FINISH_GUARD',
-    'VIMBADMIN_UI_EVENTS_DISABLE_STALE_GUARD',
-    flag,
-  ];
-  // Mutant children run the same observable tests once, without spawning again.
-  if (mutationFlags.some(name => process.env[name] === '1')) return;
-  const result = spawnSync(process.execPath, [__filename], {
-    env: {...process.env, [flag]: '1'},
-    encoding: 'utf8', timeout: 30000, maxBuffer: 256 * 1024,
-  });
-  const expected = assets.map(asset => `${asset}: only the current failed request becomes visible`);
+function mutationFailedAsExpected(result, expected, totalChecks) {
   const observed = (result.stdout || '').split('\n').filter(line => line.startsWith('  FAIL '));
-  check('error-only generation mutation fails at the current-request identity assertion for both assets',
-    !result.error && result.signal === null && result.status === 1 && result.stderr === ''
-      && /2 FAILED \(42 checks\)\s*$/.test(result.stdout)
-      && observed.length === expected.length
-      && expected.every(label => observed.filter(line => line.startsWith(`  FAIL ${label}: `)).length === 1),
-    `expected=${expected.length}, observed=${observed.length}, status=${result.status}`);
+  return !result.error && result.signal === null && result.status === 1 && result.stderr === ''
+    && result.stdout.endsWith(`${expected.length} FAILED (${totalChecks} checks)\n`)
+    && observed.length === expected.length
+    && expected.every(label => observed.filter(line => line === `  FAIL ${label}`
+      || line.startsWith(`  FAIL ${label}: `)).length === 1);
+}
+
+function runMutationControls() {
+  const controls = [
+    {
+      flag: 'VIMBADMIN_UI_EVENTS_DISABLE_FINISH_GUARD',
+      name: 'finish guard',
+      labels: ['successful request invokes success and completion exactly once'],
+    },
+    {
+      flag: 'VIMBADMIN_UI_EVENTS_DISABLE_STALE_GUARD',
+      name: 'stale-response guard',
+      labels: ['stale response cannot replace the current request result',
+        'only the current failed request becomes visible'],
+    },
+    {
+      flag: 'VIMBADMIN_UI_EVENTS_INVERT_ERROR_GUARD',
+      name: 'error-only generation',
+      labels: ['only the current failed request becomes visible'],
+    },
+  ];
+  // Manual mutants and marked children run the observable tests once. The marker
+  // also bounds recursion if a child accidentally loses its mutation flag.
+  if (process.env.VIMBADMIN_UI_EVENTS_MUTATION_CHILD === '1'
+    || controls.some(({flag}) => process.env[flag] === '1')) return;
+  const totalChecks = checks;
+  for (const {flag, name, labels} of controls) {
+    const expected = assets.flatMap(asset => labels.map(label => `${asset}: ${label}`));
+    const result = spawnSync(process.execPath, [__filename], {
+      env: {...process.env, [flag]: '1', VIMBADMIN_UI_EVENTS_MUTATION_CHILD: '1'},
+      encoding: 'utf8', timeout: 30000, maxBuffer: 256 * 1024,
+    });
+    const observed = (result.stdout || '').split('\n').filter(line => line.startsWith('  FAIL ')).length;
+    check(`${name} mutation fails at the expected identities for both assets`,
+      mutationFailedAsExpected(result, expected, totalChecks),
+      `expected=${expected.length}, observed=${observed}, status=${result.status}`);
+
+    const valid = {
+      status: 1, signal: null, stderr: '',
+      stdout: expected.map(label => `  FAIL ${label}\n`).join('')
+        + `${expected.length} FAILED (${totalChecks} checks)\n`,
+    };
+    check(`${name} result validator accepts exact failures with and without details`,
+      mutationFailedAsExpected(valid, expected, totalChecks)
+        && mutationFailedAsExpected({...valid,
+          stdout: expected.map(label => `  FAIL ${label}: detail\n`).join('')
+            + `${expected.length} FAILED (${totalChecks} checks)\n`,
+        }, expected, totalChecks));
+    const invalid = [
+      {...valid, status: 0},
+      {...valid, status: null, signal: 'SIGTERM'},
+      {...valid, error: new Error('child failed')},
+      {...valid, stderr: 'bootstrap failed'},
+      {...valid, stdout: 'bootstrap failed\n'},
+      {...valid, stdout: `${expected.length} FAILED (${totalChecks} checks)\n`},
+      {...valid, stdout: valid.stdout.replace(expected[0], 'unrelated assertion')},
+      {...valid, stdout: valid.stdout.replace(expected[0], expected[1])},
+      {...valid, stdout: valid.stdout.replace(`${totalChecks} checks`, `${totalChecks + 1} checks`)},
+      {...valid, stdout: valid.stdout + '  FAIL unexpected extra assertion\n'},
+    ];
+    check(`${name} result validator rejects success, failed children and false failure identities`,
+      invalid.every(value => !mutationFailedAsExpected(value, expected, totalChecks)));
+  }
 }
 
 for (const asset of assets) {
@@ -417,6 +466,6 @@ for (const asset of assets) {
   runMissingElement(asset, source);
 }
 
-if (failures === 0) runErrorIdentityControl();
+if (failures === 0) runMutationControls();
 console.log(failures === 0 ? `ALL PASSED (${checks} checks)` : `${failures} FAILED (${checks} checks)`);
 process.exit(failures === 0 ? 0 : 1);

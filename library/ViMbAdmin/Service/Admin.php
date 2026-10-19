@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/PersistsAuditLog.php';
+
 /**
  * Admin application service — framework-free business logic for AdminController.
  *
@@ -26,6 +28,8 @@
  */
 class ViMbAdmin_Service_Admin
 {
+    use ViMbAdmin_Service_PersistsAuditLog;
+
     /**
      * @var \Doctrine\Persistence\ObjectManager
      */
@@ -222,24 +226,4 @@ class ViMbAdmin_Service_Admin
         $this->em->flush();
     }
 
-    /**
-     * Write a Log row against the acting admin (and optionally a domain) and
-     * persist it; the caller flushes. Same shape as the controller's protected
-     * log(), which only binds a domain when one is in context.
-     */
-    private function log(\Entities\Admin $actor, string $action, string $message, ?\Entities\Domain $domain = null): void
-    {
-        $log = new \Entities\Log();
-        $log->setAction($action);
-        $log->setData($message);
-        $log->setAdmin($actor);
-
-        if ($domain !== null) {
-            $log->setDomain($domain);
-        }
-
-        $log->setTimestamp(new \DateTime());
-
-        $this->em->persist($log);
-    }
 }

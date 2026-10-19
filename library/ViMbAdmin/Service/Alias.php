@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/PersistsAuditLog.php';
+
 /**
  * Open Solutions' ViMbAdmin Project.
  *
@@ -23,6 +25,8 @@
  */
 class ViMbAdmin_Service_Alias
 {
+    use ViMbAdmin_Service_PersistsAuditLog;
+
     /**
      * @var \Doctrine\Persistence\ObjectManager
      */
@@ -269,22 +273,4 @@ class ViMbAdmin_Service_Alias
         });
     }
 
-    /**
-     * Write a Log row for an action (persist only; the caller's flush commits it).
-     */
-    private function log(\Entities\Admin $actor, string $action, string $message, ?\Entities\Domain $domain = null): void
-    {
-        $log = new \Entities\Log();
-        $log->setAction($action);
-        $log->setData($message);
-        $log->setAdmin($actor);
-
-        if ($domain !== null) {
-            $log->setDomain($domain);
-        }
-
-        $log->setTimestamp(new \DateTime());
-
-        $this->em->persist($log);
-    }
 }

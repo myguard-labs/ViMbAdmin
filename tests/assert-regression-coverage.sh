@@ -105,7 +105,7 @@ SH
       VIMBADMIN_RUNNER_GIT_LOG="$git_log" \
       VIMBADMIN_RUNNER_PHP_LOG="$php_log" \
       "$runner_path") >"$output" 2>&1; then
-    rm -rf -- "$harness_root"
+    rm -rf -- "${harness_root:?}"
     return 1
   fi
 
@@ -114,7 +114,7 @@ SH
     [[ $(wc -l <"$php_log") -ne 2 ]] ||
     [[ $(grep -cxF 'tests/test-runner-contract-a.php' "$php_log") -ne 1 ]] ||
     [[ $(grep -cxF 'tests/test-runner-contract-b.php' "$php_log") -ne 1 ]]; then
-    rm -rf -- "$harness_root"
+    rm -rf -- "${harness_root:?}"
     return 1
   fi
 
@@ -126,18 +126,18 @@ SH
       VIMBADMIN_RUNNER_PHP_LOG="$php_log" \
       "$runner_path" tests/test-runner-contract-b.php) \
     >"$output" 2>&1; then
-    rm -rf -- "$harness_root"
+    rm -rf -- "${harness_root:?}"
     return 1
   fi
 
   if [[ $(wc -l <"$git_log") -ne 1 ]] ||
     [[ $(wc -l <"$php_log") -ne 1 ]] ||
     ! grep -qxF 'tests/test-runner-contract-b.php' "$php_log"; then
-    rm -rf -- "$harness_root"
+    rm -rf -- "${harness_root:?}"
     return 1
   fi
 
-  rm -rf -- "$harness_root"
+  rm -rf -- "${harness_root:?}"
 }
 
 if ! unit_runner_executes_tracked_tests_and_subset; then
@@ -277,9 +277,27 @@ workflow_has_unconditional_owner_step "$regression_workflow" php \
   exit 1
 }
 
+workflow_has_unconditional_owner_step "$regression_workflow" command \
+  'node ci/test-refactor-ui-events.cjs' static || {
+  printf 'Regression static job does not invoke the request-helper UI contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" command \
+  'bash ci/test-asset-cache-version-boundary.sh' static || {
+  printf 'Regression static job does not invoke the stale-asset cache boundary.\n' >&2
+  exit 1
+}
+
 workflow_has_unconditional_owner_step "$regression_workflow" php \
   'ci/test-refactor-input-contract.php' unit || {
   printf 'Regression unit job does not invoke the controller string input contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-autoload-contract.php' unit || {
+  printf 'Regression unit job does not invoke the autoload discovery contract.\n' >&2
   exit 1
 }
 
@@ -308,6 +326,12 @@ workflow_has_unconditional_owner_step "$regression_workflow" php \
 }
 
 workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-list-templates.php' unit || {
+  printf 'Regression unit job does not invoke the list-template render contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
   'ci/test-refactor-preference-contract.php' schema-drift || {
   printf 'Regression schema-drift job does not invoke the preference reuse contract.\n' >&2
   exit 1
@@ -316,6 +340,12 @@ workflow_has_unconditional_owner_step "$regression_workflow" php \
 workflow_has_unconditional_owner_step "$regression_workflow" php \
   'ci/test-refactor-queue-lifecycle.php' schema-drift || {
   printf 'Regression schema-drift job does not invoke the queue lifecycle contract.\n' >&2
+  exit 1
+}
+
+workflow_has_unconditional_owner_step "$regression_workflow" php \
+  'ci/test-refactor-service-audit-log.php' schema-drift || {
+  printf 'Regression schema-drift job does not invoke the service audit-log contract.\n' >&2
   exit 1
 }
 

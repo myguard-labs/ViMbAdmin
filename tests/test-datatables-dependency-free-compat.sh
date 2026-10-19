@@ -132,23 +132,25 @@ awk '
   application/views/mailbox/js/list.js >"$tmp/view-row-lifecycle.js"
 for view in alias domain mailbox; do
   awk '
-    /drawCallback.*function/ && !found++ { active = 1; sub(/^.*function/, "function"); print; next }
-    active && /^[[:space:]]*},/ { print "},"; active = 0; complete++ }
-    active { print }
-    END { if (complete != 1) exit 1 }
+    /drawCallback.*vmDataTableRememberPageLength/ { found++ }
+    END {
+      if (found != 2) exit 1
+      print "vmDataTableRememberPageLength,"
+    }
   ' "application/views/$view/js/list.js" >>"$tmp/view-row-lifecycle.js"
 done
 printf "];\n}\n" >>"$tmp/view-row-lifecycle.js"
 
-# Both pagination modes in every production list must persist the API length.
+# Both pagination modes in every production list must bind the shared callback
+# that persists the API length.
 printf 'var listLengthCallbacks = [\n' >"$tmp/view-length-callbacks.js"
 for view in alias/js/list domain/js/list mailbox/js/list archive/js/list log/js/list admin/js/list admin/js/domains domain/js/admins mailbox/js/aliases; do
   count=1
   [[ $view =~ ^(alias|domain|mailbox|archive|log)/js/list$ ]] && count=2
   awk -v expected="$count" '
-    /drawCallback.*function/ { active = 1; sub(/^.*function/, "function"); print; next }
-    active && /^[[:space:]]*},/ { print "},"; active = 0; complete++ }
-    active { print }
+    /drawCallback.*vmDataTableRememberPageLength/ {
+      print "vmDataTableRememberPageLength,"; complete++
+    }
     END { if (complete != expected) exit 1 }
   ' "application/views/$view.js" >>"$tmp/view-length-callbacks.js"
 done

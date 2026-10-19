@@ -20,10 +20,7 @@ vmReady( function()
         'pageLength': vmDataTablePageLength( {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if} ),
         'order': [[ 4, 'desc' ]],
         'language': { 'processing': 'Loading…', 'emptyTable': 'No archives.', 'search': 'Search (prefix * to match anywhere):' },
-        'drawCallback': function(settings) {
-            vm_prefs['iLength'] = settings.api.page.len();
-            vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
-        },
+        'drawCallback': vmDataTableRememberPageLength,
         'columns': [
             { 'data': 'username', 'render': DataTable.render.text() },
             { 'data': null, 'render': function( d, t, row ){ return vmArchiveEsc( archiveStatuses[ row.status ] || row.status ); } },
@@ -43,11 +40,7 @@ vmReady( function()
     });
     {else}
     oDataTable = new DataTable('#list_table', {
-        'drawCallback': function(settings) {
-            vm_prefs['iLength'] = settings.api.page.len();
-
-            vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
-        },
+        'drawCallback': vmDataTableRememberPageLength,
         'pageLength': vmDataTablePageLength( {if isset( $options.defaults.table.entries )}{$options.defaults.table.entries}{else}10{/if} ),
         // Username, Status, Domain, Archived, User exists, Autoprune, Actions
         'columns': [

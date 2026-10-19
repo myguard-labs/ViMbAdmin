@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 tmp=$(mktemp -d /tmp/vimbadmin-pinned-assets.XXXXXX)
 readonly tmp
 readonly source=public/js/990-vimbadmin.js
-readonly js_bundle=public/js/min.bundle-v29.js
+readonly js_bundle=public/js/min.bundle-v30.js
 readonly css_bundle=public/css/min.bundle-v29.css
 readonly js_header=application/views/header-js.phtml
 readonly css_header=application/views/header-css.phtml
@@ -19,7 +19,7 @@ restore() {
 }
 cleanup() {
   restore
-  rm -rf -- "$tmp"
+  rm -rf -- "${tmp:?}"
 }
 trap cleanup EXIT
 
@@ -34,7 +34,8 @@ compare_generated() {
     cmp "$tmp/${css_header//\//__}" "$css_header"
 }
 
-php bin/minify-bundle.php --version 29 --quiet
+php bin/minify-bundle.php --version 30 --js-only --quiet
+php bin/minify-bundle.php --version 29 --css-only --quiet
 compare_generated || {
   echo 'FAIL: pinned toolchain did not reproduce committed bundles and headers' >&2
   exit 1
@@ -42,7 +43,7 @@ compare_generated || {
 echo 'ok   pinned toolchain reproduces committed bundles and headers'
 
 printf '\nwindow.__vimbadminAssetMutation = true;\n' >>"$source"
-php bin/minify-bundle.php --version 29 --js-only --quiet
+php bin/minify-bundle.php --version 30 --js-only --quiet
 if compare_generated; then
   echo 'FAIL: source-only mutation did not change generated assets' >&2
   exit 1
@@ -50,7 +51,8 @@ fi
 echo 'ok   negative control: source-only mutation changes generated JS bundle'
 
 restore
-php bin/minify-bundle.php --version 29 --quiet
+php bin/minify-bundle.php --version 30 --js-only --quiet
+php bin/minify-bundle.php --version 29 --css-only --quiet
 compare_generated || {
   echo 'FAIL: restored source did not reproduce committed generated assets' >&2
   exit 1

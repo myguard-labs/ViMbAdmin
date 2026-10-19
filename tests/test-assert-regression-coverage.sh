@@ -10,7 +10,7 @@ phpstan_runner=$PWD/tests/run-phpstan-tests.sh
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-regression-coverage.XXXXXX")
 
 cleanup() {
-  rm -rf -- "$test_root"
+  rm -rf -- "${test_root:?}"
 }
 trap cleanup EXIT
 
@@ -35,16 +35,24 @@ cat >"$test_root/.github/workflows/regression.yml" <<'YAML'
 name: Regression fixture
 on: push
 jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - run: node --version
+      - run: node ci/test-refactor-ui-events.cjs
+      - run: bash ci/test-asset-cache-version-boundary.sh
   unit:
     runs-on: ubuntu-latest
     steps:
       - run: bash tests/run-unit-tests.sh
       - run: php ci/test-refactor-runtime-baseline.php
       - run: php ci/test-refactor-input-contract.php
+      - run: php ci/test-refactor-autoload-contract.php
       - run: php ci/test-refactor-list-contract.php
       - run: php ci/test-refactor-doveadm-contract.php
       - run: php ci/test-refactor-queue-database-guard.php
       - run: php ci/test-refactor-controller-resources.php
+      - run: php ci/test-refactor-list-templates.php
       - run: bash tests/test-resolve-bundle-v.sh
   cache:
     runs-on: ubuntu-latest
@@ -59,6 +67,7 @@ jobs:
       - run: php tests/test-schema-no-pending.php
       - run: php ci/test-refactor-preference-contract.php
       - run: php ci/test-refactor-queue-lifecycle.php
+      - run: php ci/test-refactor-service-audit-log.php
   mailbox-queue:
     runs-on: ubuntu-latest
     steps:
@@ -159,7 +168,8 @@ run_guard() {
   fi
 }
 
-if git -C "$test_root" status --short | grep -q .; then
+fixture_status=$(git -C "$test_root" status --short)
+if [[ -n $fixture_status ]]; then
   printf 'Fixture unexpectedly became dirty.\n' >&2
   exit 1
 fi
@@ -373,6 +383,49 @@ for input_owner_defect in missing conditional masked echoed wrong-job wrong-work
   }
 done
 
+# VC-S01's retained-adapter discovery contract must remain an unconditional
+# owner in the supported PHP unit matrix. Each defect is observed by the
+# maintained coverage guard, then the exact valid fixture is restored.
+for autoload_owner_defect in missing conditional masked echoed wrong-job wrong-workflow; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$autoload_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-autoload-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-autoload-contract.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  masked)
+    sed -i '\|run: php ci/test-refactor-autoload-contract.php|a\        continue-on-error: true' "$test_root/.github/workflows/regression.yml"
+    ;;
+  echoed)
+    sed -i 's|run: php ci/test-refactor-autoload-contract.php|run: echo php ci/test-refactor-autoload-contract.php|' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-autoload-contract.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-autoload-contract.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-workflow)
+    sed -i '\|run: php ci/test-refactor-autoload-contract.php|d' "$test_root/.github/workflows/regression.yml"
+    sed -i '/run: php ci\/test-formatter-selection.php/a\      - run: php ci/test-refactor-autoload-contract.php' "$test_root/.github/workflows/static-analysis.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'Autoload discovery owner mutation matched nothing: %s\n' "$autoload_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "autoload discovery $autoload_owner_defect" \
+    'Regression unit job does not invoke the autoload discovery contract.'
+  printf 'Autoload discovery owner rejected %s (guard exit %d).\n' "$autoload_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
 # VC-C03's source-row contract must remain an unconditional unit-matrix owner.
 # Each named defect is observed red through the maintained coverage guard and
 # the exact valid fixture is restored before the next mutation.
@@ -509,6 +562,41 @@ for controller_resource_owner_defect in missing conditional wrong-job; do
     'Regression unit job does not invoke the concrete controller resource contract.'
   printf 'Concrete controller resource owner rejected %s (guard exit %d).\n' \
     "$controller_resource_owner_defect" "$guard_status"
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  run_guard
+  [[ $guard_status -eq 0 ]] || {
+    cat "$test_root/output" >&2
+    exit 1
+  }
+done
+
+# VC-S02's real Smarty render contract must remain an unconditional owner in
+# the supported PHP unit matrix. Observe missing, conditional and misdirected
+# owner shapes, restoring the exact valid fixture after each mutation.
+for list_template_owner_defect in missing conditional wrong-job; do
+  cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+  cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
+  case "$list_template_owner_defect" in
+  missing)
+    sed -i '\|run: php ci/test-refactor-list-templates.php|d' "$test_root/.github/workflows/regression.yml"
+    ;;
+  conditional)
+    sed -i '\|run: php ci/test-refactor-list-templates.php|a\        if: false' "$test_root/.github/workflows/regression.yml"
+    ;;
+  wrong-job)
+    sed -i '\|run: php ci/test-refactor-list-templates.php|d; /run: php tests\/test-cache-bootstrap.php/a\      - run: php ci/test-refactor-list-templates.php' "$test_root/.github/workflows/regression.yml"
+    ;;
+  esac
+  if cmp -s "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"; then
+    printf 'List-template owner mutation matched nothing: %s\n' \
+      "$list_template_owner_defect" >&2
+    exit 1
+  fi
+  expect_owner_rejected "list-template $list_template_owner_defect" \
+    'Regression unit job does not invoke the list-template render contract.'
+  printf 'List-template owner rejected %s (guard exit %d).\n' \
+    "$list_template_owner_defect" "$guard_status"
   cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
   cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
   run_guard
@@ -659,6 +747,48 @@ sed -i 's|php ci/test-refactor-runtime-baseline.php|echo php ci/test-refactor-ru
   "$test_root/.github/workflows/regression.yml"
 expect_owner_rejected 'disabled real adapter runtime baseline' \
   'Regression workflow does not invoke the real adapter runtime baseline.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i 's|node ci/test-refactor-ui-events.cjs|echo node ci/test-refactor-ui-events.cjs|' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'disabled request-helper UI contract' \
+  'Regression static job does not invoke the request-helper UI contract.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i 's|      - run: node ci/test-refactor-ui-events.cjs|      - run: node ci/test-refactor-ui-events.cjs\n        if: false|' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'conditional request-helper UI contract' \
+  'Regression static job does not invoke the request-helper UI contract.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i '\|      - run: node ci/test-refactor-ui-events.cjs|d; /run: bash tests\/run-unit-tests.sh/a\      - run: node ci/test-refactor-ui-events.cjs' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'request-helper UI contract in wrong job' \
+  'Regression static job does not invoke the request-helper UI contract.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i 's|bash ci/test-asset-cache-version-boundary.sh|echo bash ci/test-asset-cache-version-boundary.sh|' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'disabled stale-asset cache boundary' \
+  'Regression static job does not invoke the stale-asset cache boundary.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i 's|      - run: bash ci/test-asset-cache-version-boundary.sh|      - run: bash ci/test-asset-cache-version-boundary.sh\n        if: false|' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'conditional stale-asset cache boundary' \
+  'Regression static job does not invoke the stale-asset cache boundary.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i '\|      - run: bash ci/test-asset-cache-version-boundary.sh|d; /run: bash tests\/run-unit-tests.sh/a\      - run: bash ci/test-asset-cache-version-boundary.sh' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'stale-asset cache boundary in wrong job' \
+  'Regression static job does not invoke the stale-asset cache boundary.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i 's|php ci/test-refactor-service-audit-log.php|echo php ci/test-refactor-service-audit-log.php|' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'disabled service audit-log contract' \
+  'Regression schema-drift job does not invoke the service audit-log contract.'
 
 cp -- "$test_root/static-analysis.yml.valid" "$test_root/.github/workflows/static-analysis.yml"
 cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"

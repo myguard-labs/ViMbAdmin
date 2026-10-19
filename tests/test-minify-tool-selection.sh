@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 tmp=$(mktemp -d /tmp/vimbadmin-minify-tools.XXXXXX)
 readonly tmp
 readonly generated=(
-  public/js/min.bundle-v29.js
+  public/js/min.bundle-v30.js
   public/css/min.bundle-v29.css
   application/views/header-js.phtml
   application/views/header-css.phtml
@@ -24,7 +24,7 @@ restore() {
 }
 cleanup() {
   restore
-  rm -rf -- "$tmp"
+  rm -rf -- "${tmp:?}"
 }
 trap cleanup EXIT
 
@@ -34,7 +34,7 @@ done
 
 mv bin/compiler.jar "$tmp/compiler.jar"
 php bin/minify-bundle.php --version 29 --css-only --quiet
-if php bin/minify-bundle.php --version 29 --js-only --quiet >"$tmp/js-missing" 2>&1; then
+if php bin/minify-bundle.php --version 30 --js-only --quiet >"$tmp/js-missing" 2>&1; then
   echo 'FAIL: JS-only build accepted a missing Closure Compiler' >&2
   exit 1
 fi
@@ -44,7 +44,7 @@ echo 'ok   CSS-only requires no JS tool; JS-only rejects a missing compiler'
 
 cp bin/compiler.jar "$tmp/compiler.good.jar"
 printf 'readable but not the pinned compiler\n' >bin/compiler.jar
-if php bin/minify-bundle.php --version 29 --js-only --quiet >"$tmp/js-mismatch" 2>&1; then
+if php bin/minify-bundle.php --version 30 --js-only --quiet >"$tmp/js-mismatch" 2>&1; then
   echo 'FAIL: JS-only build accepted a mismatched Closure Compiler' >&2
   exit 1
 fi
@@ -56,11 +56,11 @@ FATAL: Closure Compiler digest mismatch for $PWD/bin/compiler.jar.
 EOF
 diff -u "$tmp/js-mismatch.expected" "$tmp/js-mismatch"
 mv "$tmp/compiler.good.jar" bin/compiler.jar
-php bin/minify-bundle.php --version 29 --js-only --quiet
+php bin/minify-bundle.php --version 30 --js-only --quiet
 echo 'ok   JS-only rejects a readable compiler with the wrong digest before execution'
 
 mv bin/node_modules "$tmp/node_modules"
-php bin/minify-bundle.php --version 29 --js-only --quiet
+php bin/minify-bundle.php --version 30 --js-only --quiet
 if php bin/minify-bundle.php --version 29 --css-only --quiet >"$tmp/css-missing" 2>&1; then
   echo 'FAIL: CSS-only build accepted a missing clean-css installation' >&2
   exit 1
@@ -70,6 +70,8 @@ mv "$tmp/node_modules" bin/node_modules
 echo 'ok   JS-only requires no CSS tool; CSS-only rejects missing clean-css'
 
 cp bin/node_modules/.package-lock.json "$tmp/installed-package-lock.good.json"
+# The dollar-prefixed names below are literal PHP variables, not shell expansions.
+# shellcheck disable=SC2016
 php -r '
 $path = "bin/node_modules/.package-lock.json";
 $lock = json_decode((string) file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
@@ -89,16 +91,17 @@ cp "$tmp/installed-package-lock.good.json" bin/node_modules/.package-lock.json
 php bin/minify-bundle.php --version 29 --css-only --quiet
 echo 'ok   CSS-only rejects a mismatched installed package lock before execution'
 
-php bin/minify-bundle.php --version 29 --quiet
-echo 'ok   combined build accepts both restored pinned tools'
+php bin/minify-bundle.php --version 30 --js-only --quiet
+php bin/minify-bundle.php --version 29 --css-only --quiet
+echo 'ok   versioned JS and CSS lanes accept both restored pinned tools'
 
-if [[ ${VIMBADMIN_CORRUPT_COMBINED_OUTPUT:-0} == 1 ]]; then
-  printf '\n/* corrupt combined-build fixture */\n' >>public/js/min.bundle-v29.js
+if [[ ${VIMBADMIN_CORRUPT_SELECTED_OUTPUT:-0} == 1 ]]; then
+  printf '\n/* corrupt selected-build fixture */\n' >>public/js/min.bundle-v30.js
 fi
 for path in "${generated[@]}"; do
   if ! cmp "$tmp/${path//\//__}" "$path"; then
-    echo "FAIL: combined build changed tracked output: $path" >&2
+    echo "FAIL: selected builds changed tracked output: $path" >&2
     exit 1
   fi
 done
-echo 'ok   tool-selection probes preserve the committed comparison baseline'
+echo 'ok   tool-selection probes preserve the committed versioned baselines'

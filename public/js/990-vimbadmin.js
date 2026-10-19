@@ -707,6 +707,12 @@ function vmDataTablePageLength( fallback )
     return Number.isSafeInteger(length) && (length > 0 || length === -1) ? length : fallback;
 }
 
+function vmDataTableRememberPageLength( settings )
+{
+    vm_prefs['iLength'] = settings.api.page.len();
+    vmPrefsCookie( 'vm_prefs', vm_prefs, vm_cookie_options );
+}
+
 function vmDataTableApi( table )
 {
     return new DataTable.Api(table);

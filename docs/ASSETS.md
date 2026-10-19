@@ -56,12 +56,17 @@ THE SOFTWARE.
 
 ## Packaging and compatibility
 
-Install the exact input list in `bin/minify-bundle-files.php` and regenerate
-both bundles with `php bin/minify-bundle.php --version 29`. Fetch the documented
+Install the exact input list in `bin/minify-bundle-files.php`. The committed
+JavaScript bundle is `min.bundle-v30.js`; it was regenerated with
+`php bin/minify-bundle.php --version 30 --js-only` so browsers do not reuse the
+pre-page-length-callback v29 URL. The unchanged CSS remains
+`min.bundle-v29.css` and is reproducible with
+`php bin/minify-bundle.php --version 29 --css-only`. Fetch the documented
 Closure Compiler artifact and install clean-css with `npm ci --prefix bin`.
 The build verifies the compiler SHA-256 and the installed clean-css dependency
 graph against `bin/package-lock.json` before either tool runs.
-Ship the regenerated headers together with both bundles. Remove the old
+Ship each regenerated header with its matching bundle and retain exactly one
+JavaScript and one CSS bundle. Remove the old
 `100-jquery.js`, `150-jquery.datatables.js`, `151-jquery.datatables.ext.js`
 and `152-jquery.datatables.bootstrap5.js` files when updating an existing
 installation. No CDN fallback is used; CSP and nonce handling are unchanged.

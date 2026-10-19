@@ -159,3 +159,158 @@ VC-D01 reconciliation. Report the unmet target explicitly to the supervisor;
 changing it requires an explicit recorded acceptance decision. Never silently
 lower it, narrow the measurement/checks, force unsafe reuse or activate extra
 work to declare completion. No production reduction is claimed by this row.
+
+## Final sweep reconciliation (VC-D01)
+
+The final measurement keeps the baseline recipe above unchanged: jscpd 5.0.12
+from the project npm integrity lock, weak mode, 8 lines / 70 tokens, roots
+`src application library`, and only `**/Proxies/**` excluded. The candidate was
+reconstructed in a private Git index so every delivered source file was tracked,
+including new helpers; the real delivery index was not used or modified. A fresh
+capture of `841144d0cb300ac2e3bca3af3c3874e0d091d958` reproduced every checked-in
+baseline aggregate and dataset hash before the final candidate was measured.
+
+<!-- markdownlint-disable MD013 -- dense exact metrics table -->
+
+| Maintained PHP/template measure | Baseline | Final | Delta |
+| --- | ---: | ---: | ---: |
+| First-party token-bearing physical lines, mapping included | 22,247 | 21,871 | -376 |
+| Tracked source files in the three roots | 234 | 238 | +4 |
+| jscpd clone occurrences | 125 | 108 | -17 |
+| jscpd duplicated lines | 2,868 | 2,183 | -685 |
+| jscpd duplicated tokens | 14,274 | 12,131 | -2,143 |
+| jscpd scanned lines | 40,268 | 39,645 | -623 |
+| jscpd scanned tokens | 195,894 | 193,725 | -2,169 |
+| SCC PHP code lines (comments/blanks excluded) | 19,864 | 19,498 | -366 |
+| Lizard functions | 1,515 | 1,459 | -56 |
+| Lizard aggregate CCN | 5,063 | 4,950 | -113 |
+| Lizard average function CCN | 3.3419 | 3.3927 | +0.0508 |
+
+<!-- markdownlint-enable MD013 -->
+
+The final 21,871 lines beat the 22,147 stop threshold by 276 lines, a net
+reduction of 376 from the 22,247 baseline. SCC counted the tracked first-party
+`.php` files; the target's PHP lexer and Lizard also included `.phtml`. These
+tools report physical/token-bearing code, NCSS and static complexity, not
+runtime-executed statement counts. Consequently no whole-program executable
+statement total is claimed. The higher average CCN is reported rather than
+treated as an improvement: total functions and aggregate CCN fell at different
+rates. The retained `Mailbox::create` CCN 19 warning also remains; no
+complexity-clean claim is made.
+
+The following source sequence makes the net result attributable without adding
+overlapping group bounds. Each row is a fresh capture with the same pinned
+binary, roots, exclusions and runtime:
+
+<!-- markdownlint-disable MD013 -- dense exact attribution table -->
+
+| Delivered boundary | First-party lines | Line delta | Clone delta | Duplicated-line delta | Duplicated-token delta |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Baseline `841144d0` | 22,247 | — | — | — | — |
+| PR274 `9c66a490` (fixtures/baselines) | 22,247 | 0 | 0 | 0 | 0 |
+| PR276 `26697c13` (controller adapters) | 22,066 | -181 | -8 | -171 | -920 |
+| PR277 `ef9e930d` (preference accessors) | 21,943 | -123 | -3 | -395 | -586 |
+| PR278 `9522ff42` (queue execution) | 21,937 | -6 | 0 | 0 | 0 |
+| PR279 `2a025f3c` (controller resources) | 21,893 | -44 | -3 | -63 | -265 |
+| Accepted local candidate | 21,871 | -22 | -3 | -56 | -372 |
+
+<!-- markdownlint-enable MD013 -->
+
+Clone counts describe detector overlap only. They are not independent removable
+blocks, runtime speedups or savings. The final source-derived census covers all
+108 current occurrences: 97 first-party retained, 7 mapping retained, 3
+attribution retained and 1 vendor retained, with zero unresolved candidate
+occurrences. Eighty-seven final occurrences retain their earlier group only
+after exact path and fragment-hash matching; the 21 changed identities were
+classified from their final source ranges. Mapping, attribution and vendor
+matches receive zero first-party savings credit.
+
+### Local row accounting
+
+<!-- markdownlint-disable MD013 -- dense exact row accounting -->
+
+| Unit | Final production result | Separate additions or qualifications |
+| --- | --- | --- |
+| VR-L01 | Characterization only; zero production savings. | Proved the three service log bodies' actor, action, message, optional domain, timestamp, one-persist/no-flush and persist-error contracts. |
+| VR-L02 | Service scope: 965 → 942 physical lines (-23), 535 → 521 SCC code lines (-14), 532 → 517 token-bearing/NLOC (-15), and 34,674 → 33,772 bytes (-902). Three log bodies became one trait method, so function count fell 27 → 25 and aggregate SCC complexity 71 → 69. | The shared trait, three uses and call sites are included. Average CCN worsened from 5.0 to 5.2; the unchanged CCN 19 warning remains. No flush, transaction or public service API moved. |
+| VC-S01 / VC-S01b | Retain current; no adapter deletion, wrapper reduction or production savings. | Active ORM3/proxy, direct-include, web/CLI/MCP and Smarty reachability prevented a safe deletion. |
+| VC-S02 | Selected template scope: 226 → 216 physical lines (-10); target metric -7 token-bearing lines; one clone, 10 duplicated lines and 123 duplicated tokens removed. | The new narrow partial and both include calls are included. Remaining list/modal spans keep their fields, body text, row actions, escaping, placement and skin behavior. |
+| VC-S03 | Retain current; zero production deletion/savings. | Added 418 lines of workflow/shell/CJS test wiring; that is not production savings. |
+| VC-S03b | Retain current; zero production and test delta. | Modal owners remain distinct after stale/failure/dismiss/reopen and duplicate-handler proof. |
+| VC-S03c | Maintained JS: -42 physical lines and -1,657 bytes, including the helper, separator and 14 references. Fourteen equivalent callbacks now use one shared page-length owner; no inline equivalent remains. | Generated bundle +146 bytes and zero lines; its bytes are unchanged by the cache repair, but the maintained URL moved from v29 to v30 so old cached bytes cannot satisfy the new views. The native cache-boundary regression, workflow owner and versioned fixtures are test wiring, not production savings. The scoped detector changed by -2 clones, -38 lines and -335 tokens, but that is advisory and not a latency claim. |
+| VC-P01 | Retain current; zero production delta/savings and no performance claim. | Twenty-four query plans and 48 measurements / 296 cases on each of PHP 8.3, 8.4 and 8.5 found no redundant in-scope fetch. Cold means a fresh process/entity manager/result cache with prewarmed MariaDB; RSS is lifetime high-water and excludes network/bootstrap latency. |
+| VC-D01 / VC-D01b | Documentation only; zero production savings. | This reconciliation and the ownership/test map below; no behavior test is credited to prose. |
+
+<!-- markdownlint-enable MD013 -->
+
+No performance or hardening improvement is claimed by the local sweep. VC-P01
+retains permission, count, row and visible usage queries; changing full entity
+hydration, large `IN` plans or SQL shape needs separate admission. Security
+evidence proves preservation, not an added hardening gain: authorization, CSRF,
+ownership, error text/status, escaping, plugin order, audit actor/domain and
+transaction/flush ordering remain the delivered contracts. Deduplication alone
+does not establish latency.
+
+## Final ownership and maintained entry points (VC-D01b)
+
+Service mutation policy stays in `ViMbAdmin_Service_Admin`,
+`ViMbAdmin_Service_Alias` and `ViMbAdmin_Service_Mailbox`. Their methods still
+own authorization-adjacent ordering, entity changes, plugin hooks and caller
+flush/transaction boundaries. `PersistsAuditLog` owns only construction and one
+`persist()` of the proven audit record; it neither flushes nor starts or commits
+a transaction. Domain and archive logging paths remain separate.
+
+Input adapters have narrow owners. `Kernel\Input\Reader` owns scalar/array
+parsing primitives, while `DataTableQuery` owns DataTables request normalization
+and order-field selection. Controllers retain authentication, transport-specific
+errors, response mapping and their explicit defaults.
+`ConcreteControllerResources` shares only the concrete entity-manager/Admin
+guards; the Alias controller keeps its `EntityManagerInterface` boundary and
+repository-specific checks. No generic controller or CRUD dispatch layer was
+introduced.
+
+Repositories remain the owners of tenant/permission predicates, count and page
+semantics, hydration and sort/filter query shape. In particular,
+`Repositories\Mailbox::pagedForMailboxList`,
+`Repositories\Domain::pagedForDomainList` and
+`Repositories\Archive::pagedForArchiveList` stay behind their corresponding
+list-data actions. MCP read operations retain token/allowlist and bounded-list
+semantics, and `ViMbAdmin_Service_QueueRunner::scanOrphans` retains its single
+batched known-mailbox query. The closeout does not move SQL ownership into
+controllers or services.
+
+The maintained focused entry points are:
+
+- `ci/test-refactor-service-audit-log.php` for the shared persist-only audit
+  policy, including binding and injected-flush/persist-failure controls;
+- `ci/test-refactor-autoload-contract.php` for adapter/autoload/proxy and direct
+  include reachability;
+- `ci/test-refactor-list-templates.php` for partial rendering, escaping,
+  subpaths, actions and containment controls;
+- `ci/test-refactor-ui-events.cjs`, `ci/test-maintenance-modal-generation.cjs`,
+  `ci/test-asset-cache-version-boundary.sh` and
+  `tests/test-datatables-dependency-free-compat.sh` for request, modal,
+  table-helper, source/bundle, duplicate/stale event behavior and the real
+  cached-v29/current-view failure followed by a fresh v30 subpath load;
+- `ci/test-refactor-runtime-baseline.php`, with
+  `ci/test-maintenance-query-baseline.php` and
+  `ci/maintenance-operation-observer.php`, for 1/50/500/1000 read-path,
+  authorization/error, extra-query and query-plan evidence;
+- `ci/test-refactor-metrics.sh` for the pinned capture/census path,
+  repeatability and malformed/error/negative controls; and
+- `/opt/myguard/tools/php-test-matrix --project vimbadmin --cwd "$checkout" --
+  bash tests/run-unit-tests.sh` for the complete PHP 8.3/8.4/8.5 unit matrix.
+
+The cache repair changes only the generated JS filename, its header URL and
+their affected fixture/workflow/docs bytes; the compiled v30 content is
+byte-identical to the fixed v29 candidate and CSS remains unchanged at v29.
+The fresh private-index capture includes the untracked service helper, v30
+bundle and cache regression while reproducing the same 21,871-line, 108-clone
+source-root result and complete 108-occurrence census. Exact accepted receipts
+for unchanged PHP, schema, database and runtime inputs remain the reuse
+authority. The metrics fixture and Markdown/link gates are rerun for this
+documentation change. Standard Psalm's 115 findings across 45 files, the six
+taint-baseline findings, unavailable Phan configuration and line/branch coverage,
+and 37 standing audit limitations remain explicit. Rendered Smarty/JS syntax
+evidence does not imply complete raw-template ESLint/SAST coverage. No 100%,
+exhaustive, aggregate-clean or delivery claim follows from this closeout.

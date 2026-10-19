@@ -114,7 +114,7 @@ function runAsset(asset) {
 }
 
 runAsset('public/js/990-vimbadmin.js');
-runAsset('public/js/min.bundle-v29.js');
+runAsset('public/js/min.bundle-v30.js');
 
 console.log(failures === 0 ? 'ALL PASSED' : `${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

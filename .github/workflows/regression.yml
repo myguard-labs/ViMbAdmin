@@ -127,6 +127,9 @@ jobs:
       - name: DataTables search uses native active transports
         run: node tests/test-datatable-search-row-api.cjs
 
+      - name: Request helper behavior remains source and bundle equivalent
+        run: node ci/test-refactor-ui-events.cjs
+
       - name: Containerized Chrome runner hardening
         run: >-
           VIMBADMIN_BROWSER=chrome bash tests/test-headless-chrome-container.sh
@@ -172,6 +175,12 @@ jobs:
         run: >-
           CHROMIUM_BIN="$GITHUB_WORKSPACE/.github/scripts/run-headless-chrome.sh"
           bash tests/test-datatables-dependency-free-compat.sh
+
+      - name: A stale JS URL fails and the maintained URL loads fresh
+        env:
+          CHROMIUM_BIN: >-
+            ${{ github.workspace }}/.github/scripts/run-headless-chrome.sh
+        run: bash ci/test-asset-cache-version-boundary.sh
 
       - name: Deliberately broken compatibility lane must fail on this engine
         run: bash tests/test-browser-engine-negative-control.sh
@@ -258,6 +267,9 @@ jobs:
       - name: Controller string inputs preserve their transport contracts
         run: php ci/test-refactor-input-contract.php
 
+      - name: Live adapters retain runtime discovery contracts
+        run: php ci/test-refactor-autoload-contract.php
+
       - name: Equal list pagination adapters share one policy owner
         run: php ci/test-refactor-list-contract.php
 
@@ -269,6 +281,9 @@ jobs:
 
       - name: Concrete controller resources retain one typed guard policy
         run: php ci/test-refactor-controller-resources.php
+
+      - name: Shared list-modal markup preserves both rendered consumers
+        run: php ci/test-refactor-list-templates.php
 
       - name: MCP domain defaults match GUI quota bytes
         run: php ci/test-mcp-domain-default-quota.php
@@ -532,6 +547,22 @@ jobs:
           SKIP_CREATE: '1'
           VERIFY_ALIAS_COUNT_RECONCILIATION: '1'
         run: php tests/test-schema-no-pending.php
+
+      - name: Provision dedicated service audit-log database
+        run: >-
+          mysql -hmariadb -P3306 -uroot -pci -e
+          "CREATE DATABASE \`vimbadmin_service_audit_log\`
+          CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+
+      - name: Service audit-log construction preserves caller ownership
+        env:
+          DB_HOST: mariadb
+          DB_PORT: '3306'
+          DB_NAME: vimbadmin_service_audit_log
+          DB_USER: root
+          DB_PASS: ci
+          VIMBADMIN_SERVICE_AUDIT_DB: '1'
+        run: php ci/test-refactor-service-audit-log.php
 
       - name: Mailbox-task enqueue is atomic under concurrent transactions
         env:

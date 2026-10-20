@@ -12,6 +12,8 @@ environment variables: `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS`, and
 `DB_PORT` selects the TCP port; when omitted it defaults to `3306`. An explicit
 value must be a decimal integer from `1` through `65535`; an empty or malformed
 value fails before connecting. The port applies to fixture creation and samples.
+For this fixture, `DB_HOST=localhost` is normalized to `127.0.0.1` so PDO uses
+TCP and honors `DB_PORT` in both paths. Other host values are passed through.
 `DB_NAME` must start with `vimbadmin_runtime`; the fixture rebuilds every table
 in that database. Use the supported PHP 8.3/8.4/8.5 matrix and locked Composer
 dependencies. The workflow already provisions its MariaDB service.

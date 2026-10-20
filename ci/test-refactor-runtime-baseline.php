@@ -60,9 +60,15 @@ function runtimeDatabasePort(): int
     return (int) $value;
 }
 
+function runtimeDatabaseHost(): string
+{
+    $host = runtimeEnvironment('DB_HOST');
+    return $host === 'localhost' ? '127.0.0.1' : $host;
+}
+
 function runtimeManager(MaintenanceOperationObserver $logger, bool $create = false): EntityManager
 {
-    $parameters = ['driver' => 'pdo_mysql', 'host' => runtimeEnvironment('DB_HOST'), 'port' => runtimeDatabasePort(), 'dbname' => runtimeEnvironment('DB_NAME'),
+    $parameters = ['driver' => 'pdo_mysql', 'host' => runtimeDatabaseHost(), 'port' => runtimeDatabasePort(), 'dbname' => runtimeEnvironment('DB_NAME'),
         'user' => runtimeEnvironment('DB_USER'), 'password' => runtimeEnvironment('DB_PASS'), 'charset' => 'utf8mb4'];
     if ($create) {
         $database = $parameters['dbname'];
@@ -474,6 +480,8 @@ $mode = $argv[1] ?? '';
 $size = (int) ($argv[3] ?? $argv[2] ?? 0);
 if ($mode === '--check-port') {
     echo runtimeManager(new MaintenanceOperationObserver())->getConnection()->getParams()['port'] . "\n";
+} elseif ($mode === '--check-host') {
+    echo (runtimeManager(new MaintenanceOperationObserver())->getConnection()->getParams()['host'] ?? '') . "\n";
 } elseif ($mode === '--setup') {
     runtimeCheck('fixed dataset size', in_array($size, [1, 50, 500, 1000], true));
     runtimeSetup($size);

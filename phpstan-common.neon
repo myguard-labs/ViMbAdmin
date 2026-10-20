@@ -1,4 +1,13 @@
 parameters:
+    # Pin the analysed PHP range to composer.json's supported range
+    # (">=8.2.0" through the newest CI target 8.5). Without this PHPStan infers
+    # the version from a composer.json in the current directory, so results
+    # differ with the working directory. Syntax: phpVersion {min, max} as
+    # documented at https://phpstan.org/config-reference#phpversion
+    # (PHPStan 2.x, verified with 2.2.5).
+    phpVersion:
+        min: 80200
+        max: 80599
     paths:
         - application
         - bin

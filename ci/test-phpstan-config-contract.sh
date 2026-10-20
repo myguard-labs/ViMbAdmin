@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+#
+# Regression for the PHPStan configuration contract.
+#
+# 1. ci/reconcile-phpstan-coverage.sh accepts the real repository and rejects
+#    each seeded defect (new tracked root, stale/duplicate/covered/unknown
+#    allowlist entries, outside-by-exclude file, non-git tree, native config
+#    parsing failures and invalid parameter dump output).
+# 2. phpstan-common.neon pins phpVersion, so the verdict on a version-dependent
+#    probe is identical with and without a composer.json in the working
+#    directory; with the pin removed the verdicts diverge (control).
+#
+# Requires phpstan on PATH (or PHPSTAN_BIN) for section 2.
+
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd)
+cd "$repo_root"
+reconcile=$repo_root/ci/reconcile-phpstan-coverage.sh
+work=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-phpstan-contract.XXXXXX")
+nopin=$(mktemp "$repo_root/.phpstan-nopin.XXXXXX.neon")
+cleanup() {
+  rm -rf -- "${work:?}"
+  rm -f -- "$nopin"
+}
+trap cleanup EXIT
+failures=0
+
+expect() { # expect <green|red> <label> <needle-for-red> -- command...
+  local want=$1 label=$2 needle=$3 out rc
+  shift 4
+  set +e
+  out=$("$@" 2>&1)
+  rc=$?
+  set -e
+  if [ "$want" = green ] && [ "$rc" -eq 0 ]; then
+    printf 'ok   green %s\n' "$label"
+  elif [ "$want" = red ] && [ "$rc" -ne 0 ] && grep -qF -- "$needle" <<<"$out"; then
+    printf 'ok   red   %s\n' "$label"
+  else
+    printf 'FAIL %s (want %s, rc=%s)\n%s\n' "$label" "$want" "$rc" "$out" >&2
+    failures=$((failures + 1))
+  fi
+}
+
+# --- section 1: reconciliation ------------------------------------------
+expect green 'real repository reconciles' '' -- bash "$reconcile"
+
+scratch() { # scratch <dir>: a tiny git repo with the real config
+  local d=$1
+  rm -rf -- "${d:?}"
+  mkdir -p "$d/src" "$d/ci" "$d/application/Proxies" "$d/vendor"
+  git -C "$d" init -q
+  cp phpstan-common.neon "$d/"
+  printf '<?php\n' >"$d/src/a.php"
+  printf '<?php\n' >"$d/ci/test-x.php"
+  printf '<?php\n' >"$d/vendor/autoload.php"
+  printf 'ci/test-x.php\tci-test-script\n' >"$d/allow.txt"
+  git -C "$d" add src/a.php ci/test-x.php phpstan-common.neon
+}
+run() { # run <dir> [allowlist]
+  RECONCILE_REPO_ROOT=$1 RECONCILE_ALLOWLIST=${2:-$1/allow.txt} bash "$reconcile"
+}
+
+s=$work/s
+scratch "$s"
+expect green 'scratch baseline' '' -- run "$s"
+
+printf '<?php\n' >"$s/untracked.php"
+expect green 'untracked file is not enumerated (boundary)' '' -- run "$s"
+rm "$s/untracked.php"
+
+printf '<?php\n' >"$s/src/space name.php"
+git -C "$s" add 'src/space name.php'
+expect green 'tracked PHP filename with space stays covered' '' -- run "$s"
+
+scratch "$s"
+printf '<?php\n' >"$s/src/tab"$'\t'"name.php"
+git -C "$s" add -- "src/tab"$'\t'"name.php"
+expect red 'TAB filename fails explicitly before allowlist parsing' \
+  'cannot be represented in the TAB allowlist' -- run "$s"
+
+scratch "$s"
+mkdir -p "$s/newroot"
+printf '<?php\n' >"$s/newroot/x.php"
+git -C "$s" add newroot/x.php
+expect red 'NEGATIVE CONTROL new root outside PHPStan, not allowlisted' \
+  'not allowlisted: newroot/x.php' -- run "$s"
+printf 'newroot/x.php\ttooling-script\n' >>"$s/allow.txt"
+expect green 'new root passes once allowlisted with a class' '' -- run "$s"
+
+scratch "$s"
+printf 'ci/gone.php\tci-test-script\n' >>"$s/allow.txt"
+expect red 'NEGATIVE CONTROL stale allowlist entry' 'stale allowlist entry' -- run "$s"
+
+scratch "$s"
+printf 'src/a.php\ttooling-script\n' >>"$s/allow.txt"
+expect red 'NEGATIVE CONTROL covered file allowlisted' 'remove the entry: src/a.php' -- run "$s"
+
+scratch "$s"
+printf 'ci/test-x.php\tci-test-script\n' >>"$s/allow.txt"
+expect red 'NEGATIVE CONTROL duplicate entry' 'duplicate allowlist entry' -- run "$s"
+
+scratch "$s"
+printf 'ci/test-x.php\tmystery\n' >"$s/allow.txt"
+expect red 'malformed: unknown reason class' "unknown reason class 'mystery'" -- run "$s"
+
+scratch "$s"
+printf 'ci/test-x.php\n' >"$s/allow.txt"
+expect red 'malformed: missing reason class' 'malformed allowlist line' -- run "$s"
+
+scratch "$s"
+printf 'ci/test-x.php\tci-test-script' >"$s/allow.txt"
+expect green 'allowlist last line without newline is read' '' -- run "$s"
+
+scratch "$s"
+printf '<?php\n' >"$s/application/Proxies/__CG__X.php"
+git -C "$s" add -f application/Proxies/__CG__X.php
+expect red 'tracked file under an exclude must be allowlisted' \
+  'not allowlisted: application/Proxies/__CG__X.php' -- run "$s"
+
+scratch "$s"
+printf 'ci/test-x.php\tci-test-script\nsrc/b.php\tci-test-script\n' >"$s/allow.txt"
+expect red 'allowlist entry for an untracked path is stale' 'stale allowlist entry' -- run "$s"
+
+scratch "$s"
+sed -i 's/^    excludePaths:/    excludePaths:\n        analyse:\n            - src/' "$s/phpstan-common.neon"
+expect red 'native nested excludePaths form excludes src' \
+  'not allowlisted: src/a.php' -- run "$s"
+
+scratch "$s"
+sed -i '/^    excludePaths:/,/^    bootstrapFiles:/ { /^        - /d; }' "$s/phpstan-common.neon"
+sed -i 's/^    excludePaths:/    excludePaths: [src]/' "$s/phpstan-common.neon"
+expect red 'native inline excludePaths form excludes src' \
+  'not allowlisted: src/a.php' -- run "$s"
+
+scratch "$s"
+sed -i '/^    paths:/,/^    excludePaths:/ { /^        - /d; }' "$s/phpstan-common.neon"
+sed -i 's/^    paths:/    paths: [src]/' "$s/phpstan-common.neon"
+expect green 'native inline paths form includes src' '' -- run "$s"
+
+scratch "$s"
+sed -i 's/^    excludePaths:/    excludePaths: src/' "$s/phpstan-common.neon"
+expect red 'scalar excludePaths declaration fails native dump or schema' \
+  'PHPStan parameter dump' -- run "$s"
+
+scratch "$s"
+sed -i 's/^    excludePaths:/   excludePaths:/' "$s/phpstan-common.neon"
+expect red 'invalid declaration indentation fails native dump' \
+  'PHPStan parameter dump failed' -- run "$s"
+
+scratch "$s"
+sed -i 's/^        - application\/Proxies.*/      - src/' "$s/phpstan-common.neon"
+expect red 'native under-indented excludePaths item excludes src' \
+  'not allowlisted: src/a.php' -- run "$s"
+
+scratch "$s"
+sed -i 's/^        - application\/Proxies.*/          - src/' "$s/phpstan-common.neon"
+expect red 'native over-indented excludePaths item excludes src' \
+  'not allowlisted: src/a.php' -- run "$s"
+
+scratch "$s"
+sed -i 's/^        - application\/Proxies.*/      src/' "$s/phpstan-common.neon"
+expect red 'invalid scalar excludePaths item fails native dump' \
+  'PHPStan parameter dump failed' -- run "$s"
+
+scratch "$s"
+sed -i 's|^        - src$|        - src # inline comment|' "$s/phpstan-common.neon"
+expect green 'native inline item comment keeps src covered' '' -- run "$s"
+
+scratch "$s"
+sed -i 's/^    excludePaths:/    excludePaths:\n        - ci(?)/' "$s/phpstan-common.neon"
+expect green 'native optional path pattern preserves covered src' '' -- run "$s"
+
+scratch "$s"
+sed -i 's/^    excludePaths:/    excludePaths:\n        - src/' "$s/phpstan-common.neon"
+expect red 'bare directory exclude covers files beneath it' \
+  'not allowlisted: src/a.php' -- run "$s"
+
+scratch "$s"
+printf '\nservices: []\n' >>"$s/phpstan-common.neon"
+expect green 'native top-level services key follows excludes' '' -- run "$s"
+
+scratch "$s"
+sed -i 's/^    paths:/    # - commented-out-root\n    paths:/' "$s/phpstan-common.neon"
+expect green 'whole-line comments are skipped' '' -- run "$s"
+
+scratch "$s"
+printf '\nparameters: [\n' >>"$s/phpstan-common.neon"
+expect red 'native parser failure propagates' 'PHPStan parameter dump failed' -- run "$s"
+
+scratch "$s"
+printf '#!/bin/sh\nprintf "not-json\\n"\n' >"$work/invalid-json-phpstan"
+chmod +x "$work/invalid-json-phpstan"
+PHPSTAN_BIN="$work/invalid-json-phpstan" expect red 'invalid native JSON fails closed' \
+  'invalid paths/excludePaths schema' -- run "$s"
+
+printf '#!/bin/sh\nprintf "{\\\"paths\\\":[\\\"/tmp\\\"],\\\"excludePaths\\\":{\\\"analyse\\\":[],\\\"analyseAndScan\\\":\\\"bad\\\"}}\\n"\n' >"$work/invalid-schema-phpstan"
+chmod +x "$work/invalid-schema-phpstan"
+PHPSTAN_BIN="$work/invalid-schema-phpstan" expect red 'invalid native schema fails closed' \
+  'invalid paths/excludePaths schema' -- run "$s"
+
+printf '#!/bin/sh\nexit 42\n' >"$work/failing-phpstan"
+chmod +x "$work/failing-phpstan"
+PHPSTAN_BIN="$work/failing-phpstan" expect red 'native command failure propagates' \
+  'PHPStan parameter dump failed' -- run "$s"
+
+scratch "$s"
+printf '#!/bin/sh\nprintf "src/a.php\\0"\nexit 42\n' >"$work/failing-classifier"
+chmod +x "$work/failing-classifier"
+RECONCILE_PHP_BIN="$work/failing-classifier" expect red \
+  'classifier partial output and failure propagates' \
+  'PHPStan exclusion classification failed' -- run "$s"
+
+# Forms that the old handwritten NEON reader silently accepted as covered.
+# PHPStan excludes src/a.php for valid forms and rejects the replacement key.
+grammar_case() { # grammar_case <label> <declaration> <item> <newline yes|no> [error]
+  local label=$1 declaration=$2 item=$3 newline=$4 needle=${5:-not allowlisted: src/a.php}
+  scratch "$s"
+  printf 'parameters:\n    paths:\n        - src\n    level: 10\n    %s\n        - %s' \
+    "$declaration" "$item" >"$s/phpstan-common.neon"
+  [ "$newline" = no ] || printf '\n' >>"$s/phpstan-common.neon"
+  expect red "$label cannot silently cover src" "$needle" -- run "$s"
+}
+grammar_case 'quoted single key' "'excludePaths':" src yes
+grammar_case 'quoted double key' '"excludePaths":' src yes
+grammar_case 'replacement key' 'excludePaths!:' src yes 'PHPStan parameter dump failed'
+grammar_case 'leading space item' excludePaths: ' src' yes
+grammar_case 'trailing space item' excludePaths: 'src ' yes
+grammar_case 'leading tab item' excludePaths: $'\tsrc' yes
+grammar_case 'trailing tab item' excludePaths: $'src\t' yes
+grammar_case 'tab comment item' excludePaths: $'src\t# comment' yes
+grammar_case 'leading quoted item' excludePaths: ' "src"' yes
+grammar_case 'dot relative item' excludePaths: ./src yes
+grammar_case 'dot segment item' excludePaths: src/../src yes
+grammar_case 'absolute item' excludePaths: "$s/src" yes
+grammar_case 'final line without newline' excludePaths: src no
+printf 'src/a.php\ttooling-script\n' >>"$s/allow.txt"
+expect green 'grammar exclusion passes after explicit reason allowlist' '' -- run "$s"
+
+scratch "$s"
+printf '<?php\n' >"$s/src/@(a|b).php"
+git -C "$s" add 'src/@(a|b).php'
+sed -i "/^    excludePaths:/a\\        - 'src/@(a|b).php'" "$s/phpstan-common.neon"
+expect red 'literal extglob-looking filename is excluded by PHPStan' \
+  'not allowlisted: src/@(a|b).php' -- run "$s"
+printf 'src/@(a|b).php\ttooling-script\n' >>"$s/allow.txt"
+expect green 'literal extglob-looking filename passes with reason' '' -- run "$s"
+
+mkdir -p "$work/notgit"
+cp phpstan-common.neon "$work/notgit/"
+printf 'x\ty\n' >"$work/notgit/allow.txt"
+GIT_CEILING_DIRECTORIES="$work" expect red 'non-git tree is an error' 'git ls-files failed' -- run "$work/notgit"
+
+expect red 'unexpected argument is a usage error' 'usage:' -- bash "$reconcile" extra
+
+# --- section 2: phpVersion pin ------------------------------------------
+if [ -n "${PHPSTAN_BIN:-}" ]; then
+  phpstan=("$PHPSTAN_BIN")
+elif [ -x vendor/bin/phpstan ]; then
+  phpstan=("$repo_root/vendor/bin/phpstan")
+else
+  phpstan=(phpstan)
+fi
+
+expect green 'phpstan-common.neon pins phpVersion min/max' '' -- \
+  bash -c 'grep -Eq "^    phpVersion:" phpstan-common.neon &&
+    grep -Eq "^        min: 80200$" phpstan-common.neon &&
+    grep -Eq "^        max: 80599$" phpstan-common.neon'
+
+mkdir -p "$work/empty"
+printf '<?php\nif (PHP_VERSION_ID >= 80200) { echo "x"; }\n' >"$work/probe.php"
+verdict() { # verdict <config> <cwd> <log>: exit status of the probe analysis
+  local rc
+  set +e
+  (cd "$2" && "${phpstan[@]}" analyse -c "$1" --level 10 --no-progress \
+    --error-format=raw "$work/probe.php" >"$3" 2>&1)
+  rc=$?
+  set -e
+  echo "$rc"
+}
+sed '/^    # Pin the analysed/,/^        max: 80599/d' phpstan-common.neon >"$nopin"
+if grep -q phpVersion "$nopin"; then
+  echo 'FAIL seeded unpinned config still contains phpVersion' >&2
+  failures=$((failures + 1))
+fi
+
+pinned_repo=$(verdict phpstan-level10.neon "$repo_root" "$work/pinned-repo.log")
+pinned_empty=$(verdict "$repo_root/phpstan-level10.neon" "$work/empty" "$work/pinned-empty.log")
+nopin_repo=$(verdict "$nopin" "$repo_root" "$work/nopin-repo.log")
+nopin_empty=$(verdict "$nopin" "$work/empty" "$work/nopin-empty.log")
+printf 'pinned repo=%s empty=%s; unpinned repo=%s empty=%s\n' \
+  "$pinned_repo" "$pinned_empty" "$nopin_repo" "$nopin_empty"
+if [ "$pinned_repo" = "$pinned_empty" ] && [ "$pinned_repo" -eq 1 ] &&
+  grep -qF '[identifier=greaterOrEqual.alwaysTrue]' "$work/pinned-repo.log" &&
+  grep -qF '[identifier=greaterOrEqual.alwaysTrue]' "$work/pinned-empty.log"; then
+  echo 'ok   green pinned verdict is identical with and without composer.json in cwd'
+else
+  echo 'FAIL pinned verdict depends on the working directory' >&2
+  failures=$((failures + 1))
+fi
+if [ "$nopin_repo" != "$nopin_empty" ]; then
+  echo 'ok   red   NEGATIVE CONTROL unpinned verdict diverges by cwd'
+else
+  echo 'FAIL control: unpinned config did not diverge, probe is vacuous' >&2
+  failures=$((failures + 1))
+fi
+
+if [ "$failures" -ne 0 ]; then
+  printf '%s check(s) failed.\n' "$failures" >&2
+  exit 1
+fi
+echo 'PHPStan configuration contract: ALL PASSED'

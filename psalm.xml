@@ -17,10 +17,14 @@
         <directory name="src" />
         <directory name="library" />
         <directory name="application" />
-        <ignoreFiles>
-            <directory name="vendor" />
-        </ignoreFiles>
+        <!--
+            Psalm honours only one ignoreFiles element; a second one is
+            silently dropped. Keep every ignored directory in this block.
+            Generated Doctrine proxies are gitignored and may be absent, so
+            the block allows missing files.
+        -->
         <ignoreFiles allowMissingFiles="true">
+            <directory name="vendor" />
             <directory name="application/Proxies" />
         </ignoreFiles>
     </projectFiles>

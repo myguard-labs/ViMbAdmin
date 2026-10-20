@@ -98,6 +98,12 @@ jobs:
       - name: Test PHPStan ratchet
         run: bash tests/run-phpstan-tests.sh
 
+      - name: PHPStan configuration contract self-test
+        run: bash ci/test-phpstan-config-contract.sh
+
+      - name: Reconcile tracked PHP files with PHPStan coverage
+        run: bash ci/reconcile-phpstan-coverage.sh
+
       - name: Run PHPStan
         env:
           PHPSTAN_EVENT_BEFORE: ${{ github.event.before }}
@@ -137,6 +143,9 @@ jobs:
           bash tests/test-regenerate-psalm-taint-baseline.sh
           bash tests/test-psalm-taint-contract.sh
           bash tests/regenerate-psalm-taint-baseline.sh --check
+
+      - name: Psalm excludes generated proxies
+        run: bash ci/test-psalm-proxies-ignored.sh
 
       - name: Psalm taint analysis
         run: psalm --no-progress --taint-analysis

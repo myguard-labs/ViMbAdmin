@@ -1,0 +1,86 @@
+# Tracked PHP files that phpstan-common.neon deliberately does not analyse.
+#
+# Format: <path><TAB><reason-class>. ci/reconcile-phpstan-coverage.sh fails when
+# a tracked PHP file is neither covered by the PHPStan paths/excludePaths nor
+# listed here, and when an entry here is stale (untracked, or now covered).
+# Adding a path is a reviewed decision: pick the reason class that is true.
+#
+# Reason classes:
+#   ci-test-script        ci/test-*.php regression script (own check() helpers,
+#                         test doubles; bringing it under level 10 is PHP-03a)
+#   ci-support-script     ci/ helper that is not a test entrypoint
+#   tooling-script        repository maintenance script (tools/, .github/scripts)
+#   external-tool-config  config file evaluated by another tool
+.github/scripts/assert-composer-lock.php	tooling-script
+.php-cs-fixer.dist.php	external-tool-config
+ci/maintenance-operation-observer.php	ci-support-script
+ci/test-access-cache-invalidation.php	ci-test-script
+ci/test-angie-server-tokens.php	ci-test-script
+ci/test-bcrypt-password-length.php	ci-test-script
+ci/test-bundle-utf8.php	ci-test-script
+ci/test-cli-once-forwarding.php	ci-test-script
+ci/test-cron-readme-queue-contract.php	ci-test-script
+ci/test-curl-dependency-contract.php	ci-test-script
+ci/test-dependency-refresh.php	ci-test-script
+ci/test-domain-alias-count-route.php	ci-test-script
+ci/test-domain-capacity-atomic-mariadb.php	ci-test-script
+ci/test-domain-capacity-version.php	ci-test-script
+ci/test-dovecot-quota-clone-contract.php	ci-test-script
+ci/test-dovecot-storage-config-schema-contract.php	ci-test-script
+ci/test-formatter-selection.php	ci-test-script
+ci/test-fpm-health-routing.php	ci-test-script
+ci/test-ini-config-empty-parent.php	ci-test-script
+ci/test-mailer-starttls.php	ci-test-script
+ci/test-maintenance-archive-generation.php	ci-test-script
+ci/test-maintenance-bruteforce-cleanup.php	ci-test-script
+ci/test-maintenance-doveadm-tags.php	ci-test-script
+ci/test-maintenance-input-parity.php	ci-test-script
+ci/test-maintenance-mailbox-create-parity.php	ci-test-script
+ci/test-maintenance-mcp-auth.php	ci-test-script
+ci/test-maintenance-mcp-parity.php	ci-test-script
+ci/test-maintenance-message-parity.php	ci-test-script
+ci/test-maintenance-orphan-workflow.php	ci-test-script
+ci/test-maintenance-purge-parity.php	ci-test-script
+ci/test-maintenance-query-baseline.php	ci-test-script
+ci/test-maintenance-recipient-ownership.php	ci-test-script
+ci/test-maintenance-reset-ceiling.php	ci-test-script
+ci/test-maintenance-resource-claims.php	ci-test-script
+ci/test-maintenance-resource-migration.php	ci-test-script
+ci/test-maintenance-rpc-duplicates.php	ci-test-script
+ci/test-maintenance-task-ownership.php	ci-test-script
+ci/test-maintenance-task-retry.php	ci-test-script
+ci/test-maintenance-workflow-observers.php	ci-test-script
+ci/test-mcp-alias-create.php	ci-test-script
+ci/test-mcp-archive-domain-authorization.php	ci-test-script
+ci/test-mcp-domain-default-quota.php	ci-test-script
+ci/test-mcp-edge-routing.php	ci-test-script
+ci/test-mcp-enable-config.php	ci-test-script
+ci/test-mcp-list-pagination.php	ci-test-script
+ci/test-mcp-mailbox-create-policy.php	ci-test-script
+ci/test-password-reset-atomic-mariadb.php	ci-test-script
+ci/test-password-reset-bearer.php	ci-test-script
+ci/test-password-reset-email-url.php	ci-test-script
+ci/test-password-reset-origin.php	ci-test-script
+ci/test-php-runtime.php	ci-test-script
+ci/test-php-version-contract.php	ci-test-script
+ci/test-proxy-generation.php	ci-test-script
+ci/test-queue-loopback-origin.php	ci-test-script
+ci/test-quota-form-validation.php	ci-test-script
+ci/test-refactor-autoload-contract.php	ci-test-script
+ci/test-refactor-controller-resources.php	ci-test-script
+ci/test-refactor-doveadm-contract.php	ci-test-script
+ci/test-refactor-input-contract.php	ci-test-script
+ci/test-refactor-list-contract.php	ci-test-script
+ci/test-refactor-list-templates.php	ci-test-script
+ci/test-refactor-preference-contract.php	ci-test-script
+ci/test-refactor-queue-database-guard.php	ci-test-script
+ci/test-refactor-queue-lifecycle.php	ci-test-script
+ci/test-refactor-runtime-baseline.php	ci-test-script
+ci/test-refactor-service-audit-log.php	ci-test-script
+ci/test-schema-collation-contract.php	ci-test-script
+ci/test-second-factor-lockout.php	ci-test-script
+ci/test-subpath-routing.php	ci-test-script
+ci/test-two-factor-atomic-mariadb.php	ci-test-script
+ci/test-two-factor-security-salt.php	ci-test-script
+tools/phpstan-codemod.php	tooling-script
+tools/refresh-dependencies.php	tooling-script

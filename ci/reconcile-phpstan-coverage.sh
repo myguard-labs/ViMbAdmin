@@ -48,7 +48,7 @@ problem() {
 
 tracked_file=$(mktemp)
 trap 'rm -f -- "$tracked_file"' EXIT
-if ! git ls-files -z '*.php' >"$tracked_file"; then
+if ! git -c safe.directory="$repo_root" ls-files -z '*.php' >"$tracked_file"; then
   echo 'git ls-files failed' >&2
   exit 1
 fi

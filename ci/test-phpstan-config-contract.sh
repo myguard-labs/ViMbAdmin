@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-repo_root=$(cd "$(dirname "$0")/.." && pwd)
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 cd "$repo_root"
 reconcile=$repo_root/ci/reconcile-phpstan-coverage.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-phpstan-contract.XXXXXX")
@@ -45,6 +45,18 @@ expect() { # expect <green|red> <label> <needle-for-red> -- command...
 
 # --- section 1: reconciliation ------------------------------------------
 expect green 'real repository reconciles' '' -- bash "$reconcile"
+
+# GitHub's checkout action writes safe.directory to a temporary HOME; the
+# container's actual HOME does not inherit it. On a cross-UID checkout, prove
+# the untrusted invocation fails while the exact-root guard still works.
+if [ "$(stat -c %u "$repo_root")" != "$(id -u)" ]; then
+  expect red 'cross-UID unscoped Git rejects checkout' 'dubious ownership' -- \
+    env -u SUDO_UID GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    git -C "$repo_root" ls-files '*.php'
+  expect green 'cross-UID reconciliation trusts only checkout root' '' -- \
+    env -u SUDO_UID GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    bash "$reconcile"
+fi
 
 scratch() { # scratch <dir>: a tiny git repo with the real config
   local d=$1

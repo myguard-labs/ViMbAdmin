@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-repo_root=$(cd "$(dirname "$0")/.." && pwd)
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
 cd "$repo_root"
 
 if [ -n "${PSALM_BIN:-}" ]; then
@@ -41,6 +41,24 @@ cleanup() {
   if [ -n "$swapped_file" ]; then rm -f -- "$swapped_file"; fi
 }
 trap cleanup EXIT
+
+if [ "$(stat -c %u "$repo_root")" != "$(id -u)" ]; then
+  # The CI checkout belongs to another UID, and checkout's temporary Git
+  # config is not inherited by the test container.
+  if env -u SUDO_UID GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    git -C "$repo_root" ls-files '*.php' >"$work/untrusted.out" 2>"$work/untrusted.err" ||
+    ! grep -q 'dubious ownership' "$work/untrusted.err"; then
+    echo 'Cross-UID negative control did not reject untrusted Git inventory.' >&2
+    exit 1
+  fi
+  if ! env -u SUDO_UID GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    git -C "$repo_root" -c safe.directory="$repo_root" ls-files -z '*.php' \
+    >"$work/scoped.out" || [ ! -s "$work/scoped.out" ]; then
+    echo 'Cross-UID scoped Git inventory failed.' >&2
+    exit 1
+  fi
+  echo 'Cross-UID Git inventory rejects untrusted access and accepts only this checkout.'
+fi
 
 first_party_paths() { # first_party_paths <debug-log> <literal-root>
   awk -v root="$2" '
@@ -113,7 +131,7 @@ fi
 # configuration. Equality of the two Psalm runs alone misses a root removed
 # from both the shipped configuration and its seeded revert.
 # shellcheck disable=SC2016 # PHP source is intentionally single-quoted.
-git ls-files -z -- '*.php' | "${PHP_BINARY:-php}" -r '
+git -c safe.directory="$repo_root" ls-files -z -- '*.php' | "${PHP_BINARY:-php}" -r '
   foreach (explode("\0", stream_get_contents(STDIN)) as $path) {
       if ($path === "") continue;
       if (!preg_match("~^(src|library|application)/.*\\.php$~", $path)
@@ -144,7 +162,7 @@ echo 'Negative control: omitted first-party root differs from tracked inventory.
 swapped_file=$(mktemp "$repo_root/src/.psalm-swap.XXXXXX.php")
 printf '<?php\n' >"$swapped_file"
 swapped_relative=${swapped_file#"$repo_root"/}
-swap_target=$(git ls-files -- 'src/*.php' | sed -n '1p')
+swap_target=$(git -c safe.directory="$repo_root" ls-files -- 'src/*.php' | sed -n '1p')
 if [ -z "$swap_target" ]; then
   echo 'Negative control requires a tracked src PHP file.' >&2
   exit 1

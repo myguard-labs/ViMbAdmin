@@ -133,7 +133,7 @@ try {
     $changed = [];
     foreach ($candidate['packages'] as &$package) {
         if ($package['name'] === 'doctrine/orm' || $package['name'] === 'doctrine/dbal') {
-            $package['version'] = $package['name'] === 'doctrine/orm' ? '3.99.1' : '4.99.2';
+            $package['version'] = $package['name'] === 'doctrine/orm' ? '3.7.6' : '4.5.1';
             $package['dist']['url'] = substr($package['dist']['url'], 0, -40) . str_repeat($package['name'] === 'doctrine/orm' ? 'a' : 'b', 40);
             $package['dist']['shasum'] = '';
             $changed[$package['name']] = $package['dist']['url'];
@@ -150,8 +150,8 @@ try {
             dependencyTest($package['dist']['shasum'] === sha1('independent fixture archive bytes: ' . $changed[$package['name']]), 'changed archive independently hashed: ' . $package['name']);
         }
     }
-    dependencyTest($updated['docs/ORM3-UPGRADE.md'] === str_replace(['ORM ' . $baseVersions['doctrine/orm'] . ' and DBAL ' . $baseVersions['doctrine/dbal']], ['ORM 3.99.1 and DBAL 4.99.2'], $original['docs/ORM3-UPGRADE.md'])
-        && $updated['CHANGELOG'] === str_replace(['Doctrine ORM 2.8 -> ' . $baseVersions['doctrine/orm'] . ' (+ DBAL ' . $baseVersions['doctrine/dbal'] . ')'], ['Doctrine ORM 2.8 -> 3.99.1 (+ DBAL 4.99.2)'], $original['CHANGELOG']), 'only exact existing documentation pairs change');
+    dependencyTest($updated['docs/ORM3-UPGRADE.md'] === str_replace(['ORM ' . $baseVersions['doctrine/orm'] . ' and DBAL ' . $baseVersions['doctrine/dbal']], ['ORM 3.7.6 and DBAL 4.5.1'], $original['docs/ORM3-UPGRADE.md'])
+        && $updated['CHANGELOG'] === str_replace(['Doctrine ORM 2.8 -> ' . $baseVersions['doctrine/orm'] . ' (+ DBAL ' . $baseVersions['doctrine/dbal'] . ')'], ['Doctrine ORM 2.8 -> 3.7.6 (+ DBAL 4.5.1)'], $original['CHANGELOG']), 'only exact existing documentation pairs change');
     dependencyTest(is_file($directory . '/guard-calls') && dependencyRead($directory . '/guard-calls') === "integrity\ndocumentation\n", 'changed candidate reaches both real guards');
     $fetches = [];
     refreshDependencies($directory, $basePath, true, $fetch);
@@ -159,6 +159,21 @@ try {
     dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, static fn (): string => 'wrong archive bytes'), 'checksum mismatch');
     dependencyTest(dependencyInputs($directory) === $updated, 'checksum mismatch preserves all inputs');
     dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, static fn (): never => throw new RuntimeException('fixture fetch failed')), 'fetch failed');
+
+    $reset();
+    $candidate = $base;
+    foreach ($candidate['packages'] as &$package) {
+        if ($package['name'] === 'doctrine/orm') {
+            $package['version'] = '3.99.1';
+            $package['dist']['url'] = substr($package['dist']['url'], 0, -40) . str_repeat('c', 40);
+            $package['dist']['shasum'] = '';
+        }
+    }
+    unset($package);
+    file_put_contents($directory . '/composer.lock', json_encode($candidate, JSON_THROW_ON_ERROR));
+    $before = dependencyInputs($directory);
+    dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'Dependency guard failed: tests/test-documentation-contract.php');
+    dependencyTest(dependencyInputs($directory) === $before, 'cross-minor documentation drift rolls back all dependency inputs');
 
     $reset();
     $candidate = $base;
@@ -321,10 +336,11 @@ SH;
     $reset();
     dependencyReject(static fn () => refreshDependencies($directory . '.missing', $basePath, false, $fetch), 'checkout root is missing');
     $development = $base;
-    $developmentPackage = array_shift($development['packages']);
-    if ($developmentPackage === null) {
-        throw new RuntimeException('Production fixture needs a package');
+    $developmentIndex = array_search('dasprid/enum', array_column($development['packages'], 'name'), true);
+    if (!is_int($developmentIndex)) {
+        throw new RuntimeException('Production fixture needs dasprid/enum');
     }
+    $developmentPackage = array_splice($development['packages'], $developmentIndex, 1)[0];
     $development['packages-dev'][] = $developmentPackage;
     file_put_contents($directory . '/composer.lock', json_encode($development, JSON_THROW_ON_ERROR));
     refreshDependencies($directory, $basePath, true, $fetch);

@@ -64,6 +64,7 @@ jobs:
   schema-drift:
     runs-on: ubuntu-latest
     steps:
+      - run: bash ci/test-refactor-runtime-port.sh
       - run: php tests/test-schema-no-pending.php
       - run: php ci/test-refactor-preference-contract.php
       - run: php ci/test-refactor-queue-lifecycle.php
@@ -747,6 +748,24 @@ sed -i 's|php ci/test-refactor-runtime-baseline.php|echo php ci/test-refactor-ru
   "$test_root/.github/workflows/regression.yml"
 expect_owner_rejected 'disabled real adapter runtime baseline' \
   'Regression workflow does not invoke the real adapter runtime baseline.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i '\|run: bash ci/test-refactor-runtime-port.sh|d' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'missing runtime fixture port contract' \
+  'Regression workflow does not invoke the runtime fixture port contract.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i '\|run: bash ci/test-refactor-runtime-port.sh|a\        if: false' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'conditional runtime fixture port contract' \
+  'Regression workflow does not invoke the runtime fixture port contract.'
+
+cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
+sed -i '\|run: bash ci/test-refactor-runtime-port.sh|d; /run: bash tests\/run-unit-tests.sh/a\      - run: bash ci/test-refactor-runtime-port.sh' \
+  "$test_root/.github/workflows/regression.yml"
+expect_owner_rejected 'runtime fixture port contract in wrong job' \
+  'Regression workflow does not invoke the runtime fixture port contract.'
 
 cp -- "$test_root/regression.yml.valid" "$test_root/.github/workflows/regression.yml"
 sed -i 's|node ci/test-refactor-ui-events.cjs|echo node ci/test-refactor-ui-events.cjs|' \

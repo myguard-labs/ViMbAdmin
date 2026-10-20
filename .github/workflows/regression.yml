@@ -719,6 +719,9 @@ jobs:
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-maintenance-resource-migration.php
 
+      - name: Runtime fixture database port contract
+        run: bash ci/test-refactor-runtime-port.sh
+
       - name: Real adapter runtime baselines on isolated MariaDB datasets
         env:
           DB_HOST: mariadb

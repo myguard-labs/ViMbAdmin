@@ -200,13 +200,29 @@ chmod +x "$work/invalid-schema-phpstan"
 PHPSTAN_BIN="$work/invalid-schema-phpstan" expect red 'invalid native schema fails closed' \
   'invalid paths/excludePaths schema' -- run "$s"
 
+for bad_shape in \
+  '{"paths":[],"excludePaths":{"analyse":[],"analyseAndScan":[]}}' \
+  '{"paths":{"0":"/tmp"},"excludePaths":{"analyse":[],"analyseAndScan":[]}}' \
+  '{"paths":["/tmp"],"excludePaths":[]}' \
+  '{"paths":["/tmp"],"excludePaths":{"analyse":[],"analyseAndScan":[],"extra":[]}}'; do
+  printf '#!/bin/sh\nprintf "%%s\\n" '\''%s'\''\n' "$bad_shape" >"$work/invalid-shape-phpstan"
+  chmod +x "$work/invalid-shape-phpstan"
+  PHPSTAN_BIN="$work/invalid-shape-phpstan" expect red 'native JSON type and key schema fails closed' \
+    'invalid paths/excludePaths schema' -- run "$s"
+done
+
 printf '#!/bin/sh\nexit 42\n' >"$work/failing-phpstan"
 chmod +x "$work/failing-phpstan"
 PHPSTAN_BIN="$work/failing-phpstan" expect red 'native command failure propagates' \
   'PHPStan parameter dump failed' -- run "$s"
 
 scratch "$s"
-printf '#!/bin/sh\nprintf "src/a.php\\0"\nexit 42\n' >"$work/failing-classifier"
+cat >"$work/failing-classifier" <<'EOF'
+#!/bin/sh
+if [ "$#" -eq 3 ]; then exec "${PHP_BINARY:-php}" "$@"; fi
+printf 'src/a.php\0'
+exit 42
+EOF
 chmod +x "$work/failing-classifier"
 RECONCILE_PHP_BIN="$work/failing-classifier" expect red \
   'classifier partial output and failure propagates' \
@@ -274,7 +290,7 @@ verdict() { # verdict <config> <cwd> <log>: exit status of the probe analysis
   local rc
   set +e
   (cd "$2" && "${phpstan[@]}" analyse -c "$1" --level 10 --no-progress \
-    --error-format=raw "$work/probe.php" >"$3" 2>&1)
+    --error-format=json "$work/probe.php" >"$3" 2>"$3.stderr")
   rc=$?
   set -e
   echo "$rc"
@@ -289,11 +305,25 @@ pinned_repo=$(verdict phpstan-level10.neon "$repo_root" "$work/pinned-repo.log")
 pinned_empty=$(verdict "$repo_root/phpstan-level10.neon" "$work/empty" "$work/pinned-empty.log")
 nopin_repo=$(verdict "$nopin" "$repo_root" "$work/nopin-repo.log")
 nopin_empty=$(verdict "$nopin" "$work/empty" "$work/nopin-empty.log")
+has_pinned_diagnostic() { # PHPStan's JSON identifier is independent of raw-output verbosity.
+  # shellcheck disable=SC2016 # PHP source is intentionally single-quoted.
+  "${PHP_BINARY:-php}" -r '
+    try {
+        $data = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);
+        $files = $data["files"] ?? [];
+        $messages = $files[$argv[2]]["messages"] ?? [];
+        exit(count($messages) === 1
+            && ($messages[0]["identifier"] ?? null) === "greaterOrEqual.alwaysTrue"
+            && ($data["totals"]["file_errors"] ?? null) === 1
+            && ($data["totals"]["errors"] ?? null) === 0 ? 0 : 1);
+    } catch (Throwable $error) { exit(1); }
+  ' "$1" "$work/probe.php"
+}
 printf 'pinned repo=%s empty=%s; unpinned repo=%s empty=%s\n' \
   "$pinned_repo" "$pinned_empty" "$nopin_repo" "$nopin_empty"
 if [ "$pinned_repo" = "$pinned_empty" ] && [ "$pinned_repo" -eq 1 ] &&
-  grep -qF '[identifier=greaterOrEqual.alwaysTrue]' "$work/pinned-repo.log" &&
-  grep -qF '[identifier=greaterOrEqual.alwaysTrue]' "$work/pinned-empty.log"; then
+  has_pinned_diagnostic "$work/pinned-repo.log" &&
+  has_pinned_diagnostic "$work/pinned-empty.log"; then
   echo 'ok   green pinned verdict is identical with and without composer.json in cwd'
 else
   echo 'FAIL pinned verdict depends on the working directory' >&2

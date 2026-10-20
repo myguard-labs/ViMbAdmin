@@ -82,29 +82,40 @@ if ! "${phpstan[@]}" dump-parameters -l 10 -c "$config" --json >"$parameters" 2>
   problem "PHPStan parameter dump failed: $(sed -n '/./{p;q;}' "$parameter_error")"
   exit 1
 fi
-if ! jq -e '
-  def absolute_array:
-    type == "array" and length > 0 and all(.[]; type == "string" and startswith("/"));
-  def exclude_array:
-    type == "array" and all(.[]; type == "string" and startswith("/"));
-  (.paths | absolute_array) and
-  (.excludePaths | type == "object" and (keys | sort) == ["analyse", "analyseAndScan"]) and
-  (.excludePaths.analyse | exclude_array) and
-  (.excludePaths.analyseAndScan | exclude_array)
-' "$parameters" >/dev/null 2>&1; then
-  problem 'PHPStan parameter dump has invalid paths/excludePaths schema'
-  exit 1
-fi
-if ! jq -j '.paths[] | ., "\u0000"' "$parameters" >"$roots_file"; then
-  problem 'PHPStan parameter paths could not be decoded'
-  exit 1
-fi
-mapfile -d '' -t roots <"$roots_file"
-
 # Mirror PHPStan FileExcluder on its already normalized effective paths:
 # wildcard patterns use fnmatch; literal files match exactly, and literal
 # directories match descendants. Classify the tracked set in one PHP process.
 classifier_php=${RECONCILE_PHP_BIN:-${PHP_BINARY:-php}}
+# PHP is available in every supported analysis lane. Validate the native JSON
+# with its original object/list types, then emit NUL-delimited roots so a
+# missing optional command cannot turn every fixture into a schema failure.
+# shellcheck disable=SC2016 # PHP source is intentionally single-quoted for the shell.
+if ! "$classifier_php" -r '
+  try {
+      $data = json_decode(file_get_contents($argv[1]), false, 512, JSON_THROW_ON_ERROR);
+      $absolute = static fn ($value, $nonempty): bool => is_array($value)
+          && (!$nonempty || count($value) > 0)
+          && array_reduce($value, static fn ($ok, $path): bool => $ok
+              && is_string($path) && str_starts_with($path, "/"), true);
+      $exclude = is_object($data) && property_exists($data, "excludePaths")
+          ? $data->excludePaths : null;
+      $keys = is_object($exclude) ? array_keys(get_object_vars($exclude)) : [];
+      sort($keys);
+      if (!is_object($data) || !property_exists($data, "paths")
+          || !$absolute($data->paths, true)
+          || !is_object($exclude) || $keys !== ["analyse", "analyseAndScan"]
+          || !$absolute($exclude->analyse, false)
+          || !$absolute($exclude->analyseAndScan, false)) {
+          exit(1);
+      }
+      foreach ($data->paths as $root) echo $root, "\0";
+  } catch (Throwable $error) { exit(1); }
+' "$parameters" >"$roots_file" 2>"$parameter_error"; then
+  problem 'PHPStan parameter dump has invalid paths/excludePaths schema'
+  exit 1
+fi
+mapfile -d '' -t roots <"$roots_file"
+
 # shellcheck disable=SC2016 # PHP source is intentionally single-quoted for the shell.
 if ! "$classifier_php" -r '
   $parameters = json_decode(file_get_contents($argv[1]), true, 512, JSON_THROW_ON_ERROR);

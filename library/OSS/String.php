@@ -195,11 +195,21 @@ class OSS_String
     *
     * Some letters are excluded from the character set: 1, 0, O, I, l
     *
-    * @param int $length The length of the password to be generated.
+    * @param int $length The password length; must be at least 3.
     * @return string The password string.
+    * @throws \TypeError If the length is not a native integer.
+    * @throws \InvalidArgumentException If the length is below 3.
+    * @SuppressWarnings("PHPMD.MissingImport") Both exceptions are in the global namespace.
     */
     public static function randomPassword($length = 8)
     {
+        if (!is_int($length)) {
+            throw new \TypeError('Password length must be an integer');
+        }
+        if ($length < 3) {
+            throw new \InvalidArgumentException('Password length must be at least 3');
+        }
+
         $chars = "23456789abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
 
         while (true) {

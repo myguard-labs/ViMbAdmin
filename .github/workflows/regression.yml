@@ -348,6 +348,9 @@ jobs:
       - name: Bcrypt password length is fail-closed
         run: php ci/test-bcrypt-password-length.php
 
+      - name: Random password length validates native integers
+        run: php ci/test-random-password-length.php
+
       - name: Password-reset bearer secrecy
         run: php ci/test-password-reset-bearer.php
 

@@ -47,9 +47,22 @@ function runtimeEnvironment(string $name): string
     return $value;
 }
 
+function runtimeDatabasePort(): int
+{
+    $value = getenv('DB_PORT');
+    if ($value === false) {
+        return 3306;
+    }
+    runtimeCheck(
+        'DB_PORT must be a decimal TCP port from 1 to 65535',
+        preg_match('/^[1-9][0-9]*$/D', $value) === 1 && (int) $value <= 65535
+    );
+    return (int) $value;
+}
+
 function runtimeManager(MaintenanceOperationObserver $logger, bool $create = false): EntityManager
 {
-    $parameters = ['driver' => 'pdo_mysql', 'host' => runtimeEnvironment('DB_HOST'), 'dbname' => runtimeEnvironment('DB_NAME'),
+    $parameters = ['driver' => 'pdo_mysql', 'host' => runtimeEnvironment('DB_HOST'), 'port' => runtimeDatabasePort(), 'dbname' => runtimeEnvironment('DB_NAME'),
         'user' => runtimeEnvironment('DB_USER'), 'password' => runtimeEnvironment('DB_PASS'), 'charset' => 'utf8mb4'];
     if ($create) {
         $database = $parameters['dbname'];
@@ -459,7 +472,9 @@ function runtimeAll(): void
 
 $mode = $argv[1] ?? '';
 $size = (int) ($argv[3] ?? $argv[2] ?? 0);
-if ($mode === '--setup') {
+if ($mode === '--check-port') {
+    echo runtimeManager(new MaintenanceOperationObserver())->getConnection()->getParams()['port'] . "\n";
+} elseif ($mode === '--setup') {
     runtimeCheck('fixed dataset size', in_array($size, [1, 50, 500, 1000], true));
     runtimeSetup($size);
 } elseif ($mode === '--sample') {
@@ -471,5 +486,5 @@ if ($mode === '--setup') {
 } elseif ($mode === '') {
     runtimeAll();
 } else {
-    throw new RuntimeException('Use no arguments, --setup ROWS or --sample UNIT ROWS CASE inside the fixture runner');
+    throw new RuntimeException('Use no arguments, --check-port, --setup ROWS or --sample UNIT ROWS CASE inside the fixture runner');
 }

@@ -361,6 +361,12 @@ workflow_runs_php_test() {
   workflow_has_unconditional_owner_step "$regression_workflow" php "$test"
 }
 
+workflow_has_unconditional_owner_step "$regression_workflow" command \
+  'bash ci/test-refactor-runtime-port.sh' schema-drift || {
+  printf 'Regression workflow does not invoke the runtime fixture port contract.\n' >&2
+  exit 1
+}
+
 manifest=$(mktemp)
 excluded_manifest=$(mktemp)
 cleanup() {

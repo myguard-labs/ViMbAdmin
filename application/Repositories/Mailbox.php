@@ -365,7 +365,7 @@ class Mailbox extends EntityRepository
     }
 
     /**
-     * Load mailboxes usernmae list.
+     * Load mailboxes username list.
      *
      * If admin is super he gets all mailboxes.
      *

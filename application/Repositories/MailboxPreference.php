@@ -113,9 +113,9 @@ class MailboxPreference extends EntityRepository
     }
 
     /**
-     * Loads preferene values by attribute.
+     * Loads preference values by attribute.
      *
-     * Loads all prefrences value form all admin accessible mailboxes and return as array [ value1, value2, value3, ...].
+     * Loads all preferences value from all admin accessible mailboxes and return as array [ value1, value2, value3, ...].
      * Use cache for this method.
      *
      * @param string $attribute Attribute name

@@ -38,11 +38,11 @@ need contributors to follow so that we can accept them.
 ## Submitting Changes
 
 * Push your changes to a topic branch in your fork of the repository.
-* Submit a pull request to the repository in the inex organisation.
+* Submit a pull request to the myguard-labs/ViMbAdmin repository.
 * In the pull request, state your agreement to the [Contributor License Agreement](https://github.com/opensolutions/ViMbAdmin/wiki/Contributor-License-Agreement).
 
 # Additional Resources
 
-* [General GitHub documentation](http://help.github.com/)
-* [GitHub pull request documentation](http://help.github.com/send-pull-requests/)
+* [General GitHub documentation](https://docs.github.com/)
+* [GitHub pull request documentation](https://docs.github.com/en/pull-requests/how-tos/create-pull-requests/creating-a-pull-request)
 

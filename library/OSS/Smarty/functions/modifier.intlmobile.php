@@ -54,7 +54,7 @@
  * @package    OSS_Smarty
  * @subpackage Modifier
  *
- * @param string $string Strint to modify
+ * @param string $string String to modify
  * @return string
  */
 function smarty_modifier_intlmobile($string)

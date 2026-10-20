@@ -60,7 +60,7 @@ class OSS_Message_Pop_Up extends OSS_Message
     *
     * @param mixed $message Message to display
     * @param string $class  Message class
-    * @param bool $isHTML Htmk flag
+    * @param bool $isHTML HTML flag
     * @return void
     * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
     */

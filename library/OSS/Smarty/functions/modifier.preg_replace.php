@@ -53,7 +53,7 @@
  * @package    OSS_Smarty
  * @subpackage Modifier
  *
- * @param string $string Strint to modify
+ * @param string $string String to modify
  * @param string $search Pattern to search
  * @param string $replace Replacement string
  * @return string

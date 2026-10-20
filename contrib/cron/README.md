@@ -94,10 +94,10 @@ authenticated `/queue/trigger` HTTP endpoint — see `queue.runner.key` /
 # 1) PHP + the app's extensions (no tar/bzip2 needed).
 sudo apt-get install --no-install-recommends -y \
     php-cli php-mysql php-mbstring php-intl php-gettext \
-    php-xml php-curl php-bcmath php-gmp php-sodium git unzip
+    php-xml php-curl php-gd php-sodium git unzip
 
 # 2) Code + composer deps.
-sudo git clone https://github.com/eilandert/ViMbAdmin.git /opt/vimbadmin
+sudo git clone https://github.com/myguard-labs/ViMbAdmin.git /opt/vimbadmin
 cd /opt/vimbadmin
 sudo composer install --no-dev --prefer-dist --optimize-autoloader
 

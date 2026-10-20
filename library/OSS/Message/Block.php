@@ -83,7 +83,7 @@ class OSS_Message_Block extends OSS_Message
      *
      * @param mixed $message Message to display
      * @param string $class  Message class
-     * @param bool $isHTML Htmk flag
+     * @param bool $isHTML HTML flag
      * @return void
      * @SuppressWarnings("PHPMD.BooleanArgumentFlag")
      */

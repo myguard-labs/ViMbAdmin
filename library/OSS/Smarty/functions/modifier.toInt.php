@@ -48,7 +48,7 @@
 
 /**
  * To int modifier
- * Multicasting given string to int
+ * Casting given string to int
  *
  * @category   OSS
  * @package    OSS_Smarty

@@ -190,6 +190,47 @@ function globSources(string $root, string $pattern): array
 }
 
 /**
+ * @param list<string> $longFlags Parsed getopt long options, without colons.
+ * @param list<string> $shortFlags Parsed getopt short options taking no argument.
+ * @return list<string>
+ */
+function documentationGlobalFlagIssues(string $readme, array $longFlags, array $shortFlags): array
+{
+    if (preg_match_all('/\*\*Global flags\*\*[^\r\n]*\R(.*?)\*\*Actions:\*\*/s', $readme, $tables) !== 1) {
+        return ['README.md global flags table: expected exactly one section before Actions'];
+    }
+    $issues = [];
+    $documentedLong = [];
+    $documentedShort = [];
+    preg_match_all('/^\|\s*([^|]+)\|[^\r\n]*\r?$/m', $tables[1][0], $rows);
+    foreach ($rows[1] as $cell) {
+        if (trim($cell) === 'Flag' || preg_match('/^[-: ]+$/D', $cell) === 1) {
+            continue;
+        }
+        if (preg_match('/^`-([a-z])`,\s*`--([a-z][a-z-]*)`\s*$/D', $cell, $flags) !== 1) {
+            $issues[] = 'README.md global flags table: malformed flag row ' . trim($cell);
+            continue;
+        }
+        $documentedShort[] = $flags[1];
+        $documentedLong[] = $flags[2];
+        if (!in_array($flags[1], $shortFlags, true)) {
+            $issues[] = "README.md global flags table: '-{$flags[1]}' is not a no-argument getopt option";
+        }
+        if (!in_array($flags[2], $longFlags, true)) {
+            $issues[] = "README.md global flags table: '--{$flags[2]}' is not in the getopt spec";
+        }
+    }
+    // These four CLI-wide switches must remain documented, including both aliases.
+    sort($documentedLong);
+    sort($documentedShort);
+    sort($shortFlags);
+    if ($documentedLong !== ['copyright', 'debug', 'help', 'verbose'] || $documentedShort !== $shortFlags) {
+        $issues[] = 'README.md global flags table: missing, extra or duplicate global flag';
+    }
+    return $issues;
+}
+
+/**
  * @param array<string,string> $f snapshot from claimSnapshot()
  * @return list<string> human readable contradictions; empty means consistent
  */
@@ -273,13 +314,17 @@ function documentationClaimIssues(array $f): array
         $issues[] = 'bin/vimbtool.php --help action list [' . implode(', ', $helpActions)
             . '] differs from command classes [' . implode(', ', $actions) . ']';
     }
-    $flags = ['verbose', 'debug', 'help', 'copyright'];
-    if (preg_match("/getopt\('[^']*',\s*\[(.*?)\]\)/s", $tool, $m) === 1) {
-        preg_match_all("/'([a-z]+):?'/", $m[1], $long);
+    $flags = [];
+    $shortFlags = [];
+    if (preg_match("/getopt\('([^']*)',\s*\[(.*?)\]\)/s", $tool, $m) === 1) {
+        preg_match_all("/'([a-z][a-z-]*):{0,2}'/", $m[2], $long);
         $flags = array_values(array_unique($long[1]));
+        preg_match_all('/([a-z])(?!:)/', $m[1], $short);
+        $shortFlags = $short[1];
     } else {
         $issues[] = 'bin/vimbtool.php: getopt() specification not found';
     }
+    $issues = array_merge($issues, documentationGlobalFlagIssues($f['README.md'], $flags, $shortFlags));
     $cliDocs = ['README.md', 'contrib/cron/README.md', 'contrib/cron/crontab.example', 'docs/MIGRATION.md', 'docs/mcp-auth.md'];
     $documentedActions = [];
     foreach ($cliDocs as $path) {
@@ -478,15 +523,23 @@ $seed = static function (string $path, string $from, string $to) use ($claims): 
     $variant[$path] = str_replace($from, $to, $claims[$path]);
     return documentationClaimIssues($variant);
 };
+$ormLine = implode('.', array_slice(explode('.', $orm), 0, 2));
 $controls = [
     'changed PHP floor' => [['README.md', 'PHP **8.2.0+** with', 'PHP **8.1.0+** with'], 'PHP floor claim'],
     'changed tested minors' => [['README.md', 'Tested PHP minors: 8.3, 8.4, 8.5.', 'Tested PHP minors: 8.2, 8.3, 8.4.'], 'tested PHP minors'],
+    'bogus global flag' => [['README.md', '`--debug`', '`--bogus-global`'], "'--bogus-global'"],
+    'missing global flag' => [['README.md', '| `-d`, `--debug` | debug output |', ''], 'missing, extra or duplicate global flag'],
+    'bogus short global flag' => [['README.md', '`-d`, `--debug`', '`-z`, `--debug`'], "'-z'"],
+    'missing global alias' => [['README.md', '`-d`, `--debug`', '`--debug`'], 'malformed flag row'],
+    'duplicate global flag' => [['README.md', '| `-d`, `--debug` | debug output |', "| `-d`, `--debug` | debug output |\n| `-d`, `--debug` | debug output |"], 'missing, extra or duplicate global flag'],
+    'missing global table' => [['README.md', '**Global flags**', '**Options**'], 'expected exactly one section'],
+    'global flag removed from getopt' => [['bin/vimbtool.php', "'debug',", ''], "'--debug'"],
     'nonexistent CLI flag' => [['README.md', '--once', '--bogus-flag'], "'--bogus-flag'"],
     'nonexistent CLI action' => [['contrib/cron/crontab.example', '-a queue.cli-run', '-a queue.cli-runn'], "'queue.cli-runn'"],
     'working `-a help` claim' => [['README.md', '(`-a help` is rejected', '(`-a help` is accepted'], 'documents `-a help`'],
     'wrong route' => [['README.md', '/admin/two-factor', '/admin/two-factors'], 'two-factors'],
     'unknown controller route' => [['README.md', '`/admin/two-factor`', '`/admins/two-factor`'], 'names no native controller'],
-    'changed ORM minor' => [['README.md', 'doctrine/orm 3.7', 'doctrine/orm 3.6'], 'doctrine/orm 3.6'],
+    'changed ORM minor' => [['README.md', 'doctrine/orm ' . $ormLine . ',', 'doctrine/orm 0.0,'], 'doctrine/orm 0.0'],
     'README extension list drift' => [['README.md', '`curl`, ', ''], 'extension list'],
     'FPM extension list drift' => [['contrib/php-fpm/vimbadmin.conf', 'gd, curl, ', ''], 'extension list'],
     'cron apt drops php-gd' => [['contrib/cron/README.md', 'php-gd ', ''], 'php-gd'],
@@ -496,6 +549,21 @@ foreach ($controls as $label => [$args, $expected]) {
     $found = implode(' | ', $seed(...$args));
     if ($found === '' || !str_contains($found, $expected)) {
         failContract('control ' . $label, "reported issue containing '{$expected}'", $found === '' ? 'documentation still accepted' : $found);
+    }
+}
+foreach ([
+    'CRLF and whitespace' => str_replace(["\n", '`-d`, `--debug`'], ["\r\n", '`-d`,    `--debug`'], $claims['README.md']),
+    'reordered rows' => str_replace(
+        "| `-d`, `--debug` | debug output |\n| `-h`, `--help` | usage + action list |",
+        "| `-h`, `--help` | usage + action list |\n| `-d`, `--debug` | debug output |",
+        $claims['README.md']
+    ),
+] as $label => $readme) {
+    $variant = $claims;
+    $variant['README.md'] = $readme;
+    $found = documentationClaimIssues($variant);
+    if ($found !== []) {
+        failContract('global flags boundary ' . $label, 'valid table accepted', implode(' | ', $found));
     }
 }
 if (documentationClaimIssues($claims) !== []) {

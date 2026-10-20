@@ -111,7 +111,7 @@ function refreshDependencies(string $root, string $baseLock, bool $check = false
     }
     $root = $resolvedRoot;
     $base = dependencyLock(dependencyRead($baseLock), true);
-    $paths = ['composer.lock', 'docs/ORM3-UPGRADE.md', 'CHANGELOG'];
+    $paths = ['composer.lock', 'docs/ORM3-UPGRADE.md', 'CHANGELOG', 'README.md'];
     $original = [];
     foreach ($paths as $path) {
         $resolved = realpath($root . '/' . $path);
@@ -196,6 +196,17 @@ function refreshDependencies(string $root, string $baseLock, bool $check = false
         if ($count !== 1 || !is_string($updated[$path])) {
             throw new RuntimeException('Existing documentation version pair is missing or ambiguous');
         }
+    }
+    $updated['README.md'] = preg_replace_callback(
+        '/(\bCurrent release lines \(doctrine\/orm\s+)[0-9]+\.[0-9]+(,\s+DBAL\s+)[0-9]+/',
+        static fn (array $m): string => $m[1] . implode('.', array_slice(explode('.', $orm), 0, 2))
+            . $m[2] . explode('.', $dbal)[0],
+        $original['README.md'],
+        -1,
+        $count
+    );
+    if ($count !== 1 || !is_string($updated['README.md'])) {
+        throw new RuntimeException('Existing README dependency version pair is missing or ambiguous');
     }
     $completed = false;
     try {

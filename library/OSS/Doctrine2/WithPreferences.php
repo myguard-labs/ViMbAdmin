@@ -355,7 +355,7 @@ trait OSS_Doctrine2_WithPreferences
      *
      * WARNING: You need to EntityManager#flush() if the return >0!
      *
-     * @param int $asOf default null The UNIX timestamp for the expriy, null means now
+     * @param int $asOf default null The UNIX timestamp for the expiry, null means now
      * @param string $attribute default null Limit it to the specified attributes, null means all attributes
      * @return int The number of preferences deleted
      */

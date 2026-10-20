@@ -4,7 +4,7 @@
 > (password + 2FA changes locked, outgoing mail no-op'd); everything else is the real panel.
 >
 > **Full write-up, history & guided tour:**
-> [ViMbAdmin: The Postfix + Dovecot Mailbox Admin Panel (Modernised for PHP 8.5)](https://deb.myguard.nl/2026/06/vimbadmin-postfix-dovecot-mailbox-admin-panel/)
+> [ViMbAdmin: The Postfix + Dovecot Mailbox Admin Panel (Modernised for PHP 8.5)](https://deb.myguard.nl/articles/vimbadmin-mailbox-admin/)
 
 *Virtual Mailbox Administration that runs on a PHP version released this decade.*
 
@@ -133,7 +133,7 @@ By layer. Stock upstream had **none** of the application-layer items below.
 
 Everything under [`contrib/`](contrib/) hardens the panel around the edges;
 upstream shipped none of it. All of it ships pre-wired in the
-[vimbadmin Docker image](https://github.com/eilandert/dockerized/tree/master/src/vimbadmin).
+[vimbadmin Docker image](https://github.com/myguard-labs/dockerized/tree/master/src/vimbadmin).
 
 - **Runtime Snuffleupagus ruleset** — code-derived
   [`vimbadmin-strict.list`](contrib/snuffleupagus/vimbadmin-strict.list): bans
@@ -147,15 +147,16 @@ upstream shipped none of it. All of it ships pre-wired in the
 - **Hardened Angie/nginx vhost** (`contrib/angie/vimbadmin.conf`) — a **native
   positive-security gate**: only known HTTP methods, the real route map, and the
   app's known argument names reach PHP; scanner/empty user-agents dropped. Plus
-  TLS, strict **CSP** + security headers, **rate-limited login**,
-  internal-path/dotfile denies, **BREACH mitigation**.
+  TLS, strict **CSP** + security headers (login brute-force limiting is done
+  in the application, not at the vhost), internal-path/dotfile denies,
+  **BREACH mitigation**.
 - **OWASP CRS / ModSecurity plugin** *(optional)* — payload signature scanning
   on top of the vhost, where you already run libmodsecurity:
-  [vimbadmin-crs-plugin](https://github.com/eilandert/vimbadmin-crs-plugin).
+  [vimbadmin-crs-plugin](https://github.com/myguard-labs/vimbadmin-crs-plugin).
 - **Docker image** — read-only rootfs, root-owned read-only codebase,
   per-deployment secrets at first run, all caps dropped bar the few needed,
   docs/repos/setuid stripped. See the
-  [image README](https://github.com/eilandert/dockerized/tree/master/src/vimbadmin).
+  [image README](https://github.com/myguard-labs/dockerized/tree/master/src/vimbadmin).
 
 ### Attack surface removed
 
@@ -168,7 +169,7 @@ upstream shipped none of it. All of it ships pre-wired in the
 
 ### Dependencies
 
-Current release lines (doctrine/orm 3.6, DBAL 4, symfony/cache 6.4/7/8, Smarty
+Current release lines (doctrine/orm 3.7, DBAL 4, symfony/cache 6.4/7/8, Smarty
 5, robthree/twofactorauth 3, bacon/bacon-qr-code 3); kernel/routing/forms/
 sessions/CLI native and ZF1-free; `composer audit` reports **no advisories**.
 
@@ -229,7 +230,7 @@ PHP **8.2.0+** with `pdo_mysql`, `mbstring`, `intl`, `gettext`, `gd`, `dom`,
 optional but recommended (see [Performance](#performance)).
 
 ```sh
-git clone https://github.com/eilandert/ViMbAdmin.git
+git clone https://github.com/myguard-labs/ViMbAdmin.git
 cd ViMbAdmin
 composer install --no-dev
 
@@ -317,8 +318,9 @@ All maintenance/automation tasks run through one entry point:
 docker exec vimbadmin php /opt/vimbadmin/bin/vimbtool.php -a <controller.action> [options]
 ```
 
-`bin/vimbtool.php -a help` (or `--help`) prints the action list; `--copyright`
-prints the banner. The CLI is framework-free and never starts a session or
+`bin/vimbtool.php --help` prints the action list (`-a help` is rejected as an
+unknown action and exits 1); `--copyright` prints the
+banner. The CLI is framework-free and never starts a session or
 authenticates — every command works against the Doctrine EM directly.
 
 **Global flags** (accepted by every action):
@@ -339,7 +341,7 @@ authenticates — every command works against the Doctrine EM directly.
 | `maintenance.cli-precompile-templates` | Compile every **Smarty template** ahead of time into persistent `var/templates_c`, so the first web request pays no compile cost. Safe to re-run; image runs it on start. | — |
 | `admin.cli-reset-totp` | **Disable two-factor** for a locked-out admin. | `--username=<email>` **or** `--all` |
 | `mcp.cli-token-generate` | Mint a new **MCP API token**. Raw token printed **once** (only its SHA-256 stored). | `--name=` (required, free/revoked), `--scope=` (default `read`), `--ip=`, `--domains=`, `--days=` (default no expiry) |
-| `mcp.cli-token-list` | List MCP API tokens (name, scope, ip, domains, expiry, revoked). | — |
+| `mcp.cli-token-list` | List MCP API tokens (id, name, scope, ips, domains, state active/expired/revoked, last used). | — |
 | `mcp.cli-token-revoke` | Revoke an MCP API token (row kept for audit). | `--id=<id>` **or** `--name=<name>` |
 
 Examples:
@@ -598,11 +600,12 @@ bin/            CLI tools (doctrine-cli.php, vimbtool.php, crons)
 contrib/        deploy configs: php-fpm pool, Angie vhost, mail-host crons,
                 snuffleupagus/ (the validated SP ruleset), migrations/, theming
 application/Entities/  Doctrine entities; schema mapping in #[ORM\...] attributes
-docs/           extra documentation (mcp-auth.md)
+docs/           extra documentation (ASSETS, DEPENDENCY-REFRESH, MIGRATION,
+                NATIVE-WORKFLOWS-1, ORM3-UPGRADE, ZF1-REMOVAL, mcp-auth)
 ```
 
 A separate, optional **OWASP CRS / ModSecurity plugin** lives at
-[vimbadmin-crs-plugin](https://github.com/eilandert/vimbadmin-crs-plugin) —
+[vimbadmin-crs-plugin](https://github.com/myguard-labs/vimbadmin-crs-plugin) —
 payload-signature scanning on top of the vhost, only if you already run
 libmodsecurity.
 
@@ -614,8 +617,8 @@ entirely** — kernel, routing, forms, config loader, sessions and auth are nati
 PHP 8 — while keeping Doctrine (ORM 3) and Smarty (5). GPLv3, same as always.
 
 - Upstream: <https://github.com/opensolutions/ViMbAdmin>
-- This fork: <https://github.com/eilandert/ViMbAdmin>
-- Write-up: <https://deb.myguard.nl/2026/06/vimbadmin-postfix-dovecot-mailbox-admin-panel/>
+- This fork: <https://github.com/myguard-labs/ViMbAdmin>
+- Write-up: <https://deb.myguard.nl/articles/vimbadmin-mailbox-admin/>
 
 ## Local PHP validation
 

@@ -51,7 +51,7 @@ class OSS_String
      * The Unicode version of ucfirst().
      *
      * @param string $string the input string
-     * @param string $encoding default null the character encoding, if omitted the the PHP internal encoding is used
+     * @param string $encoding default null the character encoding, if omitted the PHP internal encoding is used
      * @return string
      */
     public static function mb_ucfirst($string, $encoding = null)
@@ -72,7 +72,7 @@ class OSS_String
      * The Unicode version of ucwords().
      *
      * @param string $string the input string
-     * @param string $encoding default null the character encoding, if omitted the the PHP internal encoding is used
+     * @param string $encoding default null the character encoding, if omitted the PHP internal encoding is used
      * @return string
      */
     public static function mb_ucwords($string, $encoding = null)

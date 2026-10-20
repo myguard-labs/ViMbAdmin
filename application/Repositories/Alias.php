@@ -105,7 +105,7 @@ class Alias extends EntityRepository
      *
      * Selects aliases where address not equal to goto, and goto not equals to
      * mailbox username, but goto has mailbox username. If admin is not super
-     * then it checks if admin have have linked with domain.
+     * then it checks if admin has been linked with domain.
      *
      * @param \Entities\Mailbox $mailbox Mailbox for alias filtering.
      * @param \Entities\Admin|null $admin Admin for checking privileges, or null for a trusted system context.

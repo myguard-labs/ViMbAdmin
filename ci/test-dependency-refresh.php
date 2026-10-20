@@ -58,7 +58,7 @@ function dependencyRemoveFixture(string $path): void
 function dependencyInputs(string $root): array
 {
     $result = [];
-    foreach (['composer.lock', 'docs/ORM3-UPGRADE.md', 'CHANGELOG'] as $path) {
+    foreach (['composer.lock', 'docs/ORM3-UPGRADE.md', 'CHANGELOG', 'README.md'] as $path) {
         $result[$path] = dependencyRead($root . '/' . $path);
     }
     return $result;
@@ -77,7 +77,7 @@ function dependencyReject(Closure $operation, string $message): void
 
 $source = dirname(__DIR__);
 $directory = sys_get_temp_dir() . '/vimbadmin-dependency-refresh-' . bin2hex(random_bytes(8));
-$copies = ['composer.lock', 'docs/ORM3-UPGRADE.md', 'CHANGELOG', '.github/scripts/assert-composer-lock.php',
+$copies = ['composer.lock', 'docs/ORM3-UPGRADE.md', 'CHANGELOG', 'README.md', '.github/scripts/assert-composer-lock.php',
     'tests/test-documentation-contract.php', '.github/workflows/ci.yml', '.github/scripts/check-dependency-refresh.sh', 'tools/refresh-dependencies.php'];
 dependencyFixtureTree($source, $directory, $copies);
 try {
@@ -142,6 +142,11 @@ try {
     unset($package);
     $changedLock = json_encode($candidate, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
     file_put_contents($directory . '/composer.lock', $changedLock);
+    $before = dependencyInputs($directory);
+    dependencyReject(static fn () => refreshDependencies($directory, $basePath, true, $fetch), 'needs refresh');
+    dependencyTest(dependencyInputs($directory) === $before, 'cross-minor check mode restores lock, upgrade guide, changelog and README byte-for-byte');
+    dependencyTest(is_file($directory . '/guard-calls') && dependencyRead($directory . '/guard-calls') === "integrity\ndocumentation\n", 'cross-minor check mode executes both real guards before rollback');
+    unlink($directory . '/guard-calls');
     refreshDependencies($directory, $basePath, false, $fetch);
     $updated = dependencyInputs($directory);
     $verified = dependencyLock($updated['composer.lock'], true);
@@ -152,6 +157,15 @@ try {
     }
     dependencyTest($updated['docs/ORM3-UPGRADE.md'] === str_replace(['ORM ' . $baseVersions['doctrine/orm'] . ' and DBAL ' . $baseVersions['doctrine/dbal']], ['ORM 3.99.1 and DBAL 4.99.2'], $original['docs/ORM3-UPGRADE.md'])
         && $updated['CHANGELOG'] === str_replace(['Doctrine ORM 2.8 -> ' . $baseVersions['doctrine/orm'] . ' (+ DBAL ' . $baseVersions['doctrine/dbal'] . ')'], ['Doctrine ORM 2.8 -> 3.99.1 (+ DBAL 4.99.2)'], $original['CHANGELOG']), 'only exact existing documentation pairs change');
+    $baseOrmLine = implode('.', array_slice(explode('.', $baseVersions['doctrine/orm']), 0, 2));
+    dependencyTest(
+        $updated['README.md'] === str_replace(
+            'Current release lines (doctrine/orm ' . $baseOrmLine . ', DBAL 4,',
+            'Current release lines (doctrine/orm 3.99, DBAL 4,',
+            $original['README.md']
+        ) && $updated['README.md'] !== $original['README.md'],
+        'cross-minor refresh changes only the exact README release-line pair'
+    );
     dependencyTest(is_file($directory . '/guard-calls') && dependencyRead($directory . '/guard-calls') === "integrity\ndocumentation\n", 'changed candidate reaches both real guards');
     $fetches = [];
     refreshDependencies($directory, $basePath, true, $fetch);
@@ -159,6 +173,7 @@ try {
     dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, static fn (): string => 'wrong archive bytes'), 'checksum mismatch');
     dependencyTest(dependencyInputs($directory) === $updated, 'checksum mismatch preserves all inputs');
     dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, static fn (): never => throw new RuntimeException('fixture fetch failed')), 'fetch failed');
+
 
     $reset();
     $candidate = $base;
@@ -195,21 +210,28 @@ try {
     dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'Trusted pin missing');
     file_put_contents($basePath, $original['composer.lock']);
     dependencyReject(static fn () => refreshDependencies($directory, $basePath . '.missing', false, $fetch), 'cannot be read');
-    foreach (['docs/ORM3-UPGRADE.md', 'CHANGELOG'] as $surface) {
-        $reset();
-        file_put_contents($directory . '/' . $surface, 'missing version pair');
-        dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'pair is missing or ambiguous');
+    foreach (['docs/ORM3-UPGRADE.md', 'CHANGELOG', 'README.md'] as $surface) {
+        foreach (['missing' => 'missing version pair', 'ambiguous' => $original[$surface] . "\n" . $original[$surface]] as $case => $bytes) {
+            $reset();
+            file_put_contents($directory . '/' . $surface, $bytes);
+            $before = dependencyInputs($directory);
+            dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'pair is missing or ambiguous');
+            dependencyTest(dependencyInputs($directory) === $before, $surface . ' ' . $case . ' version pair preserves every input byte');
+        }
     }
     $reset();
     foreach (['.github/scripts/assert-composer-lock.php', 'tests/test-documentation-contract.php'] as $guard) {
         $path = $directory . '/' . $guard;
         $saved = dependencyRead($path);
+        file_put_contents($directory . '/composer.lock', $changedLock);
+        $before = dependencyInputs($directory);
         file_put_contents($path, str_replace('declare(strict_types=1);', 'declare(strict_types=1); exit(37);', $saved));
         dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'Dependency guard failed: ' . $guard);
-        dependencyTest(dependencyInputs($directory) === $original, $guard . ' failure rolls back all candidate writes');
+        dependencyTest(dependencyInputs($directory) === $before, $guard . ' failure rolls back lock, upgrade guide, changelog and README byte-for-byte');
         unlink($path);
         dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'guard is missing');
         file_put_contents($path, $saved);
+        $reset();
     }
     $reset();
     $workflow = dependencyRead($source . '/.github/workflows/ci.yml');
@@ -312,19 +334,22 @@ SH;
         putenv('DEPENDENCY_TEST_CURL_ARGS');
     }
     $reset();
-    unlink($directory . '/CHANGELOG');
-    dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'input is missing or escapes checkout');
-    symlink($source . '/CHANGELOG', $directory . '/CHANGELOG');
-    dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'input is missing or escapes checkout');
-    unlink($directory . '/CHANGELOG');
-    file_put_contents($directory . '/CHANGELOG', $original['CHANGELOG']);
+    foreach (['CHANGELOG', 'README.md'] as $surface) {
+        unlink($directory . '/' . $surface);
+        dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'input is missing or escapes checkout');
+        symlink($source . '/' . $surface, $directory . '/' . $surface);
+        dependencyReject(static fn () => refreshDependencies($directory, $basePath, false, $fetch), 'input is missing or escapes checkout');
+        unlink($directory . '/' . $surface);
+        file_put_contents($directory . '/' . $surface, $original[$surface]);
+    }
     $reset();
     dependencyReject(static fn () => refreshDependencies($directory . '.missing', $basePath, false, $fetch), 'checkout root is missing');
     $development = $base;
-    $developmentPackage = array_shift($development['packages']);
-    if ($developmentPackage === null) {
-        throw new RuntimeException('Production fixture needs a package');
+    $developmentIndex = array_search('dasprid/enum', array_column($development['packages'], 'name'), true);
+    if (!is_int($developmentIndex)) {
+        throw new RuntimeException('Production fixture needs dasprid/enum');
     }
+    $developmentPackage = array_splice($development['packages'], $developmentIndex, 1)[0];
     $development['packages-dev'][] = $developmentPackage;
     file_put_contents($directory . '/composer.lock', json_encode($development, JSON_THROW_ON_ERROR));
     refreshDependencies($directory, $basePath, true, $fetch);
@@ -384,7 +409,8 @@ SH;
         );
         dependencyTest(
             dependencyRead($directory . '/docs/ORM3-UPGRADE.md') === $beforeRestoreFailure['docs/ORM3-UPGRADE.md']
-            && dependencyRead($directory . '/CHANGELOG') === $beforeRestoreFailure['CHANGELOG'],
+            && dependencyRead($directory . '/CHANGELOG') === $beforeRestoreFailure['CHANGELOG']
+            && dependencyRead($directory . '/README.md') === $beforeRestoreFailure['README.md'],
             'restore continues to later inputs after the first failure'
         );
     } finally {

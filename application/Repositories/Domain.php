@@ -434,7 +434,7 @@ class Domain extends EntityRepository
     }
 
     /**
-     * Purge all alaises of a domain
+     * Purge all aliases of a domain
      *
      * @param \Entities\Domain $domain The domain to purge the aliases of
      * @return int The number of records deleted

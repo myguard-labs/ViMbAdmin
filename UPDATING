@@ -19,8 +19,9 @@ and `size_at` columns. Review the `application.ini` config changes in the
 release notes before
 restarting the application.
 
-Server-side list tables now use the DataTables 2 wire protocol. Deploy the PHP
-code and JavaScript assets together with the companion
+Server-side list tables send the DataTables 2 request parameters
+(draw/start/length), which the bundled DataTables 3 keeps unchanged. Deploy the
+PHP code and JavaScript assets together with the companion
 `myguard-labs/vimbadmin-crs-plugin#9` DataTables 2 allowlist, then reload open
 panel tabs after upgrading. All three components must be deployed
 simultaneously.

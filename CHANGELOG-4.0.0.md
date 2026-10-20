@@ -1,6 +1,6 @@
 # ViMbAdmin 4.0.0
 
-_Released 2026-06-02 — eilandert fork ([github.com/eilandert/ViMbAdmin](https://github.com/eilandert/ViMbAdmin))_
+_Released 2026-06-02 — eilandert fork ([github.com/myguard-labs/ViMbAdmin](https://github.com/myguard-labs/ViMbAdmin))_
 
 First tagged release of the modernised fork. PHP 8.5, Doctrine ORM 3, a full security pass, an optional MCP adapter and 2FA. **40 commits since 3.4.1.**
 
@@ -69,4 +69,4 @@ First tagged release of the modernised fork. PHP 8.5, Doctrine ORM 3, a full sec
 
 ---
 
-**Full diff:** [`3.4.1...4.0.0`](https://github.com/eilandert/ViMbAdmin/compare/3.4.1...4.0.0)
+**Full diff:** [`3.4.1...4.0.0`](https://github.com/myguard-labs/ViMbAdmin/compare/3.4.1...4.0.0)

@@ -32,7 +32,7 @@ body {
 a            { color: var(--vimb-accent); }
 a:hover      { color: var(--vimb-accent-2); }
 hr           { border-top-color: var(--vimb-border); }
-.page-header { border-bottom-color: var(--vimb-border); }
+.page-header { background-color: var(--vimb-surface-2); border-bottom-color: var(--vimb-border); }
 .page-header h1, h1, h2, h3, h4, legend { color: var(--vimb-text); }
 
 /* ---- top navbar --------------------------------------------------- */
@@ -162,10 +162,6 @@ html, body { background-color: var(--vimb-bg); }
     background-color: var(--vimb-surface);
     box-shadow: none;
     border: 1px solid var(--vimb-border);
-}
-.page-header {
-    background-color: var(--vimb-surface-2);
-    border-bottom-color: var(--vimb-border);
 }
 .page-header h1 { color: var(--vimb-text); }
 

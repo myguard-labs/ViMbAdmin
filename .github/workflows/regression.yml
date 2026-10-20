@@ -321,6 +321,9 @@ jobs:
       - name: Cron HOWTO queue contract
         run: php ci/test-cron-readme-queue-contract.php
 
+      - name: Angie vhost hides the server version (server_tokens off)
+        run: php ci/test-angie-server-tokens.php
+
       - name: Native schema derives the mailbox collation
         run: php ci/test-schema-collation-contract.php
 

@@ -66,6 +66,7 @@ ci/test-php-version-contract.php	ci-test-script
 ci/test-proxy-generation.php	ci-test-script
 ci/test-queue-loopback-origin.php	ci-test-script
 ci/test-quota-form-validation.php	ci-test-script
+ci/test-random-password-length.php	ci-test-script
 ci/test-refactor-autoload-contract.php	ci-test-script
 ci/test-refactor-controller-resources.php	ci-test-script
 ci/test-refactor-doveadm-contract.php	ci-test-script

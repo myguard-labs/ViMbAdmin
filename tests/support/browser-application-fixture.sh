@@ -346,13 +346,26 @@ db_port=${db_binding##*:}
   exit 1
 }
 
-tar -cf - application bin contrib data library public src composer.json composer.lock | tar -xf - -C "$app_root"
+# A developer checkout may contain ignored proxies. Build the private fixture's
+# proxies from its locked dependencies, just as the production image does.
+tar --exclude=application/Proxies -cf - application bin contrib data library public src composer.json composer.lock | tar -xf - -C "$app_root"
 mkdir -p "$app_root/var/tmp" "$app_root/var/cache" "$app_root/var/templates_c" "$app_root/var/bruteforce"
 chmod 700 "$app_root/var" "$app_root/var/"*
 
 run_captured_php composer-install "$evidence_dir/logs/02-composer-install.log" \
   env COMPOSER_HOME="$fixture_root/composer-home" COMPOSER_NO_INTERACTION=1 \
   composer install --working-dir="$app_root" --no-interaction --no-progress --prefer-dist --no-dev
+
+run_captured_php proxy-generation "$evidence_dir/logs/02-proxy-generation.log" \
+  php "$app_root/bin/generate-proxies.php"
+for proxy_file in "$app_root"/application/Proxies/__CG__*.php; do
+  [[ -f $proxy_file && -s $proxy_file ]] || {
+    echo 'FAIL: generated fixture proxy is missing or empty' >&2
+    exit 1
+  }
+  stat --printf='source_artifact_mtime=%y source_artifact_bytes=%s\n' "$proxy_file"
+  sha256sum "$proxy_file"
+done >"$evidence_dir/logs/02-proxy-artifacts.log"
 
 read -r app_port verifier_port < <(python3 -c '
 import socket

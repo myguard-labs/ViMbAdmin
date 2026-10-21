@@ -133,6 +133,11 @@ jobs:
       - name: UI mutation controls reject false passing child results
         run: node ci/test-refactor-ui-controls.cjs
 
+      - name: Entry-control evidence is retained only on failure
+        run: |
+          node ci/test-entry-autoload-workflow.cjs
+          node ci/test-entry-autoload-cleanup.cjs
+
       - name: Containerized Chrome runner hardening
         run: >-
           VIMBADMIN_BROWSER=chrome bash tests/test-headless-chrome-container.sh
@@ -267,9 +272,6 @@ jobs:
 
       - name: Native controller discovery honours configured entity paths
         run: bash ci/test-entry-autoload-control.sh
-
-      - name: Entry-control evidence is retained only on failure
-        run: node ci/test-entry-autoload-cleanup.cjs
 
       - name: PHP support claims match the installable Composer contract
         run: php ci/test-php-version-contract.php

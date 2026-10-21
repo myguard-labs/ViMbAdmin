@@ -182,10 +182,10 @@ final class FakeObjectManager extends \Doctrine\ORM\Decorator\EntityManagerDecor
      */
     public function getRepository(string $className): \Doctrine\ORM\EntityRepository
     {
-        if ($this->aliasRepo !== null && $className === '\\Entities\\Alias') {
+        if ($this->aliasRepo !== null && $className === \Entities\Alias::class) {
             return $this->aliasRepo;
         }
-        if ($this->mailboxRepo !== null && $className === '\\Entities\\Mailbox') {
+        if ($this->mailboxRepo !== null && $className === \Entities\Mailbox::class) {
             return $this->mailboxRepo;
         }
         throw new \RuntimeException('not used');

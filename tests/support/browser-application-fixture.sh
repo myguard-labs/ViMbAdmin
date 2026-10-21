@@ -45,25 +45,25 @@ readonly run_label='myguard.run=vimbadmin-c121-r1-browser-review'
 readonly name_prefix='myguard-run-vimbadmin-c121-r1-browser-review-'
 readonly mariadb_image='mirror.gcr.io/library/mariadb@sha256:2439dcd7d14010ecd1ff7a4e1c5abe8e208c34fe35290744deeeaac3569043c3'
 readonly browser_image='vimbadmin-browser:1.63.0'
+for required_command in composer curl docker openssl php python3 realpath sha256sum tar; do
+  command -v "$required_command" >/dev/null || {
+    echo "FAIL: required browser application fixture command is unavailable: $required_command" >&2
+    exit 1
+  }
+done
+php --ri pdo_mysql >/dev/null || {
+  echo 'FAIL: host PHP pdo_mysql extension is unavailable' >&2
+  exit 1
+}
+
 fixture_root=$(mktemp -d /tmp/vimbadmin-browser-application.XXXXXX)
 readonly fixture_root
-chmod 700 "$fixture_root"
 readonly app_root=$fixture_root/application-tree
 readonly session_dir=$fixture_root/sessions
 readonly state_dir=$fixture_root/browser-state
 readonly db_password_file=$fixture_root/db-password
 readonly verifier_token_file=$fixture_root/verifier-token
 readonly verifier_curl_config=$fixture_root/verifier-curl.conf
-mkdir -p "$app_root" "$session_dir" "$state_dir" "$fixture_root/profile"
-chmod 700 "$app_root" "$session_dir" "$state_dir" "$fixture_root/profile"
-for private_file in "$db_password_file" "$verifier_token_file" "$verifier_curl_config"; do
-  install -m 600 /dev/null "$private_file"
-done
-openssl rand -hex 32 >"$db_password_file"
-openssl rand -hex 32 >"$verifier_token_file"
-db_password=$(<"$db_password_file")
-verifier_token=$(<"$verifier_token_file")
-printf 'header = "X-Vimbadmin-Fixture-Token: %s"\n' "$verifier_token" >"$verifier_curl_config"
 
 declare -a container_ids=()
 declare -a php_pids=()
@@ -112,21 +112,23 @@ cleanup() {
 trap 'status=$?; trap - EXIT; cleanup "$status"; exit $?' EXIT
 trap 'exit 130' INT TERM
 
+chmod 700 "$fixture_root"
+mkdir -p "$app_root" "$session_dir" "$state_dir" "$fixture_root/profile"
+chmod 700 "$app_root" "$session_dir" "$state_dir" "$fixture_root/profile"
+for private_file in "$db_password_file" "$verifier_token_file" "$verifier_curl_config"; do
+  install -m 600 /dev/null "$private_file"
+done
+openssl rand -hex 32 >"$db_password_file"
+openssl rand -hex 32 >"$verifier_token_file"
+db_password=$(<"$db_password_file")
+verifier_token=$(<"$verifier_token_file")
+printf 'header = "X-Vimbadmin-Fixture-Token: %s"\n' "$verifier_token" >"$verifier_curl_config"
+
 existing=$(docker ps -aq --filter "label=$run_label")
 if [[ -n $existing ]]; then
   echo 'FAIL: pre-existing task-labeled containers must be cleaned before this run' >&2
   exit 1
 fi
-for required_command in composer curl docker openssl php python3 realpath sha256sum tar; do
-  command -v "$required_command" >/dev/null || {
-    echo "FAIL: required browser application fixture command is unavailable: $required_command" >&2
-    exit 1
-  }
-done
-php --ri pdo_mysql >/dev/null || {
-  echo 'FAIL: host PHP pdo_mysql extension is unavailable' >&2
-  exit 1
-}
 docker pull "$mariadb_image" >"$evidence_dir/logs/00-mariadb-pull.log" 2>&1
 docker image inspect "$mariadb_image" >/dev/null
 docker image inspect "$browser_image" >/dev/null

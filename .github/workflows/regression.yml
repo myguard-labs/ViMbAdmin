@@ -52,7 +52,7 @@ jobs:
           bash tests/test-pinned-asset-regeneration.sh
 
   # ------------------------------------------------------------------ #
-  # Static/browser regressions — no DB. Fast first signal.             #
+  # Static/browser regressions — isolated fixture DB. Fast first signal. #
   # ------------------------------------------------------------------ #
   static:
     name: Static and browser regression (${{ matrix.browser }})
@@ -147,10 +147,12 @@ jobs:
         run: bash tests/test-fixture-http-readiness-bound.sh
 
       - name: Install template dependencies with PHP 8.4
-        # The browser fixture renders Smarty only; it neither connects to MySQL
-        # nor translates messages. Keep this image-only extension exception
-        # narrow so Composer still validates every other production requirement.
+        # The template fixtures render Smarty without MySQL or translations.
+        # The auth/error fixture preflights host PHP and pulls its pinned DB.
         run: bash .github/scripts/run-static-php-container.sh install
+
+      - name: Authentication and error routes render in a real browser
+        run: bash ci/test-browser-auth-errors.sh
 
       - name: Alias destinations render as text (stored-XSS regression)
         run: >-

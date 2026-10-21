@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* global require, process, console, URL, document */
+/* global require, process, console, URL, document, navigator */
 
 // Adapt the existing dump-dom fixture interface to three browser engines.
 // Invoked only inside the confined container by run-headless-chrome.sh.
@@ -14,6 +14,87 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { fileURLToPath } = require('node:url');
 
+function option(args, name) {
+  const prefix = `${name}=`;
+  return args.find(arg => arg.startsWith(prefix))?.slice(prefix.length);
+}
+
+function loopbackApplicationUrl(value, name) {
+  const url = new URL(value);
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port === '' ||
+      url.username !== '' || url.password !== '' || url.pathname !== '/' ||
+      url.search !== '' || url.hash !== '') {
+    throw new Error(`${name} must be an HTTP 127.0.0.1 origin with an explicit port`);
+  }
+  return url;
+}
+
+async function applicationMode(engines, engine, root, args) {
+  const origin = loopbackApplicationUrl(option(args, '--application-origin'), 'application origin');
+  const target = new URL(option(args, '--application-target') || origin.href);
+  const suitePath = await fs.realpath(option(args, '--application-suite'));
+  const inputPath = await fs.realpath(option(args, '--application-input'));
+  const profilePath = await fs.realpath(option(args, '--application-profile'));
+  const expectedEngine = option(args, '--application-expected-engine') || engine;
+  const mutation = process.env.VIMBADMIN_BROWSER_APP_MUTATION || '';
+  for (const [name, filename] of [
+    ['application suite', suitePath],
+    ['application input', inputPath],
+    ['application profile', profilePath]
+  ]) {
+    if (!filename.startsWith(`${root}/`)) throw new Error(`${name} is outside the fixture root`);
+  }
+  if (target.protocol !== 'http:' || target.username !== '' || target.password !== '') {
+    throw new Error('application target must be an HTTP URL without credentials');
+  }
+  if (target.origin !== origin.origin) {
+    throw new Error('application target is outside the declared application origin');
+  }
+
+  let browserContext;
+  try {
+    browserContext = await engines[engine].launchPersistentContext(profilePath, {
+      headless: true, timeout: 15000
+    });
+    const identityPage = browserContext.pages()[0];
+    const identityResponse = await identityPage.goto(new URL('/auth/login', target).href, {
+      waitUntil: 'load', timeout: 15000
+    });
+    if (!identityResponse) throw new Error('application engine probe returned no response');
+    const actualEngine = await identityPage.evaluate(() => {
+      const ua = navigator.userAgent;
+      return /Firefox\//.test(ua) ? 'firefox' : /Chrome\//.test(ua) ? 'chromium' :
+        /AppleWebKit\//.test(ua) ? 'webkit' : 'unknown';
+    });
+    if (actualEngine !== expectedEngine) {
+      throw new Error(`application engine assertion: expected ${expectedEngine}, got ${actualEngine}`);
+    }
+
+    // The suite is copied into the private fixture root and is the only code
+    // allowed to drive application mode. Unlike static mode, no synthetic DOM
+    // verdict is consulted and no rendered HTML (which can contain tokens) is
+    // written to stdout.
+    const suite = require(suitePath);
+    if (typeof suite.runApplicationSuite !== 'function') {
+      throw new Error('application suite must export runApplicationSuite');
+    }
+    const input = JSON.parse(await fs.readFile(inputPath, 'utf8'));
+    const result = await suite.runApplicationSuite({
+      browserContext,
+      engine,
+      expectedEngine,
+      origin: origin.origin,
+      targetOrigin: target.origin,
+      root,
+      input,
+      mutation
+    });
+    process.stdout.write(`${JSON.stringify({ engine, application: true, result })}\n`);
+  } finally {
+    if (browserContext) await browserContext.close();
+  }
+}
+
 async function main() {
   const [engine, root, ...args] = process.argv.slice(2);
   if (engine === '--help') {
@@ -23,6 +104,10 @@ async function main() {
   const engines = { chromium, firefox, webkit };
   if (!Object.hasOwn(engines, engine) || !path.isAbsolute(root || '')) {
     throw new Error('engine and absolute fixture root are required');
+  }
+  if (option(args, '--application-origin')) {
+    await applicationMode(engines, engine, root, args);
+    return;
   }
   let target = args.find(arg => arg.startsWith('file://') || arg.startsWith('http://'));
   if (!target) throw new Error('fixture URL is required');

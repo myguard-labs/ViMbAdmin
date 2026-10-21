@@ -34,3 +34,15 @@ controls) and `test-browser-engine-negative-control.sh` (the existing
 compatibility lane must exit 1 on its deliberately disabled-button mutation).
 The adapter fixture prefix is registered in the workflow, wrapper allowlist
 and `test-headless-chrome-container.sh`, as required for every browser fixture.
+
+`run-fixture.cjs` also has an explicit application-origin mode for
+`ci/test-browser-auth-errors.sh`. That mode accepts only a declared loopback
+origin, starts no Node static server, never consults fixture DOM verdicts and
+never dumps rendered HTML. The CI entry point creates a private application
+tree from `composer.lock`, boots a pinned disposable MariaDB and captured
+loopback PHP servers, then drives the real auth/error routes in all three
+engines. This mode deliberately uses host networking so the browser can reach
+the fixture's host-loopback listeners. Unlike static mode, the container then
+shares the host network stack, including non-loopback and external access; the
+application-origin guard and its observed-red mutation only prevent the runner
+from silently targeting another origin.

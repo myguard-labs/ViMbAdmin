@@ -230,7 +230,7 @@ class MailboxTask extends EntityRepository
     {
         return $this->getEntityManager()->createQueryBuilder()
             ->select('t')
-            ->from('\\Entities\\MailboxTask', 't')
+            ->from(\Entities\MailboxTask::class, 't')
             ->where('t.status = :s')
             ->setParameter('s', \Entities\MailboxTask::STATUS_PENDING)
             ->orderBy('t.priority', 'DESC')
@@ -278,7 +278,7 @@ class MailboxTask extends EntityRepository
     {
         $rows = $this->getEntityManager()->createQueryBuilder()
             ->select('t.status as status, COUNT(t.id) as cnt')
-            ->from('\\Entities\\MailboxTask', 't')
+            ->from(\Entities\MailboxTask::class, 't')
             ->groupBy('t.status')
             ->getQuery()->getArrayResult();
 

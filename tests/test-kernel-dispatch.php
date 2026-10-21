@@ -293,6 +293,10 @@ foreach ($malformedMailerOptions as $index => $options) {
 }
 
 $dispatcher = new Dispatcher($container, ['probe' => ProbeController::class]);
+check(
+    'AbstractController constructor is final for dynamic dispatch',
+    (new ReflectionMethod(AbstractController::class, '__construct'))->isFinal()
+);
 
 // Happy path: probe/show/type/HELLO ------------------------------------ //
 $match = new RouteMatch('probe', 'show', 'ProbeController', 'showAction', ['type' => 'HELLO']);

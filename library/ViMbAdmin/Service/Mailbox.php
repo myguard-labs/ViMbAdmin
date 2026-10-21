@@ -27,7 +27,7 @@ require_once __DIR__ . '/PersistsAuditLog.php';
  * @package ViMbAdmin
  * @subpackage Services
  */
-class ViMbAdmin_Service_Mailbox
+final class ViMbAdmin_Service_Mailbox
 {
     use ViMbAdmin_Service_PersistsAuditLog;
 
@@ -60,15 +60,16 @@ class ViMbAdmin_Service_Mailbox
         \Entities\Mailbox $mailbox,
         \Entities\Domain $domain
     ): bool {
-        if ($domain->getMaxQuota() == 0
-            || ($mailbox->getQuota() > 0 && $mailbox->getQuota() <= $domain->getMaxQuota())) {
+        $maxQuota = $domain->getMaxQuota();
+        if ($maxQuota === null || $maxQuota === 0
+            || ($mailbox->getQuota() > 0 && $mailbox->getQuota() <= $maxQuota)) {
             return false;
         }
 
         $domainQuota = $domain->requiredQuota();
         $mailbox->setQuota($domainQuota === 0
-            ? $domain->getMaxQuota()
-            : min($domainQuota, $domain->getMaxQuota()));
+            ? $maxQuota
+            : min($domainQuota, $maxQuota));
         return true;
     }
 
@@ -180,7 +181,7 @@ class ViMbAdmin_Service_Mailbox
 
         $operation = function () use ($mailbox, $actor, $deleteFiles, $preFlush, $postFlush, $username): bool {
             return ViMbAdmin_Recipients::atomic($this->em, function () use ($mailbox, $actor, $deleteFiles, $preFlush, $postFlush, $username): bool {
-                $repository = $this->em->getRepository('\\Entities\\Mailbox');
+                $repository = $this->em->getRepository(\Entities\Mailbox::class);
                 if (!method_exists($repository, 'purgeMailbox')) {
                     throw new \LogicException('Mailbox repository must implement purgeMailbox().');
                 }
@@ -335,7 +336,7 @@ class ViMbAdmin_Service_Mailbox
         // — inserting a duplicate violates the unique key and rolls the create
         // back.
         if ($mailboxAliases
-            && $this->em->getRepository('\\Entities\\Alias')->findOneBy(['address' => $username]) === null
+            && $this->em->getRepository(\Entities\Alias::class)->findOneBy(['address' => $username]) === null
         ) {
             $alias = new \Entities\Alias();
             $alias->setAddress($username);

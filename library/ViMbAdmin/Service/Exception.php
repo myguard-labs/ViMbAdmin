@@ -16,6 +16,6 @@
  * @package ViMbAdmin
  * @subpackage Service
  */
-class ViMbAdmin_Service_Exception extends \Exception
+final class ViMbAdmin_Service_Exception extends \Exception
 {
 }

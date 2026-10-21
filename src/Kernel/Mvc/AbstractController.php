@@ -36,7 +36,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  */
 abstract class AbstractController
 {
-    public function __construct(
+    final public function __construct(
         protected readonly Container $container,
         protected readonly RouteMatch $route,
     ) {

@@ -26,7 +26,7 @@
  *     ...<string, mixed>
  * }
  */
-class ViMbAdmin_QueueRunner
+final class ViMbAdmin_QueueRunner
 {
     /** Seconds after which a lease with no heartbeat is considered dead. */
     public const LEASE_TTL = 1800;
@@ -199,7 +199,7 @@ class ViMbAdmin_QueueRunner
             throw new \UnexpectedValueException('Runner lease insert returned an invalid identifier.');
         }
 
-        $lease = $em->find('\Entities\QueueRunner', $id);
+        $lease = $em->find(\Entities\QueueRunner::class, $id);
         if (!$lease instanceof \Entities\QueueRunner || $lease->getSlot() !== $slot) {
             throw new \UnexpectedValueException('Inserted runner lease could not be reloaded.');
         }

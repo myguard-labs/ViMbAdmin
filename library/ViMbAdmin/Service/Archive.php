@@ -21,7 +21,7 @@
  * @package ViMbAdmin
  * @subpackage Services
  */
-class ViMbAdmin_Service_Archive
+final class ViMbAdmin_Service_Archive
 {
     /**
      * @var \Doctrine\Persistence\ObjectManager
@@ -75,7 +75,7 @@ class ViMbAdmin_Service_Archive
 
         $this->em->flush();
 
-        return (bool) $archive->getAutoprune();
+        return $archive->getAutoprune();
     }
 
     /**

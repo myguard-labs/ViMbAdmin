@@ -9,8 +9,10 @@
 # 2. phpstan-common.neon pins phpVersion, so the verdict on a version-dependent
 #    probe is identical with and without a composer.json in the working
 #    directory; with the pin removed the verdicts diverge (control).
+# 3. The real shared config discovers the browser fixture's CI-only class;
+#    removing its scan registration reports an unknown class (control).
 #
-# Requires phpstan on PATH (or PHPSTAN_BIN) for section 2.
+# Requires phpstan on PATH (or PHPSTAN_BIN).
 
 set -euo pipefail
 
@@ -19,9 +21,10 @@ cd "$repo_root"
 reconcile=$repo_root/ci/reconcile-phpstan-coverage.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-phpstan-contract.XXXXXX")
 nopin=$(mktemp "$repo_root/.phpstan-nopin.XXXXXX.neon")
+noscan=$(mktemp "$repo_root/.phpstan-noscan.XXXXXX.neon")
 cleanup() {
   rm -rf -- "${work:?}"
-  rm -f -- "$nopin"
+  rm -f -- "$nopin" "$noscan"
 }
 trap cleanup EXIT
 failures=0
@@ -61,9 +64,10 @@ fi
 scratch() { # scratch <dir>: a tiny git repo with the real config
   local d=$1
   rm -rf -- "${d:?}"
-  mkdir -p "$d/src" "$d/ci" "$d/application/Proxies" "$d/vendor"
+  mkdir -p "$d/src" "$d/ci/support" "$d/application/Proxies" "$d/vendor"
   git -C "$d" init -q
   cp phpstan-common.neon "$d/"
+  cp ci/support/browser-fixture-super-admin.php "$d/ci/support/"
   printf '<?php\n' >"$d/src/a.php"
   printf '<?php\n' >"$d/ci/test-x.php"
   printf '<?php\n' >"$d/vendor/autoload.php"
@@ -347,6 +351,33 @@ else
   echo 'FAIL control: unpinned config did not diverge, probe is vacuous' >&2
   failures=$((failures + 1))
 fi
+
+# --- section 3: CI-only helper discovery --------------------------------
+# Do not pass the helper as an analysis root or require it from the probe:
+# either would hide a missing registration in the real project config.
+printf '%s\n' '<?php' \
+  'function browserFixtureUsername(): string {' \
+  '    return \ViMbAdmin\Tests\BrowserFixture\SuperAdmin::USERNAME;' \
+  '}' >"$work/discovery.php"
+discovery() { # discovery <config> <log>
+  "${phpstan[@]}" analyse -c "$1" --level 10 --no-progress \
+    --error-format=raw "$work/discovery.php" >"$2" 2>&1
+  local rc=$?
+  cat "$2"
+  return "$rc"
+}
+expect green 'shared config discovers CI-only SuperAdmin' '' -- \
+  discovery phpstan-level10.neon "$work/discovery-baseline.log"
+sed '/^    scanFiles:/,+1d' phpstan-common.neon >"$noscan"
+printf 'discovery control: config=%s; probe=%s\n' "$noscan" "$work/discovery.php"
+stat -c 'mtime=%y size=%s file=%n' "$noscan" "$work/discovery.php"
+sha256sum "$noscan" "$work/discovery.php"
+expect red 'NEGATIVE CONTROL missing CI helper discovery' \
+  'Access to constant USERNAME on an unknown class ViMbAdmin\Tests\BrowserFixture\SuperAdmin.' -- \
+  discovery "$noscan" "$work/discovery-mutant.log"
+sed -n '/Access to constant USERNAME on an unknown class/p' "$work/discovery-mutant.log"
+expect green 'restored shared config discovers CI-only SuperAdmin' '' -- \
+  discovery phpstan-level10.neon "$work/discovery-restored.log"
 
 if [ "$failures" -ne 0 ]; then
   printf '%s check(s) failed.\n' "$failures" >&2

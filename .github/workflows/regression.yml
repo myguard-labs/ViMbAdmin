@@ -133,6 +133,11 @@ jobs:
       - name: UI mutation controls reject false passing child results
         run: node ci/test-refactor-ui-controls.cjs
 
+      - name: Entry-control evidence is retained only on failure
+        run: |
+          node ci/test-entry-autoload-workflow.cjs
+          node ci/test-entry-autoload-cleanup.cjs
+
       - name: Containerized Chrome runner hardening
         run: >-
           VIMBADMIN_BROWSER=chrome bash tests/test-headless-chrome-container.sh
@@ -153,6 +158,14 @@ jobs:
 
       - name: Authentication and error routes render in a real browser
         run: bash ci/test-browser-auth-errors.sh
+
+      - name: Tenant boundaries render and preserve isolated state
+        run: |
+          bash ci/test-browser-tenant-mutation.sh
+          bash ci/test-browser-tenant.sh
+
+      - name: Owned browser containers remove their anonymous volumes
+        run: bash ci/test-browser-owned-cleanup.sh
 
       - name: Alias destinations render as text (stored-XSS regression)
         run: >-
@@ -256,6 +269,12 @@ jobs:
 
       - name: Run all framework-free PHP regression tests
         run: bash tests/run-unit-tests.sh
+
+      - name: Native controller discovery honours configured entity paths
+        run: bash ci/test-entry-autoload-control.sh
+
+      - name: Browser fixtures require their canonical super admin
+        run: php ci/test-browser-fixture-super-admin.php
 
       - name: PHP support claims match the installable Composer contract
         run: php ci/test-php-version-contract.php

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Doctrine\ORM\Tools\SchemaTool;
+use ViMbAdmin\Tests\BrowserFixture\SuperAdmin;
 
 if ($argc < 4 || $argc > 5 || ($argc === 5 && $argv[4] !== '--sessions-only')) {
     fwrite(STDERR, "usage: browser-application-setup.php APP_ROOT SESSION_DIR STATE_DIR [--sessions-only]\n");
@@ -27,6 +28,7 @@ if ($applicationPath === false) {
 define('APPLICATION_PATH', $applicationPath);
 define('APPLICATION_ENV', 'browser-fixture');
 require $appRoot . '/vendor/autoload.php';
+require dirname(__DIR__, 2) . '/ci/support/browser-fixture-super-admin.php';
 set_include_path(implode(PATH_SEPARATOR, [realpath(APPLICATION_PATH . '/../library'), get_include_path()]));
 
 $container = ViMbAdmin\Kernel\Bootstrap::boot(APPLICATION_PATH, APPLICATION_ENV, 'ViMbAdmin_Auth');
@@ -36,7 +38,7 @@ if (!$em instanceof Doctrine\ORM\EntityManagerInterface) {
 }
 $metadata = $em->getMetadataFactory()->getAllMetadata();
 if ($sessionsOnly) {
-    $admin = $em->getRepository(Entities\Admin::class)->findOneBy([]);
+    $admin = $em->getRepository(Entities\Admin::class)->findOneBy(['username' => SuperAdmin::USERNAME]);
     if (!$admin instanceof Entities\Admin) {
         throw new RuntimeException('fixture admin is unavailable for session reset');
     }
@@ -47,8 +49,15 @@ if ($sessionsOnly) {
     }
 } else {
     (new SchemaTool($em))->createSchema($metadata);
+    if (getenv('VIMBADMIN_FIXTURE_TENANT') === '1') {
+        // Keep a non-super row first so session resets cannot rely on row order.
+        $assigned = (new Entities\Admin())->setUsername('assigned@browser.example.test')
+            ->setPassword(password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT))
+            ->setSuper(false)->setActive(true)->setCreated(new DateTime('2020-01-01'));
+        $em->persist($assigned);
+    }
     $admin = new Entities\Admin();
-    $admin->setUsername('browser-fixture-admin.invalid');
+    $admin->setUsername(SuperAdmin::USERNAME);
     $admin->setPassword(password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT));
     $admin->setSuper(true);
     $admin->setActive(true);
@@ -57,6 +66,7 @@ if ($sessionsOnly) {
     $em->persist($admin);
     $em->flush();
 }
+$admin = SuperAdmin::requireAdmin($admin);
 $adminId = $admin->getId();
 if (!is_int($adminId) || $adminId < 1) {
     throw new RuntimeException('fixture admin id was not generated');
@@ -154,6 +164,10 @@ $writeSession('expired', static function () use ($admin): void {
         ],
     ];
 });
+
+if (getenv('VIMBADMIN_FIXTURE_TENANT') === '1') {
+    require dirname(__DIR__, 2) . '/ci/support/browser-tenant-seed.php';
+}
 
 $aliasPath = $stateDir . '/session-aliases.json';
 if (file_put_contents($aliasPath, json_encode($aliases, JSON_THROW_ON_ERROR)) === false) {

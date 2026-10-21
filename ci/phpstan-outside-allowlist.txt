@@ -14,10 +14,15 @@
 .github/scripts/assert-composer-lock.php	tooling-script
 .php-cs-fixer.dist.php	external-tool-config
 ci/maintenance-operation-observer.php	ci-support-script
+ci/support/browser-fixture-super-admin.php	ci-support-script
+ci/support/browser-tenant-seed.php	ci-support-script
+ci/support/entry-autoload-probe.php	ci-support-script
 ci/test-access-cache-invalidation.php	ci-test-script
 ci/test-angie-server-tokens.php	ci-test-script
 ci/test-bcrypt-password-length.php	ci-test-script
+ci/test-browser-fixture-super-admin.php	ci-test-script
 ci/test-bundle-utf8.php	ci-test-script
+ci/test-entry-autoload.php	ci-test-script
 ci/test-cli-once-forwarding.php	ci-test-script
 ci/test-cron-readme-queue-contract.php	ci-test-script
 ci/test-curl-dependency-contract.php	ci-test-script

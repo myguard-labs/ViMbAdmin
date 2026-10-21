@@ -33,14 +33,20 @@ $path = \ViMbAdmin\Kernel\Router::withoutBasePath(
 $router = new \ViMbAdmin\Kernel\Router(\ViMbAdmin\Kernel\Http\Kernel::nativeControllers());
 $probe = new \ViMbAdmin\Kernel\Http\Kernel($router);
 
-if (!$probe->canHandle($path)) {
-    http_response_code(404);
-    header('Content-Type: text/plain; charset=utf-8');
-    echo "Not found\n";
-    return;
-}
-
 try {
+    if (!$probe->canHandle($path, static function (): void {
+        // Reflection loads controller signatures before the normal bootstrap.
+        // Honour configured entity paths without opening a session or DB.
+        \ViMbAdmin\Kernel\Doctrine\EntityManagerFactory::registerEntityAutoloaders(
+            \ViMbAdmin\Kernel\Config\IniConfig::load(APPLICATION_PATH . '/configs/application.ini', APPLICATION_ENV),
+        );
+    })) {
+        http_response_code(404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Not found\n";
+        return;
+    }
+
     $container = \ViMbAdmin\Kernel\Bootstrap::boot(APPLICATION_PATH, APPLICATION_ENV, 'ViMbAdmin_Auth');
     $kernel = new \ViMbAdmin\Kernel\Http\Kernel(
         $router,

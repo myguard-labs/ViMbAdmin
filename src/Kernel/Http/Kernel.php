@@ -101,8 +101,10 @@ final class Kernel
      * A controller whose specific action method does not exist is NOT
      * servable here; native controllers must therefore never punt a route they
      * own by returning null at runtime — they self-handle and redirect instead.
+     *
+     * @param (\Closure(): void)|null $beforeControllerLoad Resource-free dependency registration.
      */
-    public function canHandle(string $path): bool
+    public function canHandle(string $path, ?\Closure $beforeControllerLoad = null): bool
     {
         $match = $this->router->match($path);
         if ($match === null) {
@@ -112,8 +114,16 @@ final class Kernel
             return true; // a built-in (e.g. kernel-health)
         }
         $class = self::NATIVE_CONTROLLERS[$match->controller] ?? null;
-
-        return $class !== null && method_exists($class, $match->actionMethod);
+        if ($class === null) {
+            return false;
+        }
+        // Controller return types can refer to configured Doctrine entities.
+        // Register their autoloaders before PHP checks inherited signatures,
+        // while unknown routes and built-in handlers still need no resources.
+        if ($beforeControllerLoad !== null) {
+            $beforeControllerLoad();
+        }
+        return method_exists($class, $match->actionMethod);
     }
 
     /**

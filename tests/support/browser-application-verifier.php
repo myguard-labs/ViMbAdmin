@@ -34,7 +34,7 @@ function requiredSecretFile(string $environmentName): string
     return rtrim($value, "\n");
 }
 
-/** @return array{tables:int,rows:int,sha256:string} */
+/** @return array<string,mixed> */
 function databaseSnapshot(): array
 {
     $host = requiredEnvironment('DB_HOST');
@@ -63,6 +63,7 @@ function databaseSnapshot(): array
     sort($tables, SORT_STRING);
     $database = hash_init('sha256');
     $rowCount = 0;
+    $entityDigests = [];
     foreach ($tables as $table) {
         $rowStatement = $pdo->query('SELECT * FROM `' . $table . '`');
         if ($rowStatement === false) {
@@ -71,13 +72,37 @@ function databaseSnapshot(): array
         $rows = $rowStatement->fetchAll(PDO::FETCH_ASSOC);
         $rowHashes = [];
         foreach ($rows as $row) {
-            $rowHashes[] = hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
+            $rowHash = hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
+            $rowHashes[] = $rowHash;
+            if (getenv('VIMBADMIN_FIXTURE_TENANT') === '1'
+                && in_array($table, ['admin', 'domain', 'mailbox'], true)) {
+                $id = is_array($row) ? ($row['id'] ?? null) : null;
+                if (!is_string($id) || !ctype_digit($id)) {
+                    throw new RuntimeException('tenant entity id is invalid');
+                }
+                $entityDigests[$table][$id] = $rowHash;
+            }
         }
         sort($rowHashes, SORT_STRING);
         $rowCount += count($rowHashes);
         hash_update($database, $table . "\0" . implode("\0", $rowHashes) . "\n");
     }
-    return ['tables' => count($tables), 'rows' => $rowCount, 'sha256' => hash_final($database)];
+    $snapshot = ['tables' => count($tables), 'rows' => $rowCount, 'sha256' => hash_final($database)];
+    if (getenv('VIMBADMIN_FIXTURE_TENANT') === '1') {
+        // Explicit projections keep passwords, tokens and other private fields
+        // out of browser diagnostics while proving per-tenant state changes.
+        $snapshot['entities'] = [];
+        $snapshot['entityDigests'] = $entityDigests;
+        foreach (['admin' => 'id,username,active,super', 'domain' => 'id,domain,active',
+            'mailbox' => 'id,username,active,name'] as $table => $columns) {
+            $statement = $pdo->query('SELECT ' . $columns . ' FROM `' . $table . '` ORDER BY id');
+            if ($statement === false) {
+                throw new RuntimeException('tenant projection failed');
+            }
+            $snapshot['entities'][$table] = $statement->fetchAll(PDO::FETCH_ASSOC);
+        }
+    }
+    return $snapshot;
 }
 
 /** @return array{exists:int,sha256:string}|array{exists:bool,bytes:int,sha256:?string} */

@@ -22,6 +22,10 @@ parameters:
         - application/Proxies/__CG__*.php
     bootstrapFiles:
         - vendor/autoload.php
+    # The browser setup under tests/ references this CI-only class. Discover
+    # its symbols without adding CI fixtures to production autoloading.
+    scanFiles:
+        - ci/support/browser-fixture-super-admin.php
     # Fixed debt must be removed from the matching baseline in the same change;
     # stale suppressions are errors rather than reusable hiding places.
     reportUnmatchedIgnoredErrors: true

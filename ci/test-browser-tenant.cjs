@@ -38,6 +38,10 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input }
   const csrfTokens = new WeakMap();
   const owned = 'owned.browser.example.test';
   const foreign = 'foreign.browser.example.test';
+  const fixtureAdmin = (await snapshot(input, 'super')).entities.admin.find(row => Number(row.id) === ids.admin.super);
+  assert.equal(fixtureAdmin?.username, 'browser-fixture-admin.invalid', 'tenant super role uses the canonical identity');
+  assert.equal(fixtureAdmin.super, '1', 'tenant canonical identity retains super privileges');
+  assert.ok(ids.admin.assigned < ids.admin.super, 'non-super fixture row precedes the canonical super admin');
 
   async function rolePage(role, path) {
     const state = JSON.parse(await fs.readFile(`${input.stateDirectory}/tenant_${role}.json`, 'utf8'));

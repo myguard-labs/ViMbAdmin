@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
+use ViMbAdmin\Tests\BrowserFixture\SuperAdmin;
+
 // Included only by the private browser fixture after its session writer boots.
 // Each browser run resets flags and role sessions; no deployed state is used.
-$tenantAdmins = ['super' => $admin];
+$tenantAdmins = ['super' => SuperAdmin::requireAdmin($admin)];
 foreach (['assigned', 'unassigned', 'target'] as $role) {
     $username = $role . '@browser.example.test';
     $actor = $em->getRepository(Entities\Admin::class)->findOneBy(['username' => $username]);

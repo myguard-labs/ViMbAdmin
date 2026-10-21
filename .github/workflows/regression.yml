@@ -273,6 +273,9 @@ jobs:
       - name: Native controller discovery honours configured entity paths
         run: bash ci/test-entry-autoload-control.sh
 
+      - name: Browser fixtures require their canonical super admin
+        run: php ci/test-browser-fixture-super-admin.php
+
       - name: PHP support claims match the installable Composer contract
         run: php ci/test-php-version-contract.php
 

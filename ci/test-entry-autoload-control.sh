@@ -5,12 +5,18 @@ cd "$(dirname "$0")/.."
 control_dir=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-entry-autoload-control.XXXXXX")
 printf 'control_fixture=%s\n' "$control_dir"
 cleanup() {
-  local status=$?
+  local status=$? name
   trap - EXIT
   if ((status == 0)); then
     rm -rf -- "${control_dir:?}"
   else
     printf 'Failed control evidence retained: %s\n' "$control_dir" >&2
+    # These four probes use synthetic configuration and never contain secrets.
+    for name in baseline.log mutant.log probe-mutant.log restored.log; do
+      [[ -f $control_dir/$name ]] || continue
+      printf 'Control diagnostic: %s (up to 40 lines / 8192 bytes)\n' "$name" >&2
+      head -c 8192 -- "$control_dir/$name" | sed -n '1,40p' >&2 || :
+    done
   fi
   exit "$status"
 }
@@ -31,7 +37,6 @@ VIMBADMIN_ENTRY_AUTOLOAD_CANDIDATE="$control_dir/index-mutant.php" \
   php ci/test-entry-autoload.php >"$control_dir/mutant.log" 2>&1 || status=$?
 if [[ $status == 0 ]] || ! grep -qF 'because class Entities\Admin is not available' "$control_dir/mutant.log"; then
   echo 'FAIL: cold controller autoload mutation did not reach the signature fatal' >&2
-  sed -n '1,60p' "$control_dir/mutant.log" >&2
   exit 1
 fi
 printf '%s\n' 'control_command=VIMBADMIN_ENTRY_AUTOLOAD_CANDIDATE=<private-mutant> php ci/test-entry-autoload.php'

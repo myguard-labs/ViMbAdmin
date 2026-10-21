@@ -154,6 +154,14 @@ jobs:
       - name: Authentication and error routes render in a real browser
         run: bash ci/test-browser-auth-errors.sh
 
+      - name: Tenant boundaries render and preserve isolated state
+        run: |
+          bash ci/test-browser-tenant-mutation.sh
+          bash ci/test-browser-tenant.sh
+
+      - name: Owned browser containers remove their anonymous volumes
+        run: bash ci/test-browser-owned-cleanup.sh
+
       - name: Alias destinations render as text (stored-XSS regression)
         run: >-
           PHP_RENDERER="$GITHUB_WORKSPACE/.github/scripts/run-static-php-container.sh"
@@ -256,6 +264,12 @@ jobs:
 
       - name: Run all framework-free PHP regression tests
         run: bash tests/run-unit-tests.sh
+
+      - name: Native controller discovery honours configured entity paths
+        run: bash ci/test-entry-autoload-control.sh
+
+      - name: Entry-control evidence is retained only on failure
+        run: node ci/test-entry-autoload-cleanup.cjs
 
       - name: PHP support claims match the installable Composer contract
         run: php ci/test-php-version-contract.php

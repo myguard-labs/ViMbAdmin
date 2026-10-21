@@ -155,6 +155,10 @@ $writeSession('expired', static function () use ($admin): void {
     ];
 });
 
+if (getenv('VIMBADMIN_FIXTURE_TENANT') === '1') {
+    require dirname(__DIR__, 2) . '/ci/support/browser-tenant-seed.php';
+}
+
 $aliasPath = $stateDir . '/session-aliases.json';
 if (file_put_contents($aliasPath, json_encode($aliases, JSON_THROW_ON_ERROR)) === false) {
     throw new RuntimeException('fixture session aliases could not be written');

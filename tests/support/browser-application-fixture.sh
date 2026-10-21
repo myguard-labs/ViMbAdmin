@@ -24,6 +24,15 @@ if [[ -n ${VIMBADMIN_BROWSER:-} ]]; then
 fi
 
 cd "$(dirname "$0")/../.."
+suite=${VIMBADMIN_BROWSER_APPLICATION_SUITE:-auth-errors}
+case $suite in
+auth-errors | tenant) ;;
+*)
+  echo 'FAIL: unsupported browser application suite' >&2
+  exit 64
+  ;;
+esac
+if [[ $suite == tenant ]]; then export VIMBADMIN_FIXTURE_TENANT=1; fi
 evidence_dir=''
 if [[ ${1:-} == --evidence-dir ]]; then
   [[ $# -eq 2 && -n ${2:-} ]] || {
@@ -41,8 +50,8 @@ fi
 mkdir -p "$evidence_dir/logs" "$evidence_dir/processes"
 evidence_dir=$(realpath "$evidence_dir")
 
-readonly run_label='myguard.run=vimbadmin-c121-r1-browser-review'
-readonly name_prefix='myguard-run-vimbadmin-c121-r1-browser-review-'
+readonly run_label="myguard.run=${VIMBADMIN_BROWSER_RUN_LABEL:-vimbadmin-c121-r1-browser-review}"
+readonly name_prefix="myguard-run-${run_label#myguard.run=}-"
 readonly mariadb_image='mirror.gcr.io/library/mariadb@sha256:2439dcd7d14010ecd1ff7a4e1c5abe8e208c34fe35290744deeeaac3569043c3'
 readonly browser_image='vimbadmin-browser:1.63.0'
 for required_command in composer curl docker openssl php python3 realpath sha256sum tar; do
@@ -68,15 +77,46 @@ readonly verifier_curl_config=$fixture_root/verifier-curl.conf
 declare -a container_ids=()
 declare -a php_pids=()
 declare -a collector_pids=()
+declare -A removed_containers=()
 container_counter=0
 cleanup_started=0
+
+remove_owned_container() {
+  local cid=${1:?} force=${2:-} known owned=0 volume remaining
+  local -a remove_args=(rm -v)
+  for known in "${container_ids[@]}"; do
+    if [[ $known == "$cid" ]]; then
+      owned=1
+      break
+    fi
+  done
+  if ((owned == 0)); then
+    echo 'FAIL: refusing cleanup of an unrecorded container' >&2
+    return 1
+  fi
+  if [[ -z ${removed_containers[$cid]:-} ]]; then
+    docker inspect --format '{{range .Mounts}}{{if eq .Type "volume"}}{{.Name}}{{"\n"}}{{end}}{{end}}' \
+      "$cid" >"$evidence_dir/logs/mounts-${cid}.log" || return 1
+    if [[ $force == force ]]; then remove_args+=(-f); fi
+    docker "${remove_args[@]}" "$cid" >/dev/null || return 1
+    removed_containers[$cid]=1
+  fi
+  while IFS= read -r volume; do
+    [[ -n $volume ]] || continue
+    remaining=$(docker volume ls --filter "name=^${volume}$" --format '{{.Name}}') || return 1
+    if [[ -n $remaining ]]; then
+      echo 'FAIL: owned container volume remains after removal' >&2
+      return 1
+    fi
+  done <"$evidence_dir/logs/mounts-${cid}.log"
+}
 
 cleanup() {
   local status=${1:?}
   if ((cleanup_started)); then return "$status"; fi
   cleanup_started=1
   set +e
-  local index pid cid remaining recorded_remaining=0
+  local index pid cid remaining recorded_remaining=0 cleanup_failures=0
   for ((index = ${#php_pids[@]} - 1; index >= 0; index--)); do
     pid=${php_pids[$index]}
     if kill -0 "$pid" 2>/dev/null; then kill -TERM "$pid" 2>/dev/null; fi
@@ -84,7 +124,7 @@ cleanup() {
   done
   for pid in "${collector_pids[@]}"; do wait "$pid" 2>/dev/null; done
   for cid in "${container_ids[@]}"; do
-    docker rm -f "$cid" >/dev/null 2>&1
+    remove_owned_container "$cid" force || cleanup_failures=$((cleanup_failures + 1))
   done
   {
     echo "cleanup_original_status=$status"
@@ -102,11 +142,12 @@ cleanup() {
       echo 'label_filtered_remaining=0'
     fi
     echo "recorded_ids_remaining=$recorded_remaining"
+    echo "owned_cleanup_failures=$cleanup_failures"
   } >"$evidence_dir/logs/99-cleanup.log" 2>&1
   if [[ $fixture_root == /tmp/vimbadmin-browser-application.* && -d $fixture_root && ! -L $fixture_root ]]; then
     rm -rf -- "$fixture_root"
   fi
-  if ((recorded_remaining != 0)) || [[ -n ${remaining:-} ]]; then status=1; fi
+  if ((recorded_remaining != 0 || cleanup_failures != 0)) || [[ -n ${remaining:-} ]]; then status=1; fi
   return "$status"
 }
 trap 'status=$?; trap - EXIT; cleanup "$status"; exit $?' EXIT
@@ -370,6 +411,11 @@ done < <(git ls-files --others --exclude-standard | sort)
     tests/support/browser-application-verifier.php tests/support/browser-application-fixture.sh; do
     printf 'file\t%s\t%s\n' "$identity_file" "$(sha256sum "$identity_file" | awk '{print $1}')"
   done
+  if [[ $suite == tenant ]]; then
+    for identity_file in ci/test-browser-tenant.cjs ci/test-browser-tenant.sh ci/support/browser-tenant-seed.php; do
+      printf 'file\t%s\t%s\n' "$identity_file" "$(sha256sum "$identity_file" | awk '{print $1}')"
+    done
+  fi
   printf 'generated_config_sha256\t%s\n' "$(sha256sum "$app_root/application/configs/application.ini" | awk '{print $1}')"
   printf 'composer_installed_sha256\t%s\n' "$(sha256sum "$app_root/vendor/composer/installed.php" | awk '{print $1}')"
   printf 'browser_image_id\t%s\n' "$(docker image inspect --format '{{.Id}}' "$browser_image")"
@@ -384,7 +430,7 @@ run_captured_php application-setup "$evidence_dir/logs/03-application-setup.log"
   env VIMBADMIN_FIXTURE_ORIGIN="$app_origin" \
   php tests/support/browser-application-setup.php "$app_root" "$session_dir" "$state_dir"
 
-cp ci/test-browser-auth-errors.cjs "$fixture_root/test-browser-auth-errors.cjs"
+cp "ci/test-browser-$suite.cjs" "$fixture_root/test-browser-auth-errors.cjs"
 chmod 500 "$fixture_root/test-browser-auth-errors.cjs"
 sed 's/if (target.origin !== origin.origin) {/if (false \&\& target.origin !== origin.origin) {/' \
   .github/scripts/browser/run-fixture.cjs >"$fixture_root/run-fixture-origin-guard-mutant.cjs"
@@ -403,7 +449,8 @@ unset db_password verifier_token
 
 start_captured_php application-server "$evidence_dir/logs/04-application-server.log" \
   env APPLICATION_ENV=browser-fixture VIMBADMIN_FIXTURE_PUBLIC="$app_root/public" \
-  php -d display_errors=0 -d log_errors=1 -S "127.0.0.1:$app_port" -t "$app_root/public" \
+  php -d display_errors=0 -d log_errors=1 -d opcache.enable=0 -d opcache.enable_cli=0 \
+  -S "127.0.0.1:$app_port" -t "$app_root/public" \
   tests/support/browser-application-router.php
 app_pid=$CAPTURED_PID
 php_pids+=("$CAPTURED_PID")
@@ -437,6 +484,17 @@ unauthorized_verifier_status=$(curl --silent --max-time 2 --output /dev/null --w
   exit 1
 }
 
+apply_domain_authorization_mutation() {
+  local source=$1 target=$2
+  # shellcheck disable=SC2016 # Match literal PHP variables in the private copy.
+  sed 's/if (!$domain || (!$admin->isSuper() \&\& !$admin->canManageDomain($domain))) {/if (false) {/' \
+    "$source" >"$target" || return 1
+  if [[ $(grep -cF 'if (false) {' "$target") != 1 ]]; then
+    echo 'FAIL: domain authorization mutation must replace exactly one guard' >&2
+    return 1
+  fi
+}
+
 run_browser() {
   local engine=$1 case_name=$2 mutation=$3 expected_engine=$4 target_origin=$5 input_file=$6
   local safe_case=${case_name//[^a-z0-9]/-} cid name log status exit_code profile
@@ -447,6 +505,18 @@ run_browser() {
     "$evidence_dir/logs/session-reset-${engine}-${safe_case}.log" \
     env VIMBADMIN_FIXTURE_ORIGIN="$app_origin" \
     php tests/support/browser-application-setup.php "$app_root" "$session_dir" "$state_dir" --sessions-only
+  if [[ $suite == tenant ]]; then
+    cp src/Kernel/Controller/DomainController.php "$app_root/src/Kernel/Controller/DomainController.php"
+    if [[ $mutation == disable-domain-authorization ]]; then
+      # Mutate only the disposable application copy. PHP is interpreted with
+      # CLI opcache disabled; every request loads this exact source artifact.
+      apply_domain_authorization_mutation src/Kernel/Controller/DomainController.php \
+        "$app_root/src/Kernel/Controller/DomainController.php"
+    fi
+    stat --printf='source_artifact_mtime=%y source_artifact_bytes=%s\n' \
+      "$app_root/src/Kernel/Controller/DomainController.php" >"$evidence_dir/logs/artifact-${engine}-${safe_case}.log"
+    sha256sum "$app_root/src/Kernel/Controller/DomainController.php" >>"$evidence_dir/logs/artifact-${engine}-${safe_case}.log"
+  fi
   args=(--network host --cap-drop ALL --security-opt no-new-privileges
     --user "$(id -u):$(id -g)" --env "HOME=$fixture_root"
     --mount "type=bind,src=$fixture_root,dst=$fixture_root")
@@ -467,7 +537,7 @@ run_browser() {
   [[ $status == "$exit_code" ]] || status=$exit_code
   printf '%s\t%s\t%s\t%s\t%s\n' "$cid" "$name" "browser-$engine-$case_name" "$browser_image" "$status" \
     >>"$evidence_dir/container-results.tsv"
-  docker rm "$cid" >/dev/null
+  remove_owned_container "$cid"
   BROWSER_STATUS=$status
   BROWSER_LOG=$log
 }
@@ -498,6 +568,13 @@ expect_red() {
 }
 
 for engine in "${engines[@]}"; do
+  if [[ $suite == tenant ]]; then
+    expect_green "$engine" full
+    expect_red "$engine" domain-authorization-disabled disable-domain-authorization "$engine" \
+      'assigned cross-tenant domain toggle: expected exact denial ko'
+    expect_green "$engine" restored
+    continue
+  fi
   expect_green "$engine" full
   expect_red "$engine" wrong-engine '' deliberately-wrong \
     'application engine assertion: expected deliberately-wrong'
@@ -545,16 +622,17 @@ docker stop --time 10 "$mariadb_id" >/dev/null
 mariadb_exit=$(docker inspect --format '{{.State.ExitCode}}' "$mariadb_id")
 printf '%s\t%s\t%s\t%s\t%s\n' "$mariadb_id" "${name_prefix}1-mariadb" mariadb "$mariadb_image" "$mariadb_exit" \
   >>"$evidence_dir/container-results.tsv"
-docker rm "$mariadb_id" >/dev/null
+remove_owned_container "$mariadb_id"
 remaining=$(docker ps -aq --filter "label=$run_label")
 [[ -z $remaining ]] || {
   echo 'FAIL: label-filtered containers remain after fixture run' >&2
   exit 1
 }
 
+sha256sum "$evidence_dir"/logs/mounts-*.log >"$evidence_dir/container-mounts.sha256"
 sha256sum "$evidence_dir"/identities.tsv "$evidence_dir"/php-commands.tsv \
   "$evidence_dir"/php-processes.tsv "$evidence_dir"/browser-status.tsv \
   "$evidence_dir"/container-ids.tsv "$evidence_dir"/container-labels.tsv \
-  "$evidence_dir"/container-results.tsv >"$evidence_dir/core-manifest.sha256"
-printf 'OK: actual ViMbAdmin auth/error application fixture passed engines [%s] and observed-red controls\n' \
-  "${engines[*]}"
+  "$evidence_dir"/container-results.tsv "$evidence_dir/container-mounts.sha256" >"$evidence_dir/core-manifest.sha256"
+printf 'OK: actual ViMbAdmin %s application fixture passed engines [%s] and observed-red controls\n' \
+  "$suite" "${engines[*]}"

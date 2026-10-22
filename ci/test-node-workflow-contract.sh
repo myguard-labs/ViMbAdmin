@@ -24,7 +24,7 @@ job_body() {
 }
 
 check_job() {
-  local workflow=$1 job=$2 consumer=$3 body setup_block setup_count pin_count cache_count setup_line consumer_line
+  local workflow=$1 job=$2 consumer=$3 body setup_block setup_with setup_count pin_count cache_count setup_line consumer_line
   if ! body=$(job_body "$workflow" "$job"); then
     fail "$(basename "$workflow") job $job is missing or uses an unsupported declaration"
   fi
@@ -42,13 +42,23 @@ check_job() {
     found { print; printed = 1 }
   ' <<<"$body")
 
-  pin_count=$(grep -cE -- "^[[:space:]]+node-version: '$node_major'[[:space:]]*$" <<<"$setup_block" || true)
+  setup_with=$(awk '
+    $0 == "        with:" { found = 1; next }
+    found && /^        [^[:space:]#]/ { exit }
+    found { print }
+  ' <<<"$setup_block")
+
+  pin_count=$(grep -cE -- "^          node-version: '$node_major'[[:space:]]*$" <<<"$setup_with" || true)
   [[ $pin_count == 1 ]] ||
     fail "$(basename "$workflow") job $job must pin node-version '$node_major' exactly once (found $pin_count)"
 
-  cache_count=$(grep -cE -- '^[[:space:]]+package-manager-cache: false[[:space:]]*$' <<<"$setup_block" || true)
+  cache_count=$(grep -cE -- '^          package-manager-cache: false[[:space:]]*$' <<<"$setup_with" || true)
   [[ $cache_count == 1 ]] ||
     fail "$(basename "$workflow") job $job must disable setup-node package-manager-cache exactly once (found $cache_count)"
+
+  if grep -qE -- "^          ([\"']?cache[\"']?):" <<<"$setup_with"; then
+    fail "$(basename "$workflow") job $job must not configure setup-node cache input"
+  fi
 
   setup_line=$(grep -nF -- "uses: $setup_node" <<<"$body" | cut -d: -f1)
   consumer_line=$(grep -nF -- "$consumer" <<<"$body" | head -1 | cut -d: -f1)
@@ -82,6 +92,8 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
       cat "$fixture/output" >&2
       fail "fixture rejected $label without the expected assertion"
     }
+    printf 'Negative control rejected: %s; command=NODE_CONTRACT_FIXTURE_MODE=1 NODE_CONTRACT_REGRESSION_WORKFLOW=%q NODE_CONTRACT_STATIC_ANALYSIS_WORKFLOW=%q bash %q; assertion=%s\n' \
+      "$label" "$fixture/regression.yml" "$fixture/static-analysis.yml" "${BASH_SOURCE[0]}" "$assertion"
     cp -- "$regression" "$fixture/regression.yml"
     cp -- "$static_analysis" "$fixture/static-analysis.yml"
   }
@@ -111,6 +123,46 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
     "$fixture/regression.yml"
   expect_rejected "implicit package-manager cache behavior" \
     'regression.yml job assets must disable setup-node package-manager-cache exactly once (found 0)'
+
+  if ! awk -v action="      - uses: $setup_node" '
+    $0 == action { in_setup = 1 }
+    in_setup && $0 == "        with:" {
+      if ((getline node_version) <= 0 || node_version != "          node-version: '\''22'\''") exit 2
+      print "        env:"
+      print node_version
+      print
+      changed = 1
+      in_setup = 0
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-misplaced-node-version.yml"; then
+    fail "fixture preparation failed: expected exactly one assets node-version input target"
+  fi
+  mv -- "$fixture/regression.with-misplaced-node-version.yml" "$fixture/regression.yml"
+  expect_rejected "node-version misplaced under env" \
+    "regression.yml job assets must pin node-version '22' exactly once (found 0)"
+
+  sed -i '0,/package-manager-cache: false/s//package-manager-cache: false\n          cache: npm/' \
+    "$fixture/regression.yml"
+  expect_rejected "explicit setup-node cache input" \
+    'regression.yml job assets must not configure setup-node cache input'
+
+  sed -i '0,/package-manager-cache: false/s//package-manager-cache: false\n          "cache": npm/' \
+    "$fixture/regression.yml"
+  expect_rejected "quoted explicit setup-node cache input" \
+    'regression.yml job assets must not configure setup-node cache input'
+
+  sed -i "0,/node-version: '22'/s//node-version: '22'\n        # setup-node inputs may contain YAML comments/" \
+    "$fixture/regression.yml"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a YAML comment within setup-node inputs"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a YAML comment within setup-node inputs'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
 
   boundary_block=$(sed -n '/      # actions\/setup-node v6.3.0/,+4p' "$fixture/regression.yml")
   sed -i '/      # actions\/setup-node v6.3.0/,+4d' "$fixture/regression.yml"

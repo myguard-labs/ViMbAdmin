@@ -33,6 +33,11 @@ jobs:
       - name: PR runner job count reports observed and expected values
         run: bash ci/test-pr-runner-isolation-count.sh
 
+      # actions/setup-node v6.3.0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+
       - name: Install pinned asset toolchain
         run: |
           compiler_url=https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/

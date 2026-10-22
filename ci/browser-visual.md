@@ -25,14 +25,20 @@ responsive bounds, keyboard dismissal and restored opener focus.
 Assertions check application status and route, stylesheet loading/order,
 computed body and heading colors, body text contrast, named navigation and
 keyboard expansion, and selected primary action visibility, hit testing and
-focus. Desktop surfaces select an explicit rendered control instead of skipping
-the checks when the responsive navigation toggle is hidden. Bootstrap collapse
+focus. Each surface selects its real page action at all three widths; narrow
+navigation toggle visibility, geometry, center hit testing, naming, focus and
+keyboard expansion checks run separately. Reports retain the narrow toggle's
+geometry and hit result. Bootstrap collapse
 transitions finish before hit testing. Independent private-source mutations hide
-and clip an action, hide a desktop administrator action, remove the navigation name
+and clip an action, hide a desktop administrator action, hide and clip that page
+action only below 992 pixels, independently hide, clip or cover the narrow
+navigation toggle, remove the navigation name
 and focusability, remove focusability alone, and omit the dark stylesheet.
 Every engine must observe each named assertion fail and both restored skins
-pass. PHP opcache is disabled and compiled Smarty templates are invalidated
-for every changed source. The working application source is never mutated.
+pass. Both narrow-only page-action controls must pass the desktop action and
+fail their named assertions at 768 pixels. PHP opcache is disabled and compiled
+Smarty templates are invalidated for every changed source. The working
+application source is never mutated.
 
 Each report contains public route/role/viewport bindings, computed styles,
 stylesheet status, horizontal overflow and visible input controls lacking a

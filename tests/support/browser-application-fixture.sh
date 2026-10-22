@@ -622,6 +622,23 @@ run_browser() {
       sed -i 's/<button class="btn btn-sm"/<button style="clip-path: inset(100%);" class="btn btn-sm"/' "$app_root/application/views/maintenance/index.phtml"
     elif [[ $mutation == hidden-desktop-action ]]; then
       sed -i 's/id="add_admin"/id="add_admin" style="display: none;"/' "$app_root/application/views/admin/list.phtml"
+    elif [[ $mutation == hidden-narrow-action ]]; then
+      sed -i '$a<style>@media (max-width: 991.98px) { #add_admin { display: none !important; } }</style>' \
+        "$app_root/application/views/admin/list.phtml"
+    elif [[ $mutation == clipped-narrow-action ]]; then
+      sed -i '$a<style>@media (max-width: 991.98px) { #add_admin { clip-path: inset(100%) !important; } }</style>' \
+        "$app_root/application/views/admin/list.phtml"
+    elif [[ $mutation == hidden-narrow-toggle ]]; then
+      sed -i '$a<style>@media (max-width: 991.98px) { .navbar-toggler { display: none !important; } }</style>' \
+        "$app_root/application/views/header.phtml"
+    elif [[ $mutation == clipped-narrow-toggle ]]; then
+      sed -i '$a<style>@media (max-width: 991.98px) { .navbar-toggler { clip-path: inset(100%) !important; } }</style>' \
+        "$app_root/application/views/header.phtml"
+    elif [[ $mutation == covered-narrow-toggle ]]; then
+      sed -i '0,/<\/button>/s@</button>@</button><span class="visual-toggle-cover" aria-hidden="true"></span>@' \
+        "$app_root/application/views/header.phtml"
+      sed -i '$a<style>.visual-toggle-cover { display: none; } @media (max-width: 991.98px) { .navbar > .container { position: relative; } .visual-toggle-cover { display: block; position: absolute; top: 0; right: 0; width: 80px; height: 56px; z-index: 2000; } }</style>' \
+        "$app_root/application/views/header.phtml"
     elif [[ $mutation == missing-label-focus ]]; then
       sed -i 's/aria-label="Toggle navigation"/aria-label="" tabindex="-1"/' "$app_root/application/views/header.phtml"
     elif [[ $mutation == missing-focus ]]; then
@@ -738,6 +755,11 @@ for engine in "${engines[@]}"; do
     expect_red "$engine" dark-hidden-action hidden-action "$engine" 'visual action is visible: maintenance release check'
     expect_red "$engine" dark-clipped-action clipped-action "$engine" 'maintenance: action is not clipped or covered'
     expect_red "$engine" dark-hidden-desktop-action hidden-desktop-action "$engine" 'admins: primary action visible'
+    expect_red "$engine" dark-hidden-narrow-action hidden-narrow-action "$engine" 'admins: primary action visible at 768'
+    expect_red "$engine" dark-clipped-narrow-action clipped-narrow-action "$engine" 'admins: action is not clipped or covered at 768'
+    expect_red "$engine" dark-hidden-narrow-toggle hidden-narrow-toggle "$engine" 'navigation toggle is visible at 768'
+    expect_red "$engine" dark-clipped-narrow-toggle clipped-narrow-toggle "$engine" 'navigation toggle is not clipped or covered at 768'
+    expect_red "$engine" dark-covered-narrow-toggle covered-narrow-toggle "$engine" 'navigation toggle is not clipped or covered at 768'
     expect_red "$engine" dark-missing-label-focus missing-label-focus "$engine" 'navigation toggle has accessible name and keyboard focus'
     expect_red "$engine" dark-missing-focus missing-focus "$engine" 'navigation toggle has accessible name and keyboard focus'
     expect_red "$engine" dark-omitted-skin omitted-skin "$engine" 'dark skin stylesheet is loaded last'

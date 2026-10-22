@@ -6,6 +6,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
+function controlGeometry(node) {
+  const rect = node.getBoundingClientRect();
+  const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  return { x: rect.x, right: rect.right, top: rect.top, bottom: rect.bottom,
+    width: rect.width, height: rect.height, hit: hit === node || node.contains(hit) };
+}
+
 // Executed in the page; return geometry/styles and control identifiers only.
 function appearance() {
   const pick = selector => {
@@ -58,35 +65,34 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input, 
     ['lost-password', 'anonymous', '/auth/lost-password', 'form button[type="submit"]'],
     ['change-password', 'anonymous', '/auth/change-password', 'form button[type="submit"]'],
     ['totp', 'pending_totp', '/auth/totp', 'form button[type="submit"]'],
-    ['totp-setup', 'pending_setup', '/auth/totp-setup', '.navbar-toggler', 'form button[type="submit"]'],
-    ['admins', 'tenant_super', '/admin/list', '.navbar-toggler', '#add_admin'],
+    ['totp-setup', 'pending_setup', '/auth/totp-setup', 'form button[type="submit"]'],
+    ['admins', 'tenant_super', '/admin/list', '#add_admin'],
     ['admin-add', 'tenant_super', '/admin/add', 'form button[type="submit"]'],
     ['admin-password', 'tenant_super', `/admin/password/aid/${ids.admin.super}`, 'form button[type="submit"]'],
-    ['admin-two-factor', 'tenant_super', '/admin/two-factor', '.navbar-toggler', 'form button[type="submit"]'],
+    ['admin-two-factor', 'tenant_super', '/admin/two-factor', 'form button[type="submit"]'],
     ['domains', 'tenant_super', '/domain/list', '#add_domain'],
-    ['assigned-domains', 'tenant_assigned', '/domain/list', '.navbar-toggler', `#list_table a[href$="/mailbox/list/did/${ids.domain.owned}"]`],
-    ['empty-domains', 'tenant_unassigned', '/domain/list', '.navbar-toggler', '#list_table_wrapper input[type="search"]'],
+    ['assigned-domains', 'tenant_assigned', '/domain/list', `#list_table a[href$="/mailbox/list/did/${ids.domain.owned}"]`],
+    ['empty-domains', 'tenant_unassigned', '/domain/list', '#list_table_wrapper input[type="search"]'],
     ['domain-add', 'tenant_super', '/domain/add', 'form button[type="submit"]'],
     ['domain-edit', 'tenant_super', `/domain/edit/did/${ids.domain.owned}`, 'form button[type="submit"]'],
-    ['domain-admins', 'tenant_super', `/domain/admins/did/${ids.domain.owned}`, '.navbar-toggler', '#add_admin'],
-    ['mailboxes', 'tenant_assigned', `/mailbox/list/did/${ids.domain.owned}`, '.navbar-toggler', '#add_mailbox'],
+    ['domain-admins', 'tenant_super', `/domain/admins/did/${ids.domain.owned}`, '#add_admin'],
+    ['mailboxes', 'tenant_assigned', `/mailbox/list/did/${ids.domain.owned}`, '#add_mailbox'],
     ['mailbox-add', 'tenant_assigned', `/mailbox/add/did/${ids.domain.owned}`, 'form button[type="submit"]'],
     ['mailbox-edit', 'tenant_assigned', `/mailbox/edit/mid/${ids.mailbox.owned}`, 'form button[type="submit"], form input[type="submit"]'],
     ['mailbox-password', 'tenant_assigned', `/mailbox/password/mid/${ids.mailbox.owned}`, 'form button[type="submit"]'],
-    ['aliases', 'tenant_assigned', `/alias/list/did/${ids.domain.owned}`, '.navbar-toggler', '#add_alias'],
+    ['aliases', 'tenant_assigned', `/alias/list/did/${ids.domain.owned}`, '#add_alias'],
     ['alias-add', 'tenant_assigned', `/alias/add/did/${ids.domain.owned}`, 'form button[type="submit"]'],
-    ['archives', 'tenant_super', '/archive/list', '.navbar-toggler', '#list_table_wrapper input[type="search"]'],
-    ['logs', 'tenant_super', '/log/list', '.navbar-toggler', '#list_table_wrapper input[type="search"]'],
-    ['queue', 'tenant_super', '/queue/index', '.navbar-toggler', 'form[action$="/queue/run-now"] button']
+    ['archives', 'tenant_super', '/archive/list', '#list_table_wrapper input[type="search"]'],
+    ['logs', 'tenant_super', '/log/list', '#list_table_wrapper input[type="search"]'],
+    ['queue', 'tenant_super', '/queue/index', 'form[action$="/queue/run-now"] button']
   ];
-  for (const [name, role, route, narrowActionSelector, desktopActionSelector = narrowActionSelector] of surfaces) {
+  for (const [name, role, route, actionSelector] of surfaces) {
     const state = JSON.parse(await fs.readFile(`${input.stateDirectory}/${role}.json`, 'utf8'));
     await browserContext.clearCookies();
     await browserContext.addCookies(state.cookies);
     const page = await browserContext.newPage();
     try {
       for (const width of [1440, 768, 375]) {
-        const actionSelector = width >= 992 ? desktopActionSelector : narrowActionSelector;
         await page.setViewportSize({ width, height: 900 });
         const response = await page.goto(`${targetOrigin}${route}`, { waitUntil: 'load', timeout: 15000 });
         assert.equal(response.status(), 200, `${name}: real application response`);
@@ -106,7 +112,14 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input, 
           'navigation toggle has accessible name and keyboard focus');
         assert.notEqual(await toggle.getAttribute('tabindex'), '-1',
           'navigation toggle has accessible name and keyboard focus');
+        let navigationToggle = null;
         if (width < 992) {
+          assert.ok(await toggle.isVisible(), `navigation toggle is visible at ${width}`);
+          navigationToggle = await toggle.evaluate(controlGeometry);
+          assert.ok(navigationToggle.x >= -1 && navigationToggle.right <= width + 1 &&
+            navigationToggle.top >= -1 && navigationToggle.bottom <= 901 &&
+            navigationToggle.width > 0 && navigationToggle.height > 0 && navigationToggle.hit,
+          `navigation toggle is not clipped or covered at ${width}: ${JSON.stringify(navigationToggle)}`);
           await toggle.focus();
           assert.ok(await toggle.evaluate(node => node === document.activeElement), 'responsive toggle accepts focus');
           await page.keyboard.press('Enter');
@@ -122,14 +135,9 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input, 
           assert.ok(await action.isVisible(), 'visual action is visible: maintenance release check');
         }
         await assert.doesNotReject(() => action.waitFor({ state: 'visible', timeout: 10000 }),
-          `${name}: primary action visible`);
+          `${name}: primary action visible at ${width}`);
         await action.scrollIntoViewIfNeeded();
-        const geometry = await action.evaluate(node => {
-          const rect = node.getBoundingClientRect();
-          const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
-          return { x: rect.x, right: rect.right, top: rect.top, bottom: rect.bottom,
-            width: rect.width, height: rect.height, hit: hit === node || node.contains(hit) };
-        });
+        const geometry = await action.evaluate(controlGeometry);
         assert.ok(geometry.x >= -1 && geometry.right <= width + 1 && geometry.width > 0 &&
           geometry.height > 0 && geometry.hit, `${name}: action is not clipped or covered at ${width}: ${JSON.stringify(geometry)}`);
         await action.focus();
@@ -186,7 +194,7 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input, 
         const screenshot = `${name}-${width}.png`;
         await page.screenshot({ path: path.join(artifacts, screenshot), fullPage: true,
           mask: [page.locator(screenshotMask)] });
-        report.surfaces.push({ name, role, route, width, actionSelector, computed, screenshot, sheets });
+        report.surfaces.push({ name, role, route, width, actionSelector, navigationToggle, computed, screenshot, sheets });
       }
     } catch (error) {
       await page.screenshot({ path: path.join(artifacts, `${name}-failure.png`), fullPage: true,

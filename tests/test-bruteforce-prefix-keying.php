@@ -92,6 +92,48 @@ function prefixLocked(ViMbAdmin_BruteForce $bruteForce, string $ip): bool
     return $bruteForce->isLocked(null);
 }
 
+/**
+ * Inspect executable tokens, not comments or timings. Together with the held
+ * lock exercise below, this witnesses a single non-blocking acquisition with
+ * an immediate skip, rather than a blocking call or a retry-until-success loop.
+ */
+function prefixMaintenanceLockIsNonBlocking(): bool
+{
+    $method = new \ReflectionMethod(ViMbAdmin_BruteForce::class, '_maybeReapStale');
+    $filename = $method->getFileName();
+    if ($filename === false) {
+        return false;
+    }
+    $lines = file($filename);
+    if ($lines === false) {
+        return false;
+    }
+    $source = implode('', array_slice(
+        $lines,
+        $method->getStartLine() - 1,
+        $method->getEndLine() - $method->getStartLine() + 1
+    ));
+    $code = '';
+    foreach (token_get_all('<?php ' . $source) as $token) {
+        if (!is_array($token)) {
+            $code .= $token;
+            continue;
+        }
+        if (in_array($token[0], [T_WHILE, T_DO, T_FOR, T_FOREACH, T_GOTO], true)) {
+            return false;
+        }
+        if (in_array($token[0], [T_OPEN_TAG, T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+            continue;
+        }
+        $code .= $token[1];
+    }
+
+    return substr_count($code, 'flock(') === 2
+        && substr_count($code, '_maybeReapStale(') === 1
+        && str_contains($code, 'if(!@flock($handle,LOCK_EX|LOCK_NB)){return;}')
+        && str_contains($code, 'finally{@flock($handle,LOCK_UN);}');
+}
+
 echo "== brute-force prefix keying, bounding and reaper scaling ==\n";
 
 $root = sys_get_temp_dir() . '/vimbadmin-bruteforce-prefix-' . bin2hex(random_bytes(8));
@@ -657,14 +699,25 @@ $steadyOptions = [
     'max_entries' => 4096,
 ];
 $steadyStart = hrtime(true);
+$steadyCursor = str_repeat('0', 64) . "\n";
+$steadyCursorWritten = false;
 for ($index = 0; $index < 200; $index++) {
     prefixRequestAttempt($steadyOptions, '203.0.113.5');
+    if ($index === 0) {
+        // A valid cursor with a distinct name makes even a one-file rescan
+        // observable: _reapStale() replaces it with the state's hash.
+        $steadyCursorWritten = file_put_contents($steadyDirectory . '/.reap-cursor', $steadyCursor) === 65;
+    }
 }
 $steadyElapsed = (hrtime(true) - $steadyStart) / 1e6;
 prefixCheck(
     'ordinary failed logins under the cap stay cheap',
     $steadyElapsed < 500.0 && count(prefixStateFiles($steadyDirectory)) === 1,
     sprintf('%.2f ms for 200 records', $steadyElapsed),
+);
+prefixCheck(
+    'ordinary under-cap records do not repeat the directory sweep',
+    $steadyCursorWritten && file_get_contents($steadyDirectory . '/.reap-cursor') === $steadyCursor,
 );
 
 $underCapDirectory = $root . '/under-cap';
@@ -881,6 +934,14 @@ prefixCheck(
 // complete anyway.
 
 $contendedDirectory = $root . '/contended';
+// Check before taking the lock so a blocking-call mutation fails explicitly
+// instead of deadlocking this process on its own held file description.
+$maintenanceNonBlocking = prefixMaintenanceLockIsNonBlocking();
+prefixCheck('maintenance acquisition is one non-blocking attempt with immediate skip', $maintenanceNonBlocking);
+if (!$maintenanceNonBlocking) {
+    prefixRemoveTree($root);
+    exit(1);
+}
 mkdir($contendedDirectory, 0700, true);
 $contended = new ViMbAdmin_BruteForce(null, [
     'statedir' => $contendedDirectory,
@@ -904,6 +965,15 @@ try {
     $contendedFailure = $exception->getMessage();
 }
 $contendedElapsed = (hrtime(true) - $contendedStart) / 1e6;
+// Observe all writes before releasing the maintenance lock. Returning early
+// from record() would satisfy a timing check but must not pass this witness.
+$contendedState = json_decode((string) file_get_contents(bruteForceStatePath($contendedDirectory, '203.0.113.0')), true);
+prefixCheck(
+    'all 20 records persist while the maintenance lock remains held',
+    $held && is_array($contendedState) && ($contendedState['attempts'] ?? null) === 20
+        && !is_file($contendedDirectory . '/.reap-stamp')
+        && !is_file($contendedDirectory . '/.reap-cursor'),
+);
 if (is_resource($hold)) {
     flock($hold, LOCK_UN);
     fclose($hold);
@@ -956,7 +1026,7 @@ prefixCheck(
 
 // ---- 10. fixed assertion count -----------------------------------------
 
-prefixCheck('fixed assertion count', BruteForcePrefixAssertions::$checks === 50, (string) BruteForcePrefixAssertions::$checks);
+prefixCheck('fixed assertion count', BruteForcePrefixAssertions::$checks === 53, (string) BruteForcePrefixAssertions::$checks);
 
 prefixRemoveTree($root);
 

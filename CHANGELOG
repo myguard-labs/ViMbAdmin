@@ -84,7 +84,7 @@ The below is the changelog for V2.x.x.
  - add: Mailbox access restriction allowing for POP3 only / IMAP only / both
          See: https://github.com/opensolutions/ViMbAdmin/wiki/POP3-IMAP-Access-Restriction
  - add: "allow_access_restriction" to application.ini to enable access
-        restiction options
+        restriction options
  - add: "migration_version" to application.ini.dist - only used for new
         installs
  - add: Doctrine migration tables now that we have had out first migration
@@ -92,7 +92,7 @@ The below is the changelog for V2.x.x.
  - fix: formatting in add/edit mailbox dialog
 
 2.0.8   2012-03-06
- - fix: Accidently commited testing code causing issue #10. Fixed.
+ - fix: Accidentally committed testing code causing issue #10. Fixed.
  - fix: Better Smarty 3.1 integration.
  - fix: Options in bin/minify-options.php to work with updated version
  - add: Popover to add alias to explain / highlight domain aliases
@@ -112,7 +112,7 @@ The below is the changelog for V2.x.x.
         login screen
 
 2.0.5   2012-03-05
- - fix: Some issues in JS causing errors and also affeting dialogs.
+ - fix: Some issues in JS causing errors and also affecting dialogs.
 
 2.0.4   2012-03-01
  - add: Now using groups of icons for actions rather than buttons
@@ -210,7 +210,7 @@ The below is the changelog for V2.x.x.
 0.2.1   2011-03-25
  - upd: it is possible now to add domains to admins through the
         Administrators->Domains screen
- - upd: checkbox to include/exclude mailbox aliases on the Maliboxes->Aliases
+ - upd: checkbox to include/exclude mailbox aliases on the Mailboxes->Aliases
         and Aliases pages
  - fix: the DataTables search was searching in the columns of the buttons too,
         providing fake results
@@ -235,7 +235,7 @@ The below is the changelog for V2.x.x.
         the numeric values, fixed by using Allan Jardine's DataTables sorting plugin
  - fix: some typos in texts
  - fix: clicking the "Add xyz" buttons at the top of the tables caused a sorting
-        on that coulumn, which didn't make any sense at all
+        on that column, which didn't make any sense at all
  - upd: less text in the footer, so ViMbAdmin hopefully fits on an 1024x768 screen
  - upd: jQuery UI 1.8.11
  - upd: ColorBox v1.3.16

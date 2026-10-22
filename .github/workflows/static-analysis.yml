@@ -207,6 +207,12 @@ jobs:
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
 
+      # actions/setup-node v6.3.0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
       - name: Install PHP lexer and pinned clone detector
         run: |
           sudo apt-get update

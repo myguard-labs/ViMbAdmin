@@ -26,13 +26,14 @@ fi
 cd "$(dirname "$0")/../.."
 suite=${VIMBADMIN_BROWSER_APPLICATION_SUITE:-auth-errors}
 case $suite in
-auth-errors | tenant) ;;
+auth-errors | tenant | operations) ;;
 *)
   echo 'FAIL: unsupported browser application suite' >&2
   exit 64
   ;;
 esac
-if [[ $suite == tenant ]]; then export VIMBADMIN_FIXTURE_TENANT=1; fi
+if [[ $suite == tenant || $suite == operations ]]; then export VIMBADMIN_FIXTURE_TENANT=1; fi
+if [[ $suite == operations ]]; then export VIMBADMIN_FIXTURE_OPERATIONS=1; fi
 evidence_dir=''
 if [[ ${1:-} == --evidence-dir ]]; then
   [[ $# -eq 2 && -n ${2:-} ]] || {
@@ -320,7 +321,13 @@ create_container() {
   CREATED_NAME=$name
 }
 
-create_container mariadb "$mariadb_image" \
+database_storage=()
+if [[ $suite == operations ]]; then
+  # Private throwaway data only. Keep the large PHP file-fixture suites from
+  # competing with cold database initialization on the host's disk.
+  database_storage+=(--tmpfs '/var/lib/mysql:rw,noexec,nosuid,size=512m')
+fi
+create_container mariadb "$mariadb_image" "${database_storage[@]}" \
   --publish 127.0.0.1::3306 \
   --mount "type=bind,src=$db_password_file,dst=/run/secrets/vimbadmin-db-password,readonly" \
   --env MARIADB_ROOT_PASSWORD_FILE=/run/secrets/vimbadmin-db-password \
@@ -396,6 +403,17 @@ cp "$app_root/application/configs/application.ini.dist" "$app_root/application/c
   printf 'resources.session.idle_timeout = 3600\n'
   printf 'temporary_directory = "%s"\n' "$app_root/var/tmp"
   printf 'bruteforce.enabled = 0\n'
+  if [[ $suite == operations ]]; then
+    printf 'mcp.enabled = true\n'
+    printf 'mcp.ratelimit.statedir = "%s"\n' "$app_root/var/tmp/mcp-rate"
+    printf 'queue.runner.key = "%s"\n' "$salt"
+    printf 'queue.runner.allowed_ips = "127.0.0.1/32"\n'
+    printf 'queue.runner.host = ""\n'
+    # A private verifier URL returns an authentic HTTP rejection for any
+    # accidental backend request; no live Dovecot address is configured.
+    printf 'doveadm.http.url = "%s/not-doveadm"\n' "$verifier_origin"
+    printf 'doveadm.http.api_key = "%s"\n' "$salt"
+  fi
   printf '\n[browser-fixture-failure : browser-fixture]\n'
   printf 'resources.doctrine2.connection.options.driver = "fixture_injected_invalid_driver"\n'
 } >>"$app_root/application/configs/application.ini"
@@ -426,6 +444,11 @@ done < <(git ls-files --others --exclude-standard | sort)
   done
   if [[ $suite == tenant ]]; then
     for identity_file in ci/test-browser-tenant.cjs ci/test-browser-tenant.sh ci/support/browser-tenant-seed.php; do
+      printf 'file\t%s\t%s\n' "$identity_file" "$(sha256sum "$identity_file" | awk '{print $1}')"
+    done
+  fi
+  if [[ $suite == operations ]]; then
+    for identity_file in ci/test-browser-operations.cjs ci/test-browser-operations.sh ci/support/browser-operations-seed.php ci/support/browser-operations-control.php; do
       printf 'file\t%s\t%s\n' "$identity_file" "$(sha256sum "$identity_file" | awk '{print $1}')"
     done
   fi
@@ -460,9 +483,11 @@ printf '{"mode":"guard-smoke","verifierOrigin":"%s","verifierToken":"%s","stateD
 chmod 600 "$fixture_root/"*-input.json
 unset db_password verifier_token
 
+application_php_options=()
+if [[ $suite == operations ]]; then application_php_options+=(-d allow_url_fopen=0); fi
 start_captured_php application-server "$evidence_dir/logs/04-application-server.log" \
   env APPLICATION_ENV=browser-fixture VIMBADMIN_FIXTURE_PUBLIC="$app_root/public" \
-  php -d display_errors=0 -d log_errors=1 -d opcache.enable=0 -d opcache.enable_cli=0 \
+  php "${application_php_options[@]}" -d display_errors=0 -d log_errors=1 -d opcache.enable=0 -d opcache.enable_cli=0 \
   -S "127.0.0.1:$app_port" -t "$app_root/public" \
   tests/support/browser-application-router.php
 app_pid=$CAPTURED_PID
@@ -508,6 +533,62 @@ apply_domain_authorization_mutation() {
   fi
 }
 
+apply_operations_rollback_mutation() {
+  local source=$1 target=$2 source_commits target_commits source_rollbacks count_status matches
+  if matches=$(grep -oF "\$conn->rollBack();" "$source"); then
+    source_rollbacks=$(printf '%s\n' "$matches" | wc -l) || {
+      echo 'FAIL: operations rollback mutation could not count rollback occurrences in source' >&2
+      return 1
+    }
+  else
+    count_status=$?
+    if [[ $count_status == 1 ]]; then
+      source_rollbacks=0
+    else
+      echo "FAIL: operations rollback mutation could not read rollback occurrences in source (grep status $count_status)" >&2
+      return 1
+    fi
+  fi
+  if ((source_rollbacks != 1)); then
+    echo 'FAIL: operations rollback mutation must replace exactly one rollback' >&2
+    return 1
+  fi
+  if matches=$(grep -oF "\$conn->commit();" "$source"); then
+    source_commits=$(printf '%s\n' "$matches" | wc -l) || {
+      echo 'FAIL: operations rollback mutation could not count commit occurrences in source' >&2
+      return 1
+    }
+  else
+    count_status=$?
+    if [[ $count_status == 1 ]]; then
+      source_commits=0
+    else
+      echo "FAIL: operations rollback mutation could not read commit occurrences in source (grep status $count_status)" >&2
+      return 1
+    fi
+  fi
+  # shellcheck disable=SC2016 # Match interpreted PHP in the disposable copy.
+  sed 's/\$conn->rollBack();/$conn->commit();/' "$source" >"$target" || return 1
+  if matches=$(grep -oF "\$conn->commit();" "$target"); then
+    target_commits=$(printf '%s\n' "$matches" | wc -l) || {
+      echo 'FAIL: operations rollback mutation could not count commit occurrences in target' >&2
+      return 1
+    }
+  else
+    count_status=$?
+    if [[ $count_status == 1 ]]; then
+      target_commits=0
+    else
+      echo "FAIL: operations rollback mutation could not read commit occurrences in target (grep status $count_status)" >&2
+      return 1
+    fi
+  fi
+  if ((target_commits != source_commits + 1)) || grep -qF "\$conn->rollBack();" "$target"; then
+    echo 'FAIL: operations rollback mutation must add exactly one commit and remove the rollback' >&2
+    return 1
+  fi
+}
+
 run_browser() {
   local engine=$1 case_name=$2 mutation=$3 expected_engine=$4 target_origin=$5 input_file=$6
   local safe_case=${case_name//[^a-z0-9]/-} cid name log status exit_code profile
@@ -529,6 +610,16 @@ run_browser() {
     stat --printf='source_artifact_mtime=%y source_artifact_bytes=%s\n' \
       "$app_root/src/Kernel/Controller/DomainController.php" >"$evidence_dir/logs/artifact-${engine}-${safe_case}.log"
     sha256sum "$app_root/src/Kernel/Controller/DomainController.php" >>"$evidence_dir/logs/artifact-${engine}-${safe_case}.log"
+  fi
+  if [[ $suite == operations ]]; then
+    cp src/Kernel/Controller/MaintenanceController.php "$app_root/src/Kernel/Controller/MaintenanceController.php"
+    if [[ $mutation == commit-on-rollback ]]; then
+      apply_operations_rollback_mutation src/Kernel/Controller/MaintenanceController.php \
+        "$app_root/src/Kernel/Controller/MaintenanceController.php"
+    fi
+    stat --printf='source_artifact_mtime=%y source_artifact_bytes=%s\n' \
+      "$app_root/src/Kernel/Controller/MaintenanceController.php" >"$evidence_dir/logs/artifact-${engine}-${safe_case}.log"
+    sha256sum "$app_root/src/Kernel/Controller/MaintenanceController.php" >>"$evidence_dir/logs/artifact-${engine}-${safe_case}.log"
   fi
   args=(--network host --cap-drop ALL --security-opt no-new-privileges
     --user "$(id -u):$(id -g)" --env "HOME=$fixture_root"
@@ -581,6 +672,13 @@ expect_red() {
 }
 
 for engine in "${engines[@]}"; do
+  if [[ $suite == operations ]]; then
+    expect_green "$engine" full
+    expect_red "$engine" commit-on-rollback commit-on-rollback "$engine" \
+      'maintenance rollback preserves complete protected rows'
+    expect_green "$engine" restored
+    continue
+  fi
   if [[ $suite == tenant ]]; then
     expect_green "$engine" full
     expect_red "$engine" domain-authorization-disabled disable-domain-authorization "$engine" \

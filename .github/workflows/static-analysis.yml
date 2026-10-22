@@ -211,6 +211,7 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: '22'
+          package-manager-cache: false
 
       - name: Install PHP lexer and pinned clone detector
         run: |

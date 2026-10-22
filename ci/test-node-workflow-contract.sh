@@ -24,7 +24,7 @@ job_body() {
 }
 
 check_job() {
-  local workflow=$1 job=$2 consumer=$3 body setup_count pin_count setup_line consumer_line
+  local workflow=$1 job=$2 consumer=$3 body setup_block setup_count pin_count cache_count setup_line consumer_line
   if ! body=$(job_body "$workflow" "$job"); then
     fail "$(basename "$workflow") job $job is missing or uses an unsupported declaration"
   fi
@@ -36,9 +36,19 @@ check_job() {
   grep -qF -- "uses: $setup_node" <<<"$body" ||
     fail "$(basename "$workflow") job $job must pin actions/setup-node to $setup_node"
 
-  pin_count=$(grep -cE -- "^[[:space:]]+node-version: '$node_major'[[:space:]]*$" <<<"$body" || true)
+  setup_block=$(awk -v action="      - uses: $setup_node" '
+    $0 == action { found = 1 }
+    found && printed && /^      - / { exit }
+    found { print; printed = 1 }
+  ' <<<"$body")
+
+  pin_count=$(grep -cE -- "^[[:space:]]+node-version: '$node_major'[[:space:]]*$" <<<"$setup_block" || true)
   [[ $pin_count == 1 ]] ||
     fail "$(basename "$workflow") job $job must pin node-version '$node_major' exactly once (found $pin_count)"
+
+  cache_count=$(grep -cE -- '^[[:space:]]+package-manager-cache: false[[:space:]]*$' <<<"$setup_block" || true)
+  [[ $cache_count == 1 ]] ||
+    fail "$(basename "$workflow") job $job must disable setup-node package-manager-cache exactly once (found $cache_count)"
 
   setup_line=$(grep -nF -- "uses: $setup_node" <<<"$body" | cut -d: -f1)
   consumer_line=$(grep -nF -- "$consumer" <<<"$body" | head -1 | cut -d: -f1)
@@ -85,8 +95,20 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   expect_rejected "a mismatched action revision" \
     "regression.yml job assets must pin actions/setup-node to $setup_node"
 
-  sed -i '/      # actions\/setup-node v6.3.0/,+3d' "$fixture/regression.yml"
-  expect_rejected "a pin outside the owning job boundary" \
+  sed -i '0,/package-manager-cache: false/s/package-manager-cache: false/package-manager-cache: true/' \
+    "$fixture/regression.yml"
+  expect_rejected "implicit package-manager cache behavior" \
+    'regression.yml job assets must disable setup-node package-manager-cache exactly once (found 0)'
+
+  boundary_block=$(sed -n '/      # actions\/setup-node v6.3.0/,+4p' "$fixture/regression.yml")
+  sed -i '/      # actions\/setup-node v6.3.0/,+4d' "$fixture/regression.yml"
+  awk -v block="$boundary_block" '
+    /^  static:$/ { in_static = 1 }
+    in_static && /^    steps:$/ { print; print block; in_static = 0; next }
+    { print }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-boundary.yml"
+  mv -- "$fixture/regression.with-boundary.yml" "$fixture/regression.yml"
+  expect_rejected "an identical pin in the neighbouring static job boundary" \
     'regression.yml job assets must use setup-node exactly once (found 0)'
 fi
 

@@ -37,6 +37,10 @@ jobs:
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
         with:
           node-version: '22'
+          package-manager-cache: false
+
+      - name: Node workflow contract
+        run: bash ci/test-node-workflow-contract.sh
 
       - name: Install pinned asset toolchain
         run: |

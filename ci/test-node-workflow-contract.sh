@@ -23,6 +23,114 @@ job_body() {
   ' "$workflow"
 }
 
+consumer_run_line() {
+  local body=$1 consumer=$2
+  awk -v consumer="$consumer" '
+    BEGIN { single_quote = sprintf("%c", 39) }
+    function trim(value) {
+      sub(/^[[:space:]]+/, "", value)
+      sub(/[[:space:]]+$/, "", value)
+      return value
+    }
+    function inline_scalar(value, first, closing, suffix, i, char, backslashes) {
+      first = substr(value, 1, 1)
+      if (first != "\"" && first != single_quote) {
+        sub(/[[:space:]]+#.*$/, "", value)
+        return trim(value)
+      }
+
+      for (i = 2; i <= length(value); i++) {
+        char = substr(value, i, 1)
+        if (first == single_quote) {
+          if (char == single_quote && substr(value, i + 1, 1) == single_quote) {
+            i++
+          } else if (char == single_quote) {
+            closing = i
+            break
+          }
+        } else if (char == "\\") {
+          backslashes++
+        } else {
+          if (char == "\"" && backslashes % 2 == 0) {
+            closing = i
+            break
+          }
+          backslashes = 0
+        }
+      }
+
+      suffix = substr(value, closing + 1)
+      if (!closing || suffix !~ /^([[:space:]]+#.*|[[:space:]]*)$/) return value
+      return substr(value, 2, closing - 2)
+    }
+    function finish_folded() {
+      if (run_style == ">" && folded_nonblank == 1 && folded_line) {
+        in_run = 0
+        print folded_line
+        exit
+      }
+      folded_nonblank = 0
+      folded_line = 0
+    }
+    function finish_inline() {
+      if (pending_inline) {
+        pending_inline = 0
+        print inline_line
+        exit
+      }
+    }
+    {
+      indent = match($0, /[^ ]/) ? RSTART - 1 : length($0)
+      if (pending_inline) {
+        value = trim($0)
+        if (value == "" || value ~ /^#/) next
+        if (indent > inline_key_indent) {
+          pending_inline = 0
+        } else {
+          finish_inline()
+        }
+      }
+      if (in_run && $0 ~ /^ *$/) next
+      if (in_run && indent <= run_indent) {
+        finish_folded()
+        in_run = 0
+      }
+
+      if ($0 ~ /^(        run:|      - run:)([[:space:]]|$)/) {
+        run_indent = ($0 ~ /^      - run:/) ? indent + 2 : indent
+        value = trim(substr($0, index($0, "run:") + 4))
+        if (value ~ /^[|>]([+-][1-9]?|[1-9][+-]?)?([[:space:]]+#.*|[[:space:]]*)$/) {
+          run_style = substr(value, 1, 1)
+          in_run = 1
+          next
+        }
+        value = inline_scalar(value)
+        if (value == consumer) {
+          pending_inline = 1
+          inline_line = NR
+          inline_key_indent = run_indent
+        }
+        next
+      }
+
+      if (in_run) {
+        value = trim($0)
+        if (run_style == ">") {
+          folded_nonblank++
+          if (value == consumer) folded_line = NR
+        } else if (value !~ /^#/ && value == consumer) {
+          print NR
+          exit
+        }
+      }
+    }
+    END {
+      finish_inline()
+      if (in_run) finish_folded()
+    }
+  ' <<<"$body"
+}
+
 check_job() {
   local workflow=$1 job=$2 consumer=$3 body setup_block setup_with setup_count pin_count cache_count setup_line consumer_line
   if ! body=$(job_body "$workflow" "$job"); then
@@ -61,7 +169,7 @@ check_job() {
   fi
 
   setup_line=$(grep -nF -- "uses: $setup_node" <<<"$body" | cut -d: -f1)
-  consumer_line=$(grep -nF -- "$consumer" <<<"$body" | head -1 | cut -d: -f1)
+  consumer_line=$(consumer_run_line "$body" "$consumer")
   [[ -n $consumer_line ]] || fail "$(basename "$workflow") job $job has no expected Node consumer: $consumer"
   ((setup_line < consumer_line)) ||
     fail "$(basename "$workflow") job $job must provision Node before: $consumer"
@@ -163,6 +271,445 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   printf '%s\n' 'Positive boundary accepted: a YAML comment within setup-node inputs'
   cp -- "$regression" "$fixture/regression.yml"
   cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  sed -i 's/^          npm ci --prefix bin --ignore-scripts$/          # npm ci --prefix bin --ignore-scripts/' \
+    "$fixture/regression.yml"
+  expect_rejected "a comment-only Node consumer" \
+    'regression.yml job assets has no expected Node consumer: npm ci --prefix bin --ignore-scripts'
+
+  sed -i 's/^          npm ci --prefix bin --ignore-scripts$/          # npm ci --prefix bin --ignore-scripts/' \
+    "$fixture/regression.yml"
+  awk '
+    /^      - name: Node workflow contract$/ {
+      print "      - name: npm ci --prefix bin --ignore-scripts"
+    }
+    { print }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-outside-mention.yml"
+  mv -- "$fixture/regression.with-outside-mention.yml" "$fixture/regression.yml"
+  expect_rejected "a consumer mention in a step name outside the run block" \
+    'regression.yml job assets has no expected Node consumer: npm ci --prefix bin --ignore-scripts'
+
+  sed -i 's/^          npm ci --prefix bin --ignore-scripts$/          echo npm ci --prefix bin --ignore-scripts/' \
+    "$fixture/regression.yml"
+  expect_rejected "an executable echo mentioning the Node consumer" \
+    'regression.yml job assets has no expected Node consumer: npm ci --prefix bin --ignore-scripts'
+
+  if ! awk '
+    $0 == "      - name: Install pinned asset toolchain" {
+      targets++
+      print
+      next
+    }
+    targets == 1 && !changed && $0 == "        run: |" {
+      print "        run: npm ci --prefix bin --ignore-scripts"
+      changed++
+      in_original_run = 1
+      next
+    }
+    in_original_run && /^      - / { in_original_run = 0 }
+    in_original_run {
+      if ($0 == "          npm ci --prefix bin --ignore-scripts") removed_consumers++
+      next
+    }
+    { print }
+    END {
+      if (targets != 1 || changed != 1 || removed_consumers != 1) exit 2
+    }
+  ' "$regression" >"$fixture/regression.with-inline-run.yml"; then
+    fail "fixture preparation failed: expected exactly one assets consumer block for inline conversion"
+  fi
+  mv -- "$fixture/regression.with-inline-run.yml" "$fixture/regression.yml"
+  inline_shape=$(awk '
+    $0 == "      - name: Install pinned asset toolchain" { in_step = 1; next }
+    in_step && /^      - / { exit }
+    in_step && /^        run:/ { run_keys++; if ($0 == "        run: npm ci --prefix bin --ignore-scripts") exact++ }
+    END { print run_keys ":" exact }
+  ' "$fixture/regression.yml")
+  [[ $inline_shape == 1:1 ]] ||
+    fail "fixture preparation failed: inline assets step shape is $inline_shape, expected 1:1"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected an inline executable Node consumer"
+  fi
+  printf '%s\n' 'Positive boundary accepted: an inline executable run command'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  inline_eof_body='        run: npm ci --prefix bin --ignore-scripts'
+  inline_eof_line=$(consumer_run_line "$inline_eof_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ $inline_eof_line == 1 ]] || fail "inline consumer at EOF did not finalize exactly once"
+  printf '%s\n' 'Positive boundary accepted: an exact inline run command at EOF'
+
+  inline_sibling_body=$'      - run: npm ci --prefix bin --ignore-scripts\n        shell: bash'
+  inline_sibling_line=$(consumer_run_line "$inline_sibling_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ $inline_sibling_line == 1 ]] || fail "list-first inline consumer did not finalize at a sibling key"
+  printf '%s\n' 'Positive boundary accepted: a list-first inline run command before a sibling key'
+
+  folded_eof_body=$'      - run: >\n          npm ci --prefix bin --ignore-scripts'
+  folded_eof_line=$(consumer_run_line "$folded_eof_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ $folded_eof_line == 2 ]] || fail "list-first folded consumer did not finalize at EOF"
+  printf '%s\n' 'Positive boundary accepted: a list-first folded run command at EOF'
+
+  folded_sibling_body=$'      - run: >\n          npm ci --prefix bin --ignore-scripts\n        shell: bash'
+  folded_sibling_line=$(consumer_run_line "$folded_sibling_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ $folded_sibling_line == 2 ]] || fail "list-first folded consumer did not finalize at a sibling key"
+  printf '%s\n' 'Positive boundary accepted: a list-first folded run command before a sibling key'
+
+  if ! awk '
+    $0 == "      - name: Install pinned asset toolchain" {
+      targets++
+      print
+      print "        run: npm ci --prefix bin --ignore-scripts"
+      print "          --dry-run"
+      in_original_step = 1
+      next
+    }
+    in_original_step && /^      - / { in_original_step = 0 }
+    in_original_step {
+      if ($0 == "          npm ci --prefix bin --ignore-scripts") removed_consumers++
+      next
+    }
+    { print }
+    END { if (targets != 1 || removed_consumers != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-inline-continuation.yml"; then
+    fail "fixture preparation failed: expected one complete assets step for inline continuation control"
+  fi
+  mv -- "$fixture/regression.with-inline-continuation.yml" "$fixture/regression.yml"
+  expect_rejected "a plain inline consumer with a non-comment continuation" \
+    'regression.yml job assets has no expected Node consumer: npm ci --prefix bin --ignore-scripts'
+
+  if ! awk '
+    $0 == "      - name: Install pinned asset toolchain" {
+      targets++
+      print
+      next
+    }
+    targets == 1 && !changed && $0 == "        run: |" {
+      print "        run: >"
+      print "          npm ci --prefix bin --ignore-scripts"
+      changed++
+      in_original_run = 1
+      next
+    }
+    in_original_run && /^      - / { in_original_run = 0 }
+    in_original_run {
+      if ($0 == "          npm ci --prefix bin --ignore-scripts") removed_consumers++
+      next
+    }
+    { print }
+    END { if (targets != 1 || changed != 1 || removed_consumers != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-folded-run.yml"; then
+    fail "fixture preparation failed: expected exactly one assets consumer block for folded conversion"
+  fi
+  mv -- "$fixture/regression.with-folded-run.yml" "$fixture/regression.yml"
+  folded_shape=$(awk '
+    $0 == "      - name: Install pinned asset toolchain" { in_step = 1; next }
+    in_step && /^      - / { exit }
+    in_step && $0 == "        run: >" { headers++ }
+    in_step && /^          [^[:space:]]/ { content++; if ($0 == "          npm ci --prefix bin --ignore-scripts") exact++ }
+    END { print headers ":" content ":" exact }
+  ' "$fixture/regression.yml")
+  [[ $folded_shape == 1:1:1 ]] ||
+    fail "fixture preparation failed: folded assets step shape is $folded_shape, expected 1:1:1"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a sole-command folded executable Node consumer"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a sole-command folded executable run command'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  if ! awk '
+    $0 == "      - name: Install pinned asset toolchain" {
+      targets++
+      print
+      next
+    }
+    targets == 1 && !changed && $0 == "        run: |" {
+      print "        run: >"
+      print "          printf '\''asset toolchain prepared\\n'\''"
+      print "          npm ci --prefix bin --ignore-scripts"
+      changed++
+      in_original_run = 1
+      next
+    }
+    in_original_run && /^      - / { in_original_run = 0 }
+    in_original_run {
+      if ($0 == "          npm ci --prefix bin --ignore-scripts") removed_consumers++
+      next
+    }
+    { print }
+    END { if (targets != 1 || changed != 1 || removed_consumers != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-adjacent-folded-run.yml"; then
+    fail "fixture preparation failed: expected exactly one assets consumer block for adjacent folded control"
+  fi
+  mv -- "$fixture/regression.with-adjacent-folded-run.yml" "$fixture/regression.yml"
+  expect_rejected "a folded consumer adjacent to another command" \
+    'regression.yml job assets has no expected Node consumer: npm ci --prefix bin --ignore-scripts'
+
+  awk '
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !changed {
+      print ""
+      changed = 1
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-blank-run-line.yml" ||
+    fail "fixture preparation failed: expected exactly one assets consumer for blank-line control"
+  mv -- "$fixture/regression.with-blank-run-line.yml" "$fixture/regression.yml"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a blank line within a block-style run command"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a blank line within a block-style run command'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  if ! awk '
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !added {
+      print
+      print "          echo prepared-after-consumer"
+      added++
+      next
+    }
+    { print }
+    END { if (added != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-extra-consumer-command.yml"; then
+    fail "fixture preparation failed: expected exactly one assets consumer before list-first conversion"
+  fi
+  mv -- "$fixture/regression.with-extra-consumer-command.yml" "$fixture/regression.yml"
+  if ! awk '
+    $0 == "      - name: Install pinned asset toolchain" {
+      targets++
+      print "      - run: npm ci --prefix bin --ignore-scripts"
+      print "        shell: bash"
+      in_original_step = 1
+      next
+    }
+    in_original_step && /^      - / { in_original_step = 0 }
+    in_original_step {
+      if ($0 == "          npm ci --prefix bin --ignore-scripts") removed_consumers++
+      if ($0 == "          echo prepared-after-consumer") removed_extras++
+      next
+    }
+    { print }
+    END { if (targets != 1 || removed_consumers != 1 || removed_extras != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-list-inline-run.yml"; then
+    fail "fixture preparation failed: expected one complete assets step for list-first inline conversion"
+  fi
+  mv -- "$fixture/regression.with-list-inline-run.yml" "$fixture/regression.yml"
+  list_inline_shape=$(awk '
+    $0 == "      - run: npm ci --prefix bin --ignore-scripts" { found++; in_step = 1; next }
+    in_step && /^      - / { exit }
+    in_step && $0 == "        shell: bash" { shells++ }
+    END { print found ":" shells }
+  ' "$fixture/regression.yml")
+  if [[ $list_inline_shape != 1:1 ]] ||
+    grep -qF -- 'Install pinned asset toolchain' "$fixture/regression.yml" ||
+    grep -qF -- 'prepared-after-consumer' "$fixture/regression.yml"; then
+    fail "fixture preparation failed: list-first inline assets shape is not 1:1 with the original body absent"
+  fi
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a list-first inline executable Node consumer"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a list-first inline executable run command'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  if ! awk '
+    $0 == "      - name: Install pinned asset toolchain" {
+      targets++
+      print "      - run: |"
+      print "          npm ci --prefix bin --ignore-scripts"
+      print "        shell: bash"
+      in_original_step = 1
+      next
+    }
+    in_original_step && /^      - / { in_original_step = 0 }
+    in_original_step {
+      if ($0 == "          npm ci --prefix bin --ignore-scripts") removed_consumers++
+      next
+    }
+    { print }
+    END { if (targets != 1 || removed_consumers != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-list-block-run.yml"; then
+    fail "fixture preparation failed: expected one complete assets step for list-first block conversion"
+  fi
+  mv -- "$fixture/regression.with-list-block-run.yml" "$fixture/regression.yml"
+  list_block_shape=$(awk '
+    $0 == "      - run: |" { headers++; in_step = 1; next }
+    in_step && /^      - / { exit }
+    in_step && $0 == "          npm ci --prefix bin --ignore-scripts" { consumers++ }
+    in_step && $0 == "        shell: bash" { shells++ }
+    END { print headers ":" consumers ":" shells }
+  ' "$fixture/regression.yml")
+  if [[ $list_block_shape != 1:1:1 ]] ||
+    grep -qF -- 'Install pinned asset toolchain' "$fixture/regression.yml"; then
+    fail "fixture preparation failed: list-first block assets shape is not 1:1:1 with the original body absent"
+  fi
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a list-first literal block consumer before a sibling key"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a list-first literal block run command before a sibling key'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  if ! awk '
+    $0 == "      - name: Install pinned asset toolchain" {
+      targets++
+      in_target = 1
+      print
+      next
+    }
+    in_target && !changed && $0 == "        run: |" {
+      print "        run: | # install pinned asset toolchain"
+      changed++
+      in_target = 0
+      next
+    }
+    { print }
+    END { if (targets != 1 || changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-commented-block-header.yml"; then
+    fail "fixture preparation failed: expected exactly one assets block header for trailing-comment control"
+  fi
+  mv -- "$fixture/regression.with-commented-block-header.yml" "$fixture/regression.yml"
+  commented_header_shape=$(awk '
+    $0 == "      - name: Install pinned asset toolchain" { in_step = 1; next }
+    in_step && /^      - / { exit }
+    in_step && $0 == "        run: | # install pinned asset toolchain" { headers++ }
+    in_step && $0 == "          npm ci --prefix bin --ignore-scripts" { consumers++ }
+    END { print headers ":" consumers }
+  ' "$fixture/regression.yml")
+  [[ $commented_header_shape == 1:1 ]] ||
+    fail "fixture preparation failed: commented assets block shape is $commented_header_shape, expected 1:1"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a block-style run header with a trailing YAML comment"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a block-style run header with a trailing YAML comment'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  awk '
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !changed {
+      print "          printf '\''asset toolchain prepared\\n'\''"
+      print "      - name: Install assets with a quoted command"
+      print "        run: \"npm ci --prefix bin --ignore-scripts\""
+      changed = 1
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-quoted-inline-run.yml" ||
+    fail "fixture preparation failed: expected exactly one assets consumer for quoted inline control"
+  mv -- "$fixture/regression.with-quoted-inline-run.yml" "$fixture/regression.yml"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a quoted inline executable Node consumer"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a quoted inline executable run command'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  awk '
+    BEGIN { single_quote = sprintf("%c", 39) }
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !changed {
+      print "          echo asset-toolchain-prepared"
+      print "      - name: Install assets with a single-quoted command"
+      print "        run: " single_quote "npm ci --prefix bin --ignore-scripts" single_quote
+      changed = 1
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-single-quoted-inline-run.yml" ||
+    fail "fixture preparation failed: expected exactly one assets consumer for single-quoted inline control"
+  mv -- "$fixture/regression.with-single-quoted-inline-run.yml" "$fixture/regression.yml"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a single-quoted inline executable Node consumer"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a single-quoted inline executable run command'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  awk '
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !changed {
+      print "          echo asset-toolchain-prepared"
+      print "      - run: npm ci --prefix bin --ignore-scripts # install assets"
+      changed = 1
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-inline-comment.yml" ||
+    fail "fixture preparation failed: expected exactly one assets consumer for inline-comment control"
+  mv -- "$fixture/regression.with-inline-comment.yml" "$fixture/regression.yml"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a plain inline Node consumer with a trailing YAML comment"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a plain inline run command with a trailing YAML comment'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  awk '
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !changed {
+      print "          echo asset-toolchain-prepared"
+      print "      - run: \"npm ci --prefix bin --ignore-scripts\" # install assets"
+      changed = 1
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-double-quoted-inline-comment.yml" ||
+    fail "fixture preparation failed: expected exactly one assets consumer for double-quoted comment control"
+  mv -- "$fixture/regression.with-double-quoted-inline-comment.yml" "$fixture/regression.yml"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a double-quoted inline Node consumer with a trailing YAML comment"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a double-quoted inline run command with a trailing YAML comment'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  awk '
+    BEGIN { single_quote = sprintf("%c", 39) }
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !changed {
+      print "          echo asset-toolchain-prepared"
+      print "      - run: " single_quote "npm ci --prefix bin --ignore-scripts" single_quote " # install assets"
+      changed = 1
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-single-quoted-inline-comment.yml" ||
+    fail "fixture preparation failed: expected exactly one assets consumer for single-quoted comment control"
+  mv -- "$fixture/regression.with-single-quoted-inline-comment.yml" "$fixture/regression.yml"
+  if ! run_fixture; then
+    cat "$fixture/output" >&2
+    fail "fixture rejected a single-quoted inline Node consumer with a trailing YAML comment"
+  fi
+  printf '%s\n' 'Positive boundary accepted: a single-quoted inline run command with a trailing YAML comment'
+  cp -- "$regression" "$fixture/regression.yml"
+  cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  awk '
+    $0 == "          npm ci --prefix bin --ignore-scripts" && !changed {
+      print "          echo asset-toolchain-prepared"
+      print "      - run: \"npm ci --prefix bin --ignore-scripts # literal argument\""
+      changed = 1
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-quoted-hash.yml" ||
+    fail "fixture preparation failed: expected exactly one assets consumer for quoted-hash control"
+  mv -- "$fixture/regression.with-quoted-hash.yml" "$fixture/regression.yml"
+  expect_rejected "a hash inside a quoted nonmatching Node command" \
+    'regression.yml job assets has no expected Node consumer: npm ci --prefix bin --ignore-scripts'
 
   boundary_block=$(sed -n '/      # actions\/setup-node v6.3.0/,+4p' "$fixture/regression.yml")
   sed -i '/      # actions\/setup-node v6.3.0/,+4d' "$fixture/regression.yml"

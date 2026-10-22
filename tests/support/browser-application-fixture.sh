@@ -534,15 +534,57 @@ apply_domain_authorization_mutation() {
 }
 
 apply_operations_rollback_mutation() {
-  local source=$1 target=$2
-  if [[ $(grep -cF "\$conn->rollBack();" "$source") != 1 ]]; then
+  local source=$1 target=$2 source_commits target_commits source_rollbacks count_status matches
+  if matches=$(grep -oF "\$conn->rollBack();" "$source"); then
+    source_rollbacks=$(printf '%s\n' "$matches" | wc -l) || {
+      echo 'FAIL: operations rollback mutation could not count rollback occurrences in source' >&2
+      return 1
+    }
+  else
+    count_status=$?
+    if [[ $count_status == 1 ]]; then
+      source_rollbacks=0
+    else
+      echo "FAIL: operations rollback mutation could not read rollback occurrences in source (grep status $count_status)" >&2
+      return 1
+    fi
+  fi
+  if ((source_rollbacks != 1)); then
     echo 'FAIL: operations rollback mutation must replace exactly one rollback' >&2
     return 1
   fi
+  if matches=$(grep -oF "\$conn->commit();" "$source"); then
+    source_commits=$(printf '%s\n' "$matches" | wc -l) || {
+      echo 'FAIL: operations rollback mutation could not count commit occurrences in source' >&2
+      return 1
+    }
+  else
+    count_status=$?
+    if [[ $count_status == 1 ]]; then
+      source_commits=0
+    else
+      echo "FAIL: operations rollback mutation could not read commit occurrences in source (grep status $count_status)" >&2
+      return 1
+    fi
+  fi
   # shellcheck disable=SC2016 # Match interpreted PHP in the disposable copy.
   sed 's/\$conn->rollBack();/$conn->commit();/' "$source" >"$target" || return 1
-  if [[ $(grep -cF "\$conn->commit();" "$target") != 2 ]] || grep -qF "\$conn->rollBack();" "$target"; then
-    echo 'FAIL: operations rollback mutation must replace exactly one rollback' >&2
+  if matches=$(grep -oF "\$conn->commit();" "$target"); then
+    target_commits=$(printf '%s\n' "$matches" | wc -l) || {
+      echo 'FAIL: operations rollback mutation could not count commit occurrences in target' >&2
+      return 1
+    }
+  else
+    count_status=$?
+    if [[ $count_status == 1 ]]; then
+      target_commits=0
+    else
+      echo "FAIL: operations rollback mutation could not read commit occurrences in target (grep status $count_status)" >&2
+      return 1
+    fi
+  fi
+  if ((target_commits != source_commits + 1)) || grep -qF "\$conn->rollBack();" "$target"; then
+    echo 'FAIL: operations rollback mutation must add exactly one commit and remove the rollback' >&2
     return 1
   fi
 }

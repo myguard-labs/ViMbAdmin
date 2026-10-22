@@ -130,7 +130,7 @@ consumer_run_line() {
       }
       return depth > 0
     }
-    function queue_heredocs(value, rest, offset, operator, marker, consumed, i, char, quote, escaped) {
+    function queue_heredocs(value, rest, offset, operator, marker, consumed, i, char, quote, escaped, j, digit, number, base, limit, ansi_delimiter, masked) {
       rest = value
       while (match(rest, /<<-?[[:space:]]*/)) {
         operator = substr(rest, RSTART, RLENGTH)
@@ -146,14 +146,44 @@ consumer_run_line() {
 
         # Read only this delimiter word, removing its shell quote syntax.
         marker = quote = ""
+        ansi_delimiter = 0
         for (i = 1; i <= length(rest); i++) {
           char = substr(rest, i, 1)
-          if (quote == single_quote) {
+          if (quote == "ansi") {
+            if (char == single_quote) {
+              quote = ""
+            } else if (char == "\\") {
+              escaped = substr(rest, ++i, 1)
+              if (escaped == "") {
+                unsupported_delimiter = 1
+                return value
+              }
+              if (escaped ~ /[\\"?]/ || escaped == single_quote) marker = marker escaped
+              else if (escaped ~ /[0-7x]/) {
+                base = escaped == "x" ? 16 : 8
+                limit = base == 16 ? 2 : 3
+                number = 0
+                if (base == 8) i--
+                for (j = 0; j < limit; j++) {
+                  digit = substr(rest, i + 1, 1)
+                  if (digit == "" || (base == 8 && digit !~ /[0-7]/) ||
+                      (base == 16 && digit !~ /[[:xdigit:]]/)) break
+                  number = number * base + index("0123456789abcdef", tolower(digit)) - 1
+                  i++
+                }
+                # Byte escapes only: never guess Unicode, control or NUL delimiters.
+                if (!j && base == 16) marker = marker "\\x"
+                else if (number % 256 >= 32 && number % 256 < 127) marker = marker sprintf("%c", number % 256)
+                else unsupported_delimiter = 1
+              } else if (escaped ~ /[abefnrtvEuUc]/) unsupported_delimiter = 1
+              else marker = marker "\\" escaped
+            } else marker = marker char
+          } else if (quote == single_quote) {
             if (char == single_quote) quote = ""
             else marker = marker char
           } else if (char == "\\") {
             escaped = substr(rest, i + 1, 1)
-            if (escaped == "") return
+            if (escaped == "") return value
             if (quote == "\"" && escaped !~ /[$`"\\]/) {
               marker = marker char
             } else {
@@ -163,6 +193,10 @@ consumer_run_line() {
           } else if (quote == "\"") {
             if (char == "\"") quote = ""
             else marker = marker char
+          } else if (char == "$" && substr(rest, i + 1, 1) == single_quote) {
+            quote = "ansi"
+            ansi_delimiter = 1
+            i++
           } else if (char == "\"" || char == single_quote) {
             quote = char
           } else if (char ~ /[[:space:];|&<>()]/) {
@@ -171,21 +205,42 @@ consumer_run_line() {
             marker = marker char
           }
         }
-        if (quote != "") return
+        if (quote != "") {
+          if (ansi_delimiter) unsupported_delimiter = 1
+          return value
+        }
         consumed = i - 1
         if (consumed > 0) {
           heredoc_delimiters[++heredoc_tail] = marker
           heredoc_strip_tabs[heredoc_tail] = operator ~ /^<<-/
+          if (ansi_delimiter) {
+            # Hide only this parsed delimiter from the later literal-quote scan.
+            masked = substr(rest, 1, consumed)
+            gsub(/./, "x", masked)
+            value = substr(value, 1, offset) masked substr(value, offset + consumed + 1)
+          }
         }
         rest = substr(rest, consumed + 1)
         offset += consumed
       }
+      return value
     }
     function update_control_depth(value, i, char, word, at_command) {
       # Count only if/fi at unquoted command boundaries; other grammar is outside this check.
       at_command = !literal_quote && !continued_line
       for (i = 1; i <= length(value); i++) {
         char = substr(value, i, 1)
+        if (test_expression) {
+          if (substr(value, i) ~ /^\]\]([[:space:];&|()]|$)/ &&
+              (i == 1 || (substr(value, i - 1, 1) ~ /[[:space:]]/ &&
+                          operator_is_unquoted(value, i - 1))) &&
+              operator_is_unquoted(value, i)) {
+            test_expression = 0
+            at_command = 0
+            i++
+          }
+          continue
+        }
         if (char ~ /[;|&]/ && operator_is_unquoted(value, i)) {
           at_command = 1
           continue
@@ -193,7 +248,12 @@ consumer_run_line() {
         if (!at_command || char ~ /[[:space:]]/) continue
         at_command = 0
         word = substr(value, i)
-        if (word !~ /^(if|fi|then|else)([[:space:];&|()]|$)/) continue
+        if (word ~ /^\[\[([[:space:]]|$)/ && operator_is_unquoted(value, i)) {
+          test_expression = 1
+          i++
+          continue
+        }
+        if (word !~ /^(if|fi|then|else|elif|while|until|do|!|time|\{)([[:space:];&|()]|$)/) continue
         sub(/[[:space:];&|()].*$/, "", word)
         if (word == "if") control_depth++
         else if (word == "fi" && control_depth) control_depth--
@@ -205,6 +265,8 @@ consumer_run_line() {
       for (delimiter in heredoc_delimiters) delete heredoc_delimiters[delimiter]
       for (delimiter in heredoc_strip_tabs) delete heredoc_strip_tabs[delimiter]
       control_depth = 0
+      test_expression = 0
+      unsupported_delimiter = 0
       continued_list = 0
       continued_line = 0
       literal_quote = ""
@@ -293,12 +355,12 @@ consumer_run_line() {
           }
 
           shell_code = shell_without_comment(substr($0, literal_indent + 1))
-          if (value == consumer && !literal_quote && !continued_line && !control_depth && !continued_list) {
+          if (value == consumer && !literal_quote && !continued_line && !control_depth && !continued_list && !test_expression && !unsupported_delimiter) {
             print NR
             exit
           }
+          if (shell_code != "") shell_code = queue_heredocs(shell_code)
           update_control_depth(shell_code)
-          if (shell_code != "") queue_heredocs(shell_code)
           if (value !~ /^#/ && value != "") {
             continued_list = shell_code ~ /(&&|\|\|)[[:space:]]*$/
           }
@@ -954,6 +1016,65 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   [[ -z $unquoted_fi_argument_line ]] || fail "unquoted fi argument suppressed conditional tracking"
   printf '%s\n' 'Negative control rejected: unquoted conditional terminator argument; assertion=unquoted fi argument suppressed conditional tracking'
 
+  bracket_if_operand_body=$'        run: |\n          [[ ready == ready || if == other ]]\n          npm ci --prefix bin --ignore-scripts'
+  bracket_if_operand_line=$(consumer_run_line "$bracket_if_operand_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$bracket_if_operand_line" == 3 ]] || fail "double-bracket if operand hid a later executable consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer after a double-bracket if operand'
+
+  bracket_fi_operand_body=$'        run: |\n          if false; then\n            [[ ready == ready && fi == other ]]\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  bracket_fi_operand_line=$(consumer_run_line "$bracket_fi_operand_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $bracket_fi_operand_line ]] || fail "double-bracket fi operand closed a real conditional"
+  printf '%s\n' 'Negative control rejected: consumer after a double-bracket fi operand inside a real conditional'
+
+  multiline_bracket_body=$'        run: |\n          [[ ready == ready ||\n             if == other ]]\n          npm ci --prefix bin --ignore-scripts'
+  multiline_bracket_line=$(consumer_run_line "$multiline_bracket_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$multiline_bracket_line" == 4 ]] || fail "multiline double-bracket operand changed conditional depth"
+  printf '%s\n' 'Positive boundary accepted: consumer after a multiline double-bracket expression'
+
+  unclosed_bracket_body=$'        run: |\n          [[ ready == ready ||\n          npm ci --prefix bin --ignore-scripts'
+  unclosed_bracket_line=$(consumer_run_line "$unclosed_bracket_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $unclosed_bracket_line ]] || fail "unclosed double-bracket expression accepted an operand as a consumer"
+  printf '%s\n' 'Malformed boundary rejected: consumer inside an unclosed double-bracket expression'
+
+  quoted_bracket_close_body=$'        run: |\n          [[ "]]" == ready || if == other ]] ; if false; then\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  quoted_bracket_close_line=$(consumer_run_line "$quoted_bracket_close_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $quoted_bracket_close_line ]] || fail "quoted double-bracket closure hid a following real conditional"
+  printf '%s\n' 'Negative control rejected: consumer inside a conditional after quoted double-bracket text'
+
+  for bracket_operand in '"]]"' '\]\]' ']]suffix' 'word\ ]]'; do
+    printf -v bracket_operand_body '        run: |\n          [[ ready == %s || if == other ]]\n          npm ci --prefix bin --ignore-scripts' "$bracket_operand"
+    bracket_operand_line=$(consumer_run_line "$bracket_operand_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ "$bracket_operand_line" == 3 ]] || fail "double-bracket operand text was mistaken for the expression closure: $bracket_operand"
+    printf -v unclosed_bracket_operand_body '        run: |\n          [[ ready == %s ||\n          npm ci --prefix bin --ignore-scripts' "$bracket_operand"
+    unclosed_bracket_operand_line=$(consumer_run_line "$unclosed_bracket_operand_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ -z $unclosed_bracket_operand_line ]] || fail "double-bracket operand text exposed a consumer inside the expression: $bracket_operand"
+  done
+  printf '%s\n' 'Positive and negative boundaries: quoted, escaped and suffixed bracket operands stay inside the expression'
+
+  bracket_command_list_body=$'        run: |\n          [[ ready == ready || if == other ]] && if false; then echo skipped; fi\n          echo "[["; echo [[; echo fi\n          npm ci --prefix bin --ignore-scripts'
+  bracket_command_list_line=$(consumer_run_line "$bracket_command_list_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$bracket_command_list_line" == 4 ]] || fail "double-bracket closure or bracket arguments hid a later executable consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer after a double-bracket expression and a real conditional list'
+
+  bracket_prefix_commands=(
+    '! [[ x == y || KEYWORD == z ]]'
+    'time [[ x == y || KEYWORD == z ]]'
+    '{ [[ x == y || KEYWORD == z ]]; }'
+    'if false; then :; elif [[ x == y || KEYWORD == z ]]; then :; fi'
+    'while [[ x == y || KEYWORD == z ]]; do :; done'
+    'until [[ x == x || KEYWORD == z ]]; do :; done'
+    'for item in skipped; do [[ x == y || KEYWORD == z ]]; done'
+  )
+  for bracket_prefix_command in "${bracket_prefix_commands[@]}"; do
+    printf -v bracket_prefix_body '        run: |\n          %s\n          npm ci --prefix bin --ignore-scripts' "${bracket_prefix_command/KEYWORD/if}"
+    bracket_prefix_line=$(consumer_run_line "$bracket_prefix_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ "$bracket_prefix_line" == 3 ]] || fail "prefixed double-bracket if operand hid a later executable consumer: $bracket_prefix_command"
+    printf -v nested_bracket_prefix_body '        run: |\n          if false; then\n            %s\n            npm ci --prefix bin --ignore-scripts\n          fi' "${bracket_prefix_command/KEYWORD/fi}"
+    nested_bracket_prefix_line=$(consumer_run_line "$nested_bracket_prefix_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ -z $nested_bracket_prefix_line ]] || fail "prefixed double-bracket fi operand closed a real conditional: $bracket_prefix_command"
+  done
+  printf '%s\n' 'Positive and negative boundaries: finite command prefixes preserve double-bracket operand context'
+
   concatenated_delimiter_body=$'        run: |\n          cat <<\'PAY\'LOAD\n          fixture text\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
   concatenated_delimiter_line=$(consumer_run_line "$concatenated_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
   [[ "$concatenated_delimiter_line" == 5 ]] || fail "concatenated heredoc delimiter hid a later executable consumer"
@@ -973,6 +1094,65 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   escaped_dollar_delimiter_line=$(consumer_run_line "$escaped_dollar_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
   [[ "$escaped_dollar_delimiter_line" == 5 ]] || fail "escaped dollar in a double-quoted delimiter was not unquoted"
   printf '%s\n' 'Positive boundary accepted: consumer after a double-quoted delimiter with an escaped dollar'
+
+  ansi_delimiters=(
+    "\$'PAYLOAD'" "\$'PAY'LOAD" "P\$'AY'\"LOAD\"" "\$'PAY\\x4cOAD'"
+    "\$'PAY\\114OAD'" "\$'PAY\\x4c\\x4fAD'" "\$'PAY\\x4cOAD'\$'2'"
+    "\$'PAY\\\\LOAD'" "\$'PAY\\'LOAD'" "\$'PAY\\\"LOAD'" "\$'PAY\\?LOAD'"
+    "\$'PAY\\qLOAD'" "\$'PAY\\xLOAD'" "\$'PAY\\1x4LOAD'"
+  )
+  ansi_markers=(
+    PAYLOAD PAYLOAD PAYLOAD PAYLOAD PAYLOAD PAYLOAD PAYLOAD2
+    'PAY\LOAD' "PAY'LOAD" 'PAY"LOAD' 'PAY?LOAD' 'PAY\qLOAD' 'PAY\xLOAD' ''
+  )
+  for ansi_case in "${!ansi_delimiters[@]}"; do
+    printf -v ansi_delimiter_body '        run: |\n          cat <<%s\n          npm ci --prefix bin --ignore-scripts\n          %s\n          npm ci --prefix bin --ignore-scripts' \
+      "${ansi_delimiters[ansi_case]}" "${ansi_markers[ansi_case]}"
+    ansi_delimiter_line=$(consumer_run_line "$ansi_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+    if [[ -n ${ansi_markers[ansi_case]} ]]; then
+      [[ "$ansi_delimiter_line" == 5 ]] || fail "ANSI-C heredoc delimiter hid a later executable consumer: ${ansi_delimiters[ansi_case]}"
+    else
+      [[ -z $ansi_delimiter_line ]] || fail "ANSI-C control-byte delimiter accepted a consumer"
+    fi
+  done
+  printf '%s\n' 'Positive boundary accepted: consumers only after bounded ANSI-C heredoc delimiters'
+
+  ansi_empty_body=$'        run: |\n          cat <<$\'\'\n          npm ci --prefix bin --ignore-scripts\n\n          npm ci --prefix bin --ignore-scripts'
+  ansi_empty_line=$(consumer_run_line "$ansi_empty_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$ansi_empty_line" == 5 ]] || fail "empty ANSI-C heredoc delimiter did not distinguish body and consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer only after an empty ANSI-C heredoc delimiter'
+
+  for unsupported_ansi_delimiter in "\$'PAY\\u004cOAD'" "\$'PAY\\U0000004cOAD'" "\$'PAY\\cLOAD'" "\$'PAY\\0LOAD'" "\$'PAY\\x00LOAD'" "\$'PAY\\x80LOAD'" "\$'PAY\\nLOAD'" "\$'PAYLOAD" "\$'PAYLOAD\\'" "\$'PAYLOAD\\"; do
+    printf -v unsupported_ansi_body '        run: |\n          cat <<%s\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts' "$unsupported_ansi_delimiter"
+    unsupported_ansi_line=$(consumer_run_line "$unsupported_ansi_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ -z $unsupported_ansi_line ]] || fail "unsupported or malformed ANSI-C heredoc delimiter accepted a consumer: $unsupported_ansi_delimiter"
+  done
+  printf '%s\n' 'Malformed boundary rejected: unsupported and unclosed ANSI-C heredoc delimiters'
+
+  quoted_ansi_text_body=$'        run: |\n          printf \'%s\\n\' "$\'PAYLOAD\'"\n          cat <<"$\'PAYLOAD\'"\n          npm ci --prefix bin --ignore-scripts\n          $\'PAYLOAD\'\n          npm ci --prefix bin --ignore-scripts'
+  quoted_ansi_text_line=$(consumer_run_line "$quoted_ansi_text_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$quoted_ansi_text_line" == 6 ]] || fail "ANSI-C syntax outside an unquoted heredoc delimiter was evaluated"
+  printf '%s\n' 'Positive boundary accepted: quoted ANSI-C text stays literal outside delimiter normalization'
+
+  context_reset_body=$'        run: |\n          [[ ready == ready ||\n        run: |\n          cat <<$\'PAY\\u004cOAD\'\n          PAYLOAD\n        run: |\n          npm ci --prefix bin --ignore-scripts'
+  context_reset_line=$(consumer_run_line "$context_reset_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$context_reset_line" == 7 ]] || fail "unsupported delimiter or double-bracket context leaked into a later run block"
+  printf '%s\n' 'Positive boundary accepted: unsupported delimiter and double-bracket contexts reset for a later run block'
+
+  multiple_ansi_heredocs_body=$'        run: |\n          cat <<A <<$\'B\' <<<x\n          fixture A\n          A\n          npm ci --prefix bin --ignore-scripts\n          B\n          npm ci --prefix bin --ignore-scripts'
+  multiple_ansi_heredocs_line=$(consumer_run_line "$multiple_ansi_heredocs_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$multiple_ansi_heredocs_line" == 7 ]] || fail "ANSI-C delimiter after another heredoc lost its source offset"
+  printf '%s\n' 'Positive boundary accepted: consumer after mixed heredocs and a here-string on one line'
+
+  post_here_string_ansi_body=$'        run: |\n          cat <<<x <<$\'B\'\n          npm ci --prefix bin --ignore-scripts\n          B\n          npm ci --prefix bin --ignore-scripts'
+  post_here_string_ansi_line=$(consumer_run_line "$post_here_string_ansi_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_here_string_ansi_line" == 5 ]] || fail "ANSI-C delimiter after a here-string lost its source offset"
+  printf '%s\n' 'Positive boundary accepted: consumer after an ANSI-C heredoc following a here-string'
+
+  mixed_ansi_bracket_body=$'        run: |\n          if [[ x == y || if == z ]]; then cat <<$\'PAY\\\'LOAD\'\n          npm ci --prefix bin --ignore-scripts\n          PAY\'LOAD\n          npm ci --prefix bin --ignore-scripts\n          fi\n          npm ci --prefix bin --ignore-scripts'
+  mixed_ansi_bracket_line=$(consumer_run_line "$mixed_ansi_bracket_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$mixed_ansi_bracket_line" == 7 ]] || fail "ANSI-C delimiter masking changed real conditional or double-bracket context"
+  printf '%s\n' 'Positive boundary accepted: consumer only after combined ANSI-C heredoc, double-bracket and conditional closure'
 
   escaped_delimiter_newline_body=$'        run: |\n          cat <<PAY\\\n          npm ci --prefix bin --ignore-scripts'
   escaped_delimiter_newline_line=$(consumer_run_line "$escaped_delimiter_newline_body" 'npm ci --prefix bin --ignore-scripts')

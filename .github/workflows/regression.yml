@@ -57,7 +57,7 @@ jobs:
   static:
     name: Static and browser regression (${{ matrix.browser }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -171,6 +171,9 @@ jobs:
 
       - name: Owned browser containers remove their anonymous volumes
         run: bash ci/test-browser-owned-cleanup.sh
+
+      - name: Responsive skin rendering and keyboard navigation
+        run: bash ci/test-browser-visual.sh
 
       - name: Alias destinations render as text (stored-XSS regression)
         run: >-

@@ -22,9 +22,10 @@ reconcile=$repo_root/ci/reconcile-phpstan-coverage.sh
 work=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-phpstan-contract.XXXXXX")
 nopin=$(mktemp "$repo_root/.phpstan-nopin.XXXXXX.neon")
 noscan=$(mktemp "$repo_root/.phpstan-noscan.XXXXXX.neon")
+nofixture=$(mktemp "$repo_root/.phpstan-nofixture.XXXXXX.neon")
 cleanup() {
   rm -rf -- "${work:?}"
-  rm -f -- "$nopin" "$noscan"
+  rm -f -- "$nopin" "$noscan" "$nofixture"
 }
 trap cleanup EXIT
 failures=0
@@ -62,12 +63,36 @@ if [ "$(stat -c %u "$repo_root")" != "$(id -u)" ]; then
 fi
 
 scratch() { # scratch <dir>: a tiny git repo with the real config
-  local d=$1
+  local d=$1 scan_file scan_list
+  local -a scan_files=()
   rm -rf -- "${d:?}"
   mkdir -p "$d/src" "$d/ci/support" "$d/application/Proxies" "$d/vendor"
   git -C "$d" init -q
   cp phpstan-common.neon "$d/"
-  cp ci/support/browser-fixture-super-admin.php "$d/ci/support/"
+  scan_list=$(mktemp "$work/scan-files.XXXXXX")
+  if ! sed -n '/^    scanFiles:/,/^    [A-Za-z]/ { /^        - /s/^        - //p; }' \
+    phpstan-common.neon >"$scan_list"; then
+    rm -f -- "$scan_list"
+    echo 'scratch: failed to parse phpstan-common.neon scanFiles' >&2
+    return 1
+  fi
+  if ! mapfile -t scan_files <"$scan_list"; then
+    rm -f -- "$scan_list"
+    echo 'scratch: failed to read parsed scanFiles entries' >&2
+    return 1
+  fi
+  rm -f -- "$scan_list"
+  if [ "${#scan_files[@]}" -eq 0 ]; then
+    echo 'scratch: phpstan-common.neon yielded no scanFiles entries' >&2
+    return 1
+  fi
+  for scan_file in "${scan_files[@]}"; do
+    mkdir -p "$d/$(dirname "$scan_file")"
+    if ! cp "$scan_file" "$d/$scan_file"; then
+      printf 'scratch: failed to copy scanFiles entry: %s\n' "$scan_file" >&2
+      return 1
+    fi
+  done
   printf '<?php\n' >"$d/src/a.php"
   printf '<?php\n' >"$d/ci/test-x.php"
   printf '<?php\n' >"$d/vendor/autoload.php"
@@ -353,10 +378,11 @@ else
 fi
 
 # --- section 3: CI-only helper discovery --------------------------------
-# Do not pass the helper as an analysis root or require it from the probe:
+# Do not pass the helpers as analysis roots or require them from the probe:
 # either would hide a missing registration in the real project config.
 printf '%s\n' '<?php' \
-  'function browserFixtureUsername(): string {' \
+  'function exerciseBrowserHelpers(Doctrine\ORM\EntityManagerInterface $em, Entities\Admin $admin): string {' \
+  '    seedBrowserOperations($em, $admin, [], "/tmp/browser-state");' \
   '    return \ViMbAdmin\Tests\BrowserFixture\SuperAdmin::USERNAME;' \
   '}' >"$work/discovery.php"
 discovery() { # discovery <config> <log>
@@ -366,17 +392,25 @@ discovery() { # discovery <config> <log>
   cat "$2"
   return "$rc"
 }
-expect green 'shared config discovers CI-only SuperAdmin' '' -- \
+expect green 'shared config discovers CI-only browser helpers' '' -- \
   discovery phpstan-level10.neon "$work/discovery-baseline.log"
-sed '/^    scanFiles:/,+1d' phpstan-common.neon >"$noscan"
+sed '/^        - ci\/support\/browser-operations-seed\.php$/d' phpstan-common.neon >"$noscan"
 printf 'discovery control: config=%s; probe=%s\n' "$noscan" "$work/discovery.php"
 stat -c 'mtime=%y size=%s file=%n' "$noscan" "$work/discovery.php"
 sha256sum "$noscan" "$work/discovery.php"
-expect red 'NEGATIVE CONTROL missing CI helper discovery' \
-  'Access to constant USERNAME on an unknown class ViMbAdmin\Tests\BrowserFixture\SuperAdmin.' -- \
+expect red 'NEGATIVE CONTROL missing operations seed discovery' \
+  'Function seedBrowserOperations not found.' -- \
   discovery "$noscan" "$work/discovery-mutant.log"
-sed -n '/Access to constant USERNAME on an unknown class/p' "$work/discovery-mutant.log"
-expect green 'restored shared config discovers CI-only SuperAdmin' '' -- \
+sed -n '/Function seedBrowserOperations not found/p' "$work/discovery-mutant.log"
+sed '/^        - ci\/support\/browser-fixture-super-admin\.php$/d' phpstan-common.neon >"$nofixture"
+printf 'fixture discovery control: config=%s; probe=%s\n' "$nofixture" "$work/discovery.php"
+stat -c 'mtime=%y size=%s file=%n' "$nofixture" "$work/discovery.php"
+sha256sum "$nofixture" "$work/discovery.php"
+expect red 'NEGATIVE CONTROL missing SuperAdmin discovery' \
+  'Access to constant USERNAME on an unknown class ViMbAdmin\Tests\BrowserFixture\SuperAdmin.' -- \
+  discovery "$nofixture" "$work/discovery-fixture-mutant.log"
+sed -n '/Access to constant USERNAME on an unknown class/p' "$work/discovery-fixture-mutant.log"
+expect green 'restored shared config discovers CI-only browser helpers' '' -- \
   discovery phpstan-level10.neon "$work/discovery-restored.log"
 
 if [ "$failures" -ne 0 ]; then

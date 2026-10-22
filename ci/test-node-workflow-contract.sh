@@ -63,6 +63,155 @@ consumer_run_line() {
       if (!closing || suffix !~ /^([[:space:]]+#.*|[[:space:]]*)$/) return value
       return substr(value, 2, closing - 2)
     }
+    function operator_is_unquoted(value, position, i, char, quote) {
+      quote = literal_quote
+      for (i = 1; i < position; i++) {
+        char = substr(value, i, 1)
+        if (quote == single_quote) {
+          if (char == single_quote) quote = ""
+          continue
+        }
+        if (char == "\\") {
+          if (i + 1 == position) return 0
+          i++
+          continue
+        }
+        if (quote == "\"") {
+          if (char == "\"") quote = ""
+          continue
+        }
+        if (char == single_quote || char == "\"") quote = char
+      }
+      return quote == ""
+    }
+    function shell_without_comment(value, rest, offset, position, previous) {
+      rest = value
+      while (match(rest, /#/)) {
+        position = offset + RSTART
+        previous = substr(value, position - 1, 1)
+        if ((position == 1 || (previous ~ /[[:space:];&|()<>]/ &&
+                              operator_is_unquoted(value, position - 1))) &&
+            operator_is_unquoted(value, position)) {
+          return substr(value, 1, position - 1)
+        }
+        offset = position
+        rest = substr(value, offset + 1)
+      }
+      return value
+    }
+    function advance_literal_context(value, i, char) {
+      continued_line = 0
+      for (i = 1; i <= length(value); i++) {
+        char = substr(value, i, 1)
+        if (literal_quote == single_quote) {
+          if (char == single_quote) literal_quote = ""
+        } else if (char == "\\") {
+          if (i == length(value)) continued_line = 1
+          i++
+        } else if (literal_quote == "\"") {
+          if (char == "\"") literal_quote = ""
+        } else if (char == single_quote || char == "\"") {
+          literal_quote = char
+        }
+      }
+    }
+    function inside_arithmetic(value, position, i, char, depth) {
+      # Only classify this << operator; balance unquoted arithmetic parentheses.
+      for (i = 1; i < position; i++) {
+        char = substr(value, i, 1)
+        if (char !~ /[()]/ || !operator_is_unquoted(value, i)) continue
+        if (depth) {
+          if (char == "(") depth++
+          else depth--
+        } else if (substr(value, i, 2) == "((") {
+          depth = 2
+          i++
+        }
+      }
+      return depth > 0
+    }
+    function queue_heredocs(value, rest, offset, operator, marker, consumed, i, char, quote, escaped) {
+      rest = value
+      while (match(rest, /<<-?[[:space:]]*/)) {
+        operator = substr(rest, RSTART, RLENGTH)
+        rest = substr(rest, RSTART + RLENGTH)
+        offset += RSTART + RLENGTH - 1
+        if (!operator_is_unquoted(value, offset - RLENGTH + 1)) continue
+        if (inside_arithmetic(value, offset - RLENGTH + 1)) continue
+        if (substr(rest, 1, 1) == "<") {
+          rest = substr(rest, 2)
+          offset++
+          continue
+        }
+
+        # Read only this delimiter word, removing its shell quote syntax.
+        marker = quote = ""
+        for (i = 1; i <= length(rest); i++) {
+          char = substr(rest, i, 1)
+          if (quote == single_quote) {
+            if (char == single_quote) quote = ""
+            else marker = marker char
+          } else if (char == "\\") {
+            escaped = substr(rest, i + 1, 1)
+            if (escaped == "") return
+            if (quote == "\"" && escaped !~ /[$`"\\]/) {
+              marker = marker char
+            } else {
+              marker = marker escaped
+              i++
+            }
+          } else if (quote == "\"") {
+            if (char == "\"") quote = ""
+            else marker = marker char
+          } else if (char == "\"" || char == single_quote) {
+            quote = char
+          } else if (char ~ /[[:space:];|&<>()]/) {
+            break
+          } else {
+            marker = marker char
+          }
+        }
+        if (quote != "") return
+        consumed = i - 1
+        if (consumed > 0) {
+          heredoc_delimiters[++heredoc_tail] = marker
+          heredoc_strip_tabs[heredoc_tail] = operator ~ /^<<-/
+        }
+        rest = substr(rest, consumed + 1)
+        offset += consumed
+      }
+    }
+    function update_control_depth(value, i, char, word, at_command) {
+      # Count only if/fi at unquoted command boundaries; other grammar is outside this check.
+      at_command = !literal_quote && !continued_line
+      for (i = 1; i <= length(value); i++) {
+        char = substr(value, i, 1)
+        if (char ~ /[;|&]/ && operator_is_unquoted(value, i)) {
+          at_command = 1
+          continue
+        }
+        if (!at_command || char ~ /[[:space:]]/) continue
+        at_command = 0
+        word = substr(value, i)
+        if (word !~ /^(if|fi|then|else)([[:space:];&|()]|$)/) continue
+        sub(/[[:space:];&|()].*$/, "", word)
+        if (word == "if") control_depth++
+        else if (word == "fi" && control_depth) control_depth--
+        at_command = word != "fi"
+        i += length(word) - 1
+      }
+    }
+    function reset_literal_context(delimiter) {
+      for (delimiter in heredoc_delimiters) delete heredoc_delimiters[delimiter]
+      for (delimiter in heredoc_strip_tabs) delete heredoc_strip_tabs[delimiter]
+      control_depth = 0
+      continued_list = 0
+      continued_line = 0
+      literal_quote = ""
+      heredoc_head = 1
+      heredoc_tail = 0
+      literal_indent = 0
+    }
     function finish_folded() {
       if (run_style == ">" && folded_nonblank == 1 && folded_line) {
         in_run = 0
@@ -90,7 +239,17 @@ consumer_run_line() {
           finish_inline()
         }
       }
-      if (in_run && $0 ~ /^ *$/) next
+      if (in_run && $0 ~ /^ *$/) {
+        if (run_style == "|") {
+          if (heredoc_head <= heredoc_tail && heredoc_delimiters[heredoc_head] == "" &&
+              substr($0, literal_indent + 1) == "") {
+            delete heredoc_delimiters[heredoc_head]
+            delete heredoc_strip_tabs[heredoc_head++]
+          }
+          continued_line = 0
+        }
+        next
+      }
       if (in_run && indent <= run_indent) {
         finish_folded()
         in_run = 0
@@ -101,6 +260,7 @@ consumer_run_line() {
         value = trim(substr($0, index($0, "run:") + 4))
         if (value ~ /^[|>]([+-][1-9]?|[1-9][+-]?)?([[:space:]]+#.*|[[:space:]]*)$/) {
           run_style = substr(value, 1, 1)
+          if (run_style == "|") reset_literal_context()
           in_run = 1
           next
         }
@@ -118,9 +278,31 @@ consumer_run_line() {
         if (run_style == ">") {
           folded_nonblank++
           if (value == consumer) folded_line = NR
-        } else if (value !~ /^#/ && value == consumer) {
-          print NR
-          exit
+        } else {
+          if (value != "" && (!literal_indent || indent < literal_indent)) {
+            literal_indent = indent
+          }
+          if (heredoc_head <= heredoc_tail) {
+            shell_line = substr($0, literal_indent + 1)
+            if (heredoc_strip_tabs[heredoc_head]) sub(/^\t+/, "", shell_line)
+            if (shell_line == heredoc_delimiters[heredoc_head]) {
+              delete heredoc_delimiters[heredoc_head]
+              delete heredoc_strip_tabs[heredoc_head++]
+            }
+            next
+          }
+
+          shell_code = shell_without_comment(substr($0, literal_indent + 1))
+          if (value == consumer && !literal_quote && !continued_line && !control_depth && !continued_list) {
+            print NR
+            exit
+          }
+          update_control_depth(shell_code)
+          if (shell_code != "") queue_heredocs(shell_code)
+          if (value !~ /^#/ && value != "") {
+            continued_list = shell_code ~ /(&&|\|\|)[[:space:]]*$/
+          }
+          advance_literal_context(shell_code)
         }
       }
     }
@@ -555,6 +737,322 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   printf '%s\n' 'Positive boundary accepted: a list-first literal block run command before a sibling key'
   cp -- "$regression" "$fixture/regression.yml"
   cp -- "$static_analysis" "$fixture/static-analysis.yml"
+
+  heredoc_body=$'        run: |\n          cat <<\'PAYLOAD\'\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD'
+  heredoc_line=$(consumer_run_line "$heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $heredoc_line ]] || fail "literal heredoc body was accepted as an executable Node consumer"
+  printf '%s\n' 'Negative control rejected: an exact consumer inside a literal heredoc body; assertion=literal heredoc body was accepted as an executable Node consumer'
+
+  commented_heredoc_body=$'        run: |\n          # cat <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  commented_heredoc_line=$(consumer_run_line "$commented_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$commented_heredoc_line" == 3 ]] || fail "executable consumer after a commented heredoc marker was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after a commented heredoc marker'
+
+  trailing_comment_heredoc_body=$'        run: |\n          echo done # see <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  trailing_comment_heredoc_line=$(consumer_run_line "$trailing_comment_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$trailing_comment_heredoc_line" == 3 ]] || fail "executable consumer after heredoc text in a trailing comment was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after heredoc text in a trailing comment'
+
+  quoted_heredoc_text_body=$'        run: |\n          printf \'%s\\n\' "<<PAYLOAD"\n          npm ci --prefix bin --ignore-scripts'
+  quoted_heredoc_text_line=$(consumer_run_line "$quoted_heredoc_text_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$quoted_heredoc_text_line" == 3 ]] || fail "executable consumer after quoted heredoc text was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after quoted heredoc text'
+
+  quoted_then_real_heredoc_body=$'        run: |\n          echo "<<" ; cat <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD'
+  quoted_then_real_heredoc_line=$(consumer_run_line "$quoted_then_real_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $quoted_then_real_heredoc_line ]] || fail "literal heredoc after quoted operator text accepted its body as executable"
+  printf '%s\n' 'Negative control rejected: an exact consumer inside a literal heredoc after quoted operator text; assertion=literal heredoc after quoted operator text accepted its body as executable'
+
+  apostrophe_then_heredoc_body=$'        run: |\n          echo "don\'t" ; cat <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD'
+  apostrophe_then_heredoc_line=$(consumer_run_line "$apostrophe_then_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $apostrophe_then_heredoc_line ]] || fail "apostrophe in double quotes hid a following literal heredoc"
+  printf '%s\n' 'Negative control rejected: an exact consumer inside a heredoc after a double-quoted apostrophe; assertion=apostrophe in double quotes hid a following literal heredoc'
+
+  escaped_quote_then_heredoc_body=$'        run: |\n          echo "a \\"quoted\\" value" ; cat <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD'
+  escaped_quote_then_heredoc_line=$(consumer_run_line "$escaped_quote_then_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $escaped_quote_then_heredoc_line ]] || fail "escaped double quotes hid a following literal heredoc"
+  printf '%s\n' 'Negative control rejected: an exact consumer inside a heredoc after escaped double quotes; assertion=escaped double quotes hid a following literal heredoc'
+
+  multiple_heredoc_body=$'        run: |\n          cat <<FIRST <<SECOND\n          fixture one\n          FIRST\n          npm ci --prefix bin --ignore-scripts\n          SECOND'
+  multiple_heredoc_line=$(consumer_run_line "$multiple_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $multiple_heredoc_line ]] || fail "second literal heredoc body was accepted as an executable Node consumer"
+  printf '%s\n' 'Negative control rejected: an exact consumer inside a second literal heredoc body; assertion=second literal heredoc body was accepted as an executable Node consumer'
+
+  indented_delimiter_body=$'        run: |\n          cat <<PAYLOAD\n            PAYLOAD\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD'
+  indented_delimiter_line=$(consumer_run_line "$indented_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $indented_delimiter_line ]] || fail "consumer after a space-indented heredoc delimiter was accepted as executable"
+  printf '%s\n' 'Negative control rejected: an exact consumer after a space-indented non-delimiter; assertion=consumer after a space-indented heredoc delimiter was accepted as executable'
+
+  tab_stripped_heredoc_body=$'        run: |\n          cat <<-PAYLOAD\n          \tPAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  tab_stripped_heredoc_line=$(consumer_run_line "$tab_stripped_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$tab_stripped_heredoc_line" == 4 ]] || fail "executable consumer after a tab-stripped heredoc delimiter was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after a tab-stripped heredoc delimiter'
+
+  post_multiple_heredoc_body=$'        run: |\n          cat <<FIRST <<SECOND\n          fixture one\n          FIRST\n          fixture two\n          SECOND\n          npm ci --prefix bin --ignore-scripts'
+  post_multiple_heredoc_line=$(consumer_run_line "$post_multiple_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_multiple_heredoc_line" == 7 ]] || fail "executable consumer after multiple closed literal heredocs was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after multiple closed literal heredocs'
+
+  unterminated_heredoc_body=$'        run: |\n          cat <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  unterminated_heredoc_line=$(consumer_run_line "$unterminated_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $unterminated_heredoc_line ]] || fail "unterminated literal heredoc body was accepted as an executable Node consumer"
+  printf '%s\n' 'Malformed boundary rejected: an exact consumer inside an unterminated literal heredoc body'
+
+  post_heredoc_body=$'        run: |\n          cat <<PAYLOAD\n          fixture text\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  post_heredoc_line=$(consumer_run_line "$post_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_heredoc_line" == 5 ]] || fail "executable consumer after a closed literal heredoc was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after a closed literal heredoc'
+
+  deep_literal_heredoc_body=$'        run: |\n            cat <<PAYLOAD\n            fixture text\n            PAYLOAD\n            npm ci --prefix bin --ignore-scripts'
+  deep_literal_heredoc_line=$(consumer_run_line "$deep_literal_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$deep_literal_heredoc_line" == 5 ]] || fail "executable consumer in a deeply indented literal block was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer in a deeply indented literal block'
+
+  escaped_heredoc_body=$'        run: |\n          cat <<\\PAYLOAD\n          fixture text\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  escaped_heredoc_line=$(consumer_run_line "$escaped_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$escaped_heredoc_line" == 5 ]] || fail "executable consumer after an escaped heredoc marker was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after an escaped heredoc marker'
+
+  redirected_heredoc_body=$'        run: |\n          cat <<PAYLOAD>output.txt\n          fixture text\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  redirected_heredoc_line=$(consumer_run_line "$redirected_heredoc_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$redirected_heredoc_line" == 5 ]] || fail "executable consumer after an adjacent heredoc redirection was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after an adjacent heredoc redirection'
+
+  arithmetic_shift_body=$'        run: |\n          size=$((1 << 20))\n          npm ci --prefix bin --ignore-scripts'
+  arithmetic_shift_line=$(consumer_run_line "$arithmetic_shift_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$arithmetic_shift_line" == 3 ]] || fail "executable consumer after an arithmetic shift was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after an arithmetic shift'
+
+  here_string_body=$'        run: |\n          cat <<<"fixture text"\n          npm ci --prefix bin --ignore-scripts'
+  here_string_line=$(consumer_run_line "$here_string_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$here_string_line" == 3 ]] || fail "here-string syntax was mistaken for a heredoc body"
+  printf '%s\n' 'Positive boundary accepted: consumer after a here-string'
+
+  conditional_body=$'        run: |\n          if false; then\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  conditional_line=$(consumer_run_line "$conditional_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $conditional_line ]] || fail "consumer inside an unreachable conditional was accepted as executable"
+  printf '%s\n' 'Negative control rejected: an exact consumer inside an unreachable conditional; assertion=consumer inside an unreachable conditional was accepted as executable'
+
+  short_circuit_body=$'        run: |\n          false &&\n            npm ci --prefix bin --ignore-scripts'
+  short_circuit_line=$(consumer_run_line "$short_circuit_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $short_circuit_line ]] || fail "consumer inside a short-circuited AND-list was accepted as executable"
+  printf '%s\n' 'Negative control rejected: an exact consumer inside a short-circuited AND-list; assertion=consumer inside a short-circuited AND-list was accepted as executable'
+
+  commented_short_circuit_body=$'        run: |\n          false && # skip installation\n            npm ci --prefix bin --ignore-scripts'
+  commented_short_circuit_line=$(consumer_run_line "$commented_short_circuit_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $commented_short_circuit_line ]] || fail "consumer after a commented short-circuit operator was accepted as executable"
+  printf '%s\n' 'Negative control rejected: an exact consumer after a commented short-circuit operator; assertion=consumer after a commented short-circuit operator was accepted as executable'
+
+  commented_operator_text_body=$'        run: |\n          echo done # not an operator: &&\n          npm ci --prefix bin --ignore-scripts'
+  commented_operator_text_line=$(consumer_run_line "$commented_operator_text_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$commented_operator_text_line" == 3 ]] || fail "executable consumer after a commented operator token was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after a commented operator token'
+
+  quoted_hash_short_circuit_body=$'        run: |\n          echo "text # literal" && # skip installation\n            npm ci --prefix bin --ignore-scripts'
+  quoted_hash_short_circuit_line=$(consumer_run_line "$quoted_hash_short_circuit_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $quoted_hash_short_circuit_line ]] || fail "consumer after a quoted hash and short-circuit operator was accepted as executable"
+  printf '%s\n' 'Negative control rejected: an exact consumer after a quoted hash and short-circuit operator; assertion=consumer after a quoted hash and short-circuit operator was accepted as executable'
+
+  apostrophe_short_circuit_body=$'        run: |\n          echo "it\'s skipped" && # skip installation\n            npm ci --prefix bin --ignore-scripts'
+  apostrophe_short_circuit_line=$(consumer_run_line "$apostrophe_short_circuit_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $apostrophe_short_circuit_line ]] || fail "apostrophe in double quotes hid a following shell comment"
+  printf '%s\n' 'Negative control rejected: an exact consumer after a double-quoted apostrophe and short-circuit operator; assertion=apostrophe in double quotes hid a following shell comment'
+
+  escaped_quote_short_circuit_body=$'        run: |\n          echo "a \\"quoted\\" value" && # skip installation\n            npm ci --prefix bin --ignore-scripts'
+  escaped_quote_short_circuit_line=$(consumer_run_line "$escaped_quote_short_circuit_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $escaped_quote_short_circuit_line ]] || fail "escaped double quotes hid a following shell comment"
+  printf '%s\n' 'Negative control rejected: an exact consumer after escaped double quotes and a short-circuit operator; assertion=escaped double quotes hid a following shell comment'
+
+  post_short_circuit_body=$'        run: |\n          false &&\n            echo skipped\n          npm ci --prefix bin --ignore-scripts'
+  post_short_circuit_line=$(consumer_run_line "$post_short_circuit_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_short_circuit_line" == 4 ]] || fail "executable consumer after a completed AND-list was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after a completed AND-list'
+
+  unterminated_conditional_body=$'        run: |\n          if false; then\n            npm ci --prefix bin --ignore-scripts'
+  unterminated_conditional_line=$(consumer_run_line "$unterminated_conditional_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $unterminated_conditional_line ]] || fail "consumer inside an unterminated conditional was accepted as executable"
+  printf '%s\n' 'Malformed boundary rejected: an exact consumer inside an unterminated conditional'
+
+  post_conditional_body=$'        run: |\n          if false; then\n            echo skipped\n          fi\n          npm ci --prefix bin --ignore-scripts'
+  post_conditional_line=$(consumer_run_line "$post_conditional_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_conditional_line" == 5 ]] || fail "executable consumer after a closed conditional was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after a closed conditional'
+
+  single_line_conditional_body=$'        run: |\n          if false; then echo skipped; fi\n          npm ci --prefix bin --ignore-scripts'
+  single_line_conditional_line=$(consumer_run_line "$single_line_conditional_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$single_line_conditional_line" == 3 ]] || fail "executable consumer after a single-line conditional was not accepted"
+  printf '%s\n' 'Positive boundary accepted: an exact consumer after a single-line conditional'
+
+  # These physical-line controls exercise the bounded shell context directly.
+  multiline_quote_body=$'        run: |\n          printf "%s" "payload\n          npm ci --prefix bin --ignore-scripts\n          "'
+  multiline_quote_line=$(consumer_run_line "$multiline_quote_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $multiline_quote_line ]] || fail "multiline double-quoted text was accepted as an executable consumer"
+  printf '%s\n' 'Negative control rejected: multiline double-quoted consumer text; assertion=multiline double-quoted text was accepted as an executable consumer'
+
+  multiline_single_quote_body=$'        run: |\n          printf "%s" \'payload\n          npm ci --prefix bin --ignore-scripts\n          \'\n          npm ci --prefix bin --ignore-scripts'
+  multiline_single_quote_line=$(consumer_run_line "$multiline_single_quote_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$multiline_single_quote_line" == 5 ]] || fail "consumer after multiline single-quote closure was not accepted at its executable boundary"
+  printf '%s\n' 'Positive boundary accepted: consumer after multiline single-quote closure'
+
+  multiline_quote_close_body=$'        run: |\n          printf "%s" "payload\n          # literal quote text <<PAYLOAD\n          if false; then\n          "\n          npm ci --prefix bin --ignore-scripts'
+  multiline_quote_close_line=$(consumer_run_line "$multiline_quote_close_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$multiline_quote_close_line" == 6 ]] || fail "consumer after multiline double-quote closure was not accepted"
+  printf '%s\n' 'Positive boundary accepted: consumer after multiline double-quote closure and quoted shell syntax'
+
+  escaped_multiline_quote_body=$'        run: |\n          printf "%s" "payload\\"\n          npm ci --prefix bin --ignore-scripts\n          "\n          npm ci --prefix bin --ignore-scripts'
+  escaped_multiline_quote_line=$(consumer_run_line "$escaped_multiline_quote_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$escaped_multiline_quote_line" == 5 ]] || fail "escaped quote closed a multiline shell string prematurely"
+  printf '%s\n' 'Positive boundary accepted: consumer only after an escaped multiline quote closes'
+
+  continuation_body=$'        run: |\n          printf "%s" \\\n          npm ci --prefix bin --ignore-scripts'
+  continuation_line=$(consumer_run_line "$continuation_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $continuation_line ]] || fail "backslash-continued argument was accepted as an executable consumer"
+  printf '%s\n' 'Negative control rejected: odd-backslash continuation consumer; assertion=backslash-continued argument was accepted as an executable consumer'
+
+  post_continuation_body=$'        run: |\n          printf "%s" \\\\\\\n          npm ci --prefix bin --ignore-scripts\n          npm ci --prefix bin --ignore-scripts'
+  post_continuation_line=$(consumer_run_line "$post_continuation_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_continuation_line" == 4 ]] || fail "consumer after an odd-backslash continuation was not accepted at its standalone boundary"
+  printf '%s\n' 'Positive boundary accepted: standalone consumer after an odd-backslash continuation'
+
+  even_backslash_body=$'        run: |\n          printf "%s" \\\\\n          npm ci --prefix bin --ignore-scripts'
+  even_backslash_line=$(consumer_run_line "$even_backslash_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$even_backslash_line" == 3 ]] || fail "even trailing backslashes incorrectly continued the next consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer after even trailing backslashes'
+
+  backslash_space_body=$'        run: |\n          printf "%s" \\ \n          npm ci --prefix bin --ignore-scripts'
+  backslash_space_line=$(consumer_run_line "$backslash_space_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$backslash_space_line" == 3 ]] || fail "backslash followed by a space incorrectly continued the next consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer after a backslash followed by a space'
+
+  blank_continuation_body=$'        run: |\n          printf "%s" \\\n\n          npm ci --prefix bin --ignore-scripts'
+  blank_continuation_line=$(consumer_run_line "$blank_continuation_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$blank_continuation_line" == 4 ]] || fail "blank physical line did not end a backslash continuation"
+  printf '%s\n' 'Positive boundary accepted: consumer after a blank continuation line'
+
+  commented_conditional_close_body=$'        run: |\n          if false; then # fi\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  commented_conditional_close_line=$(consumer_run_line "$commented_conditional_close_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $commented_conditional_close_line ]] || fail "commented fi token hid an unreachable conditional"
+  printf '%s\n' 'Negative control rejected: conditional with a commented fi token; assertion=commented fi token hid an unreachable conditional'
+
+  post_commented_conditional_body=$'        run: |\n          if false; then # fi\n            echo skipped\n          fi # if false; then\n          npm ci --prefix bin --ignore-scripts'
+  post_commented_conditional_line=$(consumer_run_line "$post_commented_conditional_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_commented_conditional_line" == 5 ]] || fail "consumer after a comment-stripped conditional closure was not accepted"
+  printf '%s\n' 'Positive boundary accepted: consumer after a comment-stripped conditional closure'
+
+  quoted_conditional_terminator_body=$'        run: |\n          if false; then echo " fi "\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  quoted_conditional_terminator_line=$(consumer_run_line "$quoted_conditional_terminator_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $quoted_conditional_terminator_line ]] || fail "quoted fi argument suppressed conditional tracking"
+  printf '%s\n' 'Negative control rejected: quoted conditional terminator argument; assertion=quoted fi argument suppressed conditional tracking'
+
+  quoted_separator_terminator_body=$'        run: |\n          if false; then echo "; fi "\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  quoted_separator_terminator_line=$(consumer_run_line "$quoted_separator_terminator_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $quoted_separator_terminator_line ]] || fail "quoted semicolon and fi suppressed conditional tracking"
+  printf '%s\n' 'Negative control rejected: quoted semicolon and conditional terminator; assertion=quoted semicolon and fi suppressed conditional tracking'
+
+  unquoted_fi_argument_body=$'        run: |\n          if false; then echo fi\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  unquoted_fi_argument_line=$(consumer_run_line "$unquoted_fi_argument_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $unquoted_fi_argument_line ]] || fail "unquoted fi argument suppressed conditional tracking"
+  printf '%s\n' 'Negative control rejected: unquoted conditional terminator argument; assertion=unquoted fi argument suppressed conditional tracking'
+
+  concatenated_delimiter_body=$'        run: |\n          cat <<\'PAY\'LOAD\n          fixture text\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  concatenated_delimiter_line=$(consumer_run_line "$concatenated_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$concatenated_delimiter_line" == 5 ]] || fail "concatenated heredoc delimiter hid a later executable consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer after a concatenated heredoc delimiter; assertion=concatenated heredoc delimiter hid a later executable consumer'
+
+  mixed_delimiter_body=$'        run: |\n          cat <<P\'A\'Y"LO"\\AD\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  mixed_delimiter_line=$(consumer_run_line "$mixed_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$mixed_delimiter_line" == 5 ]] || fail "mixed-quote heredoc did not distinguish its body from a later executable consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer only after a mixed-quote heredoc delimiter; assertion=mixed-quote heredoc did not distinguish its body from a later executable consumer'
+
+  double_quote_backslash_delimiter_body=$'        run: |\n          cat <<"PAY\\LOAD"\n          fixture text\n          PAY\\LOAD\n          npm ci --prefix bin --ignore-scripts'
+  double_quote_backslash_delimiter_line=$(consumer_run_line "$double_quote_backslash_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$double_quote_backslash_delimiter_line" == 5 ]] || fail "literal backslash in a double-quoted heredoc delimiter was removed"
+  printf '%s\n' 'Positive boundary accepted: consumer after a double-quoted delimiter with a literal backslash'
+
+  escaped_dollar_delimiter_body=$'        run: |\n          cat <<"PAY\\$LOAD"\n          fixture text\n          PAY$LOAD\n          npm ci --prefix bin --ignore-scripts'
+  escaped_dollar_delimiter_line=$(consumer_run_line "$escaped_dollar_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$escaped_dollar_delimiter_line" == 5 ]] || fail "escaped dollar in a double-quoted delimiter was not unquoted"
+  printf '%s\n' 'Positive boundary accepted: consumer after a double-quoted delimiter with an escaped dollar'
+
+  escaped_delimiter_newline_body=$'        run: |\n          cat <<PAY\\\n          npm ci --prefix bin --ignore-scripts'
+  escaped_delimiter_newline_line=$(consumer_run_line "$escaped_delimiter_newline_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $escaped_delimiter_newline_line ]] || fail "continued heredoc delimiter word accepted a joined consumer"
+  printf '%s\n' 'Negative control rejected: consumer joined to a continued heredoc delimiter word'
+
+  unterminated_delimiter_word_body=$'        run: |\n          cat <<\'PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  unterminated_delimiter_word_line=$(consumer_run_line "$unterminated_delimiter_word_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $unterminated_delimiter_word_line ]] || fail "unterminated heredoc delimiter quote was accepted as executable"
+  printf '%s\n' 'Malformed boundary rejected: consumer after an unterminated heredoc delimiter quote'
+
+  operator_comment_body=$'        run: |\n          false &&# skip installation\n            npm ci --prefix bin --ignore-scripts'
+  operator_comment_line=$(consumer_run_line "$operator_comment_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $operator_comment_line ]] || fail "operator-adjacent comment hid a short-circuited consumer"
+  printf '%s\n' 'Negative control rejected: consumer after an operator-adjacent comment; assertion=operator-adjacent comment hid a short-circuited consumer'
+
+  quoted_operator_hash_body=$'        run: |\n          echo "done;# literal"\n          npm ci --prefix bin --ignore-scripts'
+  quoted_operator_hash_line=$(consumer_run_line "$quoted_operator_hash_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$quoted_operator_hash_line" == 3 ]] || fail "quoted operator-adjacent hash changed executable context"
+  printf '%s\n' 'Positive boundary accepted: consumer after a quoted operator-adjacent hash'
+
+  in_word_hash_body=$'        run: |\n          echo word#literal\n          npm ci --prefix bin --ignore-scripts'
+  in_word_hash_line=$(consumer_run_line "$in_word_hash_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$in_word_hash_line" == 3 ]] || fail "in-word hash changed executable context"
+  printf '%s\n' 'Positive boundary accepted: consumer after an in-word hash'
+
+  escaped_operator_hash_body=$'        run: |\n          echo escaped\\;#literal &&\n          npm ci --prefix bin --ignore-scripts'
+  escaped_operator_hash_line=$(consumer_run_line "$escaped_operator_hash_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $escaped_operator_hash_line ]] || fail "escaped operator before an in-word hash hid a continued list"
+  printf '%s\n' 'Negative control rejected: consumer after an escaped operator and in-word hash'
+
+  escaped_space_hash_body=$'        run: |\n          echo escaped\\ #literal &&\n          npm ci --prefix bin --ignore-scripts'
+  escaped_space_hash_line=$(consumer_run_line "$escaped_space_hash_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $escaped_space_hash_line ]] || fail "escaped space before an in-word hash hid a continued list"
+  printf '%s\n' 'Negative control rejected: consumer after an escaped space and in-word hash'
+
+  nested_inline_if_body=$'        run: |\n          if false; then if true; then echo skipped; fi\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  nested_inline_if_line=$(consumer_run_line "$nested_inline_if_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $nested_inline_if_line ]] || fail "inline nested if closure hid the outer conditional depth"
+  printf '%s\n' 'Negative control rejected: consumer inside an outer conditional with an inline nested if; assertion=inline nested if closure hid the outer conditional depth'
+
+  close_reopen_if_body=$'        run: |\n          if true; then\n            echo done\n          fi; if false; then\n            npm ci --prefix bin --ignore-scripts\n          fi'
+  close_reopen_if_line=$(consumer_run_line "$close_reopen_if_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $close_reopen_if_line ]] || fail "closing and reopening an if on one line lost conditional depth"
+  printf '%s\n' 'Negative control rejected: consumer after a same-line if close and reopen; assertion=closing and reopening an if on one line lost conditional depth'
+
+  post_nested_if_body=$'        run: |\n          if false; then if true; then echo skipped; fi\n          fi\n          echo "if fi"; echo if fi\n          npm ci --prefix bin --ignore-scripts'
+  post_nested_if_line=$(consumer_run_line "$post_nested_if_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_nested_if_line" == 5 ]] || fail "consumer after balanced nested conditionals and keyword arguments was not accepted"
+  printf '%s\n' 'Positive boundary accepted: consumer after balanced nested conditionals and keyword arguments'
+
+  empty_delimiter_body=$'        run: |\n          cat <<\'\'\n          npm ci --prefix bin --ignore-scripts\n\n'
+  empty_delimiter_line=$(consumer_run_line "$empty_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $empty_delimiter_line ]] || fail "empty-delimiter heredoc body was accepted as executable"
+  printf '%s\n' 'Negative control rejected: consumer inside an empty-delimiter heredoc; assertion=empty-delimiter heredoc body was accepted as executable'
+
+  post_empty_delimiter_body=$'        run: |\n          cat <<""\n          npm ci --prefix bin --ignore-scripts\n\n          npm ci --prefix bin --ignore-scripts'
+  post_empty_delimiter_line=$(consumer_run_line "$post_empty_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$post_empty_delimiter_line" == 5 ]] || fail "empty heredoc delimiter did not distinguish its body from a later consumer"
+  printf '%s\n' 'Positive boundary accepted: consumer after an empty heredoc delimiter; assertion=empty heredoc delimiter did not distinguish its body from a later consumer'
+
+  spaced_empty_delimiter_body=$'        run: |\n          cat <<\'\'\n            \n          npm ci --prefix bin --ignore-scripts'
+  spaced_empty_delimiter_line=$(consumer_run_line "$spaced_empty_delimiter_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $spaced_empty_delimiter_line ]] || fail "space-containing heredoc line closed an empty delimiter"
+  printf '%s\n' 'Negative control rejected: consumer after a space-containing empty heredoc delimiter'
+
+  quoted_arithmetic_prefix_body=$'        run: |\n          echo "((" ; cat <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD'
+  quoted_arithmetic_prefix_line=$(consumer_run_line "$quoted_arithmetic_prefix_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $quoted_arithmetic_prefix_line ]] || fail "quoted arithmetic prefix hid a real heredoc body"
+  printf '%s\n' 'Negative control rejected: consumer in a heredoc after a quoted arithmetic prefix; assertion=quoted arithmetic prefix hid a real heredoc body'
+
+  nested_arithmetic_shift_body=$'        run: |\n          size=$(( (1 + 2) << 20 ))\n          npm ci --prefix bin --ignore-scripts'
+  nested_arithmetic_shift_line=$(consumer_run_line "$nested_arithmetic_shift_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$nested_arithmetic_shift_line" == 3 ]] || fail "nested arithmetic shift was mistaken for a heredoc"
+  printf '%s\n' 'Positive boundary accepted: consumer after a nested arithmetic shift; assertion=nested arithmetic shift was mistaken for a heredoc'
+
+  closed_arithmetic_prefix_body=$'        run: |\n          size=$(( (1 + 2) << 20 )); cat <<PAYLOAD\n          npm ci --prefix bin --ignore-scripts\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
+  closed_arithmetic_prefix_line=$(consumer_run_line "$closed_arithmetic_prefix_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$closed_arithmetic_prefix_line" == 5 ]] || fail "closed arithmetic context hid a later real heredoc"
+  printf '%s\n' 'Positive boundary accepted: consumer after a heredoc following closed arithmetic'
 
   if ! awk '
     $0 == "      - name: Install pinned asset toolchain" {

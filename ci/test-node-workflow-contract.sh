@@ -90,8 +90,20 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   expect_rejected "a non-literal major boundary" \
     "regression.yml job assets must pin node-version '22' exactly once (found 0)"
 
-  sed -i '0,/actions\/setup-node@/s/@[0-9a-f]\{40\}/@0000000000000000000000000000000000000000/' \
-    "$fixture/regression.yml"
+  if ! awk -v expected="      - uses: $setup_node" '
+    /^  assets:$/ { in_assets = 1 }
+    in_assets && /^  [A-Za-z_][A-Za-z0-9_-]*:/ && $0 != "  assets:" { in_assets = 0 }
+    in_assets && $0 == expected {
+      print "      - uses: actions/setup-node@0000000000000000000000000000000000000000"
+      changed++
+      next
+    }
+    { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.with-revision.yml"; then
+    fail "fixture preparation failed: expected exactly one assets setup-node revision target"
+  fi
+  mv -- "$fixture/regression.with-revision.yml" "$fixture/regression.yml"
   expect_rejected "a mismatched action revision" \
     "regression.yml job assets must pin actions/setup-node to $setup_node"
 
@@ -108,6 +120,13 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
     { print }
   ' "$fixture/regression.yml" >"$fixture/regression.with-boundary.yml"
   mv -- "$fixture/regression.with-boundary.yml" "$fixture/regression.yml"
+  if ! static_body=$(job_body "$fixture/regression.yml" static); then
+    fail "fixture preparation failed: neighbouring static job is missing"
+  fi
+  static_setup_count=$(grep -cF -- 'uses: actions/setup-node@' <<<"$static_body" || true)
+  relocated_block=$(sed -n '/      # actions\/setup-node v6.3.0/,+4p' <<<"$static_body")
+  [[ $static_setup_count == 1 && $relocated_block == "$boundary_block" ]] ||
+    fail "fixture preparation failed: neighbouring static job lacks one identical setup-node block"
   expect_rejected "an identical pin in the neighbouring static job boundary" \
     'regression.yml job assets must use setup-node exactly once (found 0)'
 fi

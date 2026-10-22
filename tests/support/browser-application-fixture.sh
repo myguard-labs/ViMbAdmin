@@ -26,13 +26,13 @@ fi
 cd "$(dirname "$0")/../.."
 suite=${VIMBADMIN_BROWSER_APPLICATION_SUITE:-auth-errors}
 case $suite in
-auth-errors | tenant | operations) ;;
+auth-errors | tenant | operations | visual) ;;
 *)
   echo 'FAIL: unsupported browser application suite' >&2
   exit 64
   ;;
 esac
-if [[ $suite == tenant || $suite == operations ]]; then export VIMBADMIN_FIXTURE_TENANT=1; fi
+if [[ $suite == tenant || $suite == operations || $suite == visual ]]; then export VIMBADMIN_FIXTURE_TENANT=1; fi
 if [[ $suite == operations ]]; then export VIMBADMIN_FIXTURE_OPERATIONS=1; fi
 evidence_dir=''
 if [[ ${1:-} == --evidence-dir ]]; then
@@ -322,7 +322,7 @@ create_container() {
 }
 
 database_storage=()
-if [[ $suite == operations ]]; then
+if [[ $suite == operations || $suite == visual ]]; then
   # Private throwaway data only. Keep the large PHP file-fixture suites from
   # competing with cold database initialization on the host's disk.
   database_storage+=(--tmpfs '/var/lib/mysql:rw,noexec,nosuid,size=512m')
@@ -449,6 +449,15 @@ done < <(git ls-files --others --exclude-standard | sort)
   fi
   if [[ $suite == operations ]]; then
     for identity_file in ci/test-browser-operations.cjs ci/test-browser-operations.sh ci/support/browser-operations-seed.php ci/support/browser-operations-control.php; do
+      printf 'file\t%s\t%s\n' "$identity_file" "$(sha256sum "$identity_file" | awk '{print $1}')"
+    done
+  fi
+  if [[ $suite == visual ]]; then
+    for identity_file in ci/test-browser-visual.cjs ci/test-browser-visual.sh \
+      ci/browser-visual-inventory.json ci/test-browser-visual-inventory.cjs; do
+      printf 'file\t%s\t%s\n' "$identity_file" "$(sha256sum "$identity_file" | awk '{print $1}')"
+    done
+    git ls-files application/views public/css | while IFS= read -r identity_file; do
       printf 'file\t%s\t%s\n' "$identity_file" "$(sha256sum "$identity_file" | awk '{print $1}')"
     done
   fi
@@ -595,6 +604,45 @@ run_browser() {
   log="$evidence_dir/logs/browser-${engine}-${safe_case}.log"
   profile="$fixture_root/profile-${engine}-${safe_case}"
   install -d -m 700 "$profile"
+  if [[ $suite == visual ]]; then
+    # Change only the disposable application's configuration; every request
+    # reloads it with opcache disabled. No fixture markup replaces a real view.
+    local skin=dark
+    [[ $case_name != default-* ]] || skin=''
+    cp "$fixture_root/visual-config.ini" "$app_root/application/configs/application.ini"
+    # Override inside the existing section so all connection options remain.
+    sed -i '/^\[browser-fixture-failure : browser-fixture\]/i resources.smarty.skin = "'"$skin"'"' \
+      "$app_root/application/configs/application.ini"
+    cp application/views/header.phtml "$app_root/application/views/header.phtml"
+    cp application/views/maintenance/index.phtml "$app_root/application/views/maintenance/index.phtml"
+    cp application/views/admin/list.phtml "$app_root/application/views/admin/list.phtml"
+    if [[ $mutation == hidden-action ]]; then
+      sed -i 's/<button class="btn btn-sm"/<button hidden class="btn btn-sm"/' "$app_root/application/views/maintenance/index.phtml"
+    elif [[ $mutation == clipped-action ]]; then
+      sed -i 's/<button class="btn btn-sm"/<button style="clip-path: inset(100%);" class="btn btn-sm"/' "$app_root/application/views/maintenance/index.phtml"
+    elif [[ $mutation == hidden-desktop-action ]]; then
+      sed -i 's/id="add_admin"/id="add_admin" style="display: none;"/' "$app_root/application/views/admin/list.phtml"
+    elif [[ $mutation == missing-label-focus ]]; then
+      sed -i 's/aria-label="Toggle navigation"/aria-label="" tabindex="-1"/' "$app_root/application/views/header.phtml"
+    elif [[ $mutation == missing-focus ]]; then
+      sed -i 's/aria-label="Toggle navigation"/aria-label="Toggle navigation" tabindex="-1"/' "$app_root/application/views/header.phtml"
+    fi
+    if [[ $mutation == omitted-skin ]]; then
+      sed -i 's/resources.smarty.skin = "dark"/resources.smarty.skin = ""/g' "$app_root/application/configs/application.ini"
+    fi
+    # Smarty's generated templates must never outlive their mutated source.
+    find "$app_root/var/templates_c" -type f -delete
+    mkdir -p "$fixture_root/visual-artifacts/$engine-$case_name"
+    {
+      printf 'command=bash ci/test-browser-visual.sh --evidence-dir %q; engine=%s case=%s mutation=%s\n' "$evidence_dir" "$engine" "$case_name" "$mutation"
+      for artifact in "$app_root/application/configs/application.ini" "$app_root/application/views/header.phtml" \
+        "$app_root/application/views/maintenance/index.phtml" "$app_root/application/views/admin/list.phtml" \
+        "$app_root/public/css/_skins/dark/skin.css"; do
+        stat --printf='source_artifact_mtime=%y source_artifact_bytes=%s\n' "$artifact"
+        sha256sum "$artifact"
+      done
+    } >"$evidence_dir/logs/artifact-$engine-$safe_case.log"
+  fi
   run_captured_php "session-reset-${engine}-${safe_case}" \
     "$evidence_dir/logs/session-reset-${engine}-${safe_case}.log" \
     env VIMBADMIN_FIXTURE_ORIGIN="$app_origin" \
@@ -624,6 +672,10 @@ run_browser() {
   args=(--network host --cap-drop ALL --security-opt no-new-privileges
     --user "$(id -u):$(id -g)" --env "HOME=$fixture_root"
     --mount "type=bind,src=$fixture_root,dst=$fixture_root")
+  if [[ $suite == visual ]]; then
+    args+=(--env "VIMBADMIN_VISUAL_SKIN=${skin:-default}"
+      --env "VIMBADMIN_VISUAL_ARTIFACTS=$fixture_root/visual-artifacts/$engine-$case_name")
+  fi
   if [[ $mutation == disable-origin-guard ]]; then
     args+=(--mount "type=bind,src=$fixture_root/run-fixture-origin-guard-mutant.cjs,dst=/opt/browser/run-fixture.cjs,readonly")
   fi
@@ -635,6 +687,9 @@ run_browser() {
     "--application-expected-engine=$expected_engine"
   cid=$CREATED_CONTAINER
   name=$CREATED_NAME
+  if [[ $suite == visual ]]; then
+    docker inspect --format '{{json .Path}} {{json .Args}}' "$cid" >>"$evidence_dir/logs/artifact-$engine-$safe_case.log"
+  fi
   status=0
   docker start --attach "$cid" >"$log" 2>&1 || status=$?
   exit_code=$(docker inspect --format '{{.State.ExitCode}}' "$cid")
@@ -642,6 +697,10 @@ run_browser() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$cid" "$name" "browser-$engine-$case_name" "$browser_image" "$status" \
     >>"$evidence_dir/container-results.tsv"
   remove_owned_container "$cid"
+  if [[ $suite == visual ]]; then
+    mkdir -p "$evidence_dir/visual-artifacts"
+    cp -a "$fixture_root/visual-artifacts/$engine-$case_name" "$evidence_dir/visual-artifacts/"
+  fi
   BROWSER_STATUS=$status
   BROWSER_LOG=$log
 }
@@ -671,7 +730,21 @@ expect_red() {
     >>"$evidence_dir/browser-status.tsv"
 }
 
+if [[ $suite == visual ]]; then cp "$app_root/application/configs/application.ini" "$fixture_root/visual-config.ini"; fi
 for engine in "${engines[@]}"; do
+  if [[ $suite == visual ]]; then
+    expect_green "$engine" default-full
+    expect_green "$engine" dark-full
+    expect_red "$engine" dark-hidden-action hidden-action "$engine" 'visual action is visible: maintenance release check'
+    expect_red "$engine" dark-clipped-action clipped-action "$engine" 'maintenance: action is not clipped or covered'
+    expect_red "$engine" dark-hidden-desktop-action hidden-desktop-action "$engine" 'admins: primary action visible'
+    expect_red "$engine" dark-missing-label-focus missing-label-focus "$engine" 'navigation toggle has accessible name and keyboard focus'
+    expect_red "$engine" dark-missing-focus missing-focus "$engine" 'navigation toggle has accessible name and keyboard focus'
+    expect_red "$engine" dark-omitted-skin omitted-skin "$engine" 'dark skin stylesheet is loaded last'
+    expect_green "$engine" dark-restored
+    expect_green "$engine" default-restored
+    continue
+  fi
   if [[ $suite == operations ]]; then
     expect_green "$engine" full
     expect_red "$engine" commit-on-rollback commit-on-rollback "$engine" \
@@ -741,6 +814,9 @@ remaining=$(docker ps -aq --filter "label=$run_label")
 }
 
 sha256sum "$evidence_dir"/logs/mounts-*.log >"$evidence_dir/container-mounts.sha256"
+if [[ $suite == visual ]]; then
+  find "$evidence_dir/visual-artifacts" -type f -print0 | sort -z | xargs -0 sha256sum >"$evidence_dir/visual-manifest.sha256"
+fi
 sha256sum "$evidence_dir"/identities.tsv "$evidence_dir"/php-commands.tsv \
   "$evidence_dir"/php-processes.tsv "$evidence_dir"/browser-status.tsv \
   "$evidence_dir"/container-ids.tsv "$evidence_dir"/container-labels.tsv \

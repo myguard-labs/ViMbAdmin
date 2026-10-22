@@ -67,6 +67,13 @@ consumer_run_line() {
       quote = literal_quote
       for (i = 1; i < position; i++) {
         char = substr(value, i, 1)
+        if (quote == "ansi") {
+          if (char == "\\") {
+            if (i + 1 == position) return 0
+            i++
+          } else if (char == single_quote) quote = ""
+          continue
+        }
         if (quote == single_quote) {
           if (char == single_quote) quote = ""
           continue
@@ -80,7 +87,14 @@ consumer_run_line() {
           if (char == "\"") quote = ""
           continue
         }
-        if (char == single_quote || char == "\"") quote = char
+        if (char == "$" && substr(value, i + 1, 1) == "$") {
+          i++
+          continue
+        }
+        if (char == "$" && substr(value, i + 1, 1) == single_quote) {
+          quote = "ansi"
+          i++
+        } else if (char == single_quote || char == "\"") quote = char
       }
       return quote == ""
     }
@@ -103,13 +117,23 @@ consumer_run_line() {
       continued_line = 0
       for (i = 1; i <= length(value); i++) {
         char = substr(value, i, 1)
-        if (literal_quote == single_quote) {
+        if (literal_quote == "ansi") {
+          if (char == "\\") {
+            if (i == length(value)) continued_line = 1
+            i++
+          } else if (char == single_quote) literal_quote = ""
+        } else if (literal_quote == single_quote) {
           if (char == single_quote) literal_quote = ""
         } else if (char == "\\") {
           if (i == length(value)) continued_line = 1
           i++
         } else if (literal_quote == "\"") {
           if (char == "\"") literal_quote = ""
+        } else if (char == "$" && substr(value, i + 1, 1) == "$") {
+          i++
+        } else if (char == "$" && substr(value, i + 1, 1) == single_quote) {
+          literal_quote = "ansi"
+          i++
         } else if (char == single_quote || char == "\"") {
           literal_quote = char
         }
@@ -1153,6 +1177,67 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   mixed_ansi_bracket_line=$(consumer_run_line "$mixed_ansi_bracket_body" 'npm ci --prefix bin --ignore-scripts')
   [[ "$mixed_ansi_bracket_line" == 7 ]] || fail "ANSI-C delimiter masking changed real conditional or double-bracket context"
   printf '%s\n' 'Positive boundary accepted: consumer only after combined ANSI-C heredoc, double-bracket and conditional closure'
+
+  ansi_commented_fi_body=$'        run: |\n          if false; then cat <<$\'A\\\'B\' # ; fi\n          body\n          A\'B\n          npm ci --prefix bin --ignore-scripts\n          fi'
+  ansi_commented_fi_line=$(consumer_run_line "$ansi_commented_fi_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $ansi_commented_fi_line ]] || fail "comment after an escaped ANSI-C delimiter closed a real conditional"
+  printf '%s\n' 'Negative control rejected: commented fi after an escaped ANSI-C delimiter'
+
+  ansi_comment_delimiters=("\$'A\\'B'" "\$'A\\\\'" "\$'A\\\\\\'B'")
+  ansi_comment_markers=("A'B" "A\\" "A\\'B")
+  for ansi_comment_case in "${!ansi_comment_delimiters[@]}"; do
+    printf -v ansi_commented_if_body '        run: |\n          cat <<%s # ; if false; then\n          npm ci --prefix bin --ignore-scripts\n          %s\n          npm ci --prefix bin --ignore-scripts' \
+      "${ansi_comment_delimiters[ansi_comment_case]}" "${ansi_comment_markers[ansi_comment_case]}"
+    ansi_commented_if_line=$(consumer_run_line "$ansi_commented_if_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ "$ansi_commented_if_line" == 5 ]] || fail "comment after an ANSI-C delimiter opened a fake conditional"
+    printf -v ansi_nested_comment_body '        run: |\n          if false; then cat <<%s # ; fi\n          body\n          %s\n          npm ci --prefix bin --ignore-scripts\n          fi' \
+      "${ansi_comment_delimiters[ansi_comment_case]}" "${ansi_comment_markers[ansi_comment_case]}"
+    ansi_nested_comment_line=$(consumer_run_line "$ansi_nested_comment_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ -z $ansi_nested_comment_line ]] || fail "ANSI-C backslash parity exposed a conditional consumer"
+  done
+  printf '%s\n' 'Positive and negative boundaries: odd and even ANSI-C backslashes preserve trailing comments'
+
+  ansi_delimiter_hash_body=$'        run: |\n          cat <<$\'A\\\' # ; fi B\'\n          npm ci --prefix bin --ignore-scripts\n          A\' # ; fi B\n          npm ci --prefix bin --ignore-scripts'
+  ansi_delimiter_hash_line=$(consumer_run_line "$ansi_delimiter_hash_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$ansi_delimiter_hash_line" == 5 ]] || fail "escaped ANSI-C apostrophe exposed a hash inside the delimiter"
+  printf '%s\n' 'Positive boundary accepted: a hash after an escaped apostrophe stays inside the ANSI-C delimiter'
+
+  ansi_literal_comment_body=$'        run: |\n          printf \'%s\\n\' $\'A\\\' # ; if \\; fi\' # ; if false; then\n          npm ci --prefix bin --ignore-scripts'
+  ansi_literal_comment_line=$(consumer_run_line "$ansi_literal_comment_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$ansi_literal_comment_line" == 3 ]] || fail "ANSI-C literal quote tracking hid a later executable consumer"
+  printf '%s\n' 'Positive boundary accepted: ANSI-C literal quoting and a trailing comment preserve command context'
+
+  multiline_ansi_literal_body=$'        run: |\n          printf \'%s\\n\' $\'open\\\'word\n          npm ci --prefix bin --ignore-scripts\n          close\'\n          npm ci --prefix bin --ignore-scripts'
+  multiline_ansi_literal_line=$(consumer_run_line "$multiline_ansi_literal_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$multiline_ansi_literal_line" == 5 ]] || fail "multiline ANSI-C literal exposed its consumer text"
+  printf '%s\n' 'Positive boundary accepted: consumer only after multiline ANSI-C quote closure'
+
+  unclosed_ansi_literal_body=$'        run: |\n          printf \'%s\\n\' $\'open\\\'\n          npm ci --prefix bin --ignore-scripts'
+  unclosed_ansi_literal_line=$(consumer_run_line "$unclosed_ansi_literal_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $unclosed_ansi_literal_line ]] || fail "unclosed ANSI-C literal accepted its consumer text"
+  printf '%s\n' 'Malformed boundary rejected: consumer inside an unclosed escaped ANSI-C literal'
+
+  pid_literal_comment_body=$'        run: |\n          printf \'%s\\n\' $$\'A\\\' # ; if false; then\n          npm ci --prefix bin --ignore-scripts'
+  pid_literal_comment_line=$(consumer_run_line "$pid_literal_comment_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$pid_literal_comment_line" == 3 ]] || fail "PID expansion was mistaken for an ANSI-C quote prefix"
+  printf '%s\n' 'Positive boundary accepted: consumer after PID expansion and an ordinary single-quoted literal'
+
+  pid_commented_fi_body=$'        run: |\n          if false; then printf \'%s\\n\' $$\'A\\\' # \' ; fi\n          npm ci --prefix bin --ignore-scripts\n          fi'
+  pid_commented_fi_line=$(consumer_run_line "$pid_commented_fi_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ -z $pid_commented_fi_line ]] || fail "comment after a PID-prefixed literal closed a real conditional"
+  printf '%s\n' 'Negative control rejected: commented fi after a PID-prefixed ordinary single-quoted literal'
+
+  for dollar_quote_prefix in '$' '$$$' '\$$'; do
+    printf -v dollar_prefix_body '        run: |\n          printf "%%s\\n" %s\x27A\\\x27B\x27 # ; if false; then\n          npm ci --prefix bin --ignore-scripts' "$dollar_quote_prefix"
+    dollar_prefix_line=$(consumer_run_line "$dollar_prefix_body" 'npm ci --prefix bin --ignore-scripts')
+    [[ "$dollar_prefix_line" == 3 ]] || fail "an unpaired or escaped dollar prefix changed ANSI-C literal context"
+  done
+  printf '%s\n' 'Positive boundary accepted: odd dollar counts and an escaped dollar preserve ANSI-C quote recognition'
+
+  continued_ansi_literal_body=$'        run: |\n          printf \'%s\\n\' $\'open\\\n          npm ci --prefix bin --ignore-scripts\n          close\'\n          npm ci --prefix bin --ignore-scripts'
+  continued_ansi_literal_line=$(consumer_run_line "$continued_ansi_literal_body" 'npm ci --prefix bin --ignore-scripts')
+  [[ "$continued_ansi_literal_line" == 5 ]] || fail "trailing backslash in an ANSI-C literal exposed its consumer text"
+  printf '%s\n' 'Positive boundary accepted: consumer only after backslash-continued ANSI-C literal closure'
 
   escaped_delimiter_newline_body=$'        run: |\n          cat <<PAY\\\n          npm ci --prefix bin --ignore-scripts'
   escaped_delimiter_newline_line=$(consumer_run_line "$escaped_delimiter_newline_body" 'npm ci --prefix bin --ignore-scripts')

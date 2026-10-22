@@ -1902,6 +1902,8 @@ for ($i = 0; $i < 24; ++$i) {
 $sessionLogger = new class ($observer) extends \Psr\Log\AbstractLogger {
     public int $peak = 0;
     public int $acquisitions = 0;
+    /** @var list<list<int>> */
+    public array $sessionIds = [];
     public ?Closure $onAcquisition = null;
     public function __construct(private \Doctrine\DBAL\Connection $observer)
     {
@@ -1915,7 +1917,12 @@ $sessionLogger = new class ($observer) extends \Psr\Log\AbstractLogger {
                 $this->onAcquisition = null;
                 $callback();
             }
-            $this->peak = max($this->peak, maintenanceTaskInteger($this->observer->fetchOne('SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB=DATABASE()')));
+            $ids = array_map(
+                static fn (mixed $id): int => maintenanceTaskInteger($id),
+                $this->observer->fetchFirstColumn('SELECT ID FROM information_schema.PROCESSLIST WHERE DB=DATABASE() ORDER BY ID')
+            );
+            $this->sessionIds[] = $ids;
+            $this->peak = max($this->peak, count($ids));
         }
     }
 };
@@ -1927,11 +1934,19 @@ $sessionDomain = $sessionManager->find(\Entities\Domain::class, $sessionDomainId
 if (!$sessionDomain instanceof \Entities\Domain) {
     throw new RuntimeException('session domain missing');
 }
-$baselineSessions = maintenanceTaskInteger($observer->fetchOne('SELECT COUNT(*) FROM information_schema.PROCESSLIST WHERE DB=DATABASE()'));
+$baselineSessionIds = array_map(
+    static fn (mixed $id): int => maintenanceTaskInteger($id),
+    $observer->fetchFirstColumn('SELECT ID FROM information_schema.PROCESSLIST WHERE DB=DATABASE() ORDER BY ID')
+);
+$baselineSessions = count($baselineSessionIds);
 (new \ViMbAdmin_Service_Domain($sessionManager))->purge($sessionDomain);
+echo 'resource-session-receipt '.json_encode([
+    'baseline' => $baselineSessionIds,
+    'samples' => $sessionLogger->sessionIds,
+    'acquisitions' => $sessionLogger->acquisitions,
+], JSON_THROW_ON_ERROR)."\n";
 maintenanceTaskCheck('24-resource purge keeps peak sessions constant', $sessionLogger->acquisitions === 24 && $sessionLogger->peak <= $baselineSessions + 1);
 maintenanceTaskCheck('24-resource purge releases every durable token', maintenanceTaskInteger($observer->fetchOne("SELECT COUNT(*) FROM resource_claim WHERE username LIKE '%@bulk-sessions.test'")) === 0);
-echo 'resource-session-receipt baseline='.$baselineSessions.' peak='.$sessionLogger->peak.' acquisitions='.$sessionLogger->acquisitions."\n";
 
 
 // A real creator commits after enumeration but before the Domain fence. It

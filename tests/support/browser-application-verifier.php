@@ -75,7 +75,7 @@ function databaseSnapshot(): array
             $rowHash = hash('sha256', json_encode($row, JSON_THROW_ON_ERROR));
             $rowHashes[] = $rowHash;
             if (getenv('VIMBADMIN_FIXTURE_TENANT') === '1'
-                && in_array($table, ['admin', 'domain', 'mailbox'], true)) {
+                && in_array($table, ['admin', 'domain', 'mailbox', 'alias', 'mailbox_task', 'archive'], true)) {
                 $id = is_array($row) ? ($row['id'] ?? null) : null;
                 if (!is_string($id) || !ctype_digit($id)) {
                     throw new RuntimeException('tenant entity id is invalid');
@@ -93,8 +93,20 @@ function databaseSnapshot(): array
         // out of browser diagnostics while proving per-tenant state changes.
         $snapshot['entities'] = [];
         $snapshot['entityDigests'] = $entityDigests;
-        foreach (['admin' => 'id,username,active,super', 'domain' => 'id,domain,active',
-            'mailbox' => 'id,username,active,name'] as $table => $columns) {
+        $projections = ['admin' => 'id,username,active,super', 'domain' => 'id,domain,active',
+            'mailbox' => 'id,username,active,name'];
+        if (getenv('VIMBADMIN_FIXTURE_OPERATIONS') === '1') {
+            $indexes = $pdo->query("SELECT INDEX_NAME FROM information_schema.STATISTICS"
+                . " WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'mailbox' ORDER BY INDEX_NAME");
+            if ($indexes === false) {
+                throw new RuntimeException('operations index projection failed');
+            }
+            $snapshot['mailboxIndexes'] = $indexes->fetchAll(PDO::FETCH_COLUMN);
+            $projections += ['alias' => 'id,address,goto,active,alias_version',
+                'mailbox_task' => 'id,type,username,status,finished_at,abandoned',
+                'archive' => 'id,username,status'];
+        }
+        foreach ($projections as $table => $columns) {
             $statement = $pdo->query('SELECT ' . $columns . ' FROM `' . $table . '` ORDER BY id');
             if ($statement === false) {
                 throw new RuntimeException('tenant projection failed');
@@ -150,6 +162,10 @@ try {
         failVerifier(400, 'request URI is invalid');
     }
     $requestPath = parse_url($requestUri, PHP_URL_PATH);
+    if ($requestPath === '/operations-control' && getenv('VIMBADMIN_FIXTURE_OPERATIONS') === '1') {
+        require dirname(__DIR__, 2) . '/ci/support/browser-operations-control.php';
+        exit;
+    }
     if ($requestPath !== '/snapshot') {
         failVerifier(404, 'not found');
     }

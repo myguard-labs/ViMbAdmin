@@ -164,6 +164,11 @@ jobs:
           bash ci/test-browser-tenant-mutation.sh
           bash ci/test-browser-tenant.sh
 
+      - name: Maintenance, queue and MCP operations preserve isolated state
+        run: |
+          bash ci/test-browser-operations-mutation.sh
+          bash ci/test-browser-operations.sh
+
       - name: Owned browser containers remove their anonymous volumes
         run: bash ci/test-browser-owned-cleanup.sh
 

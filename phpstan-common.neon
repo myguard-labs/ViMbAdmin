@@ -9,8 +9,10 @@ parameters:
         min: 80200
         max: 80599
     paths:
+        - .github/scripts/assert-composer-lock.php
         - application
         - bin
+        - ci/test-php-runtime.php
         - library
         - public
         - src

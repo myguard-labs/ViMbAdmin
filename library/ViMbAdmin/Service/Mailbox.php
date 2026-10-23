@@ -292,9 +292,12 @@ final class ViMbAdmin_Service_Mailbox
      * Shared persistence core for characterized mailbox-creation callers.
      *
      * The caller owns transport/form validation, uniqueness, name and quota
-     * units. The policy makes the remaining intentional differences explicit:
-     * web creation forces active=true and writes an actor log, while MCP keeps
-     * the requested active state and has no session actor or plugin hooks.
+     * units. The policy makes the active/audit differences explicit: web
+     * creation forces active=true and writes an actor log, while the MCP policy
+     * keeps the requested active state and has no audit actor. Hook support is a
+     * capability of this shared service call rather than the policy: the current
+     * web caller supplies its post-flush plugin hook, the current MCP caller
+     * supplies no hooks, and direct callers may supply the optional hooks below.
      *
      * @param callable():bool|null $preCreate veto before any entity mutation
      * @param callable():void|null $preFlush fires after persistence staging

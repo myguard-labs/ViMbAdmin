@@ -185,21 +185,30 @@ mailboxCreateParityCheck(
         && $reuseDomain->getMailboxCount() === 1,
 );
 
+$fullManager = new MailboxCreateParityManager();
 $fullDomain = mailboxCreateParityDomain(1, 1);
 $capacityMailbox = mailboxCreateParityMailbox('capacity password');
 $capacityRejected = false;
 try {
-    ViMbAdmin_Service_Mailbox::applyCreationPolicy(
+    (new ViMbAdmin_Service_Mailbox($fullManager))->createWithPolicy(
         $capacityMailbox,
         $fullDomain,
+        'crypt:sha512',
+        true,
+        ViMbAdmin_Service_MailboxCreationPolicy::mcp(),
+        static function () use ($capacityMailbox, $fullDomain): bool {
+            ViMbAdmin_Service_Mailbox::applyCreationPolicy($capacityMailbox, $fullDomain);
+            return true;
+        },
     );
 } catch (ViMbAdmin_Service_Exception $error) {
     $capacityRejected = $error->getMessage() === 'You have used all of your allocated mailboxes.';
 }
 mailboxCreateParityCheck(
-    'domain-capacity policy rejects before hashing or changing the mailbox count',
+    'domain-capacity policy rejects before hashing, count mutation or persistence',
     $capacityRejected && $fullDomain->getMailboxCount() === 1
-        && $capacityMailbox->getPassword() === 'capacity password',
+        && $capacityMailbox->getPassword() === 'capacity password'
+        && $fullManager->persisted === [] && $fullManager->flushes === 0,
 );
 
 $vetoManager = new MailboxCreateParityManager();

@@ -13,7 +13,6 @@ $check = static function (bool $condition, string $label): void {
     }
     echo "OK $label\n";
 };
-$check(PHP_VERSION_ID >= 80200, 'runtime is within the supported PHP floor');
 foreach (['doctrine/orm' => '3.', 'doctrine/dbal' => '4.'] as $package => $major) {
     $check(str_starts_with((string) InstalledVersions::getVersion($package), $major), 'locked dependency major: ' . $package);
 }

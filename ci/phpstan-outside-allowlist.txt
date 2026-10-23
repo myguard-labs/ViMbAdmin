@@ -11,7 +11,6 @@
 #   ci-support-script     ci/ helper that is not a test entrypoint
 #   tooling-script        repository maintenance script (tools/, .github/scripts)
 #   external-tool-config  config file evaluated by another tool
-.github/scripts/assert-composer-lock.php	tooling-script
 .php-cs-fixer.dist.php	external-tool-config
 ci/maintenance-operation-observer.php	ci-support-script
 ci/support/browser-fixture-super-admin.php	ci-support-script
@@ -68,7 +67,6 @@ ci/test-password-reset-atomic-mariadb.php	ci-test-script
 ci/test-password-reset-bearer.php	ci-test-script
 ci/test-password-reset-email-url.php	ci-test-script
 ci/test-password-reset-origin.php	ci-test-script
-ci/test-php-runtime.php	ci-test-script
 ci/test-php-version-contract.php	ci-test-script
 ci/test-proxy-generation.php	ci-test-script
 ci/test-queue-loopback-origin.php	ci-test-script

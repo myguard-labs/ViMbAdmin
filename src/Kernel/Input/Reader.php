@@ -23,7 +23,7 @@ final class Reader
         }
         foreach ($value as $key => $_item) {
             if (!is_string($key)) {
-                throw new \LogicException("{$name} must use string keys");
+                throw new \LogicException("{$name} must use string keys" . ($terminalPeriod ? '.' : ''));
             }
         }
 

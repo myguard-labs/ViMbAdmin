@@ -7,6 +7,7 @@ require __DIR__ . '/../application/Entities/McpToken.php';
 require_once __DIR__ . '/../application/Entities/Domain.php';
 require_once __DIR__ . '/../application/Entities/Mailbox.php';
 require_once __DIR__ . '/../application/Entities/Alias.php';
+require_once __DIR__ . '/../application/Repositories/Mailbox.php';
 
 final class MaintenanceMcpParityState
 {
@@ -26,18 +27,40 @@ final class MaintenanceMcpParityAssertions
 }
 
 /** Doctrine fixture used to exercise the real mutation-operation closures. */
+/** @extends \Doctrine\ORM\EntityRepository<Entities\Domain> */
 final class MaintenanceMcpMutationDomainRepository extends \Doctrine\ORM\EntityRepository
 {
+    public ?Entities\Domain $existing = null;
+
     /** @param array<string,mixed> $criteria */
     public function findOneBy(array $criteria, array|null $orderBy = null): ?object
     {
-        unset($criteria, $orderBy);
-        return null;
+        unset($orderBy);
+        return $this->existing?->requiredDomainName() === ($criteria['domain'] ?? null)
+            ? $this->existing
+            : null;
+    }
+}
+
+final class MaintenanceMcpMutationMailboxRepository extends \Repositories\Mailbox
+{
+    public int $uniqueChecks = 0;
+
+    public function isUnique($email): bool
+    {
+        $this->uniqueChecks++;
+        return $email === 'created@mailbox.test';
     }
 }
 
 final class MaintenanceMcpMutationRepositoryFactory implements \Doctrine\ORM\Repository\RepositoryFactory
 {
+    public ?MaintenanceMcpMutationMailboxRepository $mailboxes = null;
+
+    public function __construct(private readonly Entities\Domain $existingDomain)
+    {
+    }
+
     /**
      * @template T of object
      * @param class-string<T> $entityName
@@ -47,13 +70,22 @@ final class MaintenanceMcpMutationRepositoryFactory implements \Doctrine\ORM\Rep
         \Doctrine\ORM\EntityManagerInterface $entityManager,
         string $entityName,
     ): \Doctrine\ORM\EntityRepository {
-        if (ltrim($entityName, '\\') !== Entities\Domain::class) {
-            throw new LogicException('Unexpected mutation fixture repository ' . $entityName);
+        if (ltrim($entityName, '\\') === Entities\Domain::class) {
+            $repository = new MaintenanceMcpMutationDomainRepository(
+                $entityManager,
+                new \Doctrine\ORM\Mapping\ClassMetadata(Entities\Domain::class),
+            );
+            $repository->existing = $this->existingDomain;
+            return $repository;
         }
-        return new MaintenanceMcpMutationDomainRepository(
-            $entityManager,
-            new \Doctrine\ORM\Mapping\ClassMetadata(Entities\Domain::class),
-        );
+        if (ltrim($entityName, '\\') === Entities\Mailbox::class) {
+            $this->mailboxes = new MaintenanceMcpMutationMailboxRepository(
+                $entityManager,
+                new \Doctrine\ORM\Mapping\ClassMetadata(Entities\Mailbox::class),
+            );
+            return $this->mailboxes;
+        }
+        throw new LogicException('Unexpected mutation fixture repository ' . $entityName);
     }
 }
 
@@ -63,9 +95,21 @@ final class MaintenanceMcpMutationManager extends \Doctrine\ORM\EntityManager
     public int $persists = 0;
     public int $commits = 0;
     public bool $rejectFlush = false;
+    public readonly Entities\Domain $existingDomain;
+    public readonly MaintenanceMcpMutationRepositoryFactory $repositories;
+    public ?Entities\Mailbox $persistedMailbox = null;
 
     public function __construct()
     {
+        $this->existingDomain = (new Entities\Domain())
+            ->setDomain('mailbox.test')
+            ->setActive(true)
+            ->setTransport('virtual')
+            ->setQuota(1024)
+            ->setMaxQuota(4096)
+            ->setMaxMailboxes(10)
+            ->setMailboxCount(0)
+            ->setAliasCount(0);
         $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([]);
         if (PHP_VERSION_ID >= 80400) {
             $configuration->enableNativeLazyObjects(true);
@@ -73,7 +117,8 @@ final class MaintenanceMcpMutationManager extends \Doctrine\ORM\EntityManager
             $configuration->setProxyDir($configuration->getProxyDir() ?? sys_get_temp_dir());
             $configuration->setProxyNamespace($configuration->getProxyNamespace() ?? 'Proxies');
         }
-        $configuration->setRepositoryFactory(new MaintenanceMcpMutationRepositoryFactory());
+        $this->repositories = new MaintenanceMcpMutationRepositoryFactory($this->existingDomain);
+        $configuration->setRepositoryFactory($this->repositories);
         parent::__construct(
             \Doctrine\DBAL\DriverManager::getConnection(
                 ['driver' => 'pdo_mysql', 'serverVersion' => '8.0'],
@@ -91,11 +136,17 @@ final class MaintenanceMcpMutationManager extends \Doctrine\ORM\EntityManager
 
     public function persist(object $entity): void
     {
-        if (!$entity instanceof Entities\Domain) {
-            throw new LogicException('Unexpected mutation fixture entity');
+        if ($entity instanceof Entities\Domain) {
+            $this->persists++;
+            (new ReflectionMethod($entity, 'assignGeneratedId'))->invoke($entity, $this->persists);
+            return;
         }
-        $this->persists++;
-        (new ReflectionMethod($entity, 'assignGeneratedId'))->invoke($entity, $this->persists);
+        if ($entity instanceof Entities\Mailbox) {
+            $this->persists++;
+            $this->persistedMailbox = $entity;
+            return;
+        }
+        throw new LogicException('Unexpected mutation fixture entity');
     }
 
     public function flush(): void
@@ -634,8 +685,10 @@ $mutationOperations = new ViMbAdmin_Mcp_MutationOperations(
         'virtual' => ['defaults' => ['domain' => ['transport' => 'virtual']]],
         'defaults' => [
             'domain' => ['quota' => 0, 'maxquota' => 0, 'mailboxes' => 0, 'aliases' => 0],
+            'mailbox' => ['password_scheme' => 'crypt:sha512'],
             'quota' => ['multiplier' => OSS_Filter_FileSize::SIZE_KILOBYTES],
         ],
+        'mailboxAliases' => false,
     ],
     null,
 );
@@ -684,6 +737,53 @@ maintenanceMcpParityCheck(
     $mutationManager->repositoryCalls === 1
         && $mutationManager->persists === 1
         && $mutationManager->commits === 1,
+);
+
+$eventOffset = count($mutationState->events);
+$mailboxCreated = $mutationDispatcher->dispatch(
+    true,
+    'POST',
+    maintenanceMcpParityBody(
+        $mutationState,
+        maintenanceMcpParityRequest('mailbox.create', 'mailbox.create-id', [
+            'domain' => 'mailbox.test',
+            'local_part' => 'created',
+            'password' => 'exact mailbox password',
+            'active' => false,
+            'name' => 'Created mailbox',
+            'quota' => 512,
+        ]),
+    ),
+    [],
+);
+$mailboxCreatedBody = maintenanceMcpParityJson($mailboxCreated);
+$persistedMailbox = $mutationManager->persistedMailbox;
+maintenanceMcpParityCheck(
+    'real mailbox.create mutation dispatches, applies policy, persists and preserves result/id mapping',
+    $mailboxCreated->status === 200
+        && ($mailboxCreatedBody['id'] ?? null) === 'mailbox.create-id'
+        && ($mailboxCreatedBody['result'] ?? null) === [
+            'created' => true,
+            'username' => 'created@mailbox.test',
+        ]
+        && array_slice($mutationState->events, $eventOffset) === [
+            'body', 'auth:write', 'handler:mailbox.create',
+        ]
+        && $persistedMailbox instanceof Entities\Mailbox
+        && $persistedMailbox->getDomain() === $mutationManager->existingDomain
+        && $persistedMailbox->requiredUsername() === 'created@mailbox.test'
+        && $persistedMailbox->getName() === 'Created mailbox'
+        && $persistedMailbox->getQuota() === 512
+        && $persistedMailbox->getActive() === false
+        && OSS_Auth_Password::verify(
+            'exact mailbox password',
+            $persistedMailbox->requiredPassword(),
+            ['pwhash' => 'crypt:sha512'],
+        )
+        && $mutationManager->existingDomain->getMailboxCount() === 1
+        && $mutationManager->repositories->mailboxes?->uniqueChecks === 1
+        && $mutationManager->persists === 2
+        && $mutationManager->commits === 2,
 );
 
 foreach ($mutationDefinitions as $mutationMethod => $destructive) {

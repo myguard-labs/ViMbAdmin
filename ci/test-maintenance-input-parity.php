@@ -51,6 +51,23 @@ $check(
     $rejects(fn () => Reader::optionString(['doveadm' => 'bad'], '', ['doveadm', 'url']))
     && $rejects(fn () => Reader::optionString(['doveadm' => ['url' => []]], '', ['doveadm', 'url'])),
 );
+$check(
+    'config error: QueueRunner rejects list-shaped intermediate paths with exact punctuation',
+    $message(fn () => Reader::optionNonNegativeInteger(
+        ['queue' => [0 => 'unexpected', 'runner' => ['max_concurrent' => 1]]],
+        1,
+        ['queue', 'runner', 'max_concurrent'],
+        true,
+        'QueueRunner configuration path',
+    )) === 'QueueRunner configuration path must use string keys.'
+    && $message(fn () => Reader::optionString(
+        ['doveadm' => [0 => 'unexpected', 'maildir_root' => '/srv/mail']],
+        '',
+        ['doveadm', 'maildir_root'],
+        true,
+        'QueueRunner configuration path',
+    )) === 'QueueRunner configuration path must use string keys.',
+);
 
 $runner = (new ReflectionClass(ViMbAdmin_Service_QueueRunner::class))->newInstanceWithoutConstructor();
 (new ReflectionProperty($runner, 'options'))->setValue($runner, ['queue' => ['autoprune' => ['days' => '007']]]);
@@ -76,6 +93,7 @@ $check(
     'Reader defaults retain unpunctuated messages',
     $message(fn () => Reader::positiveInteger(0, 'id')) === 'id must be greater than zero'
     && $message(fn () => Reader::requiredString([], 'value')) === 'value must be a string'
+    && $message(fn () => Reader::stringKeyedArray([0 => 'value'], 'value')) === 'value must use string keys'
 );
 
 $consumer = file_get_contents(dirname(__DIR__) . '/library/ViMbAdmin/Service/QueueRunner.php');

@@ -75,6 +75,11 @@ function dependencyReject(Closure $operation, string $message): void
     throw new RuntimeException('FAIL: accepted ' . $message);
 }
 
+function dependencyMinorLine(string $version): string
+{
+    return implode('.', array_slice(explode('.', ltrim($version, 'v')), 0, 2));
+}
+
 $source = dirname(__DIR__);
 $directory = sys_get_temp_dir() . '/vimbadmin-dependency-refresh-' . bin2hex(random_bytes(8));
 $copies = ['composer.lock', 'docs/ORM3-UPGRADE.md', 'CHANGELOG', 'README.md', '.github/scripts/assert-composer-lock.php',
@@ -88,6 +93,19 @@ try {
     $baseVersions = [];
     foreach ($base['packages'] as $package) {
         $baseVersions[$package['name']] = ltrim($package['version'], 'v');
+    }
+    $targetVersions = ['doctrine/orm' => '3.99.1', 'doctrine/dbal' => '4.99.2'];
+    foreach ($targetVersions as $name => $targetVersion) {
+        [$baseMajor, $baseMinor] = array_map('intval', explode('.', $baseVersions[$name]));
+        dependencyTest(
+            dependencyMinorLine($baseVersions[$name]) === dependencyMinorLine($baseMajor . '.' . $baseMinor . '.999')
+                && dependencyMinorLine($baseVersions[$name]) !== dependencyMinorLine($baseMajor . '.' . ($baseMinor + 1) . '.0'),
+            $name . ' version-line oracle distinguishes a patch near-miss from the next-minor boundary'
+        );
+        dependencyTest(
+            dependencyMinorLine($baseVersions[$name]) !== dependencyMinorLine($targetVersion),
+            $name . ' cross-minor fixture differs from the base minor'
+        );
     }
     foreach (['.github/scripts/assert-composer-lock.php' => 'integrity', 'tests/test-documentation-contract.php' => 'documentation'] as $guard => $name) {
         $path = $directory . '/' . $guard;
@@ -133,13 +151,18 @@ try {
     $changed = [];
     foreach ($candidate['packages'] as &$package) {
         if ($package['name'] === 'doctrine/orm' || $package['name'] === 'doctrine/dbal') {
-            $package['version'] = $package['name'] === 'doctrine/orm' ? '3.99.1' : '4.99.2';
+            $package['version'] = $targetVersions[$package['name']];
             $package['dist']['url'] = substr($package['dist']['url'], 0, -40) . str_repeat($package['name'] === 'doctrine/orm' ? 'a' : 'b', 40);
             $package['dist']['shasum'] = '';
             $changed[$package['name']] = $package['dist']['url'];
         }
     }
     unset($package);
+    $lastCandidateIndex = count($candidate['packages']) - 1;
+    dependencyTest(
+        ReflectionReference::fromArrayElement($candidate['packages'], $lastCandidateIndex) === null,
+        'changed-package iteration releases its by-reference variable'
+    );
     $changedLock = json_encode($candidate, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
     file_put_contents($directory . '/composer.lock', $changedLock);
     $before = dependencyInputs($directory);
@@ -150,18 +173,21 @@ try {
     refreshDependencies($directory, $basePath, false, $fetch);
     $updated = dependencyInputs($directory);
     $verified = dependencyLock($updated['composer.lock'], true);
+    $candidateBeforeVerifiedIteration = json_encode($candidate, JSON_THROW_ON_ERROR);
     foreach ($verified['packages'] as $package) {
         if (isset($changed[$package['name']])) {
             dependencyTest($package['dist']['shasum'] === sha1('independent fixture archive bytes: ' . $changed[$package['name']]), 'changed archive independently hashed: ' . $package['name']);
         }
     }
-    dependencyTest($updated['docs/ORM3-UPGRADE.md'] === str_replace(['ORM ' . $baseVersions['doctrine/orm'] . ' and DBAL ' . $baseVersions['doctrine/dbal']], ['ORM 3.99.1 and DBAL 4.99.2'], $original['docs/ORM3-UPGRADE.md'])
-        && $updated['CHANGELOG'] === str_replace(['Doctrine ORM 2.8 -> ' . $baseVersions['doctrine/orm'] . ' (+ DBAL ' . $baseVersions['doctrine/dbal'] . ')'], ['Doctrine ORM 2.8 -> 3.99.1 (+ DBAL 4.99.2)'], $original['CHANGELOG']), 'only exact existing documentation pairs change');
-    $baseOrmLine = implode('.', array_slice(explode('.', $baseVersions['doctrine/orm']), 0, 2));
+    dependencyTest(json_encode($candidate, JSON_THROW_ON_ERROR) === $candidateBeforeVerifiedIteration, 'verified-package iteration preserves the candidate fixture');
+    dependencyTest($updated['docs/ORM3-UPGRADE.md'] === str_replace(['ORM ' . $baseVersions['doctrine/orm'] . ' and DBAL ' . $baseVersions['doctrine/dbal']], ['ORM ' . $targetVersions['doctrine/orm'] . ' and DBAL ' . $targetVersions['doctrine/dbal']], $original['docs/ORM3-UPGRADE.md'])
+        && $updated['CHANGELOG'] === str_replace(['Doctrine ORM 2.8 -> ' . $baseVersions['doctrine/orm'] . ' (+ DBAL ' . $baseVersions['doctrine/dbal'] . ')'], ['Doctrine ORM 2.8 -> ' . $targetVersions['doctrine/orm'] . ' (+ DBAL ' . $targetVersions['doctrine/dbal'] . ')'], $original['CHANGELOG']), 'only exact existing documentation pairs change');
+    $baseOrmLine = dependencyMinorLine($baseVersions['doctrine/orm']);
+    $targetOrmLine = dependencyMinorLine($targetVersions['doctrine/orm']);
     dependencyTest(
         $updated['README.md'] === str_replace(
             'Current release lines (doctrine/orm ' . $baseOrmLine . ', DBAL 4,',
-            'Current release lines (doctrine/orm 3.99, DBAL 4,',
+            'Current release lines (doctrine/orm ' . $targetOrmLine . ', DBAL 4,',
             $original['README.md']
         ) && $updated['README.md'] !== $original['README.md'],
         'cross-minor refresh changes only the exact README release-line pair'

@@ -224,8 +224,8 @@ if (!$emA->getRepository(\Entities\Admin::class)->findOneBy(['username' => 'reso
     $emA->persist($fixtureActor);
     $emA->flush();
 }
-$conn->executeStatement("DELETE FROM alias WHERE address='shared@alias-owner.test'");
-$conn->executeStatement("DELETE FROM mailbox WHERE username IN ('one@owner-a.test','two@owner-b.test')");
+$conn->executeStatement("DELETE FROM alias WHERE address IN ('shared@alias-owner.test','staged-list@owner-a.test')");
+$conn->executeStatement("DELETE FROM mailbox WHERE username IN ('one@owner-a.test','two@owner-b.test','staged-target@owner-a.test')");
 $conn->executeStatement("DELETE FROM domain WHERE domain IN ('owner-a.test','owner-b.test','alias-owner.test')");
 $conn->executeStatement("INSERT INTO domain (domain,created,alias_count,mailbox_count) VALUES ('owner-a.test',NOW(),0,1),('owner-b.test',NOW(),0,1),('alias-owner.test',NOW(),1,0)");
 $domainA = maintenanceTaskInteger($conn->fetchOne("SELECT id FROM domain WHERE domain='owner-a.test'"));
@@ -356,6 +356,15 @@ try {
     fflush($pipesByActor[1][0]);
     maintenanceTaskCheck('second concurrent purge commits', maintenanceRecipientReadLine($pipesByActor[1][1], 'Second recipient commit barrier') === 'COMMITTED');
     maintenanceTaskCheck('both concurrent removals survive without losing the unrelated recipient', $conn->fetchOne('SELECT goto FROM alias WHERE id=?', [$aliasId]) === 'kept@example.test');
+    maintenanceTaskCheck(
+        'cross-domain concurrent removals preserve both mailbox counts and the alias-domain count',
+        array_map(
+            static fn (mixed $count): int => maintenanceTaskInteger($count),
+            $conn->fetchAllKeyValue('SELECT domain,mailbox_count FROM domain WHERE id IN (?,?) ORDER BY domain', [$domainA,$domainB])
+        )
+            === ['owner-a.test' => 0, 'owner-b.test' => 0]
+        && maintenanceTaskInteger($conn->fetchOne('SELECT alias_count FROM domain WHERE id=?', [$aliasDomain])) === 1
+    );
 } finally {
     foreach ($children as $index => $child) {
         $childPipes = $pipesByActor[$index] ?? [];
@@ -479,31 +488,58 @@ try {
 } catch (LogicException $expected) {
     maintenanceTaskCheck('public mailbox purge rejects missing caller transaction before mutation', str_contains($expected->getMessage(), 'caller-owned recipient transaction') && maintenanceTaskInteger($conn->fetchOne("SELECT COUNT(*) FROM mailbox WHERE username='staged-target@owner-a.test'")) === 1);
 }
-foreach ([false, true] as $stringify) {
-    $abortedManager = maintenanceTaskManager();
-    $abortedConnection = $abortedManager->getConnection();
-    $nativeAbort = $abortedConnection->getNativeConnection();
-    if (!$nativeAbort instanceof PDO) {
-        throw new RuntimeException('MariaDB abort fixture requires its real PDO driver');
+$abortCleanupLog = tempnam(sys_get_temp_dir(), 'recipient-abort-cleanup-');
+if ($abortCleanupLog === false) {
+    throw new RuntimeException('Cannot create MariaDB abort cleanup log');
+}
+$previousErrorLog = ini_set('error_log', $abortCleanupLog);
+if ($previousErrorLog === false) {
+    unlink($abortCleanupLog);
+    throw new RuntimeException('Cannot isolate MariaDB abort cleanup log');
+}
+try {
+    foreach ([false, true] as $stringify) {
+        $abortedManager = maintenanceTaskManager();
+        $abortedConnection = $abortedManager->getConnection();
+        $nativeAbort = $abortedConnection->getNativeConnection();
+        if (!$nativeAbort instanceof PDO) {
+            throw new RuntimeException('MariaDB abort fixture requires its real PDO driver');
+        }
+        $nativeAbort->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, $stringify);
+        $abortProbe = $nativeAbort->query('SELECT @@in_transaction');
+        if (!$abortProbe instanceof PDOStatement) {
+            throw new RuntimeException('MariaDB diagnostic fixture did not return its real PDO statement');
+        }
+        maintenanceTaskCheck(
+            'MariaDB diagnostic fixture uses the requested integer/string representation',
+            $abortProbe->fetchColumn() === ($stringify ? '0' : 0)
+        );
+        $abortedConnection->beginTransaction();
+        maintenanceTaskCheck(
+            'MariaDB abort fixture enters a healthy caller-owned transaction before the nested wrapper',
+            $abortedConnection->getTransactionNestingLevel() === 1
+            && maintenanceTaskInteger($abortedConnection->fetchOne('SELECT @@in_transaction')) === 1
+        );
+        try {
+            \ViMbAdmin_Recipients::atomic($abortedManager, static function () use ($abortedManager, $abortedConnection): void {
+                $abortedConnection->executeStatement('ROLLBACK'); // Real server abort; DBAL still has nesting state.
+                $abortedManager->clear();
+                throw new RuntimeException('original already-aborted operation');
+            });
+            throw new RuntimeException('confirmed MariaDB abort unexpectedly returned');
+        } catch (RuntimeException $expected) {
+            maintenanceTaskCheck('confirmed MariaDB abort resets stale client transaction without masking error', $expected->getMessage() === 'original already-aborted operation' && !$abortedConnection->isTransactionActive() && count($abortedManager->getEventManager()->getListeners('onClear')) === 0);
+        }
     }
-    $nativeAbort->setAttribute(PDO::ATTR_STRINGIFY_FETCHES, $stringify);
-    $abortProbe = $nativeAbort->query('SELECT @@in_transaction');
-    if (!$abortProbe instanceof PDOStatement) {
-        throw new RuntimeException('MariaDB diagnostic fixture did not return its real PDO statement');
-    }
+    $abortCleanupDiagnostics = file_get_contents($abortCleanupLog);
     maintenanceTaskCheck(
-        'MariaDB diagnostic fixture uses the requested integer/string representation',
-        $abortProbe->fetchColumn() === ($stringify ? '0' : 0)
+        'confirmed MariaDB abort requires no failing rollback cleanup',
+        $abortCleanupDiagnostics !== false
+        && !str_contains($abortCleanupDiagnostics, 'Recipient rollback cleanup failed:')
     );
-    try {
-        \ViMbAdmin_Recipients::atomic($abortedManager, static function () use ($abortedManager, $abortedConnection): void {
-            $abortedConnection->executeStatement('ROLLBACK'); // Real server abort; DBAL still has nesting state.
-            $abortedManager->clear();
-            throw new RuntimeException('original already-aborted operation');
-        });
-    } catch (RuntimeException $expected) {
-        maintenanceTaskCheck('confirmed MariaDB abort resets stale client transaction without masking error', $expected->getMessage() === 'original already-aborted operation' && !$abortedConnection->isTransactionActive() && count($abortedManager->getEventManager()->getListeners('onClear')) === 0);
-    }
+} finally {
+    ini_set('error_log', $previousErrorLog);
+    unlink($abortCleanupLog);
 }
 
 

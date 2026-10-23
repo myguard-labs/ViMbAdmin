@@ -79,10 +79,12 @@ final class MaintenanceMcpMutationRepositoryFactory implements \Doctrine\ORM\Rep
             return $repository;
         }
         if (ltrim($entityName, '\\') === Entities\Mailbox::class) {
-            $this->mailboxes = new MaintenanceMcpMutationMailboxRepository(
-                $entityManager,
-                new \Doctrine\ORM\Mapping\ClassMetadata(Entities\Mailbox::class),
-            );
+            if ($this->mailboxes === null) {
+                $this->mailboxes = new MaintenanceMcpMutationMailboxRepository(
+                    $entityManager,
+                    new \Doctrine\ORM\Mapping\ClassMetadata(Entities\Mailbox::class),
+                );
+            }
             return $this->mailboxes;
         }
         throw new LogicException('Unexpected mutation fixture repository ' . $entityName);
@@ -740,6 +742,12 @@ maintenanceMcpParityCheck(
 );
 
 $eventOffset = count($mutationState->events);
+$persistOffset = $mutationManager->persists;
+$commitOffset = $mutationManager->commits;
+$mailboxRepository = $mutationManager->getRepository(Entities\Mailbox::class);
+$uniqueCheckOffset = $mailboxRepository instanceof MaintenanceMcpMutationMailboxRepository
+    ? $mailboxRepository->uniqueChecks
+    : -1;
 $mailboxCreated = $mutationDispatcher->dispatch(
     true,
     'POST',
@@ -781,9 +789,16 @@ maintenanceMcpParityCheck(
             ['pwhash' => 'crypt:sha512'],
         )
         && $mutationManager->existingDomain->getMailboxCount() === 1
-        && $mutationManager->repositories->mailboxes?->uniqueChecks === 1
-        && $mutationManager->persists === 2
-        && $mutationManager->commits === 2,
+        && $mutationManager->repositories->mailboxes === $mailboxRepository
+        && $mailboxRepository->uniqueChecks === $uniqueCheckOffset + 1
+        && $mutationManager->persists === $persistOffset + 1
+        && $mutationManager->commits === $commitOffset + 1,
+);
+$refetchedMailboxRepository = $mutationManager->getRepository(Entities\Mailbox::class);
+maintenanceMcpParityCheck(
+    'negative control: repeated mailbox repository fetches preserve the observed uniqueness check',
+    $refetchedMailboxRepository === $mailboxRepository
+        && $mailboxRepository->uniqueChecks === $uniqueCheckOffset + 1,
 );
 
 foreach ($mutationDefinitions as $mutationMethod => $destructive) {

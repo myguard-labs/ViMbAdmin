@@ -2,8 +2,6 @@
 name: CI
 
 on:  # yamllint disable-line rule:truthy
-  push:
-    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -76,9 +74,11 @@ jobs:
           php .github/scripts/assert-composer-lock.php
 
       - name: PHP syntax check
-        run: |
-          find application library public bin src -name '*.php' -print0 \
-            | xargs -0 -r -n1 -P"$(nproc)" php -l > /dev/null
+        run: bash ci/check-php-syntax.sh
+
+      - name: Verify batched syntax checks and failure controls
+        if: matrix.php == '8.3'
+        run: bash ci/test-php-syntax-batching.sh
 
   audit:
     name: Dependency security audit

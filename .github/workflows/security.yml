@@ -1,8 +1,6 @@
 name: Security scan (SAST)
 
 on:
-  push:
-    branches: [master]
   pull_request:
     branches: [master]
   schedule:

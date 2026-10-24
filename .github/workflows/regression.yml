@@ -40,6 +40,9 @@ jobs:
       - name: Node workflow contract
         run: bash ci/test-node-workflow-contract.sh
 
+      - name: Maintained PHP matrix and runtime lane contract
+        run: node ci/test-php-matrix-contract.cjs
+
       - name: Install pinned asset toolchain
         run: |
           compiler_url=https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/
@@ -66,6 +69,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
@@ -179,6 +183,9 @@ jobs:
       - name: Owned browser containers remove their anonymous volumes
         run: bash ci/test-browser-owned-cleanup.sh
 
+      - name: Browser process collection survives disappearing tasks
+        run: bash ci/test-browser-process-collector.sh
+
       - name: Responsive skin rendering and keyboard navigation
         run: bash ci/test-browser-visual.sh
 
@@ -244,6 +251,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -256,6 +264,9 @@ jobs:
           - php: '8.5'
             image: >-
               mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
       image: ${{ matrix.image }}
     steps:
@@ -408,13 +419,14 @@ jobs:
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #
-  # Runs on every tested PHP minor: 8.3 through 8.5.
+  # Runs on every tested PHP minor: 8.3 through 8.6.
   # ------------------------------------------------------------------ #
   cache-wiring:
     name: Cache wiring (PHP ${{ matrix.php }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -427,6 +439,9 @@ jobs:
           - php: '8.5'
             image: >-
               mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
       image: ${{ matrix.image }}
     steps:
@@ -479,6 +494,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -491,6 +507,9 @@ jobs:
           - php: '8.5'
             image: >-
               mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
       image: ${{ matrix.image }}
     services:

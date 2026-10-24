@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -31,6 +32,9 @@ jobs:
           - php: '8.5'
             image: >-
               mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
       image: ${{ matrix.image }}
     steps:
@@ -79,6 +83,10 @@ jobs:
       - name: Verify batched syntax checks and failure controls
         if: matrix.php == '8.3'
         run: bash ci/test-php-syntax-batching.sh
+
+      - name: PHP extension setup fails closed and removes temporary sources
+        if: matrix.php == '8.3'
+        run: bash ci/test-apcu-provision.sh
 
   audit:
     name: Dependency security audit

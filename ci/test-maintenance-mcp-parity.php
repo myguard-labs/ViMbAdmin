@@ -45,11 +45,13 @@ final class MaintenanceMcpMutationDomainRepository extends \Doctrine\ORM\EntityR
 final class MaintenanceMcpMutationMailboxRepository extends \Repositories\Mailbox
 {
     public int $uniqueChecks = 0;
+    /** @var array<string,true> */
+    public array $persistedUsernames = [];
 
     public function isUnique($email): bool
     {
         $this->uniqueChecks++;
-        return $email === 'created@mailbox.test';
+        return !isset($this->persistedUsernames[$email]);
     }
 }
 
@@ -144,6 +146,11 @@ final class MaintenanceMcpMutationManager extends \Doctrine\ORM\EntityManager
             return;
         }
         if ($entity instanceof Entities\Mailbox) {
+            $repository = $this->repositories->mailboxes;
+            if (!$repository instanceof MaintenanceMcpMutationMailboxRepository) {
+                throw new LogicException('Expected mailbox repository before persistence');
+            }
+            $repository->persistedUsernames[$entity->requiredUsername()] = true;
             $this->persists++;
             $this->persistedMailbox = $entity;
             return;
@@ -748,19 +755,20 @@ $mailboxRepository = $mutationManager->getRepository(Entities\Mailbox::class);
 $uniqueCheckOffset = $mailboxRepository instanceof MaintenanceMcpMutationMailboxRepository
     ? $mailboxRepository->uniqueChecks
     : -1;
+$mailboxCreateParams = [
+    'domain' => 'mailbox.test',
+    'local_part' => 'created',
+    'password' => 'exact mailbox password',
+    'active' => false,
+    'name' => 'Created mailbox',
+    'quota' => 512,
+];
 $mailboxCreated = $mutationDispatcher->dispatch(
     true,
     'POST',
     maintenanceMcpParityBody(
         $mutationState,
-        maintenanceMcpParityRequest('mailbox.create', 'mailbox.create-id', [
-            'domain' => 'mailbox.test',
-            'local_part' => 'created',
-            'password' => 'exact mailbox password',
-            'active' => false,
-            'name' => 'Created mailbox',
-            'quota' => 512,
-        ]),
+        maintenanceMcpParityRequest('mailbox.create', 'mailbox.create-id', $mailboxCreateParams),
     ),
     [],
 );
@@ -799,6 +807,47 @@ maintenanceMcpParityCheck(
     'negative control: repeated mailbox repository fetches preserve the observed uniqueness check',
     $refetchedMailboxRepository === $mailboxRepository
         && $mailboxRepository->uniqueChecks === $uniqueCheckOffset + 1,
+);
+if (!$persistedMailbox instanceof Entities\Mailbox
+    || !$mailboxRepository instanceof MaintenanceMcpMutationMailboxRepository) {
+    throw new LogicException('Expected the successful mailbox mutation fixture');
+}
+$eventOffset = count($mutationState->events);
+$persistOffset = $mutationManager->persists;
+$commitOffset = $mutationManager->commits;
+$duplicateUniqueCheckOffset = $mailboxRepository->uniqueChecks;
+$mailboxCountBeforeDuplicate = $mutationManager->existingDomain->getMailboxCount();
+$passwordBeforeDuplicate = $persistedMailbox->requiredPassword();
+$mailboxBeforeDuplicate = serialize($persistedMailbox);
+$mailboxDuplicate = $mutationDispatcher->dispatch(
+    true,
+    'POST',
+    maintenanceMcpParityBody(
+        $mutationState,
+        maintenanceMcpParityRequest('mailbox.create', 'mailbox.create-duplicate-id', $mailboxCreateParams),
+    ),
+    [],
+);
+$mailboxDuplicateBody = maintenanceMcpParityJson($mailboxDuplicate);
+maintenanceMcpParityCheck(
+    'duplicate real mailbox.create rejects persisted username without side effects',
+    $mailboxDuplicate->status === 200
+        && ($mailboxDuplicateBody['id'] ?? null) === 'mailbox.create-duplicate-id'
+        && ($mailboxDuplicateBody['error'] ?? null) === [
+            'code' => -32010,
+            'message' => 'mailbox already exists',
+        ]
+        && !array_key_exists('result', $mailboxDuplicateBody)
+        && array_slice($mutationState->events, $eventOffset) === [
+            'body', 'auth:write', 'handler:mailbox.create',
+        ]
+        && $mailboxRepository->uniqueChecks === $duplicateUniqueCheckOffset + 1
+        && $mutationManager->persists === $persistOffset
+        && $mutationManager->commits === $commitOffset
+        && $mutationManager->existingDomain->getMailboxCount() === $mailboxCountBeforeDuplicate
+        && $mutationManager->persistedMailbox === $persistedMailbox
+        && $persistedMailbox->requiredPassword() === $passwordBeforeDuplicate
+        && serialize($persistedMailbox) === $mailboxBeforeDuplicate,
 );
 
 foreach ($mutationDefinitions as $mutationMethod => $destructive) {

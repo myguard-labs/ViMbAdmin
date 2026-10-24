@@ -7,6 +7,8 @@ if (getenv('VIMBADMIN_DESTRUCTIVE_DB_TESTS') !== '1') {
     exit(2);
 }
 
+require __DIR__ . '/test-maintenance-orphan-short-write.php';
+
 define('MAINTENANCE_TASK_HELPERS_ONLY', true);
 require __DIR__ . '/test-maintenance-task-ownership.php';
 
@@ -286,12 +288,13 @@ foreach (['before-rejection', 'oversized', 'after-rejection'] as $response) {
     $header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " . strlen($body) . "\r\nConnection: close\r\n\r\n";
     fwrite($client, $header);
     $written = 0;
-    for ($offset = 0, $length = strlen($body); $offset < $length; $offset += 8192) {
+    for ($offset = 0, $length = strlen($body); $offset < $length;) {
         $bytes = @fwrite($client, substr($body, $offset, 8192));
         if (!is_int($bytes) || $bytes < 1) {
             break;
         }
         $written += $bytes;
+        $offset += $bytes;
         usleep(1000);
     }
     if ($response === 'oversized') {

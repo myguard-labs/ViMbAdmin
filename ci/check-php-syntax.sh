@@ -15,5 +15,10 @@ trap 'rm -f "$manifest"' EXIT
 find application library public bin src -name '*.php' -print0 > "$manifest"
 [[ -s $manifest ]] || { echo 'No PHP files found.' >&2; exit 1; }
 # PHP 8.3+ accepts multiple files after -l. xargs splits only at ARG_MAX.
-xargs -0 -r php -l < "$manifest" > /dev/null
-echo 'PHP syntax check passed.'
+if diagnostics=$(xargs -0 -r php -l < "$manifest" 2>&1); then
+  echo 'PHP syntax check passed.'
+else
+  status=$?
+  printf '%s\n' "$diagnostics" >&2
+  exit "$status"
+fi

@@ -11,9 +11,9 @@ if [[ ${1:-} == --help && $# == 1 ]]; then
 fi
 [[ $# == 0 ]] || { echo 'Unexpected arguments; use --help.' >&2; exit 2; }
 
-helper_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-real_php=${PHP_BINARY:-$(command -v php)}
+real_php=${PHP_BINARY:-$(command -v php || true)}
 [[ -x $real_php ]] || { echo 'PHP interpreter unavailable.' >&2; exit 1; }
+helper_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 scratch=$(mktemp -d)
 trap 'rm -rf -- "$scratch"' EXIT
 fixture=$scratch/tree
@@ -32,7 +32,7 @@ set -euo pipefail
 printf 'startup\n' >> "$PHP_LINT_STARTUPS"
 printf '%s\0' "$@" >> "$PHP_LINT_ARGUMENTS"
 [[ ${1:-} == -l ]] || { echo 'Expected syntax-only PHP invocation.' >&2; exit 95; }
-exec "$PHP_LINT_REAL_PHP" "$@"
+exec "$PHP_LINT_REAL_PHP" -d display_errors=1 -d log_errors=0 "$@"
 WRAPPER
 chmod +x "$scratch/bin/php"
 export PHP_LINT_REAL_PHP=$real_php
@@ -104,6 +104,7 @@ for location in library src; do
   printf '<?php function malformed( {\n' > "$fixture/$location/base.php"
   run_helper failure "$scratch/bin:$default_path"
   assert_startups 1 || fail 'malformed fixture was not checked in one batch'
+  [[ $(< "$scratch/output") == *'Errors parsing'* ]] || fail 'lint stdout diagnostic was lost'
   valid_fixture
   pass "malformed PHP in $location fails the batch"
 done
@@ -129,6 +130,12 @@ run_helper success "$scratch/no-php" --help
 assert_startups 0 || fail 'help launched PHP'
 [[ -s $scratch/output ]] || fail 'help is empty'
 pass 'help succeeds without PHP'
+harness_status=0
+(unset PHP_BINARY; PATH=$scratch/no-php /bin/bash "$helper_dir/test-php-syntax-batching.sh") \
+  > "$scratch/harness-output" 2>&1 || harness_status=$?
+[[ $harness_status == 1 && $(< "$scratch/harness-output") == 'PHP interpreter unavailable.' ]] \
+  || fail 'test harness lost its missing-PHP diagnostic'
+pass 'test harness itself diagnoses a missing interpreter'
 for argument in --unexpected --help; do
   if [[ $argument == --help ]]; then
     run_helper 2 "$scratch/no-php" --help extra

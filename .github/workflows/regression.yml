@@ -40,9 +40,6 @@ jobs:
       - name: Node workflow contract
         run: bash ci/test-node-workflow-contract.sh
 
-      - name: Maintained PHP matrix and runtime lane contract
-        run: node ci/test-php-matrix-contract.cjs
-
       - name: Install pinned asset toolchain
         run: |
           compiler_url=https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/
@@ -83,6 +80,12 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+
+      - name: Maintained PHP matrix and runtime lane contract
+        if: matrix.browser == 'chromium'
+        run: |
+          npm ci --prefix ci --ignore-scripts --no-audit --no-fund
+          node ci/test-php-matrix-contract.cjs
 
       - name: Bundle resolver preserves inherited shell options
         run: bash tests/test-resolve-bundle-v.sh

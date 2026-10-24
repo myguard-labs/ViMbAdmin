@@ -49,7 +49,10 @@ function accessCacheManager(ArrayAdapter $cache, ?EventManager $events = null): 
     ], $config), $config, $events);
 }
 
-/** @return list<string> */
+/**
+ * @return list<string>
+ * @phpstan-impure
+ */
 function accessCacheValues(EntityManager $em, \Entities\Admin $admin): array
 {
     $repository = $em->getRepository(\Entities\MailboxPreference::class);
@@ -260,6 +263,86 @@ try {
             (new \ViMbAdmin_Service_Domain($em))->removeAdmin($domains[$betaId], $target, $actor);
         },
     );
+
+    accessCacheResetScope($db, $targetId, [$alphaId], false);
+    $db->executeStatement('DELETE FROM log');
+    $cache->clear();
+    $em = accessCacheManager($cache);
+    $target = accessCacheAdmin($em, $targetId);
+    if (accessCacheValues($em, $target) !== ['alpha']) {
+        throw new RuntimeException('FAIL: super promotion warm values');
+    }
+    (new \ViMbAdmin_Service_Admin($em))->toggleSuper($target, accessCacheAdmin($em, $actorId));
+    if (accessCacheValues($em, $target) !== ['alpha', 'beta']) {
+        throw new RuntimeException('FAIL: super promotion same-request cache invalidation');
+    }
+    echo "ok: super promotion same-request cache invalidation\n";
+    $checks++;
+    $other = accessCacheManager($cache);
+    if (accessCacheValues($other, accessCacheAdmin($other, $targetId)) !== ['alpha', 'beta']) {
+        throw new RuntimeException('FAIL: super promotion cross-request cache invalidation');
+    }
+    echo "ok: super promotion cross-request cache invalidation\n";
+    $checks++;
+
+    accessCacheResetScope($db, $targetId, [$alphaId], false);
+    $db->executeStatement('DELETE FROM log');
+    $cache->clear();
+    $em = accessCacheManager($cache);
+    $target = accessCacheAdmin($em, $targetId);
+    $actor = accessCacheAdmin($em, $actorId);
+    $alpha = accessCacheDomain($em, $alphaId);
+    if (accessCacheValues($em, $target) !== ['alpha']) {
+        throw new RuntimeException('FAIL: revoke-then-regrant warm values');
+    }
+    $initialScopeKeys = array_keys($cache->getValues());
+    sort($initialScopeKeys, SORT_STRING);
+    (new \ViMbAdmin_Service_Admin($em))->removeDomain($target, $alpha, $actor);
+    if (accessCacheValues($em, $target) !== []) {
+        throw new RuntimeException('FAIL: revoke-then-regrant revoked values');
+    }
+    $revokedScopeKeys = array_keys($cache->getValues());
+    sort($revokedScopeKeys, SORT_STRING);
+    if (count($initialScopeKeys) !== 1 || count($revokedScopeKeys) !== 2
+        || array_diff($initialScopeKeys, $revokedScopeKeys) !== []) {
+        throw new RuntimeException('FAIL: revoke-then-regrant generated distinct scoped cache identities');
+    }
+    echo "ok: revoke-then-regrant generates a distinct revoked cache identity\n";
+    $checks++;
+    (new \ViMbAdmin_Service_Admin($em))->assignDomain($target, $alpha, $actor);
+    if (accessCacheValues($em, $target) !== ['alpha']) {
+        throw new RuntimeException('FAIL: revoke-then-regrant restored values');
+    }
+    $regrantedScopeKeys = array_keys($cache->getValues());
+    sort($regrantedScopeKeys, SORT_STRING);
+    if ($regrantedScopeKeys !== $revokedScopeKeys) {
+        throw new RuntimeException('FAIL: revoke-then-regrant reuses prior cache identity');
+    }
+    echo "ok: revoke-then-regrant reuses prior cache identity for unchanged preference data\n";
+    $checks++;
+    $other = accessCacheManager($cache);
+    if (accessCacheValues($other, accessCacheAdmin($other, $targetId)) !== ['alpha']) {
+        throw new RuntimeException('FAIL: revoke-then-regrant cross-request cache identity');
+    }
+    echo "ok: revoke-then-regrant cross-request cache identity\n";
+    $checks++;
+    $duplicateRegrant = null;
+    try {
+        (new \ViMbAdmin_Service_Admin($em))->assignDomain($target, $alpha, $actor);
+    } catch (\ViMbAdmin_Service_Exception $exception) {
+        $duplicateRegrant = $exception->getMessage();
+    }
+    if ($duplicateRegrant !== 'This domain is already assigned to the admin.') {
+        throw new RuntimeException('FAIL: duplicate regrant was not rejected');
+    }
+    $duplicateScopeKeys = array_keys($cache->getValues());
+    sort($duplicateScopeKeys, SORT_STRING);
+    if (accessCacheValues($em, $target) !== ['alpha']
+        || $duplicateScopeKeys !== $regrantedScopeKeys) {
+        throw new RuntimeException('FAIL: rejected duplicate regrant changed cache state');
+    }
+    echo "ok: rejected duplicate regrant preserves values and cache identity\n";
+    $checks++;
 
     accessCacheResetScope($db, $targetId, [$alphaId], true);
     $db->executeStatement('DELETE FROM log');

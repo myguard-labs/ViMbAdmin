@@ -7,6 +7,8 @@ if (getenv('VIMBADMIN_DESTRUCTIVE_DB_TESTS') !== '1') {
     exit(2);
 }
 
+require __DIR__ . '/test-maintenance-orphan-short-write.php';
+
 define('MAINTENANCE_TASK_HELPERS_ONLY', true);
 require __DIR__ . '/test-maintenance-task-ownership.php';
 
@@ -257,27 +259,49 @@ if (!is_resource($server)) {
 echo 'http://' . stream_socket_get_name($server, false) . "/doveadm/v1\n";
 flush();
 stream_set_timeout($server, 30);
-$client = stream_socket_accept($server, 30);
-if (!is_resource($client)) {
-    exit(3);
-}
-stream_set_timeout($client, 5);
-while (($line = fgets($client)) !== false && trim($line) !== '') {
-}
-$body = '[["doveadmResponse",[{"path":"' . str_repeat('a', 2 * 1024 * 1024) . '"}],"fixture"]]';
-$header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " . strlen($body) . "\r\nConnection: close\r\n\r\n";
-fwrite($client, $header);
-$written = 0;
-for ($offset = 0, $length = strlen($body); $offset < $length; $offset += 8192) {
-    $bytes = @fwrite($client, substr($body, $offset, 8192));
-    if (!is_int($bytes) || $bytes < 1) {
-        break;
+foreach (['before-rejection', 'oversized', 'after-rejection'] as $response) {
+    $client = stream_socket_accept($server, 30);
+    if (!is_resource($client)) {
+        exit(3);
     }
-    $written += $bytes;
-    usleep(1000);
+    stream_set_timeout($client, 5);
+    $contentLength = 0;
+    while (($line = fgets($client)) !== false && trim($line) !== '') {
+        if (str_starts_with(strtolower($line), 'content-length:')) {
+            $contentLength = (int) trim(substr($line, strlen('content-length:')));
+        }
+    }
+    $requestBody = '';
+    while (strlen($requestBody) < $contentLength) {
+        $chunk = fread($client, $contentLength - strlen($requestBody));
+        if ($chunk === false || $chunk === '') {
+            exit(4);
+        }
+        $requestBody .= $chunk;
+    }
+    $request = json_decode($requestBody, true, 512, JSON_THROW_ON_ERROR);
+    $name = $response === 'oversized' ? str_repeat('a', 2 * 1024 * 1024) : $response;
+    $body = json_encode([['doveadmResponse', [['path' => $name]], $request[0][2]]], JSON_THROW_ON_ERROR);
+    if ($response === 'after-rejection') {
+        $body = str_pad($body, 32768, ' ');
+    }
+    $header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " . strlen($body) . "\r\nConnection: close\r\n\r\n";
+    fwrite($client, $header);
+    $written = 0;
+    for ($offset = 0, $length = strlen($body); $offset < $length;) {
+        $bytes = @fwrite($client, substr($body, $offset, 8192));
+        if (!is_int($bytes) || $bytes < 1) {
+            break;
+        }
+        $written += $bytes;
+        $offset += $bytes;
+        usleep(1000);
+    }
+    if ($response === 'oversized') {
+        file_put_contents($argv[1], (string) $written);
+    }
+    fclose($client);
 }
-file_put_contents($argv[1], (string) $written);
-fclose($client);
 fclose($server);
 PHP
     );
@@ -293,12 +317,20 @@ PHP
     try {
         $url = maintenanceOrphanReadLine($pipes[1], 'orphan transport address');
         $client = new \ViMbAdmin_Doveadm($url, 'fixture-key', 5);
+        maintenanceTaskCheck(
+            'bounded transport returns the exact successful response',
+            $client->fsListDirsBounded('/', 500, 255, 32768) === ['before-rejection']
+        );
         $error = null;
         try {
             $client->fsListDirsBounded('/', 500, 255, 32768);
         } catch (Throwable $caught) {
             $error = $caught;
         }
+        maintenanceTaskCheck(
+            'same client accepts an exact-limit response after oversized rejection',
+            $client->fsListDirsBounded('/', 500, 255, 32768) === ['after-rejection']
+        );
         maintenanceOrphanCloseChild($process, $pipes, 'orphan transport fixture');
         $process = null;
         $sent = is_file($countFile) ? (int) file_get_contents($countFile) : PHP_INT_MAX;
@@ -310,6 +342,7 @@ PHP
         );
     } finally {
         if (is_resource($process)) {
+            proc_terminate($process);
             maintenanceOrphanCloseChild($process, $pipes, 'orphan transport fixture cleanup');
         }
         foreach ([$countFile, $script] as $path) {

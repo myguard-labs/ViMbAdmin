@@ -12,6 +12,7 @@ parameters:
         - .github/scripts/assert-composer-lock.php
         - application
         - bin
+        - ci/test-maintenance-orphan-short-write.php
         - ci/test-php-runtime.php
         - library
         - public

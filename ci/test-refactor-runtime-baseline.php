@@ -55,7 +55,7 @@ function runtimeDatabasePort(): int
     }
     runtimeCheck(
         'DB_PORT must be a decimal TCP port from 1 to 65535',
-        preg_match('/^[1-9][0-9]*$/D', $value) === 1 && (int) $value <= 65535
+        strlen($value) <= 5 && preg_match('/^[1-9][0-9]*$/D', $value) === 1 && (int) $value <= 65535
     );
     return (int) $value;
 }

@@ -10,11 +10,13 @@ dependencies) and generated proxy files cannot enter the scan.
 the three roots; the baseline separately hashes eligible PHP inputs.
 
 Install Python 3, PHP CLI (lexer), Git and Node/npm, then run
-`npm ci --ignore-scripts --prefix ci/refactor-metrics` and put its
-`node_modules/.bin` on PATH. The owning static-analysis job provisions
-Python/PHP and installs the exact detector through the npm integrity lock.
-The command refuses a different detector version. Run from the checkout, with
-a new output directory outside the checkout:
+`npm ci --ignore-scripts --prefix ci/refactor-metrics`. The launcher selects
+that module-owned `node_modules/.bin/jscpd` directly for its version check,
+scan and tool identity, regardless of PATH or the scanned checkout. It fails
+with setup instructions if the local executable is missing, and refuses a
+different detector version. The owning static-analysis job provisions
+Python/PHP and installs the exact detector through the npm integrity lock. Run
+from the checkout, with a new output directory outside the checkout:
 
 ```sh
 python3 tools/refactor-metrics.py capture --output /tmp/vimbadmin-metrics-new

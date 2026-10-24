@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 tool=$repo/tools/refactor-metrics.py
+real_jscpd=$repo/ci/refactor-metrics/node_modules/.bin/jscpd
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-metrics-test.XXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
 fixture=$scratch/fixture
@@ -34,17 +35,42 @@ git -C "$fixture" -c user.name=fixture -c user.email=fixture@example.invalid \
   -c commit.gpgsign=false commit -qm fixture
 cp -- "$fixture/src/OwnedA.php" "$fixture/src/Untracked.php"
 
-python3 "$tool" capture --repo "$fixture" --output "$scratch/first" >"$scratch/capture.log"
+# A conflicting global detector must never displace the module-owned pin.
+mkdir "$scratch/global-bin"
+cat >"$scratch/global-bin/jscpd" <<'GLOBAL'
+#!/usr/bin/env bash
+printf 'called\n' >"${METRICS_GLOBAL_MARKER:?}"
+printf 'jscpd 5.4.1\n'
+GLOBAL
+chmod +x "$scratch/global-bin/jscpd"
+export METRICS_GLOBAL_MARKER=$scratch/global-invoked
+export PATH="$scratch/global-bin:$PATH"
+if ! python3 "$tool" capture --repo "$fixture" --output "$scratch/first" >"$scratch/capture.log" 2>&1; then
+  printf 'FAIL: module-local detector must win over conflicting global PATH\n' >&2
+  cat "$scratch/capture.log" >&2
+  exit 1
+fi
+if [[ -e $METRICS_GLOBAL_MARKER ]]; then
+  printf 'FAIL: conflicting global detector was invoked\n' >&2
+  exit 1
+fi
+printf 'PASS: module-local detector wins over conflicting global PATH\n'
 python3 "$tool" capture --repo "$fixture" --output "$scratch/second" >>"$scratch/capture.log"
 cmp "$scratch/first/clones.json" "$scratch/second/clones.json"
 cmp "$scratch/first/tracked-manifest.tsv" "$scratch/second/tracked-manifest.tsv"
 cmp "$scratch/first/baseline.json" "$scratch/second/baseline.json"
 
-python3 - "$scratch" <<'PY'
+python3 - "$scratch" "$real_jscpd" <<'PY'
+import hashlib
 import json
 from pathlib import Path
 import sys
 root = Path(sys.argv[1])
+launcher = Path(sys.argv[2]).resolve()
+tool_manifest = json.loads((root / 'first/tool-manifest.json').read_text())
+assert any(entry['path'] == str(launcher.relative_to(launcher.parent.parent))
+           and entry['sha256'] == hashlib.sha256(launcher.read_bytes()).hexdigest()
+           for entry in tool_manifest), 'tool identity did not use the pinned local launcher'
 report = json.loads((root / 'first/clones.json').read_text())
 paths = {s['path'] for c in report['clones'] for s in c['sites']}
 assert 'src/OwnedA.php' in paths and 'src/OwnedB.php' in paths, 'first-party duplicate missing'
@@ -215,8 +241,11 @@ PYTEST
 # Delegate version/normal scans to the installed real detector; only inject
 # malformed report data for error-path tests. This also tests a standalone
 # launcher (no sibling npm package.json) without assuming one install layout.
-mkdir "$scratch/delegate"
-real_jscpd=$(command -v jscpd)
+mkdir -p "$scratch/delegate" "$scratch/tool-owner/tools" \
+  "$scratch/tool-owner/ci/refactor-metrics/node_modules/.bin"
+cp -- "$tool" "$scratch/tool-owner/tools/refactor-metrics.py"
+private_tool=$scratch/tool-owner/tools/refactor-metrics.py
+private_jscpd=$scratch/tool-owner/ci/refactor-metrics/node_modules/.bin/jscpd
 cat >"$scratch/delegate/jscpd" <<'DELEGATE'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -234,21 +263,44 @@ done
 exit 99
 DELEGATE
 chmod +x "$scratch/delegate/jscpd"
-env PATH="$scratch/delegate:$PATH" METRICS_REAL_JSCPD="$real_jscpd" \
-  python3 "$tool" capture --repo "$fixture" --output "$scratch/standalone" >/dev/null
+ln -s "$scratch/delegate/jscpd" "$private_jscpd"
+env METRICS_REAL_JSCPD="$real_jscpd" \
+  python3 "$private_tool" capture --repo "$fixture" --output "$scratch/standalone" >/dev/null
 expect_error 'invalid clone range' \
-  env PATH="$scratch/delegate:$PATH" METRICS_REAL_JSCPD="$real_jscpd" \
+  env METRICS_REAL_JSCPD="$real_jscpd" \
   METRICS_CORRUPT_REPORT="$scratch/invalid-range-raw.json" \
-  python3 "$tool" capture --repo "$fixture" --output "$scratch/invalid-range"
+  python3 "$private_tool" capture --repo "$fixture" --output "$scratch/invalid-range"
 expect_error 'duplicate clone identity' \
-  env PATH="$scratch/delegate:$PATH" METRICS_REAL_JSCPD="$real_jscpd" \
+  env METRICS_REAL_JSCPD="$real_jscpd" \
   METRICS_CORRUPT_REPORT="$scratch/duplicate-identity-raw.json" \
-  python3 "$tool" capture --repo "$fixture" --output "$scratch/duplicate-identity"
+  python3 "$private_tool" capture --repo "$fixture" --output "$scratch/duplicate-identity"
 
 # A different detector version cannot silently create a new baseline.
 mkdir "$scratch/bin"
 printf '#!/bin/sh\nprintf "cpd 0.0.0\\n"\n' >"$scratch/bin/jscpd"
 chmod +x "$scratch/bin/jscpd"
-expect_error 'require jscpd 5.0.12' env PATH="$scratch/bin:$PATH" \
-  python3 "$tool" capture --repo "$fixture" --output "$scratch/wrong-version"
+rm -- "$private_jscpd"
+ln -s "$scratch/bin/jscpd" "$private_jscpd"
+mkdir "$scratch/valid-global"
+printf '#!/bin/sh\nprintf "jscpd 5.0.12\\n"\n' >"$scratch/valid-global/jscpd"
+chmod +x "$scratch/valid-global/jscpd"
+expect_error "require jscpd 5.0.12, got 'cpd 0.0.0'" \
+  env PATH="$scratch/valid-global:$PATH" \
+  python3 "$private_tool" capture --repo "$fixture" --output "$scratch/wrong-version"
+
+# Even a correct global version cannot replace a missing/non-executable local pin.
+rm -- "$private_jscpd"
+expect_error 'missing executable module-local jscpd' \
+  env PATH="$scratch/valid-global:$PATH" \
+  python3 "$private_tool" capture --repo "$fixture" --output "$scratch/missing-local"
+printf '#!/bin/sh\nprintf "jscpd 5.0.12\\n"\n' >"$private_jscpd"
+chmod 0644 "$private_jscpd"
+expect_error 'missing executable module-local jscpd' \
+  env PATH="$scratch/valid-global:$PATH" \
+  python3 "$private_tool" capture --repo "$fixture" --output "$scratch/nonexecutable-local"
+rm -- "$private_jscpd"
+ln -s "$real_jscpd" "$private_jscpd"
+python3 "$private_tool" capture --repo "$fixture" --output "$scratch/restored" >/dev/null
+cmp "$scratch/first/clones.json" "$scratch/restored/clones.json"
+printf 'PASS: restored local detector preserves the clone dataset\n'
 printf 'ALL PASSED: tracked metrics, exclusions, classification, reproducibility and malformed/error controls\n'

@@ -222,11 +222,11 @@ workflow_has_required_owner_step() {
         in_strategy = in_matrix = 0
       }
       if (current_job == owner_job) {
-        if (current_indent == 4) {
+        if (current_indent == 4 && normalize($0) != "") {
           in_strategy = normalize($0) == "strategy:"
           in_matrix = 0
         }
-        if (in_strategy && current_indent == 6) in_matrix = normalize($0) == "matrix:"
+        if (in_strategy && current_indent == 6 && normalize($0) != "") in_matrix = normalize($0) == "matrix:"
         if (in_matrix && current_indent == 8 && normalize($0) != "") {
           if (normalize($0) == "browser: [chromium, firefox, webkit]") browser_matrix_valid = 1
           else browser_matrix_invalid = 1

@@ -224,7 +224,8 @@ for (const [file, jobs] of [['ci.yml', ['lint']], ['regression.yml', ['unit', 'c
   }
   assert.throws(() => check(source.replace('        include:', "        php: ['8.2']\n        include:"), jobs),
     /explicit include matrix required/);
-  assert.throws(() => check(source.replace('        include:', '        include: [unterminated'), jobs));
+  assert.throws(() => check(source.replace('        include:', '        include: [unterminated'), jobs),
+    { name: 'YAMLParseError' });
   check(source, jobs);
   if (file === 'regression.yml') {
     checkPlacement(source);

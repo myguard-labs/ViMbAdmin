@@ -25,6 +25,22 @@ YAML
       echo 'FAIL: real Chromium shared source owner was rejected' >&2
       exit 1
     fi
+    # YAML comment indentation is insignificant, including inside strategy/matrix.
+    for indent in 4 6 8; do
+      for before in matrix browser; do
+        spaces=$(printf '%*s' "$indent" '')
+        sed "/$before:/i\\${spaces}# retained ownership comment" "$fixture/valid.yml" >"$fixture/comment.yml"
+        if ! workflow_has_required_owner_step "$fixture/comment.yml" command "$target" static chromium; then
+          echo "FAIL: valid matrix comment rejected: indent=$indent before=$before" >&2
+          exit 1
+        fi
+        sed "/$before:/i\\${spaces}" "$fixture/valid.yml" >"$fixture/blank.yml"
+        if ! workflow_has_required_owner_step "$fixture/blank.yml" command "$target" static chromium; then
+          echo "FAIL: valid matrix blank line rejected: indent=$indent before=$before" >&2
+          exit 1
+        fi
+      done
+    done
     # Ordinary owners must continue rejecting all conditional steps.
     if workflow_has_required_owner_step "$fixture/valid.yml" command "$target" static; then
       echo 'FAIL: Chromium permission leaked into an ordinary owner' >&2

@@ -20,12 +20,29 @@ curl() {
   : >"$run_dir/build/apcu.tgz"
 }
 sha256sum() {
+  [[ $# == 2 && $1 == --check && $2 == --status ]] || {
+    echo 'FAIL: APCu checksum requires --check --status' >&2
+    exit 92
+  }
   local input
   IFS= read -r input
   [[ $input == "$apcu_sha256  $run_dir/build/apcu.tgz" ]] || exit 91
   printf 'verify\n' >>"$run_dir/calls"
   [[ $control != checksum-failure ]]
 }
+if [[ $control == success ]]; then
+  # Exercise the stub contract in this driver, without another external command.
+  for options in '' '--check' '--status' '--status --check' '--check --bogus' '--check --status --bogus'; do
+    read -r -a checksum_args <<<"$options"
+    option_status=0
+    (sha256sum "${checksum_args[@]}" <<<"$apcu_sha256  $run_dir/build/apcu.tgz") \
+      >"$run_dir/option-output" 2>&1 || option_status=$?
+    [[ $option_status == 92 ]] || {
+      echo "FAIL: checksum stub accepted invalid options '$options' (exit $option_status)" >&2
+      exit 1
+    }
+  done
+fi
 tar() {
   printf 'extract\n' >>"$run_dir/calls"
   [[ $control != archive-failure ]] || return 2

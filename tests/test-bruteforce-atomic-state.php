@@ -29,9 +29,9 @@ function bruteForceWorker(
         'max_attempts' => 1000,
         'window' => 3600,
     ]);
-    $deadline = microtime(true) + 20;
     for ($attempt = 0; $attempt < (int) $attempts; $attempt++) {
         $roundBarrier = $barrier . '-' . $attempt;
+        $deadline = microtime(true) + 20;
         while (!is_file($roundBarrier)) {
             if (microtime(true) >= $deadline) {
                 fwrite(STDERR, "timed out waiting for round barrier\n");

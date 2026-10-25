@@ -68,6 +68,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
@@ -82,72 +83,102 @@ jobs:
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
 
+      - name: Maintained PHP matrix and runtime lane contract
+        if: matrix.browser == 'chromium'
+        run: |
+          npm ci --prefix ci --ignore-scripts --no-audit --no-fund
+          node ci/test-php-matrix-contract.cjs
+
+      # Source/static controls are engine-independent; run once in Chromium.
+      # Keep each real engine suite and its local image/vendor setup below.
       - name: Bundle resolver preserves inherited shell options
+        if: matrix.browser == 'chromium'
         run: bash tests/test-resolve-bundle-v.sh
 
       - name: Shipped JS bundle retains UTF-8 licence attribution
+        if: matrix.browser == 'chromium'
         run: php ci/test-bundle-utf8.php
 
       - name: JS minifier preserves UTF-8 charset through the shipped bundle
+        if: matrix.browser == 'chromium'
         run: php tests/test-minify-bundle-charset.php
 
       - name: Smarty 5 JS-template escaping (alias [+] button regression)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-template-escaping.sh
 
       - name: ZF1 surface must not grow (Phase 0 guard, docs/ZF1-REMOVAL.md)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-no-new-zend.sh
 
       - name: Documentation matches shipped ownership and configuration
+        if: matrix.browser == 'chromium'
         run: php tests/test-documentation-contract.php
 
       - name: 2FA session-hygiene invariants (audit 2026-07-10 MAJOR)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-2fa-session-hygiene.sh
 
       - name: Bootstrap 2 grid classes must not reappear (VIM-A15 phase 4)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-bs2-grid-classes.sh
 
       - name: Bootstrap 2 component classes must not reappear (VIM-A15.19)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-bs2-component-classes.sh
 
       - name: Lint gates must be working-directory independent (VIM-A15.31)
+        if: matrix.browser == 'chromium'
         run: bash tests/test-lint-gate-cwd-independence.sh
 
       - name: Bootstrap data attributes must use bs- prefix (VIM-A15.20)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-bs5-data-attrs.sh
 
       - name: Static modals must be labelled for assistive tech (VIM-A15.32)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-modal-aria-labelledby.sh
 
       - name: Glyphicons icon-* classes must not reappear (VIM-A15.18)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-no-glyphicon-classes.sh
 
       - name: DataTables dom/sDom rejects BS2 grid tokens (VIM-A15.23)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-datatables-bs5-dom.sh
 
       - name: DataTables extension names must be registered (VIM-A15.23)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-datatables-registered-plugins.sh
 
       - name: fnServerData initialisers must keep sAjaxSource (VIM-A15.26)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-datatables-serverdata-source.sh
 
       - name: DataTables clear() must chain its redraw (VIM-A15.56a)
+        if: matrix.browser == 'chromium'
         run: bash tests/lint-datatables-clear-redraws.sh
 
       - name: DataTables search uses native active transports
+        if: matrix.browser == 'chromium'
         run: node tests/test-datatable-search-row-api.cjs
 
       - name: Request helper behavior remains source and bundle equivalent
+        if: matrix.browser == 'chromium'
         run: node ci/test-refactor-ui-events.cjs
 
       - name: UI mutation controls reject false passing child results
+        if: matrix.browser == 'chromium'
         run: node ci/test-refactor-ui-controls.cjs
 
       - name: Entry-control evidence is retained only on failure
+        if: matrix.browser == 'chromium'
         run: |
           node ci/test-entry-autoload-workflow.cjs
           node ci/test-entry-autoload-cleanup.cjs
 
       - name: Containerized Chrome runner hardening
+        if: matrix.browser == 'chromium'
         run: >-
           VIMBADMIN_BROWSER=chrome bash tests/test-headless-chrome-container.sh
 
@@ -158,6 +189,7 @@ jobs:
         run: bash tests/test-browser-fixture-adapter.sh
 
       - name: Fixture HTTP readiness stays bounded (VIM-A15.16 round-3 defect)
+        if: matrix.browser == 'chromium'
         run: bash tests/test-fixture-http-readiness-bound.sh
 
       - name: Install template dependencies with PHP 8.4
@@ -168,18 +200,27 @@ jobs:
       - name: Authentication and error routes render in a real browser
         run: bash ci/test-browser-auth-errors.sh
 
+      - name: Tenant source mutator rejects missing and duplicated guards
+        if: matrix.browser == 'chromium'
+        run: bash ci/test-browser-tenant-mutation.sh
+
       - name: Tenant boundaries render and preserve isolated state
-        run: |
-          bash ci/test-browser-tenant-mutation.sh
-          bash ci/test-browser-tenant.sh
+        run: bash ci/test-browser-tenant.sh
+
+      - name: Operations source mutator rejects invalid rollback sites
+        if: matrix.browser == 'chromium'
+        run: bash ci/test-browser-operations-mutation.sh
 
       - name: Maintenance, queue and MCP operations preserve isolated state
-        run: |
-          bash ci/test-browser-operations-mutation.sh
-          bash ci/test-browser-operations.sh
+        run: bash ci/test-browser-operations.sh
 
       - name: Owned browser containers remove their anonymous volumes
+        if: matrix.browser == 'chromium'
         run: bash ci/test-browser-owned-cleanup.sh
+
+      - name: Browser process collection survives disappearing tasks
+        if: matrix.browser == 'chromium'
+        run: bash ci/test-browser-process-collector.sh
 
       - name: Responsive skin rendering and keyboard navigation
         run: bash ci/test-browser-visual.sh
@@ -246,6 +287,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -258,6 +300,9 @@ jobs:
           - php: '8.5'
             image: >-
               mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
       image: ${{ matrix.image }}
     steps:
@@ -417,13 +462,14 @@ jobs:
   # ------------------------------------------------------------------ #
   # Dependency + cache wiring — proves a composer bump (symfony/cache, #
   # doctrine/orm) does not break the Doctrine cache layer at runtime.  #
-  # Runs on every tested PHP minor: 8.3 through 8.5.
+  # Runs on every tested PHP minor: 8.3 through 8.6.
   # ------------------------------------------------------------------ #
   cache-wiring:
     name: Cache wiring (PHP ${{ matrix.php }})
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -436,6 +482,9 @@ jobs:
           - php: '8.5'
             image: >-
               mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
       image: ${{ matrix.image }}
     steps:
@@ -488,6 +537,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
+      max-parallel: 4
       fail-fast: false
       matrix:
         include:
@@ -500,6 +550,9 @@ jobs:
           - php: '8.5'
             image: >-
               mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
       image: ${{ matrix.image }}
     services:

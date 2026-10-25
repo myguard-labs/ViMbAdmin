@@ -444,6 +444,7 @@ check_job() {
 }
 
 check_job "$regression" assets 'npm ci --prefix bin --ignore-scripts'
+check_job "$regression" unit 'bash tests/run-unit-tests.sh'
 check_job "$static_analysis" refactor-metrics 'npm ci --ignore-scripts --prefix ci/refactor-metrics'
 
 if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
@@ -477,6 +478,18 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   sed -i "s/node-version: '22'/node-version: '22.x'/" "$fixture/regression.yml"
   expect_rejected "a non-literal major boundary" \
     "regression.yml job assets must pin node-version '22' exactly once (found 0)"
+
+  awk '
+    /^  unit:$/ { in_unit = 1 }
+    in_unit && /# The full unit runner also executes the browser diagnostic Node tests\./ { skip = 1 }
+    skip && /package-manager-cache: false/ { skip = 0; changed++; next }
+    !skip { print }
+    END { if (changed != 1) exit 2 }
+  ' "$fixture/regression.yml" >"$fixture/regression.without-unit-node.yml" ||
+    fail "fixture preparation failed: expected one unit Node setup block"
+  mv -- "$fixture/regression.without-unit-node.yml" "$fixture/regression.yml"
+  expect_rejected "a missing Node runtime in the full unit job" \
+    'regression.yml job unit must use setup-node exactly once (found 0)'
 
   if ! awk -v expected="      - uses: $setup_node" '
     /^  assets:$/ { in_assets = 1 }
@@ -1474,8 +1487,15 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
   expect_rejected "a hash inside a quoted nonmatching Node command" \
     'regression.yml job assets has no expected Node consumer: npm ci --prefix bin --ignore-scripts'
 
-  boundary_block=$(sed -n '/      # actions\/setup-node v6.3.0/,+4p' "$fixture/regression.yml")
-  sed -i '/      # actions\/setup-node v6.3.0/,+4d' "$fixture/regression.yml"
+  boundary_block=$(job_body "$fixture/regression.yml" assets |
+    sed -n '/      # actions\/setup-node v6.3.0/,+4p')
+  awk '
+    /^  assets:$/ { in_assets = 1 }
+    in_assets && /# actions\/setup-node v6.3.0/ { skip = 5; in_assets = 0 }
+    skip > 0 { skip--; next }
+    { print }
+  ' "$fixture/regression.yml" >"$fixture/regression.without-assets-node.yml"
+  mv -- "$fixture/regression.without-assets-node.yml" "$fixture/regression.yml"
   awk -v block="$boundary_block" '
     /^  static:$/ { in_static = 1 }
     in_static && /^    steps:$/ { print; print block; in_static = 0; next }
@@ -1493,4 +1513,4 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
     'regression.yml job assets must use setup-node exactly once (found 0)'
 fi
 
-printf "Node workflow contract passed (assets and refactor-metrics use Node %s).\n" "$node_major"
+printf "Node workflow contract passed (assets, unit and refactor-metrics use Node %s).\n" "$node_major"

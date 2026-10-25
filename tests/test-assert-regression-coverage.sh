@@ -919,3 +919,19 @@ run_guard
 grep -qF 'CI workflow does not invoke the dependency refresh regression.' \
   "$test_root/output"
 cp -- "$test_root/.github/workflows/ci.yml.valid" "$test_root/.github/workflows/ci.yml"
+
+# The full unit run must execute its browser-diagnostic regression; requested
+# PHP subsets must remain subsets. Exercise the maintained discovery probe.
+cp -- "$runner" "$test_root/tests/run-unit-tests.sh"
+mutate_runner 's|^  node ci/test-browser-auth-diagnostics.cjs$|  :|'
+run_guard
+[[ $guard_status -ne 0 ]] || {
+  printf 'Coverage guard accepted a missing browser-diagnostic regression.\n' >&2
+  exit 1
+}
+grep -qF 'Unit test runner discovery or requested subset is incorrect.' \
+  "$test_root/output" || {
+  cat "$test_root/output" >&2
+  exit 1
+}
+cp -- "$runner" "$test_root/tests/run-unit-tests.sh"

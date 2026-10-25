@@ -54,7 +54,7 @@ static_workflow_has_phpstan_runtime_contract || exit 1
 
 unit_runner_executes_tracked_tests_and_subset() {
   local harness_root runner_path stub_path output
-  local git_log php_log
+  local git_log php_log node_log
 
   harness_root=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-unit-runner.XXXXXX")
   runner_path=$PWD/$unit_runner
@@ -62,9 +62,11 @@ unit_runner_executes_tracked_tests_and_subset() {
   output=$harness_root/output
   git_log=$harness_root/git.log
   php_log=$harness_root/php.log
+  node_log=$harness_root/node.log
   mkdir -p "$stub_path" "$harness_root/tests"
   : >"$git_log"
   : >"$php_log"
+  : >"$node_log"
   : >"$harness_root/tests/test-untracked-sentinel.php"
 
   cat >"$stub_path/git" <<'SH'
@@ -98,12 +100,21 @@ printf '%s\n' "$1" >> "$VIMBADMIN_RUNNER_PHP_LOG"
 # so the stub must emit one; this harness asserts discovery, not verdicts.
 printf 'ALL PASSED\n'
 SH
-  chmod +x "$stub_path/git" "$stub_path/php"
+  cat >"$stub_path/node" <<'SH'
+#!/bin/sh
+if [ "$#" -ne 1 ] || [ "$1" != ci/test-browser-auth-diagnostics.cjs ]; then
+  printf 'Unexpected Node argv in unit runner.\n' >&2
+  exit 98
+fi
+printf '%s\n' "$1" >> "$VIMBADMIN_RUNNER_NODE_LOG"
+SH
+  chmod +x "$stub_path/git" "$stub_path/php" "$stub_path/node"
 
   if ! (cd "$harness_root" &&
     PATH="$stub_path:/usr/bin:/bin" \
       VIMBADMIN_RUNNER_GIT_LOG="$git_log" \
       VIMBADMIN_RUNNER_PHP_LOG="$php_log" \
+      VIMBADMIN_RUNNER_NODE_LOG="$node_log" \
       "$runner_path") >"$output" 2>&1; then
     rm -rf -- "${harness_root:?}"
     return 1
@@ -113,17 +124,21 @@ SH
     ! grep -qxF 'ls-files tests/test-*.php' "$git_log" ||
     [[ $(wc -l <"$php_log") -ne 2 ]] ||
     [[ $(grep -cxF 'tests/test-runner-contract-a.php' "$php_log") -ne 1 ]] ||
-    [[ $(grep -cxF 'tests/test-runner-contract-b.php' "$php_log") -ne 1 ]]; then
+    [[ $(grep -cxF 'tests/test-runner-contract-b.php' "$php_log") -ne 1 ]] ||
+    [[ $(wc -l <"$node_log") -ne 1 ]] ||
+    ! grep -qxF 'ci/test-browser-auth-diagnostics.cjs' "$node_log"; then
     rm -rf -- "${harness_root:?}"
     return 1
   fi
 
   : >"$git_log"
   : >"$php_log"
+  : >"$node_log"
   if ! (cd "$harness_root" &&
     PATH="$stub_path:/usr/bin:/bin" \
       VIMBADMIN_RUNNER_GIT_LOG="$git_log" \
       VIMBADMIN_RUNNER_PHP_LOG="$php_log" \
+      VIMBADMIN_RUNNER_NODE_LOG="$node_log" \
       "$runner_path" tests/test-runner-contract-b.php) \
     >"$output" 2>&1; then
     rm -rf -- "${harness_root:?}"
@@ -132,7 +147,8 @@ SH
 
   if [[ $(wc -l <"$git_log") -ne 1 ]] ||
     [[ $(wc -l <"$php_log") -ne 1 ]] ||
-    ! grep -qxF 'tests/test-runner-contract-b.php' "$php_log"; then
+    ! grep -qxF 'tests/test-runner-contract-b.php' "$php_log" ||
+    [[ -s $node_log ]]; then
     rm -rf -- "${harness_root:?}"
     return 1
   fi

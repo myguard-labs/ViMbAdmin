@@ -76,6 +76,10 @@ if [[ $# -gt 0 ]]; then
   done
 fi
 
+if [[ $# -eq 0 ]]; then
+  node ci/test-browser-auth-diagnostics.cjs
+fi
+
 for test in "${selected_tests[@]}"; do
   [[ $test == tests/test-phpstan-*.php ]] && continue
   is_excluded "$test" && continue

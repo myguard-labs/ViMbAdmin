@@ -280,6 +280,13 @@ jobs:
       - name: Setup PHP container
         run: bash .github/scripts/setup-php-container.sh runtime
 
+      # The full unit runner also executes the browser diagnostic Node tests.
+      # actions/setup-node v6.3.0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
       - name: Install dependencies
         run: >-
           composer install --no-interaction --no-progress --prefer-dist --no-dev

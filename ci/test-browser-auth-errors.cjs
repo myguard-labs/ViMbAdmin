@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 'use strict';
-/* global require, module, process, URL, Buffer, document, HTMLInputElement */
+/* global require, module, process, console, URL, Buffer, document, HTMLInputElement */
 
 const fs = require('node:fs/promises');
 const http = require('node:http');
 const net = require('node:net');
+const { performance } = require('node:perf_hooks');
 
 function check(condition, message) {
   if (!condition) throw new Error(message);
@@ -56,6 +57,60 @@ async function responseChain(response) {
   const first = await request.response();
   check(first, 'browser redirect chain omitted its first response');
   return { initialStatus: first.status(), finalStatus: response.status() };
+}
+
+// Keep diagnostics separate from the security oracle. A missing POST is only
+// unobserved submission; it does not establish why the browser did not navigate.
+async function submitCsrfDenial(formPage, name) {
+  const scenario = ['missing CSRF denial', 'invalid CSRF denial'].includes(name)
+    ? name : 'unknown CSRF denial';
+  const started = performance.now();
+  const elapsed = () => Math.max(0, Math.round(performance.now() - started));
+  const progress = { submit: 'pending', navigation: 'pending', request: null, response: null, loadMs: null };
+  let submittedRequest;
+  const listeners = {
+    request(request) {
+      try {
+        if (!submittedRequest && request.isNavigationRequest() && request.method() === 'POST' &&
+            new URL(request.url()).pathname === '/auth/totp') {
+          submittedRequest = request;
+          progress.request = { method: 'POST', pathname: '/auth/totp', elapsedMs: elapsed() };
+        }
+      } catch { /* Unavailable metadata must not change the submission. */ }
+    },
+    response(response) {
+      try {
+        const status = response.status();
+        if (!progress.response && submittedRequest && response.request() === submittedRequest &&
+            Number.isInteger(status) && status >= 100 && status <= 599) {
+          progress.response = { status, elapsedMs: elapsed() };
+        }
+      } catch { /* Unavailable metadata remains unobserved. */ }
+    },
+    load() { if (progress.loadMs === null) progress.loadMs = elapsed(); }
+  };
+  for (const [event, listener] of Object.entries(listeners)) formPage.on(event, listener);
+  try {
+    const [response] = await Promise.all([
+      formPage.waitForNavigation({ waitUntil: 'load', timeout: 15000 }).then(response => {
+        progress.navigation = 'complete';
+        return response;
+      }, error => { progress.navigation = 'failed'; throw error; }),
+      formPage.click('button[type="submit"]').then(() => {
+        progress.submit = 'complete';
+      }, error => { progress.submit = 'failed'; throw error; })
+    ]);
+    return response;
+  } catch (error) {
+    // Never include the original error or arbitrary browser data here: either
+    // may contain a URL, submitted value or token. Preserve the original error.
+    try {
+      console.error(`CSRF submission diagnostic: ${JSON.stringify({ scenario, ...progress, elapsedMs: elapsed() })}`);
+    } catch { /* A diagnostic sink failure must not replace the original error. */ }
+    throw error;
+  } finally {
+    for (const [event, listener] of Object.entries(listeners)) formPage.off(event, listener);
+  }
 }
 
 async function runApplicationSuite({ browserContext, targetOrigin, root, input, mutation }) {
@@ -296,10 +351,7 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input, 
         input.value = value;
       }, submittedValue);
     }
-    const [response] = await Promise.all([
-      formPage.waitForNavigation({ waitUntil: 'load', timeout: 15000 }),
-      formPage.click('button[type="submit"]')
-    ]);
+    const response = await submitCsrfDenial(formPage, name);
     check(response && response.status() === 200, `${name}: CSRF denial did not render HTTP 200`);
     check(new URL(formPage.url()).pathname === '/auth/totp', `${name}: CSRF denial left the TOTP route`);
     const message = await formPage.locator('.alert-danger').innerText();
@@ -367,7 +419,7 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input, 
   };
 }
 
-module.exports = { runApplicationSuite };
+module.exports = { runApplicationSuite, submitCsrfDenial };
 
 if (require.main === module) {
   process.stderr.write('Run through tests/support/browser-application-fixture.sh so the pinned browser and application fixture are active.\n');

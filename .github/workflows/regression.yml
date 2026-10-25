@@ -2,6 +2,8 @@
 name: Regression tests
 
 on:  # yamllint disable-line rule:truthy
+  push:
+    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:

@@ -27,10 +27,38 @@ function check(source, expectedJobs) {
 }
 
 const command = 'node ci/test-php-matrix-contract.cjs';
+const workflowEvents = ['pull_request', 'workflow_dispatch', 'push'];
+function checkTriggers(workflow) {
+  for (const event of workflowEvents) {
+    assert.ok(Object.hasOwn(workflow.on ?? {}, event), 'all workflow triggers required');
+  }
+  assert.deepEqual(workflow.on.push, { branches: ['master'] },
+    'merged-tree checks require an unfiltered master push');
+}
+
+// The repository does not enforce branch freshness: PR-head checks alone cannot
+// cover two passing changes combined by a later merge. Keep post-merge checks.
+for (const file of ['ci.yml', 'regression.yml', 'security.yml', 'static-analysis.yml']) {
+  const workflow = yaml.parse(fs.readFileSync(path.join(__dirname, '../.github/workflows', file), 'utf8'),
+    { uniqueKeys: true, maxAliasCount: 100 });
+  checkTriggers(workflow);
+  for (const event of workflowEvents) {
+    const candidate = JSON.parse(JSON.stringify(workflow));
+    delete candidate.on[event];
+    assert.throws(() => checkTriggers(candidate), /all workflow triggers required/);
+  }
+  for (const push of [null, 'master', {}, { branches: ['main'] },
+    { branches: ['master', 'other'] }, { branches: ['master'], paths: ['src/**'] },
+    { branches: ['master'], 'paths-ignore': ['ci/**'] }, { tags: ['*'] }]) {
+    assert.throws(() => checkTriggers({ ...workflow, on: { ...workflow.on, push } }),
+      /merged-tree checks require an unfiltered master push/);
+  }
+  checkTriggers(workflow);
+}
+
 function checkPlacement(source) {
   const workflow = yaml.parse(source, { uniqueKeys: true, maxAliasCount: 100 });
-  assert.ok(Object.hasOwn(workflow.on, 'pull_request') && Object.hasOwn(workflow.on, 'workflow_dispatch'),
-    'matrix contract requires both workflow triggers');
+  checkTriggers(workflow);
   const owners = [];
   for (const [name, job] of Object.entries(workflow.jobs)) {
     for (const step of job.steps ?? []) {
@@ -39,7 +67,7 @@ function checkPlacement(source) {
   }
   assert.equal(owners.length, 1, 'matrix contract must run in exactly one step');
   assert.equal(owners[0].name, 'static', 'matrix contract requires the always-running static job');
-  assert.equal(owners[0].job.if, undefined, 'matrix contract job must run for both triggers');
+  assert.equal(owners[0].job.if, undefined, 'matrix contract job must run for all triggers');
   assert.equal(owners[0].step.if, "matrix.browser == 'chromium'", 'matrix contract runs once per workflow');
 }
 
@@ -128,15 +156,15 @@ function countBrowserCommands(job) {
 }
 function checkBrowserSelection(workflow) {
   const job = workflow.jobs.static;
-  assert.equal(job.if, undefined, 'browser job must run for both triggers');
+  assert.equal(job.if, undefined, 'browser job must run for all triggers');
   assert.equal(job.env?.VIMBADMIN_BROWSER, '${{ matrix.browser }}', 'selected engine must reach browser fixtures');
   assert.deepEqual(job.strategy.matrix, { browser: ['chromium', 'firefox', 'webkit'] },
     'all three browser lanes required');
   const onceOnly = new Set([...sharedCommands, ...contractCommands]);
   const expected = new Set([...onceOnly, ...engineCommands]);
   checkCommandOwners(workflow, onceOnly, expected);
-  for (const event of ['pull_request', 'workflow_dispatch']) {
-    assert.ok(Object.hasOwn(workflow.on, event), 'both browser workflow triggers required');
+  checkTriggers(workflow);
+  for (const event of workflowEvents) {
     const counts = countBrowserCommands(job);
     for (const line of [...sharedCommands, ...contractCommands]) {
       assert.equal(counts.get(line), 1, event + ': shared command exactly once: ' + line);
@@ -180,13 +208,13 @@ function testBrowserSelection(source) {
       owner(workflow, sharedCommands[0]).if = condition;
     })), /unsupported browser command condition/);
   }
-  for (const event of ['pull_request', 'workflow_dispatch']) {
+  for (const event of workflowEvents) {
     assert.throws(() => checkBrowserSelection(mutate(workflow => { delete workflow.on[event]; })),
-      /both browser workflow triggers required/);
+      /all workflow triggers required/);
   }
   assert.throws(() => checkBrowserSelection(mutate(workflow => {
     workflow.jobs.static.if = "github.event_name == 'pull_request'";
-  })), /browser job must run for both triggers/);
+  })), /browser job must run for all triggers/);
   for (const env of [undefined, {}, { VIMBADMIN_BROWSER: 'chromium' }]) {
     assert.throws(() => checkBrowserSelection(mutate(workflow => { workflow.jobs.static.env = env; })),
       /selected engine must reach browser fixtures/);
@@ -231,7 +259,7 @@ for (const [file, jobs] of [['ci.yml', ['lint']], ['regression.yml', ['unit', 'c
     checkPlacement(source);
     testBrowserSelection(source);
     assert.throws(() => checkPlacement(source.replace('  static:\n', "  static:\n    if: github.event_name == 'pull_request'\n")),
-      /must run for both triggers/);
+      /must run for all triggers/);
     assert.throws(() => checkPlacement(source.replace(command, `# ${command}`)), /exactly one step/);
     assert.throws(() => checkPlacement(source.replace("if: matrix.browser == 'chromium'", "if: github.event_name == 'pull_request'")),
       /runs once per workflow/);

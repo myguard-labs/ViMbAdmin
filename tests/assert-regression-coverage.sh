@@ -151,10 +151,14 @@ if ! grep -qF "git ls-files 'tests/test-phpstan-*.php'" "$phpstan_runner" ||
   exit 1
 fi
 
-workflow_has_unconditional_owner_step() {
-  local workflow=$1 kind=$2 target=$3 owner_job=${4:-}
+workflow_has_required_owner_step() {
+  local workflow=$1 kind=$2 target=$3 owner_job=${4:-} browser_once=${5:-}
 
-  awk -v kind="$kind" -v target="$target" -v owner_job="$owner_job" '
+  # A shared source check may have one unconditional matrix owner in Chromium.
+  # Arbitrary event/step conditions remain unreachable for ownership purposes.
+
+  awk -v kind="$kind" -v target="$target" -v owner_job="$owner_job" \
+    -v browser_once="$browser_once" '
     function indent(line, leading) {
       leading = line
       sub(/[^ ].*$/, "", leading)
@@ -173,6 +177,11 @@ workflow_has_unconditional_owner_step() {
         run_count++
         sub(/^run:[[:space:]]*/, "", line)
         run = line
+        return
+      }
+      if (browser_once == "chromium" && current_job == owner_job &&
+          line == "if: matrix.browser == \047chromium\047" && !step_condition) {
+        step_condition = 1
         return
       }
       approved_shape = 0
@@ -195,6 +204,7 @@ workflow_has_unconditional_owner_step() {
     }
     function finish_step() {
       if (in_step && approved_shape && run_count == 1 &&
+          (!step_condition || (browser_matrix_valid && !browser_matrix_invalid)) &&
           matches_owner(run)) {
         if (owner_job == "") found = 1
         else if (current_job == owner_job) job_found = 1
@@ -209,6 +219,18 @@ workflow_has_unconditional_owner_step() {
       if ($0 ~ /^  [A-Za-z0-9_-]+:[[:space:]]*$/) {
         current_job = normalize($0)
         sub(/:$/, "", current_job)
+        in_strategy = in_matrix = 0
+      }
+      if (current_job == owner_job) {
+        if (current_indent == 4) {
+          in_strategy = normalize($0) == "strategy:"
+          in_matrix = 0
+        }
+        if (in_strategy && current_indent == 6) in_matrix = normalize($0) == "matrix:"
+        if (in_matrix && current_indent == 8 && normalize($0) != "") {
+          if (normalize($0) == "browser: [chromium, firefox, webkit]") browser_matrix_valid = 1
+          else browser_matrix_invalid = 1
+        }
       }
       if (owner_job != "" && current_job == owner_job &&
           current_indent == 4 && normalize($0) ~ /^(if|"if"|\047if\047):/) job_disabled = 1
@@ -228,7 +250,7 @@ workflow_has_unconditional_owner_step() {
         in_step = 1
         step_indent = current_indent
         approved_shape = 1
-        run_count = 0
+        run_count = step_condition = 0
         line = $0
         sub(/^[[:space:]]+-[[:space:]]+/, "", line)
         inspect_field(line)
@@ -244,112 +266,112 @@ workflow_has_unconditional_owner_step() {
   ' "$workflow"
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" command \
+workflow_has_required_owner_step "$regression_workflow" command \
   'bash tests/run-unit-tests.sh' || {
   printf 'Regression workflow does not invoke the unit test runner.\n' >&2
   exit 1
 }
-workflow_has_unconditional_owner_step "$regression_workflow" command \
-  'bash tests/test-resolve-bundle-v.sh' || {
+workflow_has_required_owner_step "$regression_workflow" command \
+  'bash tests/test-resolve-bundle-v.sh' static chromium || {
   printf 'Regression workflow does not invoke the bundle resolver test.\n' >&2
   exit 1
 }
-workflow_has_unconditional_owner_step "$static_workflow" command \
+workflow_has_required_owner_step "$static_workflow" command \
   'bash tests/run-phpstan-tests.sh' || {
   printf 'Static-analysis workflow does not invoke the PHPStan test runner.\n' >&2
   exit 1
 }
-workflow_has_unconditional_owner_step "$static_workflow" php \
+workflow_has_required_owner_step "$static_workflow" php \
   'ci/test-formatter-selection.php' || {
   printf 'Static-analysis workflow does not invoke the formatter selection regression.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$static_workflow" command \
+workflow_has_required_owner_step "$static_workflow" command \
   'bash ci/test-refactor-metrics.sh' || {
   printf 'Static-analysis workflow does not invoke the refactor metrics regression.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-runtime-baseline.php' || {
   printf 'Regression workflow does not invoke the real adapter runtime baseline.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" command \
-  'node ci/test-refactor-ui-events.cjs' static || {
+workflow_has_required_owner_step "$regression_workflow" command \
+  'node ci/test-refactor-ui-events.cjs' static chromium || {
   printf 'Regression static job does not invoke the request-helper UI contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" command \
+workflow_has_required_owner_step "$regression_workflow" command \
   'bash ci/test-asset-cache-version-boundary.sh' static || {
   printf 'Regression static job does not invoke the stale-asset cache boundary.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-input-contract.php' unit || {
   printf 'Regression unit job does not invoke the controller string input contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-autoload-contract.php' unit || {
   printf 'Regression unit job does not invoke the autoload discovery contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-list-contract.php' unit || {
   printf 'Regression unit job does not invoke the list pagination contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-doveadm-contract.php' unit || {
   printf 'Regression unit job does not invoke the Doveadm transport contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-queue-database-guard.php' unit || {
   printf 'Regression unit job does not invoke the queue database guard contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-controller-resources.php' unit || {
   printf 'Regression unit job does not invoke the concrete controller resource contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-list-templates.php' unit || {
   printf 'Regression unit job does not invoke the list-template render contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-preference-contract.php' schema-drift || {
   printf 'Regression schema-drift job does not invoke the preference reuse contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-queue-lifecycle.php' schema-drift || {
   printf 'Regression schema-drift job does not invoke the queue lifecycle contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" php \
+workflow_has_required_owner_step "$regression_workflow" php \
   'ci/test-refactor-service-audit-log.php' schema-drift || {
   printf 'Regression schema-drift job does not invoke the service audit-log contract.\n' >&2
   exit 1
 }
 
-workflow_has_unconditional_owner_step "$ci_workflow" php \
+workflow_has_required_owner_step "$ci_workflow" php \
   'ci/test-dependency-refresh.php' || {
   printf 'CI workflow does not invoke the dependency refresh regression.\n' >&2
   exit 1
@@ -358,10 +380,10 @@ workflow_has_unconditional_owner_step "$ci_workflow" php \
 workflow_runs_php_test() {
   local test=$1
 
-  workflow_has_unconditional_owner_step "$regression_workflow" php "$test"
+  workflow_has_required_owner_step "$regression_workflow" php "$test"
 }
 
-workflow_has_unconditional_owner_step "$regression_workflow" command \
+workflow_has_required_owner_step "$regression_workflow" command \
   'bash ci/test-refactor-runtime-port.sh' schema-drift || {
   printf 'Regression workflow does not invoke the runtime fixture port contract.\n' >&2
   exit 1
@@ -408,7 +430,7 @@ done <"$excluded_manifest"
 while IFS= read -r test; do
   case "$test" in
   tests/test-phpstan-*.php)
-    workflow_has_unconditional_owner_step "$static_workflow" command \
+    workflow_has_required_owner_step "$static_workflow" command \
       'bash tests/run-phpstan-tests.sh' || exit 1
     ;;
   *)

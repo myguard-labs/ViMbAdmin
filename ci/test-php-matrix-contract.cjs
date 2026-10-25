@@ -43,6 +43,8 @@ function checkPlacement(source) {
   assert.equal(owners[0].step.if, "matrix.browser == 'chromium'", 'matrix contract runs once per workflow');
 }
 
+// Selection-change local verification also runs tests/assert-regression-coverage.sh
+// and tests/test-assert-regression-coverage.sh: Static analysis owns reachability.
 // Pin the pre-optimization command inventory so selection changes cannot drop cases.
 // This extends the existing Node process; it adds no CI job or interpreter startup.
 const sharedCommands = [

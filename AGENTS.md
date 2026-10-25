@@ -4,7 +4,7 @@ Follow `/opt/myguard/AGENTS.md` when working in the MyGuard workspace.
 
 ## PHP validation
 
-Tested PHP minors: 8.3, 8.4, 8.5. Use the shared runner for local PHP
+Tested PHP minors: 8.3, 8.4, 8.5, 8.6. Use the shared runner for local PHP
 validation of every behavior change:
 
 ```bash

@@ -23,6 +23,8 @@ bin/compiler.jar
 # yuicompressor.jar corrupts Bootstrap 5 CSS). Installed per-machine with
 # `npm ci --prefix bin`; the manifest and lockfile are committed below.
 bin/node_modules/
+# Locked YAML parser for the workflow matrix contract.
+ci/node_modules/
 vimbadmin.sublime-project
 vimbadmin.sublime-workspace
 vimbadmin3.sublime-project

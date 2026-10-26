@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$repo_root"
 
+# Keep entrypoint coverage in the existing CI taint-contract gate.
+bash ci/test-psalm-entrypoint-contract.sh
+
 generator=$PWD/tests/regenerate-psalm-taint-baseline.sh
 source_file=$PWD/library/ViMbAdmin/BruteForce.php
 backup=$(mktemp "${TMPDIR:-/tmp}/vimbadmin-bruteforce.XXXXXX.php")

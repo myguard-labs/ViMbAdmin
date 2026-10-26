@@ -25,7 +25,8 @@ Only checksum values and the existing ORM3/DBAL4 version pair in
 `docs/ORM3-UPGRADE.md` and `CHANGELOG` are updated. Other lock/document bytes
 remain intact. Both existing integrity and documentation guards execute on the
 result. Guard failure restores the three original input files. The tool needs
-PHP 8.2 or newer and the existing curl executable; CI/tests use PHP 8.3/8.4/8.5.
+PHP 8.2 or newer and the existing curl executable;
+CI/tests use PHP 8.3/8.4/8.5/8.6.
 
 Dependabot remains configured in `.github/dependabot.yml`. Its ordinary,
 isolated PR job calls `.github/scripts/check-dependency-refresh.sh`, fetching

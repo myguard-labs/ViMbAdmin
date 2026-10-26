@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Source the new controls without another shell/interpreter startup.
+# shellcheck disable=SC1091 # This CI helper is explicitly linted with its caller.
+source ci/test-regression-browser-ownership.sh
+
 # Proves the coverage guard reads the unit runner's exclusions rather than a
 # duplicated list. The mutation below must leave test-date.php unowned and
 # therefore make the guard fail.
@@ -39,6 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: node --version
+      - run: bash tests/test-resolve-bundle-v.sh
       - run: node ci/test-refactor-ui-events.cjs
       - run: bash ci/test-asset-cache-version-boundary.sh
   unit:
@@ -53,7 +58,6 @@ jobs:
       - run: php ci/test-refactor-queue-database-guard.php
       - run: php ci/test-refactor-controller-resources.php
       - run: php ci/test-refactor-list-templates.php
-      - run: bash tests/test-resolve-bundle-v.sh
   cache:
     runs-on: ubuntu-latest
     steps:
@@ -915,3 +919,19 @@ run_guard
 grep -qF 'CI workflow does not invoke the dependency refresh regression.' \
   "$test_root/output"
 cp -- "$test_root/.github/workflows/ci.yml.valid" "$test_root/.github/workflows/ci.yml"
+
+# The full unit run must execute its browser-diagnostic regression; requested
+# PHP subsets must remain subsets. Exercise the maintained discovery probe.
+cp -- "$runner" "$test_root/tests/run-unit-tests.sh"
+mutate_runner 's|^  node ci/test-browser-auth-diagnostics.cjs$|  :|'
+run_guard
+[[ $guard_status -ne 0 ]] || {
+  printf 'Coverage guard accepted a missing browser-diagnostic regression.\n' >&2
+  exit 1
+}
+grep -qF 'Unit test runner discovery or requested subset is incorrect.' \
+  "$test_root/output" || {
+  cat "$test_root/output" >&2
+  exit 1
+}
+cp -- "$runner" "$test_root/tests/run-unit-tests.sh"

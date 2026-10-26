@@ -220,7 +220,13 @@ collector_loop() {
     for pid in "${!selected[@]}"; do
       for task in /proc/"$pid"/task/[0-9]*; do
         [[ -r $task/status && -r $task/stat ]] || continue
-        status=$(<"$task/status") || continue
+        status=''
+        # A task can disappear after the readability check. Avoid Bash's
+        # optimized $(<file), whose failed redirection can abort the collector.
+        # read returns nonzero at EOF; a nonempty status is still complete.
+        if ! { IFS= read -r -d '' status <"$task/status"; } 2>/dev/null; then
+          [[ -n $status ]] || continue
+        fi
         tid=$(awk '/^Pid:/{print $2}' <<<"$status")
         tgid=$(awk '/^Tgid:/{print $2}' <<<"$status")
         task_ppid=$(awk '/^PPid:/{print $2}' <<<"$status")

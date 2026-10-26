@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -83,8 +84,21 @@ def file_entry(repo, path):
     }
 
 
-def version():
-    actual = run(["jscpd", "--version"]).strip()
+def detector():
+    launcher = (
+        Path(__file__).resolve().parents[1]
+        / "ci/refactor-metrics/node_modules/.bin/jscpd"
+    )
+    if not launcher.is_file() or not os.access(launcher, os.X_OK):
+        raise ValueError(
+            "missing executable module-local jscpd; run "
+            "npm ci --ignore-scripts --prefix ci/refactor-metrics"
+        )
+    return launcher.resolve()
+
+
+def version(launcher):
+    actual = run([str(launcher), "--version"]).strip()
     if actual not in ("cpd 5.0.12", "jscpd 5.0.12", "5.0.12"):
         raise ValueError(f"require jscpd 5.0.12, got {actual!r}")
     return actual
@@ -116,7 +130,8 @@ echo json_encode($out, JSON_THROW_ON_ERROR);
 def capture(repo, output):
     repo = repo.resolve()
     output = output.resolve()
-    tool_version = version()
+    launcher = detector()
+    tool_version = version(launcher)
     if output.exists():
         raise ValueError(f"output must be a new directory: {output}")
     if output == repo or repo in output.parents:
@@ -134,7 +149,7 @@ def capture(repo, output):
             shutil.copyfile(repo / entry["path"], target)
         for source in ROOTS:
             (snapshot / source).mkdir(exist_ok=True)
-        command = ["jscpd", *OPTIONS, "--output", str(output), *ROOTS]
+        command = [str(launcher), *OPTIONS, "--output", str(output), *ROOTS]
         log = run(command, snapshot)
         (output / "jscpd.log").write_text(log)
         raw = json.loads((output / "jscpd-report.json").read_text())
@@ -214,7 +229,6 @@ def capture(repo, output):
         file_entry(repo, p) for p in tracked(repo, others=True) if p not in ARTIFACTS
     ]
     # Hash the launcher and installed package dataset, including native binaries.
-    launcher = Path(shutil.which("jscpd")).resolve()
     package = launcher.parent
     tool_files = [launcher]
     if (package / "package.json").exists():

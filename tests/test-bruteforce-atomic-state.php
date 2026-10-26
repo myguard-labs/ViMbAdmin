@@ -24,22 +24,26 @@ function bruteForceWorker(
         exit(2);
     }
 
-    $deadline = microtime(true) + 10;
-    while (!is_file($barrier)) {
-        if (microtime(true) >= $deadline) {
-            fwrite(STDERR, "timed out waiting for barrier\n");
-            exit(3);
-        }
-        usleep(1000);
-    }
-
     $bruteForce = new ViMbAdmin_BruteForce(null, [
         'statedir' => $stateDirectory,
         'max_attempts' => 1000,
         'window' => 3600,
     ]);
     for ($attempt = 0; $attempt < (int) $attempts; $attempt++) {
+        $roundBarrier = $barrier . '-' . $attempt;
+        $deadline = microtime(true) + 20;
+        while (!is_file($roundBarrier)) {
+            if (microtime(true) >= $deadline) {
+                fwrite(STDERR, "timed out waiting for round barrier\n");
+                exit(3);
+            }
+            usleep(1000);
+        }
         $bruteForce->record('worker', null);
+        if (!touch($ready . '-done-' . $attempt)) {
+            fwrite(STDERR, "could not signal round completion\n");
+            exit(4);
+        }
     }
     exit(0);
 }
@@ -100,6 +104,32 @@ function bruteForcePersistenceDenied(callable $operation): bool
 }
 
 /**
+ * @param array<int,array{process:resource,pipes:array<int,resource>,exit:int|null}> $processes
+ * @return array{pending:bool,failed:bool}
+ */
+function bruteForcePollWorkerExits(array &$processes): array
+{
+    $pending = false;
+    $failed = false;
+    foreach ($processes as &$entry) {
+        if ($entry['exit'] !== null) {
+            $failed = $entry['exit'] !== 0 || $failed;
+            continue;
+        }
+        $status = proc_get_status($entry['process']);
+        if ($status['running']) {
+            $pending = true;
+            continue;
+        }
+        $entry['exit'] = $status['exitcode'];
+        $failed = $entry['exit'] !== 0 || $failed;
+    }
+    unset($entry);
+
+    return ['pending' => $pending, 'failed' => $failed];
+}
+
+/**
  * @return array{ready:bool,successful:bool,errors:string}
  */
 function bruteForceRunWorkers(string $stateDirectory, string $ip, string $syncDirectory, int $workers, int $attempts): array
@@ -131,31 +161,42 @@ function bruteForceRunWorkers(string $stateDirectory, string $ip, string $syncDi
         usleep(1000);
     } while (microtime(true) < $readyDeadline);
     $allReady = $readyCount === $workers && count($processes) === $workers;
-    touch($barrier);
-
     $finishDeadline = microtime(true) + 20;
-    do {
-        $running = false;
-        foreach ($processes as &$entry) {
-            if ($entry['exit'] !== null) {
-                continue;
-            }
-            $status = proc_get_status($entry['process']);
-            if ($status['running']) {
-                $running = true;
-            } else {
-                $entry['exit'] = $status['exitcode'];
-            }
-        }
-        unset($entry);
-        if (!$running) {
+    $completedRounds = 0;
+    for ($round = 0; $round < $attempts; $round++) {
+        if (!touch($barrier . '-' . $round)) {
             break;
         }
-        usleep(10000);
-    } while (microtime(true) < $finishDeadline);
+        do {
+            $doneCount = count(glob($syncDirectory . '/ready-*-done-' . $round) ?: []);
+            if ($doneCount === $workers) {
+                $completedRounds++;
+                break;
+            }
+            if (bruteForcePollWorkerExits($processes)['failed']) {
+                break;
+            }
+            usleep(10000);
+        } while (microtime(true) < $finishDeadline);
+        if ($doneCount !== $workers) {
+            break;
+        }
+    }
+
+    // The final completion marker can precede process exit by a scheduler
+    // slice. Wait for that exit before deciding a healthy worker is hung.
+    if ($completedRounds === $attempts) {
+        do {
+            $pending = bruteForcePollWorkerExits($processes)['pending'];
+            if (!$pending) {
+                break;
+            }
+            usleep(1000);
+        } while (microtime(true) < $finishDeadline);
+    }
 
     $errors = '';
-    $successful = $allReady;
+    $successful = $allReady && $completedRounds === $attempts;
     $exitCodes = [];
     foreach ($processes as $worker => $entry) {
         $status = proc_get_status($entry['process']);
@@ -197,8 +238,8 @@ $stateDirectory = $root . '/state';
 $syncDirectory = $root . '/sync';
 bruteForceCreateDirectory($syncDirectory);
 $ip = '192.0.2.77';
-// Keep concurrent writers below the one-second fail-closed lock deadline on
-// throttled CI runners; the barrier still makes every worker contend for one record.
+// Keep all 80 writes, but release one write per worker per round. A worker
+// cannot reacquire ten times before its peers reach the one-second lock bound.
 $workers = 8;
 $attemptsPerWorker = 10;
 $workerResult = bruteForceRunWorkers($stateDirectory, $ip, $syncDirectory, $workers, $attemptsPerWorker);

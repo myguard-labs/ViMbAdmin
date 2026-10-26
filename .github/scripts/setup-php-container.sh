@@ -10,6 +10,24 @@ readonly psalm_version=6.16.1
 readonly psalm_sha256=7ace71e4f698466e7e16810679a1895ea623060579aff46fcf9fd0f1c09abe00
 readonly php_cs_fixer_version=3.95.25
 readonly php_cs_fixer_sha256=80cad475fc5112fdbfab8bd66e51665ed78c1b849b918dab81fb63b7a7003b41
+readonly apcu_revision=90899684be91c4f750512c2f840f487286ecb807
+readonly apcu_sha256=33f9038e98d236d4833b3e311c21e1d969a96d06b0d1e4427c8a0db2dd7123e2
+
+install_apcu() (
+  set -euo pipefail
+  local source_dir
+  source_dir=$(mktemp -d)
+  trap 'rm -rf -- "${source_dir:?}"' EXIT
+  curl --fail --silent --show-error --location --connect-timeout 30 --max-time 300 \
+    "https://codeload.github.com/krakjoe/apcu/tar.gz/$apcu_revision" --output "$source_dir/apcu.tgz"
+  printf '%s  %s\n' "$apcu_sha256" "$source_dir/apcu.tgz" | sha256sum --check --status
+  tar -xzf "$source_dir/apcu.tgz" --directory "$source_dir" --strip-components=1
+  cd "$source_dir"
+  phpize
+  ./configure --enable-apcu
+  make -j"$(nproc)"
+  make install
+)
 
 install_verified_phar() {
   local name=$1 expected_sha256=$2 url=$3
@@ -49,12 +67,17 @@ apt-get install --yes --no-install-recommends \
 
 docker-php-ext-configure gd --with-freetype --with-jpeg
 docker-php-ext-install -j"$(nproc)" gd gettext intl pdo_mysql
+if ! php --ri mbstring >/dev/null 2>&1; then
+  apt-get install --yes --no-install-recommends libonig-dev
+  docker-php-ext-install -j"$(nproc)" mbstring
+fi
 printf 'memory_limit=-1\n' >/usr/local/etc/php/conf.d/ci-memory.ini
 
 if [[ $profile == cache ]]; then
   # shellcheck disable=SC2086 # PHPIZE_DEPS is an image-provided package list.
   apt-get install --yes --no-install-recommends $PHPIZE_DEPS
-  pecl install apcu
+  # PHP 8.6 images no longer ship PECL; build the verified release directly.
+  install_apcu
   docker-php-ext-enable apcu
   printf 'apc.enable_cli=1\n' >/usr/local/etc/php/conf.d/apcu-cli.ini
 fi

@@ -45,6 +45,12 @@ expect_port 44067 DB_PORT=44067
 for invalid in '' 0 65536 abc ' 3306' 03306 999999999999999999999999999; do
   reject_port "$invalid"
 done
+# Overflowing decimal strings may cast to zero once float conversion overflows.
+# Keep the finite-overflow case above and cover both sides of binary64 overflow.
+for digit_count in 308 309 400; do
+  printf -v oversized_port '%*s' "$digit_count" ''
+  reject_port "${oversized_port// /9}"
+done
 expect_host localhost 127.0.0.1
 expect_host 127.0.0.1 127.0.0.1
 expect_host 192.0.2.8 192.0.2.8

@@ -17,6 +17,10 @@
         <directory name="src" />
         <directory name="library" />
         <directory name="application" />
+        <file name="public/index.php" />
+        <directory name="bin" />
+        <directory name="tools" />
+        <file name="preload.php" />
         <!--
             Psalm honours only one ignoreFiles element; a second one is
             silently dropped. Keep every ignored directory in this block.

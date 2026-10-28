@@ -246,7 +246,7 @@ class OSS_Utils
     {
         $ends = [ 'th', 'st', 'nd', 'rd', 'th', 'th', 'th', 'th', 'th', 'th' ];
 
-        return (in_array($number % 100, [ 11, 12, 13 ]) ? $number . 'th' : $number . $ends[ $number % 10 ]);
+        return (in_array(abs($number % 100), [ 11, 12, 13 ]) ? $number . 'th' : $number . $ends[ abs($number % 10) ]);
     }
 
 

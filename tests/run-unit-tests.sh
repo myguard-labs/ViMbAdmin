@@ -62,6 +62,9 @@ fi
 
 mapfile -t tracked_tests <"$manifest"
 selected_tests=("${tracked_tests[@]}")
+if [[ $# -eq 0 ]]; then
+  selected_tests+=(ci/test-mcp-cli-restriction-summary.php)
+fi
 if [[ $# -gt 0 ]]; then
   selected_tests=("$@")
   for test in "${selected_tests[@]}"; do

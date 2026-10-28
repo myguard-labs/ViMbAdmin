@@ -258,7 +258,8 @@ function authMailboxPasswordRemoveTree(string $directory): void
     rmdir($directory);
 }
 
-$_SERVER['REMOTE_ADDR'] = '198.51.100.23';
+$sourceIp = '198.51.100.23';
+$_SERVER['REMOTE_ADDR'] = $sourceIp;
 
 if (($argv[1] ?? null) === '--lockout-worker') {
     $stateDirectory = $argv[2] ?? throw new LogicException('Missing worker state directory');
@@ -317,7 +318,7 @@ authMailboxPasswordCheck(
     'wrong credential performs no update or flush',
     $wrong['flushes'] === 0 && $wrong['mailbox']->requiredPassword() === $storedHash
 );
-$wrongBruteForceState = authMailboxPasswordState($wrongState, $_SERVER['REMOTE_ADDR']);
+$wrongBruteForceState = authMailboxPasswordState($wrongState, $sourceIp);
 authMailboxPasswordCheck(
     'wrong credential records one compatible source-IP attempt',
     $wrongBruteForceState !== null && $wrongBruteForceState['attempts'] === 1
@@ -342,7 +343,7 @@ authMailboxPasswordCheck(
     'successful update preserves configured hashing semantics',
     \OSS_Auth_Password::verify('new-password-456', $correct['mailbox']->requiredPassword(), $options)
 );
-$retainedState = authMailboxPasswordState($correctState, $_SERVER['REMOTE_ADDR']);
+$retainedState = authMailboxPasswordState($correctState, $sourceIp);
 authMailboxPasswordCheck(
     'mailbox success cannot clear shared administrator-login failure state',
     $retainedState !== null && $retainedState['attempts'] === 1 && $retainedState['locked_until'] === 0
@@ -361,7 +362,7 @@ authMailboxPasswordCheck(
 );
 authMailboxPasswordCheck(
     'demo-account refusal does not consume a credential attempt',
-    authMailboxPasswordState($demoState, $_SERVER['REMOTE_ADDR']) === null
+    authMailboxPasswordState($demoState, $sourceIp) === null
 );
 
 $lockoutState = $temporaryRoot . '/lockout';
@@ -380,7 +381,7 @@ fclose($pipes[1]);
 fclose($pipes[2]);
 $workerStatus = proc_close($process);
 $lookups = is_file($lookupMarker) ? file($lookupMarker, FILE_IGNORE_NEW_LINES) : [];
-$lockedState = authMailboxPasswordState($lockoutState, $_SERVER['REMOTE_ADDR']);
+$lockedState = authMailboxPasswordState($lockoutState, $sourceIp);
 
 authMailboxPasswordCheck(
     'configured max_attempts locks on the second invalid POST',

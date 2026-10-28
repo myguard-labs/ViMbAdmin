@@ -22,6 +22,54 @@ function maintenanceResourceReadLine($stream, string $label, int $timeoutNanosec
     throw new RuntimeException($label . ' timed out');
 }
 
+function maintenanceResourceRemotePid(string $firstLine, string $label, int $stderrBytes): int
+{
+    if (preg_match('/^REMOTE ([0-9]+)$/', $firstLine, $match) !== 1) {
+        throw new RuntimeException($label . ' invalid first line ' . json_encode(substr($firstLine, 0, 160), JSON_INVALID_UTF8_SUBSTITUTE) . '; child stderr bytes ' . $stderrBytes);
+    }
+    return (int) $match[1];
+}
+
+/** @param array<int,resource> $pipes */
+function maintenanceResourceRemoteBarrier(array $pipes, string $label, int $timeoutNanoseconds = MAINTENANCE_RESOURCE_LOCAL_TIMEOUT_NS): int
+{
+    stream_set_blocking($pipes[1], false);
+    stream_set_blocking($pipes[2], false);
+    $deadline = hrtime(true) + $timeoutNanoseconds;
+    $firstLine = '';
+    $stderrBytes = 0;
+    while (hrtime(true) < $deadline) {
+        $read = [$pipes[2], $pipes[1]];
+        $write = null;
+        $except = null;
+        if (stream_select($read, $write, $except, 0, 100000) === false) {
+            throw new RuntimeException($label . ' pipe select failed');
+        }
+        foreach ($read as $stream) {
+            $chunk = fread($stream, 4096);
+            if ($chunk === false || $chunk === '') {
+                continue;
+            }
+            if ($stream === $pipes[2]) {
+                $stderrBytes += strlen($chunk);
+                continue;
+            }
+            $firstLine .= $chunk;
+            $newline = strpos($firstLine, "\n");
+            if ($newline !== false) {
+                return maintenanceResourceRemotePid(trim(substr($firstLine, 0, $newline)), $label, $stderrBytes);
+            }
+            if (strlen($firstLine) > 4096) {
+                throw new RuntimeException($label . ' first line exceeds 4096 bytes; child stderr bytes ' . $stderrBytes);
+            }
+        }
+        if (feof($pipes[1])) {
+            throw new RuntimeException($label . ' child stdout closed before REMOTE barrier; child stderr bytes ' . $stderrBytes);
+        }
+    }
+    throw new RuntimeException($label . ' timed out before REMOTE barrier; child stderr bytes ' . $stderrBytes);
+}
+
 function maintenanceResourceWaitForFile(string $path, string $label, int $timeoutNanoseconds = MAINTENANCE_RESOURCE_LOCAL_TIMEOUT_NS): void
 {
     $deadline = hrtime(true) + $timeoutNanoseconds;
@@ -31,6 +79,35 @@ function maintenanceResourceWaitForFile(string $path, string $label, int $timeou
         }
         usleep(10000);
     }
+}
+
+function maintenanceResourceHasFsDeleteReceipt(mixed $record, string $destination): bool
+{
+    if (!is_array($record)) {
+        return false;
+    }
+    $parameters = $record['parameters'] ?? null;
+    $claims = $record['claims'] ?? null;
+
+    return ($record['command'] ?? null) === 'fsDelete'
+        && is_array($parameters)
+        && ($parameters['path'] ?? null) === [$destination]
+        && is_array($claims)
+        && in_array(['username' => 'maintenance@example.test','phase' => 'REMOTE'], $claims, true);
+}
+
+function maintenanceResourceCheckFsDeleteReceipts(object $indexableParameters): void
+{
+    $receiptProbe = [
+        'command' => 'fsDelete',
+        'parameters' => ['path' => ['0']],
+        'claims' => [['username' => 'maintenance@example.test','phase' => 'REMOTE']],
+    ];
+    maintenanceTaskCheck('fsDelete receipt accepts the zero-string destination', maintenanceResourceHasFsDeleteReceipt($receiptProbe, '0'));
+    maintenanceTaskCheck('fsDelete receipt rejects indexable non-array parameters', !maintenanceResourceHasFsDeleteReceipt(array_replace($receiptProbe, ['parameters' => $indexableParameters]), '0'));
+    maintenanceTaskCheck('fsDelete receipt rejects malformed claims', !maintenanceResourceHasFsDeleteReceipt(array_replace($receiptProbe, ['claims' => 'bad']), '0'));
+    maintenanceTaskCheck('fsDelete receipt rejects a missing record', !maintenanceResourceHasFsDeleteReceipt(null, '0'));
+    maintenanceTaskCheck('fsDelete receipt rejects the wrong path', !maintenanceResourceHasFsDeleteReceipt($receiptProbe, '/other'));
 }
 
 /** @phpstan-impure */
@@ -219,6 +296,29 @@ function maintenanceResourceReconcilePriorBackend(
 }
 
 
+if (($argv[1] ?? '') === 'barrier-probe-child') {
+    $mode = $argv[2] ?? '';
+    if ($mode === 'empty') {
+        exit(0);
+    }
+    if ($mode === 'early-error') {
+        fwrite(STDERR, "synthetic early child error\n");
+        exit(7);
+    }
+    if ($mode === 'stderr-burst') {
+        fwrite(STDERR, str_repeat('e', 131072));
+    }
+    if ($mode === 'stderr-error') {
+        fwrite(STDERR, "synthetic sensitive fixture detail\n");
+    }
+    if ($mode !== 'silent') {
+        fwrite(STDOUT, in_array($mode, ['unexpected', 'stderr-error'], true) ? "WRONG BARRIER\n" : "REMOTE 123\n");
+        fflush(STDOUT);
+    }
+    fgets(STDIN);
+    exit(0);
+}
+
 if (PHP_SAPI === 'cli-server' && getenv('MAINTENANCE_BACKEND_RECEIPT')) {
     $request = json_decode((string) file_get_contents('php://input'), true);
     if (!is_array($request) || !is_array($request[0] ?? null)) {
@@ -229,7 +329,7 @@ if (PHP_SAPI === 'cli-server' && getenv('MAINTENANCE_BACKEND_RECEIPT')) {
     $directory = (string) getenv('MAINTENANCE_BACKEND_RECEIPT');
     $observer = maintenanceTaskManager()->getConnection();
     $claims = $observer->fetchAllAssociative('SELECT username,phase FROM resource_claim');
-    file_put_contents($directory.'/requests', json_encode(['command' => $command,'claims' => $claims])."\n", FILE_APPEND);
+    file_put_contents($directory.'/requests', json_encode(['command' => $command,'parameters' => $parameters,'claims' => $claims])."\n", FILE_APPEND);
     if ($command === 'mailboxDelete' || $command === 'mailbox delete') {
         touch($directory.'/emptied');
     }
@@ -247,6 +347,14 @@ if (PHP_SAPI === 'cli-server' && getenv('MAINTENANCE_BACKEND_RECEIPT')) {
         || ($command === 'sync' && file_exists($directory.'/fail-restore-sync'))) {
         header('Content-Type: application/json');
         echo json_encode([['error',['type' => 'injected command failure','exitCode' => 75],$tag]]);
+        exit;
+    }
+    if ($command === 'fsDelete' && file_exists($directory.'/malformed-wrapper-fs-delete')) {
+        header('Content-Type: application/json');
+        echo json_encode([
+            ['doveadmResponse', [], $tag],
+            ['doveadmResponse', [], $tag],
+        ]);
         exit;
     }
     if ($command === 'quota recalc' && file_exists($directory.'/pause-prior-command')) {
@@ -405,6 +513,44 @@ if (($argv[1] ?? '') === 'archive-row-replacement') {
     exit(0);
 }
 
+if (($argv[1] ?? '') === 'barrier-probe-test') {
+    foreach (['positive', 'unexpected', 'empty', 'early-error', 'stderr-burst', 'stderr-error', 'silent'] as $mode) {
+        $child = proc_open([PHP_BINARY, __FILE__, 'barrier-probe-child', $mode], [
+            0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],
+        ], $pipes);
+        if (!is_resource($child)) {
+            throw new RuntimeException('Cannot start barrier-probe child');
+        }
+        $childPid = proc_get_status($child)['pid'];
+        $barrierError = null;
+        $barrierPid = null;
+        $started = hrtime(true);
+        try {
+            $barrierPid = maintenanceResourceRemoteBarrier($pipes, 'Barrier probe ' . $mode, 2_000_000_000);
+        } catch (RuntimeException $error) {
+            $barrierError = $error;
+        } finally {
+            maintenanceResourceStopChild($child, $pipes, 'Barrier probe ' . $mode);
+        }
+        $message = $barrierError?->getMessage() ?? '';
+        $valid = in_array($mode, ['positive', 'stderr-burst'], true)
+            ? $barrierPid === 123 && $barrierError === null
+            : $barrierError !== null && match ($mode) {
+                'unexpected' => str_contains($message, 'invalid first line "WRONG BARRIER"'),
+                'stderr-error' => str_contains($message, 'invalid first line "WRONG BARRIER"') && preg_match('/child stderr bytes [1-9]/', $message) === 1 && !str_contains($message, 'sensitive fixture detail'),
+                'empty' => str_contains($message, 'child stdout closed'),
+                'early-error' => str_contains($message, 'child stdout closed') && preg_match('/child stderr bytes [1-9]/', $message) === 1,
+                'silent' => str_contains($message, 'timed out before REMOTE barrier'),
+            };
+        maintenanceTaskCheck(
+            'barrier probe ' . $mode . ' reports promptly and reaps its child',
+            $valid && !maintenanceResourceProcessRunning($childPid) && hrtime(true) - $started < ($mode === 'silent' ? 5_000_000_000 : 1_000_000_000)
+        );
+    }
+    maintenanceResourceCheckFsDeleteReceipts(new \ArrayObject(['path' => ['0']]));
+    exit(0);
+}
+
 final class MaintenanceArchiveBackend extends \ViMbAdmin_Doveadm
 {
     public Closure $pausedBackup;
@@ -491,6 +637,7 @@ if (!is_resource($snapshotProcess)) {
     throw new RuntimeException('direct archive replacement actor could not start');
 }
 maintenanceTaskCheck('independent direct missing-row and replacement actor completes', proc_close($snapshotProcess) === 0);
+maintenanceResourceCheckFsDeleteReceipts(new \ArrayObject(['path' => ['0']]));
 maintenanceTaskCheck('read-line timeout is bounded, diagnostic, and reaps its owned child', $readTimeoutSafe);
 [$task] = maintenanceTaskFixture($queued, 'PENDING');
 $queued->getConnection()->executeStatement('DELETE FROM queue_runner');
@@ -725,11 +872,7 @@ $waitTimeoutBackendPid = null;
 $waitTimeoutError = null;
 $waitTimeoutStarted = hrtime(true);
 try {
-    $waitTimeoutBarrier = maintenanceResourceReadLine($waitTimeoutPipes[1], 'Wait-timeout child start barrier');
-    if (!preg_match('/^REMOTE ([0-9]+)$/', $waitTimeoutBarrier, $waitTimeoutMatch)) {
-        throw new RuntimeException('Wait-timeout child barrier failed: ' . stream_get_contents($waitTimeoutPipes[2]));
-    }
-    $waitTimeoutBackendPid = (int) $waitTimeoutMatch[1];
+    $waitTimeoutBackendPid = maintenanceResourceRemoteBarrier($waitTimeoutPipes, 'Wait-timeout child start barrier');
     maintenanceResourceStopChild($waitTimeoutChild, $waitTimeoutPipes, 'Wait-timeout claim owner');
     maintenanceTaskCheck(
         'wait-timeout negative control starts with a live backend and durable REMOTE claim',
@@ -1014,6 +1157,51 @@ try {
     require_once __DIR__.'/../application/controllers/McpController.php';
     $mcp = new \McpController(new \ViMbAdmin\Kernel\Container($bootstrap, $auth), new \ViMbAdmin\Kernel\RouteMatch('mcp', 'index', 'McpController', 'indexAction', []));
     $maintenance = new \ViMbAdmin\Kernel\Controller\MaintenanceController(new \ViMbAdmin\Kernel\Container($bootstrap, $auth), new \ViMbAdmin\Kernel\RouteMatch('maintenance', 'prune', 'MaintenanceController', 'pruneAction', []));
+    foreach ([
+        ['zero string', '0', true],
+        ['ordinary string', '/backup/maintenance-prune-destination', true],
+        ['null', null, false],
+        ['empty string', '', false],
+    ] as [$destinationCase,$destination,$expectsDelete]) {
+        $direct->clear();
+        $destinationActor = $direct->find(\Entities\Admin::class, $directActor->getId());
+        if (!$destinationActor instanceof \Entities\Admin) {
+            throw new RuntimeException('prune destination actor missing');
+        }
+        $direct->getConnection()->executeStatement("DELETE FROM archive WHERE username='maintenance@example.test'");
+        $destinationArchive = (new \Entities\Archive())->setUsername('maintenance@example.test')->setStatus(\Entities\Archive::STATUS_ARCHIVED)
+            ->setArchivedAt(new DateTime())->setStatusChangedAt(new DateTime())->setData('{}');
+        if ($destination !== null) {
+            $destinationArchive->setMaildirFile($destination);
+        }
+        $direct->persist($destinationArchive);
+        $direct->flush();
+        $destinationController = new \ViMbAdmin\Kernel\Controller\MaintenanceController(
+            maintenanceResourceContainer($direct, $session, $bootstrap->options, $destinationActor),
+            new \ViMbAdmin\Kernel\RouteMatch('maintenance', 'prune', 'MaintenanceController', 'pruneAction', [])
+        );
+        file_put_contents($backendDirectory.'/requests', '');
+        $destinationCount = (new ReflectionMethod($destinationController, 'prune'))->invoke($destinationController, [$destinationArchive]);
+        $destinationRequests = array_values(array_filter(explode("\n", (string) file_get_contents($backendDirectory.'/requests'))));
+        maintenanceTaskCheck(
+            'actual prune removes the archive row and releases ownership for '.$destinationCase.' destination',
+            $destinationCount === 1
+            && maintenanceTaskInteger($observer->fetchOne('SELECT COUNT(*) FROM archive WHERE id=?', [$destinationArchive->getId()])) === 0
+            && maintenanceTaskInteger($observer->fetchOne("SELECT COUNT(*) FROM resource_claim WHERE username='maintenance@example.test'")) === 0
+        );
+        if (!$expectsDelete) {
+            maintenanceTaskCheck('actual prune skips backend deletion for '.$destinationCase.' destination', $destinationRequests === []);
+            continue;
+        }
+        if (!is_string($destination)) {
+            throw new RuntimeException('positive prune destination fixture must be a string');
+        }
+        $destinationRecord = count($destinationRequests) === 1 ? json_decode($destinationRequests[0], true) : null;
+        maintenanceTaskCheck(
+            'actual prune sends exactly one remote fsDelete for '.$destinationCase.' destination',
+            maintenanceResourceHasFsDeleteReceipt($destinationRecord, $destination)
+        );
+    }
     foreach (['deleteAction','restoreAction','mcp-delete','mcp-restore','maintenance-prune','native-recreate','mcp-recreate'] as $caller) {
         $direct->clear();
         $currentAdmin = $direct->find(\Entities\Admin::class, $directActor->getId());
@@ -1091,6 +1279,59 @@ try {
             maintenanceTaskCheck('restore recreates the exact archived identity after its generation fence: '.$caller, $observer->fetchOne("SELECT password FROM mailbox WHERE username='maintenance@example.test'") === '!' && maintenanceTaskInteger($observer->fetchOne('SELECT mailbox_count FROM domain WHERE id=?', [$domainId])) === 1);
         }
         maintenanceTaskCheck('normal archive caller deletes its current row and releases ownership: '.$caller, maintenanceTaskInteger($observer->fetchOne("SELECT COUNT(*) FROM archive WHERE username='maintenance@example.test'")) === 0 && maintenanceTaskInteger($observer->fetchOne("SELECT COUNT(*) FROM resource_claim WHERE username='maintenance@example.test'")) === 0);
+    }
+
+    foreach ([
+        ['parsed delete error', 'fail-fs-delete', null],
+        ['malformed response wrapper', 'malformed-wrapper-fs-delete', 'REMOTE'],
+    ] as [$failureCase,$failureMarker,$retainedPhase]) {
+        $direct->clear();
+        $failureActor = $direct->find(\Entities\Admin::class, $directActor->getId());
+        if (!$failureActor instanceof \Entities\Admin) {
+            throw new RuntimeException('prune destination failure actor missing');
+        }
+        $direct->getConnection()->executeStatement("DELETE FROM archive WHERE username='maintenance@example.test'");
+        $failureDestination = '/backup/maintenance-prune-'.$failureMarker;
+        $destinationArchive = (new \Entities\Archive())->setUsername('maintenance@example.test')->setStatus(\Entities\Archive::STATUS_ARCHIVED)
+            ->setArchivedAt(new DateTime())->setStatusChangedAt(new DateTime())->setData('{}')->setMaildirFile($failureDestination);
+        $direct->persist($destinationArchive);
+        $direct->flush();
+        $destinationController = new \ViMbAdmin\Kernel\Controller\MaintenanceController(
+            maintenanceResourceContainer($direct, $session, $bootstrap->options, $failureActor),
+            new \ViMbAdmin\Kernel\RouteMatch('maintenance', 'prune', 'MaintenanceController', 'pruneAction', [])
+        );
+        file_put_contents($backendDirectory.'/requests', '');
+        touch($backendDirectory.'/'.$failureMarker);
+        try {
+            $destinationCount = (new ReflectionMethod($destinationController, 'prune'))->invoke($destinationController, [$destinationArchive]);
+        } finally {
+            unlink($backendDirectory.'/'.$failureMarker);
+        }
+        $resourceKey = \ViMbAdmin_ResourceClaim::key('maintenance@example.test');
+        $resourcePhase = $observer->fetchOne('SELECT phase FROM resource_claim WHERE resource_key=?', [$resourceKey]);
+        $destinationRequests = array_values(array_filter(explode("\n", (string) file_get_contents($backendDirectory.'/requests'))));
+        $destinationRecord = count($destinationRequests) === 1 ? json_decode($destinationRequests[0], true) : null;
+        maintenanceTaskCheck(
+            'actual prune retains its archive row after '.$failureCase,
+            $destinationCount === 0
+            && maintenanceTaskInteger($observer->fetchOne('SELECT COUNT(*) FROM archive WHERE id=?', [$destinationArchive->getId()])) === 1
+        );
+        maintenanceTaskCheck(
+            'actual prune records one attempted remote fsDelete before '.$failureCase,
+            maintenanceResourceHasFsDeleteReceipt($destinationRecord, $failureDestination)
+        );
+        maintenanceTaskCheck(
+            'actual prune applies resource retention semantics for '.$failureCase,
+            $retainedPhase === null ? $resourcePhase === false : $resourcePhase === $retainedPhase
+        );
+        if ($retainedPhase !== null) {
+            $resourceToken = $observer->fetchOne('SELECT owner_token FROM resource_claim WHERE resource_key=?', [$resourceKey]);
+            $observer->executeStatement(
+                'DELETE FROM resource_claim WHERE resource_key=? AND owner_token=? AND phase=?',
+                [$resourceKey,$resourceToken,$retainedPhase]
+            );
+        }
+        $direct->getConnection()->executeStatement('DELETE FROM archive WHERE id=?', [$destinationArchive->getId()]);
     }
 
     // A parsed command failure confirms that remote work stopped and resets
@@ -2042,22 +2283,42 @@ try {
     }
 }
 if (getenv('MAINTENANCE_DOMAIN_CHILD_SILENT') === '1') {
+    $domainChildCount = count($domainChildPids);
+    $missingFirstPid = [$domainChildCount => PHP_INT_MAX];
+    maintenanceTaskCheck('domain race timeout sparse PID fixture retains exact offsets', $missingFirstPid === [1 => PHP_INT_MAX]);
+    maintenanceTaskCheck(
+        'domain race timeout control rejects a sparse one-child PID array',
+        count($missingFirstPid) === 1
+        && !(isset($missingFirstPid[0]) && !maintenanceResourceProcessRunning($missingFirstPid[0]))
+    );
     maintenanceTaskCheck(
         'domain race connection timeout is bounded, diagnostic, and reaps every owned child',
         $domainBarrierError instanceof RuntimeException
         && str_contains($domainBarrierError->getMessage(), 'Domain race connection barrier timed out')
         && count($domainChildPids) === 1
+        && isset($domainChildPids[0])
         && !maintenanceResourceProcessRunning($domainChildPids[0])
     );
     echo "DOMAIN RACE TIMEOUT CONTROL PASSED\n";
     exit(0);
 }
 if (getenv('MAINTENANCE_DOMAIN_CHILD_BAD_VERDICT_LIVE') === '1') {
+    $domainChildCount = count($domainChildPids);
+    $missingSecondPid = [$domainChildCount - 2 => PHP_INT_MAX, $domainChildCount => PHP_INT_MAX];
+    maintenanceTaskCheck('domain race bad-verdict sparse PID fixture retains exact offsets', $missingSecondPid === [0 => PHP_INT_MAX, 2 => PHP_INT_MAX]);
+    maintenanceTaskCheck(
+        'domain race bad-verdict control rejects a sparse two-child PID array',
+        count($missingSecondPid) === 2
+        && !(isset($missingSecondPid[0], $missingSecondPid[1])
+            && !maintenanceResourceProcessRunning($missingSecondPid[0])
+            && !maintenanceResourceProcessRunning($missingSecondPid[1]))
+    );
     maintenanceTaskCheck(
         'domain race bad verdict is diagnostic and reaps every owned child before returning',
         $domainBarrierError instanceof RuntimeException
         && str_contains($domainBarrierError->getMessage(), 'unexpected verdict BAD VERDICT')
         && count($domainChildPids) === 2
+        && isset($domainChildPids[0], $domainChildPids[1])
         && !maintenanceResourceProcessRunning($domainChildPids[0])
         && !maintenanceResourceProcessRunning($domainChildPids[1])
     );

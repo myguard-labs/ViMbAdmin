@@ -251,7 +251,11 @@ $invokeArchiveQuery = static function (
 $queryParameters = static function (\Doctrine\ORM\QueryBuilder $query): array {
     $parameters = [];
     foreach ($query->getParameters() as $parameter) {
-        $parameters[$parameter->getName()] = $parameter->getValue();
+        $name = $parameter->getName();
+        $number = filter_var($name, FILTER_VALIDATE_INT);
+        // Match PHP's conversion of canonical numeric string array keys.
+        $key = $number !== false && (string) $number === $name ? $number : $name;
+        $parameters[$key] = $parameter->getValue();
     }
     return $parameters;
 };

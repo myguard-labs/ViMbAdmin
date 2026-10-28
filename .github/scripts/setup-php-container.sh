@@ -4,8 +4,8 @@ set -euo pipefail
 readonly profile=${1:?usage: setup-php-container.sh PROFILE}
 readonly composer_version=2.10.3
 readonly composer_sha256=7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6
-readonly phpstan_version=2.2.5
-readonly phpstan_sha256=1b2f03384ebcfd67053b06b69cbc0b9f62bf239349f69eaf723649409789e2e6
+readonly phpstan_version=2.2.17
+readonly phpstan_sha256=46e0eb600188e5f6945b846e427614ad531ca575dac2659d307c3f2b7e1d6c3e
 readonly psalm_version=6.16.1
 readonly psalm_sha256=7ace71e4f698466e7e16810679a1895ea623060579aff46fcf9fd0f1c09abe00
 readonly php_cs_fixer_version=3.95.25

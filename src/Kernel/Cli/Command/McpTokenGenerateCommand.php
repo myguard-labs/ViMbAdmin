@@ -7,6 +7,7 @@ namespace ViMbAdmin\Kernel\Cli\Command;
 use Doctrine\Persistence\ObjectRepository;
 use Entities\McpToken;
 use LogicException;
+use Override;
 use ViMbAdmin\Kernel\Cli\CliCommand;
 use ViMbAdmin\Kernel\Container;
 
@@ -24,11 +25,13 @@ use ViMbAdmin\Kernel\Container;
  */
 final class McpTokenGenerateCommand implements CliCommand
 {
+    #[Override]
     public function name(): string
     {
         return 'mcp.cli-token-generate';
     }
 
+    #[Override]
     public function run(Container $container, array $args): int
     {
         $opt = static function (string $k) use ($args): ?string {
@@ -82,9 +85,11 @@ final class McpTokenGenerateCommand implements CliCommand
         $entityManager->persist($tok);
         $entityManager->flush();
 
+        $allowedIps = $tok->getAllowedIps();
+        $allowedDomains = $tok->getAllowedDomains();
         echo "MCP token '{$name}' created. Scope: {$tok->getScope()}.";
-        echo $tok->getAllowedIps() ? " IPs: {$tok->getAllowedIps()}." : ' IPs: any.';
-        echo $tok->getAllowedDomains() ? " Domains: {$tok->getAllowedDomains()}." : ' Domains: all.';
+        echo ($allowedIps ?? '') !== '' ? " IPs: {$allowedIps}." : ' IPs: any.';
+        echo ($allowedDomains ?? '') !== '' ? " Domains: {$allowedDomains}." : ' Domains: all.';
         echo $tok->getExpiresAt() ? ' Expires: ' . $tok->getExpiresAt()->format('Y-m-d') . ".\n" : " No expiry.\n";
         echo "\n  TOKEN (shown once, store it now):\n\n    {$raw}\n\n";
         echo "Use it as:  Authorization: Bearer {$raw}\n";

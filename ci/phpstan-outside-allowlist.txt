@@ -50,7 +50,6 @@ ci/test-maintenance-purge-parity.php	ci-test-script
 ci/test-maintenance-query-baseline.php	ci-test-script
 ci/test-maintenance-recipient-ownership.php	ci-test-script
 ci/test-maintenance-reset-ceiling.php	ci-test-script
-ci/test-maintenance-resource-claims.php	ci-test-script
 ci/test-maintenance-resource-migration.php	ci-test-script
 ci/test-maintenance-rpc-duplicates.php	ci-test-script
 ci/test-maintenance-task-ownership.php	ci-test-script

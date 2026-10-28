@@ -323,7 +323,7 @@ fi
 expect green 'phpstan-common.neon pins phpVersion min/max' '' -- \
   bash -c 'grep -Eq "^    phpVersion:" phpstan-common.neon &&
     grep -Eq "^        min: 80200$" phpstan-common.neon &&
-    grep -Eq "^        max: 80599$" phpstan-common.neon'
+    grep -Eq "^        max: 80699$" phpstan-common.neon'
 
 mkdir -p "$work/empty"
 printf '<?php\nif (PHP_VERSION_ID >= 80200) { echo "x"; }\n' >"$work/probe.php"
@@ -336,7 +336,7 @@ verdict() { # verdict <config> <cwd> <log>: exit status of the probe analysis
   set -e
   echo "$rc"
 }
-sed '/^    # Pin the analysed/,/^        max: 80599/d' phpstan-common.neon >"$nopin"
+sed '/^    # Pin the analysed/,/^        max: 80699/d' phpstan-common.neon >"$nopin"
 if grep -q phpVersion "$nopin"; then
   echo 'FAIL seeded unpinned config still contains phpVersion' >&2
   failures=$((failures + 1))

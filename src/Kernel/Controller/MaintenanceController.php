@@ -275,8 +275,8 @@ final class MaintenanceController extends AbstractController
             try {
                 $claim = \ViMbAdmin_ResourceClaim::acquire($this->em()->getConnection(), $username);
                 $claim->guardArchive($archive);
-                $dest = $archive->getMaildirFile();
-                if ($dest) {
+                $dest = $archive->getMaildirFile() ?? '';
+                if ($dest !== '') {
                     $claim->remote(fn () => $doveadm->fsDelete($dest));
                 }
                 $this->em()->remove($archive);

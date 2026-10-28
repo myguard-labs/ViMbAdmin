@@ -125,7 +125,7 @@
     "src/Kernel/Controller/IndexController.php": "1cb458888ce5a087d92799ac5073d67e0e40bc15a4664bd3f01d67d3d776d3e3",
     "src/Kernel/Controller/LogController.php": "8beecc4332c5236ac5d03b9c57f9e2ab4f100f73e8357d02e0dfdfc183f3659f",
     "src/Kernel/Controller/MailboxController.php": "90ea7c09c62a23471e1c3a373249ec18d5188c1a2e6b0933e3a0cfcd41527d40",
-    "src/Kernel/Controller/MaintenanceController.php": "56943f351dbe8a389eb8d213ce464a919d5223c5b7b5cf6a73d531531b2af896",
+    "src/Kernel/Controller/MaintenanceController.php": "ccb19cc7af77010790847da3e1e6608cb3c919caa14442546828cd23fc617d86",
     "src/Kernel/Controller/QueueController.php": "5a040289224d6fc914a870848c3111159517a90f75fb7e6a3debed468d1c8e66",
     "src/Kernel/Http/Kernel.php": "47f24ccc2a299e2da259f4d0cfbc788ef437aa17fe7d060aed8cade89fe6f19b",
     "src/Kernel/Router.php": "0f69e8bcbfa6e9f24e8094b8aeeec363b38e63ccd3037530eb3ce660c4945103"

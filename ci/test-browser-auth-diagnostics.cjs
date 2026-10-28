@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* global require, console */
+/* global require, console, EventTarget, AbortController, Event */
 
 // Run with node ci/test-browser-auth-diagnostics.cjs. No browser, service,
 // credentials or signals: a page event double drives the real diagnostic seam.
@@ -21,6 +21,19 @@ class Page extends EventEmitter {
     this.navigation = deferred();
     this.submission = deferred();
     this.calls = [];
+    this.evaluations = 0;
+    this.setupFailure = false;
+    this.cleanupFailure = false;
+    this.missingForm = false;
+    this.failMessageDuringSetup = false;
+    this.setupValue = { forms: 1, disabled: 0, invalidFields: 0 };
+  }
+  async evaluate() {
+    this.evaluations++;
+    if (this.evaluations === 1 && this.failMessageDuringSetup) this.emit('console', { text() { throw new Error('private-token'); } });
+    if (this.evaluations === 1 && this.setupFailure) throw new Error('private-token setup failure');
+    if (this.evaluations > 1 && this.cleanupFailure) throw new Error('private-token cleanup failure');
+    return this.evaluations === 1 && !this.missingForm ? this.setupValue : false;
   }
   waitForNavigation(options) {
     this.calls.push(['navigation', options]);
@@ -46,7 +59,7 @@ function diagnostic(lines) {
 }
 
 function clean(page) {
-  for (const event of ['request', 'response', 'load']) {
+  for (const event of ['request', 'response', 'load', 'console']) {
     assert.equal(page.listenerCount(event), 0, `${event}: temporary listener detached`);
   }
 }
@@ -56,6 +69,7 @@ test('success retains wait-before-click, original response and silence', async (
   const response = {};
   const result = await capture(async () => {
     const pending = submitCsrfDenial(page, 'missing CSRF denial');
+    await Promise.resolve();
     assert.deepEqual(page.calls, [
       ['navigation', { waitUntil: 'load', timeout: 15000 }],
       ['click', 'button[type="submit"]']
@@ -82,6 +96,7 @@ test('navigation failure names missing scenario and safe observed progress', asy
   };
   const result = await capture(async () => {
     const pending = submitCsrfDenial(page, 'missing CSRF denial');
+    await Promise.resolve();
     page.emit('request', request);
     page.emit('response', { status: () => 200, request: () => request });
     page.emit('load');
@@ -111,6 +126,7 @@ test('click failure names invalid scenario and keeps missing submission unobserv
   const failure = new Error('click failed');
   const result = await capture(async () => {
     const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+    await Promise.resolve();
     page.submission.reject(failure);
     await assert.rejects(pending, error => error === failure);
     clean(page);
@@ -132,6 +148,7 @@ test('unrelated, malformed and throwing metadata cannot change control flow', as
   const failure = new Error('navigation failed');
   const result = await capture(async () => {
     const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+    await Promise.resolve();
     for (const request of [
       { isNavigationRequest: () => false },
       { isNavigationRequest: () => true, method: () => 'GET' },
@@ -158,6 +175,7 @@ test('bounded first observations preserve pre-existing listeners and static labe
   const request = { isNavigationRequest: () => true, method: () => 'POST', url: () => 'http://127.0.0.1/auth/totp' };
   const result = await capture(async () => {
     const pending = submitCsrfDenial(page, 'private-token');
+    await Promise.resolve();
     for (let i = 0; i < 1000; i++) {
       page.emit('request', request);
       page.emit('response', { status: () => 999, request: () => request });
@@ -184,9 +202,183 @@ test('failed diagnostic output preserves the original rejection and cleanup', as
   const spy = mock.method(console, 'error', () => { throw new Error('sink failed'); });
   try {
     const pending = submitCsrfDenial(page, 'missing CSRF denial');
+    await Promise.resolve();
     page.navigation.reject(failure);
     await assert.rejects(pending, error => error === failure);
     page.submission.resolve();
   } finally { spy.mock.restore(); }
+  clean(page);
+});
+
+test('console observer accepts only bounded fixed numeric events and redacts unrelated messages', async () => {
+  const page = new Page();
+  const prior = () => {};
+  page.on('console', prior);
+  const failure = new Error('original failure');
+  const result = await capture(async () => {
+    const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+    await Promise.resolve();
+    for (const text of [
+      'private-token __VI_CSRF_OBSERVER__:click:1:0:0',
+      '__VI_CSRF_OBSERVER__:click:1:0:0?private-token',
+      '__VI_CSRF_OBSERVER__:submit:1000:0:0',
+      '__VI_CSRF_OBSERVER__:click:1:2:0',
+      '__VI_CSRF_OBSERVER__:invalid:1:0:1'
+    ]) page.emit('console', { text: () => text });
+    for (let i = 0; i < 30; i++) page.emit('console', { text: () => '__VI_CSRF_OBSERVER__:click:1:0:0' });
+    page.navigation.reject(failure);
+    await assert.rejects(pending, error => error === failure);
+    page.submission.resolve();
+  });
+  const observed = diagnostic(result.lines);
+  assert.deepEqual(observed.observer, { status: 'available', events: 16, click: 15, submit: 0, invalid: 1,
+    forms: 1, disabled: 0, invalidFields: 0 });
+  assert.ok(!result.lines[0].includes('private-token'));
+  assert.deepEqual(page.listeners('console'), [prior], 'pre-existing console listener preserved');
+  assert.equal(page.evaluations, 2, 'page-side observer cleanup attempted');
+  page.off('console', prior);
+  clean(page);
+});
+
+test('observer setup and cleanup failures preserve original error and report unavailable', async () => {
+  const page = new Page();
+  page.setupFailure = true;
+  page.cleanupFailure = true;
+  const failure = new Error('original rejection');
+  const result = await capture(async () => {
+    const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+    await Promise.resolve();
+    page.navigation.reject(failure);
+    await assert.rejects(pending, error => error === failure);
+    page.submission.resolve();
+  });
+  const observed = diagnostic(result.lines);
+  assert.equal(observed.observer.status, 'unavailable');
+  assert.equal(observed.observer.events, 0);
+  assert.ok(!result.lines[0].includes('private-token'));
+  assert.equal(page.evaluations, 2);
+  clean(page);
+});
+
+test('unreadable console message is unavailable and cannot replace original failure', async () => {
+  const page = new Page();
+  const failure = new Error('original rejection');
+  const result = await capture(async () => {
+    const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+    await Promise.resolve();
+    page.emit('console', { text() { throw new Error('private-token'); } });
+    page.navigation.reject(failure);
+    await assert.rejects(pending, error => error === failure);
+    page.submission.resolve();
+  });
+  assert.equal(diagnostic(result.lines).observer.status, 'unavailable');
+  assert.ok(!result.lines[0].includes('private-token'));
+  clean(page);
+});
+
+test('missing form and an unreadable early message stay unavailable', async () => {
+  for (const mode of ['missingForm', 'failMessageDuringSetup']) {
+    const page = new Page();
+    page[mode] = true;
+    const failure = new Error('original rejection');
+    const result = await capture(async () => {
+      const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+      await Promise.resolve();
+      page.navigation.reject(failure);
+      await assert.rejects(pending, error => error === failure);
+      page.submission.resolve();
+    });
+    assert.equal(diagnostic(result.lines).observer.status, 'unavailable');
+    assert.ok(!result.lines[0].includes('private-token'));
+    clean(page);
+  }
+});
+
+test('page-side listeners abort after success and failure without altering the original result', async () => {
+  for (const outcome of ['success', 'failure']) {
+    const page = new Page();
+    const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+    const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+    const form = new EventTarget();
+    form.elements = [];
+    form.closest = () => form;
+    form.querySelector = () => ({ disabled: false });
+    Object.defineProperty(globalThis, 'window', { value: { AbortController }, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'document', { value: { querySelector: () => form, querySelectorAll: () => [form] }, configurable: true, writable: true });
+    page.evaluate = async fn => fn();
+    let emitted = 0;
+    const spy = mock.method(console, 'debug', value => {
+      emitted++;
+      page.emit('console', { text: () => value });
+    });
+    const failure = new Error('original rejection');
+    try {
+      const result = await capture(async () => {
+        const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+        await Promise.resolve();
+        form.dispatchEvent(new Event('click'));
+        page.submission.resolve();
+        if (outcome === 'success') page.navigation.resolve('response');
+        else page.navigation.reject(failure);
+        if (outcome === 'success') assert.equal(await pending, 'response');
+        else await assert.rejects(pending, error => error === failure);
+      });
+      if (outcome === 'failure') assert.equal(diagnostic(result.lines).observer.click, 1);
+      else assert.deepEqual(result.lines, []);
+      assert.equal(emitted, 1, 'observer captured the live event');
+      form.dispatchEvent(new Event('click'));
+      assert.equal(emitted, 1, 'page-side event listeners were removed');
+      clean(page);
+    } finally {
+      spy.mock.restore();
+      if (originalWindow) Object.defineProperty(globalThis, 'window', originalWindow);
+      else Reflect.deleteProperty(globalThis, 'window');
+      if (originalDocument) Object.defineProperty(globalThis, 'document', originalDocument);
+      else Reflect.deleteProperty(globalThis, 'document');
+    }
+  }
+});
+
+test('initial numeric form snapshot survives missing click and rejects malformed metadata', async () => {
+  for (const valid of [true, false]) {
+    const page = new Page();
+    page.setupValue = valid ? { forms: 1, disabled: 1, invalidFields: 2 } :
+      { forms: 'private-token', disabled: 1, invalidFields: 2 };
+    const failure = new Error('original rejection');
+    const result = await capture(async () => {
+      const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+      await Promise.resolve();
+      page.navigation.reject(failure);
+      await assert.rejects(pending, error => error === failure);
+      page.submission.resolve();
+    });
+    const observed = diagnostic(result.lines).observer;
+    assert.equal(observed.status, valid ? 'available' : 'unavailable');
+    assert.equal(observed.forms, valid ? 1 : null);
+    assert.equal(observed.disabled, valid ? 1 : null);
+    assert.equal(observed.invalidFields, valid ? 2 : null);
+    assert.ok(!result.lines[0].includes('private-token'));
+    clean(page);
+  }
+});
+
+test('console listener attachment failure is unavailable and leaves original failure intact', async () => {
+  const page = new Page();
+  const on = page.on.bind(page);
+  page.on = (event, listener) => {
+    if (event === 'console') throw new Error('private-token');
+    return on(event, listener);
+  };
+  const failure = new Error('original rejection');
+  const result = await capture(async () => {
+    const pending = submitCsrfDenial(page, 'invalid CSRF denial');
+    await Promise.resolve();
+    page.navigation.reject(failure);
+    await assert.rejects(pending, error => error === failure);
+    page.submission.resolve();
+  });
+  assert.equal(diagnostic(result.lines).observer.status, 'unavailable');
+  assert.ok(!result.lines[0].includes('private-token'));
+  assert.equal(page.evaluations, 0);
   clean(page);
 });

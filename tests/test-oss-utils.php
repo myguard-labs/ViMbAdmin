@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/../vendor/autoload.php';
+require __DIR__ . '/../ci/test-oss-ordinal.php';
 
 $failures = 0;
 $check = static function (string $label, bool $ok) use (&$failures): void {

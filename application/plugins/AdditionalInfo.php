@@ -171,6 +171,7 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $options
      * @return array<int,\ViMbAdmin\Kernel\Form\Field>
      */
+    #[Override]
     public function nativeMailboxFields(?\Entities\Mailbox $mailbox, array $options): array
     {
         $fields = [];
@@ -195,8 +196,9 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
 
             $field = new \ViMbAdmin\Kernel\Form\Field("plugin_additionalInfo_{$name}", _($opts['label']), 'text', $rules);
 
-            if ($mailbox !== null && $mailbox->getPreference('xpiInfo.' . $name)) {
-                $field->setValue((string) $mailbox->getPreference('xpiInfo.' . $name));
+            $value = $mailbox !== null ? $mailbox->getPreference('xpiInfo.' . $name) : false;
+            if ($value !== false && $value !== '') {
+                $field->setValue((string) $value);
             }
 
             $fields[] = $field;
@@ -209,6 +211,7 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
+    #[Override]
     public function nativeMailboxValidate(array $values, array $options): ?string
     {
         // All AdditionalInfo constraints are per-field (handled by the Field rules
@@ -220,6 +223,7 @@ class ViMbAdminPlugin_AdditionalInfo extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
+    #[Override]
     public function nativeMailboxApply(\Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null): void
     {
         foreach (array_keys($this->_elements($options)) as $name) {

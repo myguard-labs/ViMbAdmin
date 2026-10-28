@@ -230,6 +230,7 @@ class ViMbAdminPlugin_DirectoryEntry extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $options
      * @return array<int,\ViMbAdmin\Kernel\Form\Field>
      */
+    #[Override]
     public function nativeMailboxFields(?\Entities\Mailbox $mailbox, array $options): array
     {
         $disabled = $this->_disabled($options);
@@ -257,7 +258,7 @@ class ViMbAdminPlugin_DirectoryEntry extends ViMbAdmin_Plugin implements OSS_Plu
             $value = $dentry !== null ? $this->_fieldValue($dentry->$getFn()) : null;
             if ($value !== null) {
                 $field->setValue($value);
-            } elseif ($attr === 'O' && $orgname) {
+            } elseif ($attr === 'O' && ($orgname ?? '') !== '') {
                 $field->setValue($orgname);
             }
 
@@ -271,6 +272,7 @@ class ViMbAdminPlugin_DirectoryEntry extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
+    #[Override]
     public function nativeMailboxValidate(array $values, array $options): ?string
     {
         // The directory-entry attributes are free-form text; no cross-field rule.
@@ -282,6 +284,7 @@ class ViMbAdminPlugin_DirectoryEntry extends ViMbAdmin_Plugin implements OSS_Plu
      * @param array<string,mixed> $options
      * @param object|null $em
      */
+    #[Override]
     public function nativeMailboxApply(\Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null): void
     {
         $username = $mailbox->requiredUsername();

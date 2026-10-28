@@ -1,19 +1,23 @@
 parameters:
     # Pin the analysed PHP range to composer.json's supported range
-    # (">=8.2.0" through the newest CI target 8.5). Without this PHPStan infers
+    # (">=8.2.0" through the newest CI target 8.6). Without this PHPStan infers
     # the version from a composer.json in the current directory, so results
     # differ with the working directory. Syntax: phpVersion {min, max} as
     # documented at https://phpstan.org/config-reference#phpversion
-    # (PHPStan 2.x, verified with 2.2.5).
+    # (PHPStan 2.x, verified with 2.2.17).
     phpVersion:
         min: 80200
-        max: 80599
+        max: 80699
     paths:
         - .github/scripts/assert-composer-lock.php
         - application
         - bin
         - ci/test-maintenance-orphan-short-write.php
+        - ci/test-maintenance-resource-claims.php
+        - ci/test-mcp-cli-restriction-summary.php
+        - ci/test-oss-ordinal.php
         - ci/test-php-runtime.php
+        - ci/test-plugin-zero-prefill.php
         - library
         - public
         - src
@@ -30,6 +34,7 @@ parameters:
     scanFiles:
         - ci/support/browser-fixture-super-admin.php
         - ci/support/browser-operations-seed.php
+        - ci/test-maintenance-task-ownership.php
     # Fixed debt must be removed from the matching baseline in the same change;
     # stale suppressions are errors rather than reusable hiding places.
     reportUnmatchedIgnoredErrors: true

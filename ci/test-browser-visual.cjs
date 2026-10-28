@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* global require, module, process, document, window, getComputedStyle, URL */
+/* global require, module, process, document, window, getComputedStyle, URL, console */
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
@@ -42,6 +42,53 @@ function appearance() {
       [selector, document.querySelectorAll(selector).length])),
     horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
     missingLabels, cascade };
+}
+
+async function armModalHidden(page) {
+  await page.locator('#modal_dialog_shell').evaluate(node => {
+    window.__visualModalHiddenDone = false;
+    node.addEventListener('hidden.bs.modal', () => { window.__visualModalHiddenDone = true; }, { once: true });
+  });
+}
+
+async function waitModalHidden(page) {
+  await page.waitForFunction(() => window.__visualModalHiddenDone === true);
+}
+
+async function checkFocusNegativeControl(page, trigger, dialog) {
+  const boundary = await page.evaluate(() => {
+    const shell = document.createElement('div');
+    let completed = false;
+    shell.addEventListener('hidden.bs.modal', () => { completed = true; }, { once: true });
+    const before = completed;
+    shell.dispatchEvent(new window.Event('hidden.bs.modal'));
+    return [before, completed];
+  });
+  assert.deepEqual(boundary, [false, true], 'hidden completion is gated on the event');
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  await dialog.waitFor();
+  await page.waitForFunction(() => document.querySelector('#modal_dialog_shell')?.contains(document.activeElement));
+  assert.ok(await dialog.evaluate(node => node.contains(document.activeElement)), 'negative control starts with modal focus');
+  await armModalHidden(page);
+  await trigger.evaluate(node => { node.focus = () => {}; });
+  try {
+    await page.keyboard.press('Escape');
+    await waitModalHidden(page);
+    const restored = await trigger.evaluate(node => node === document.activeElement);
+    assert.throws(() => assert.ok(restored, 'mailbox modal restores opener focus'), /mailbox modal restores opener focus/);
+  } finally {
+    await trigger.evaluate(node => { delete node.focus; });
+  }
+  await trigger.focus();
+  await page.keyboard.press('Enter');
+  await dialog.waitFor();
+  await page.waitForFunction(() => document.querySelector('#modal_dialog_shell')?.contains(document.activeElement));
+  await armModalHidden(page);
+  await page.keyboard.press('Escape');
+  await waitModalHidden(page);
+  assert.ok(await trigger.evaluate(node => node === document.activeElement), 'restored focus handler passes after negative control');
+  console.log('PASS: missing-restoration negative control and restored focus');
 }
 
 // These are focused checks of real rendered surfaces, not WCAG certification
@@ -179,14 +226,11 @@ async function runApplicationSuite({ browserContext, targetOrigin, root, input, 
           assert.ok(bounds.x >= -1 && bounds.x + bounds.width <= width + 1, 'mailbox modal fits responsive viewport');
           await page.screenshot({ path: path.join(artifacts, `mailbox-modal-${width}.png`), fullPage: true,
             mask: [page.locator(screenshotMask)] });
+          await armModalHidden(page);
           await page.keyboard.press('Escape');
-          await dialog.waitFor({ state: 'hidden' });
-          await trigger.evaluate(node => new Promise(resolve => {
-            const shell = document.querySelector('#modal_dialog_shell');
-            if (getComputedStyle(shell).display === 'none') return resolve();
-            shell.addEventListener('hidden.bs.modal', resolve, { once: true });
-          }));
+          await waitModalHidden(page);
           assert.ok(await trigger.evaluate(node => node === document.activeElement), 'mailbox modal restores opener focus');
+          if (width === 1440) await checkFocusNegativeControl(page, trigger, dialog);
           computed.modal = { named: true, fitsViewport: true, focusRestored: true };
         }
         // Only geometry/computed values and public routes enter the report.

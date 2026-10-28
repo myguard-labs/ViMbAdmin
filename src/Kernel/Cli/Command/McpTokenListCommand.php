@@ -7,6 +7,7 @@ namespace ViMbAdmin\Kernel\Cli\Command;
 use Doctrine\Persistence\ObjectRepository;
 use Entities\McpToken;
 use LogicException;
+use Override;
 use ViMbAdmin\Kernel\Cli\CliCommand;
 use ViMbAdmin\Kernel\Container;
 
@@ -19,11 +20,13 @@ use ViMbAdmin\Kernel\Container;
  */
 final class McpTokenListCommand implements CliCommand
 {
+    #[Override]
     public function name(): string
     {
         return 'mcp.cli-token-list';
     }
 
+    #[Override]
     public function run(Container $container, array $args): int
     {
         $entityManager = $container->entityManager();
@@ -42,13 +45,15 @@ final class McpTokenListCommand implements CliCommand
 
         printf("%-4s %-20s %-12s %-20s %-20s %-10s %-19s\n", 'ID', 'NAME', 'SCOPE', 'IPS', 'DOMAINS', 'STATE', 'LAST USED');
         foreach ($tokens as $t) {
+            $allowedIps = $t->getAllowedIps();
+            $allowedDomains = $t->getAllowedDomains();
             printf(
                 "%-4d %-20s %-12s %-20s %-20s %-10s %-19s\n",
                 $t->getId(),
                 $t->getName(),
                 $t->getScope(),
-                $t->getAllowedIps() ?: 'any',
-                $t->getAllowedDomains() ?: 'all',
+                ($allowedIps ?? '') !== '' ? $allowedIps : 'any',
+                ($allowedDomains ?? '') !== '' ? $allowedDomains : 'all',
                 $t->getRevoked() ? 'revoked' : ($t->isActive() ? 'active' : 'expired'),
                 $t->getLastUsedAt() ? $t->getLastUsedAt()->format('Y-m-d H:i:s') : '-'
             );

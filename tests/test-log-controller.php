@@ -567,7 +567,7 @@ $check(
 // '%*acme%' and silently match nothing, and every non-starred case in this file
 // cannot tell the two properties apart.
 $starredLog = new LogControllerTestLogRepository([], ['rows' => [], 'total' => 9, 'filtered' => 0]);
-$_GET['search']['value'] = ' *acme ';
+$_GET['search'] = ['value' => ' *acme '];
 $starredController = logController(
     logEntityManager(['Entities\\Log' => $starredLog]),
     new LogControllerTestNamespace(['domain' => $domain]),
@@ -581,7 +581,7 @@ $check(
     $starredLog->pageCalls === [[null, $domain, 'acme', true, 'timestamp', 'DESC', 5, 25]]
 );
 
-$_GET['search']['value'] = 'abc';
+$_GET['search'] = ['value' => 'abc'];
 foreach ([
     'list-specific override' => ['defaults' => ['server_side' => ['pagination' => [
         'min_search_str' => 2,

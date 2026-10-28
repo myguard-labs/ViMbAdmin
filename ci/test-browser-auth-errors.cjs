@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-/* global require, module, process, console, URL, Buffer, document, HTMLInputElement */
+/* global require, module, process, console, URL, Buffer, document, window, HTMLInputElement */
 
 const fs = require('node:fs/promises');
 const http = require('node:http');
@@ -59,6 +59,12 @@ async function responseChain(response) {
   return { initialStatus: first.status(), finalStatus: response.status() };
 }
 
+function validCsrfObserverSnapshot(value) {
+  return value && Number.isInteger(value.forms) && value.forms >= 0 && value.forms <= 999 &&
+    (value.disabled === 0 || value.disabled === 1) && Number.isInteger(value.invalidFields) &&
+    value.invalidFields >= 0 && value.invalidFields <= 999;
+}
+
 // Keep diagnostics separate from the security oracle. A missing POST is only
 // unobserved submission; it does not establish why the browser did not navigate.
 async function submitCsrfDenial(formPage, name) {
@@ -89,8 +95,53 @@ async function submitCsrfDenial(formPage, name) {
     },
     load() { if (progress.loadMs === null) progress.loadMs = elapsed(); }
   };
+  const observer = { status: 'unavailable', events: 0, click: 0, submit: 0, invalid: 0, forms: null, disabled: null, invalidFields: null };
+  let observerReadFailed = false;
+  const observeConsole = message => {
+    try {
+      const match = /^__VI_CSRF_OBSERVER__:(click|submit|invalid):([0-9]{1,3}):([01]):([0-9]{1,3})$/.exec(message.text());
+      if (!match || observer.events >= 16) return;
+      observer.events++;
+      observer[match[1]]++;
+      observer.forms = Number(match[2]);
+      observer.disabled = Number(match[3]);
+      observer.invalidFields = Number(match[4]);
+    } catch { observerReadFailed = true; observer.status = 'unavailable'; }
+  };
   for (const [event, listener] of Object.entries(listeners)) formPage.on(event, listener);
+  let observerAttached = false;
+  try { formPage.on('console', observeConsole); observerAttached = true; } catch { /* Diagnostic only. */ }
   try {
+    try {
+      const installed = observerAttached && await formPage.evaluate(() => {
+        const form = document.querySelector('form[action="/auth/totp"]');
+        if (!form) return false;
+        const controller = new window.AbortController();
+        window.__viCsrfObserver = controller;
+        for (const type of ['click', 'submit', 'invalid']) form.addEventListener(type, event => {
+          try {
+            if (type === 'click' && !event.target.closest('button[type="submit"]')) return;
+            const forms = Math.min(999, document.querySelectorAll('form[action="/auth/totp"]').length);
+            const disabled = form.querySelector('button[type="submit"]')?.disabled ? 1 : 0;
+            const invalid = Math.min(999, [...form.elements].filter(item => item.willValidate && !item.validity.valid).length);
+            console.debug(`__VI_CSRF_OBSERVER__:${type}:${forms}:${disabled}:${invalid}`);
+          } catch { /* Observation must never alter the application event. */ }
+        }, { capture: true, signal: controller.signal });
+        return {
+          forms: Math.min(999, document.querySelectorAll('form[action="/auth/totp"]').length),
+          disabled: form.querySelector('button[type="submit"]')?.disabled ? 1 : 0,
+          invalidFields: Math.min(999, [...form.elements].filter(item => item.willValidate && !item.validity.valid).length)
+        };
+      });
+      if (validCsrfObserverSnapshot(installed) && !observerReadFailed) {
+        observer.status = 'available';
+        if (observer.events === 0) {
+          observer.forms = installed.forms;
+          observer.disabled = installed.disabled;
+          observer.invalidFields = installed.invalidFields;
+        }
+      }
+    } catch { /* Observer setup is diagnostic only. */ }
     const [response] = await Promise.all([
       formPage.waitForNavigation({ waitUntil: 'load', timeout: 15000 }).then(response => {
         progress.navigation = 'complete';
@@ -105,11 +156,18 @@ async function submitCsrfDenial(formPage, name) {
     // Never include the original error or arbitrary browser data here: either
     // may contain a URL, submitted value or token. Preserve the original error.
     try {
-      console.error(`CSRF submission diagnostic: ${JSON.stringify({ scenario, ...progress, elapsedMs: elapsed() })}`);
+      console.error(`CSRF submission diagnostic: ${JSON.stringify({ scenario, ...progress, observer, elapsedMs: elapsed() })}`);
     } catch { /* A diagnostic sink failure must not replace the original error. */ }
     throw error;
   } finally {
+    if (observerAttached) {
+      try { formPage.off('console', observeConsole); } catch { /* Diagnostic only. */ }
+    }
     for (const [event, listener] of Object.entries(listeners)) formPage.off(event, listener);
+    if (observerAttached) {
+      try { await formPage.evaluate(() => { window.__viCsrfObserver?.abort(); delete window.__viCsrfObserver; }); }
+      catch { /* The page may already be closed or navigated. */ }
+    }
   }
 }
 

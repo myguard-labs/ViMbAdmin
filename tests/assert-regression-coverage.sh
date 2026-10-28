@@ -89,7 +89,7 @@ if [ "$#" -ne 1 ]; then
   exit 98
 fi
 case "$1" in
-  tests/test-runner-contract-a.php|tests/test-runner-contract-b.php) ;;
+  tests/test-runner-contract-a.php|tests/test-runner-contract-b.php|ci/test-mcp-cli-restriction-summary.php) ;;
   *)
     printf 'Unexpected php argv in unit runner: %s\n' "$*" >&2
     exit 98
@@ -122,9 +122,10 @@ SH
 
   if [[ $(wc -l <"$git_log") -ne 1 ]] ||
     ! grep -qxF 'ls-files tests/test-*.php' "$git_log" ||
-    [[ $(wc -l <"$php_log") -ne 2 ]] ||
+    [[ $(wc -l <"$php_log") -ne 3 ]] ||
     [[ $(grep -cxF 'tests/test-runner-contract-a.php' "$php_log") -ne 1 ]] ||
     [[ $(grep -cxF 'tests/test-runner-contract-b.php' "$php_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-mcp-cli-restriction-summary.php' "$php_log") -ne 1 ]] ||
     [[ $(wc -l <"$node_log") -ne 1 ]] ||
     ! grep -qxF 'ci/test-browser-auth-diagnostics.cjs' "$node_log"; then
     rm -rf -- "${harness_root:?}"

@@ -204,7 +204,7 @@ function runMailboxTaskTransitionWorker(string $role, string $syncDir, int $task
     throw new RuntimeException('unknown transition worker role');
 }
 
-/** @return array{process:resource,pipes:array<int,resource>,last_status:array<string,mixed>} */
+/** @return array{process:resource,pipes:array<int,resource>,last_status:array{running:bool,exitcode:int,...},role:string} */
 function startMailboxQueueWorker(string $role, string $syncDir, ?int $transitionTaskId = null): array
 {
     $pipes = [];
@@ -221,27 +221,50 @@ function startMailboxQueueWorker(string $role, string $syncDir, ?int $transition
         throw new RuntimeException('failed to start transaction worker ' . $role);
     }
     fclose($pipes[0]);
-    return ['process' => $process, 'pipes' => $pipes, 'last_status' => proc_get_status($process)];
+    return ['process' => $process, 'pipes' => $pipes, 'last_status' => proc_get_status($process), 'role' => $role];
 }
 
 /**
- * @param array{process:resource,pipes:array<int,resource>,last_status:array<string,mixed>} $worker
+ * @param array{process:resource,pipes:array<int,resource>,last_status:array{running:bool,exitcode:int,...},role?:string} $worker
+ * @param array{now:callable():int,status:callable(resource):array{running:bool,exitcode:int,...},sleep:callable():void,terminate:callable(resource):bool}|null $ops
  * @return array{exit:int,stdout:string,stderr:string}
  */
-function waitMailboxQueueWorker(array &$worker, float $timeoutSeconds): array
+function waitMailboxQueueWorker(array &$worker, float $timeoutSeconds, ?array $ops = null): array
 {
-    $deadline = microtime(true) + $timeoutSeconds;
-    do {
-        $worker['last_status'] = proc_get_status($worker['process']);
-        if (!$worker['last_status']['running']) {
+    $ops ??= [
+        'now' => static fn (): int => hrtime(true),
+        'status' => proc_get_status(...),
+        'sleep' => static function (): void {
+            usleep(10_000);
+        },
+        'terminate' => proc_terminate(...),
+    ];
+    $deadline = $ops['now']() + (int) ($timeoutSeconds * 1_000_000_000);
+    while (($worker['last_status']['running'] ?? true) !== false) {
+        $worker['last_status'] = $ops['status']($worker['process']);
+        $observed = $ops['now']();
+        if (!$worker['last_status']['running'] && $observed <= $deadline) {
             break;
         }
-        usleep(10_000);
-    } while (microtime(true) < $deadline);
-
-    if ($worker['last_status']['running']) {
-        proc_terminate($worker['process']);
-        throw new RuntimeException('transaction worker timed out');
+        if ($observed >= $deadline) {
+            if ($worker['last_status']['running']) {
+                $worker['last_status'] = $ops['status']($worker['process']);
+            }
+            $streams = [];
+            foreach ([1, 2] as $fd) {
+                stream_set_blocking($worker['pipes'][$fd], false);
+                $streams[$fd] = stream_get_contents($worker['pipes'][$fd]);
+            }
+            $detail = json_encode(['role' => $worker['role'] ?? 'unknown', 'wall' => microtime(true),
+                'monotonic_ns' => $ops['now'](), 'status' => $worker['last_status'],
+                'stdout' => $streams[1], 'stderr' => $streams[2]], JSON_INVALID_UTF8_SUBSTITUTE);
+            fwrite(STDERR, 'transaction worker timeout: ' . $detail . PHP_EOL);
+            if ($worker['last_status']['running']) {
+                $ops['terminate']($worker['process']);
+            }
+            throw new RuntimeException('transaction worker timed out');
+        }
+        $ops['sleep']();
     }
 
     $stdout = stream_get_contents($worker['pipes'][1]);
@@ -252,9 +275,22 @@ function waitMailboxQueueWorker(array &$worker, float $timeoutSeconds): array
 
     return [
         'exit' => (int) $worker['last_status']['exitcode'],
+        // PHP 8.4's one-argument stream_get_contents on these readable process pipes cannot return false.
         'stdout' => trim($stdout === false ? '' : $stdout),
         'stderr' => trim($stderr === false ? '' : $stderr),
     ];
+}
+
+if (!in_array($argv[1] ?? '', ['--transition-worker', '--worker'], true)) {
+    $control = proc_open(
+        [PHP_BINARY, __DIR__ . '/../ci/test-mailbox-worker-deadline.php'],
+        [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+        $controlPipes,
+        __DIR__ . '/..'
+    );
+    if (!is_resource($control) || proc_close($control) !== 0) {
+        throw new RuntimeException('worker deadline controls failed');
+    }
 }
 
 if (($argv[1] ?? '') === '--transition-worker') {
@@ -289,9 +325,12 @@ function mailboxQueueRequiredCount(mixed $value): int
     throw new UnexpectedValueException('MariaDB returned an invalid mailbox-task count');
 }
 
-/** @param array{process:resource,pipes:array<int,resource>,last_status:array<string,mixed>} $worker */
+/** @param array{process:resource,pipes:array<int,resource>,last_status:array{running:bool,exitcode:int,...},role?:string} $worker */
 function mailboxQueueWorkerRemainsBlocked(array &$worker, float $seconds): bool
 {
+    if (($worker['last_status']['running'] ?? true) === false) {
+        return false;
+    }
     $deadline = microtime(true) + $seconds;
     do {
         $worker['last_status'] = proc_get_status($worker['process']);

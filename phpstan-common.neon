@@ -14,6 +14,8 @@ parameters:
         - bin
         - ci/test-maintenance-orphan-short-write.php
         - ci/test-maintenance-resource-claims.php
+        - ci/test-mailbox-self-alias-counter.php
+        - ci/test-mailbox-worker-deadline.php
         - ci/test-mcp-cli-restriction-summary.php
         - ci/test-oss-ordinal.php
         - ci/test-php-runtime.php

@@ -107,6 +107,20 @@ s=$work/s
 scratch "$s"
 expect green 'scratch baseline' '' -- run "$s"
 
+# A new CI fixture is invisible until Git tracks it. Once staged, each
+# fixture must be present in the configured analysis paths.
+for fixture in ci/test-mailbox-self-alias-counter.php ci/test-mailbox-worker-deadline.php; do
+  printf '<?php\n' >"$s/$fixture"
+  expect green "untracked $fixture is not enumerated" '' -- run "$s"
+  git -C "$s" add -- "$fixture"
+  expect green "tracked $fixture is covered" '' -- run "$s"
+  cp "$s/phpstan-common.neon" "$work/registered.neon"
+  awk -v path="        - $fixture" '$0 != path' "$work/registered.neon" >"$s/phpstan-common.neon"
+  expect red "NEGATIVE CONTROL missing tracked $fixture" "not allowlisted: $fixture" -- run "$s"
+  cp "$work/registered.neon" "$s/phpstan-common.neon"
+  expect green "restored tracked $fixture coverage" '' -- run "$s"
+done
+
 printf '<?php\n' >"$s/untracked.php"
 expect green 'untracked file is not enumerated (boundary)' '' -- run "$s"
 rm "$s/untracked.php"

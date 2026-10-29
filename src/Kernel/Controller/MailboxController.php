@@ -962,7 +962,9 @@ final class MailboxController extends AbstractController
                 $this->logAlias($admin, "removed alias {$identity['address']}");
                 // The counter belongs to the ALIAS's domain, which is not
                 // necessarily the mailbox's — see the cross-domain note above.
-                $aliasDomain->setAliasCount($aliasDomain->getAliasCount() - 1);
+                if ($identity['address'] !== $identity['goto']) {
+                    $aliasDomain->setAliasCount($aliasDomain->getAliasCount() - 1);
+                }
                 $this->flash('You have successfully removed the alias.');
             } else {
                 $alias->setGoto(\ViMbAdmin_Recipients::without($identity['goto'], $user, true));

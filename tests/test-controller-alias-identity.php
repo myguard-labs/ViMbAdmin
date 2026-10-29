@@ -1458,6 +1458,8 @@ controllerAliasIdentityCheck(
         && $inScopeEm->flushes === 1
 );
 
+require __DIR__ . '/../ci/test-mailbox-self-alias-counter.php';
+
 echo ControllerAliasIdentityState::$failures === 0
     ? "\nALL PASSED\n"
     : "\n" . ControllerAliasIdentityState::$failures . " FAILED\n";

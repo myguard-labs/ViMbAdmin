@@ -93,6 +93,7 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $options
      * @return list<\ViMbAdmin\Kernel\Form\Field>
      */
+    #[\Override]
     public function nativeMailboxFields(?\Entities\Mailbox $mailbox, array $options): array
     {
         $types      = $this->_types($options);
@@ -146,6 +147,7 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
+    #[\Override]
     public function nativeMailboxValidate(array $values, array $options): ?string
     {
         // "Restricted" means the master box is ticked OR at least one service is
@@ -168,6 +170,7 @@ class ViMbAdminPlugin_AccessPermissions extends ViMbAdmin_Plugin implements OSS_
      * @param array<string,mixed> $values
      * @param array<string,mixed> $options
      */
+    #[\Override]
     public function nativeMailboxApply(\Entities\Mailbox $mailbox, array $values, array $options, ?object $em = null): void
     {
         // Apply a restriction when any service is ticked, even if the master

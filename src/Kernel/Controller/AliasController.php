@@ -689,6 +689,7 @@ final class AliasController extends AbstractController
         return $domain instanceof \Entities\Domain ? $domain : null;
     }
 
+    #[\Override]
     protected function em(): EntityManagerInterface
     {
         $em = parent::em();
@@ -698,6 +699,7 @@ final class AliasController extends AbstractController
         return $em;
     }
 
+    #[\Override]
     protected function admin(): ?\Entities\Admin
     {
         $admin = parent::admin();

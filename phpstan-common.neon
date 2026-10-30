@@ -17,6 +17,7 @@ parameters:
         - ci/test-mailbox-self-alias-counter.php
         - ci/test-mailbox-worker-deadline.php
         - ci/test-mcp-cli-restriction-summary.php
+        - ci/test-nonstyle-rate-limit-cleanup-contract.php
         - ci/test-oss-ordinal.php
         - ci/test-php-runtime.php
         - ci/test-plugin-zero-prefill.php

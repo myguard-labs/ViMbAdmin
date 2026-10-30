@@ -195,7 +195,8 @@ class ViMbAdmin_BruteForce
      * Abort the request with 429 if the request's source IP is currently
      * locked out. Call early in the login flow (_preLogin).
      *
-     * @throws never returns when locked (sends 429 + exits)
+     * Sends 429 and exits when locked; returns when the request is allowed.
+     *
      * @throws RuntimeException when state cannot be read or locked
      * @param mixed $request
      * @return void

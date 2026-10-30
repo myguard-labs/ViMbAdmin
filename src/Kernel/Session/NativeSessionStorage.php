@@ -21,18 +21,21 @@ final class NativeSessionStorage implements SessionStorage
     {
     }
 
+    #[\Override]
     public function has(string $key): bool
     {
         $namespace = $_SESSION[$this->namespace] ?? null;
         return is_array($namespace) && array_key_exists($key, $namespace);
     }
 
+    #[\Override]
     public function get(string $key): mixed
     {
         $namespace = $_SESSION[$this->namespace] ?? null;
         return is_array($namespace) ? ($namespace[$key] ?? null) : null;
     }
 
+    #[\Override]
     public function set(string $key, mixed $value): void
     {
         if (!isset($_SESSION[$this->namespace]) || !is_array($_SESSION[$this->namespace])) {
@@ -41,6 +44,7 @@ final class NativeSessionStorage implements SessionStorage
         $_SESSION[$this->namespace][$key] = $value;
     }
 
+    #[\Override]
     public function remove(string $key): void
     {
         $namespace = $_SESSION[$this->namespace] ?? null;

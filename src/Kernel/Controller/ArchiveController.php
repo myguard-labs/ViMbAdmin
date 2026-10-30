@@ -572,6 +572,7 @@ final class ArchiveController extends AbstractController
 
     }
 
+    #[\Override]
     protected function em(): EntityManagerInterface
     {
         $em = parent::em();
@@ -582,6 +583,7 @@ final class ArchiveController extends AbstractController
         return $em;
     }
 
+    #[\Override]
     protected function admin(): ?Admin
     {
         $admin = parent::admin();

@@ -21,6 +21,7 @@
         <directory name="bin" />
         <directory name="tools" />
         <file name="preload.php" />
+        <file name="ci/test-nonstyle-rate-limit-cleanup-contract.php" />
         <!--
             Psalm honours only one ignoreFiles element; a second one is
             silently dropped. Keep every ignored directory in this block.
@@ -32,6 +33,27 @@
             <directory name="application/Proxies" />
         </ignoreFiles>
     </projectFiles>
+
+    <!-- Optional client declarations are scanned only; Composer never loads them. -->
+    <extraFiles>
+        <directory name="var/tmp/psalm-optional/predis/src" />
+    </extraFiles>
+    <enableExtensions>
+        <extension name="redis" />
+    </enableExtensions>
+    <stubs>
+        <file name="var/tmp/psalm-optional/redis/RedisArray.php" />
+        <file name="var/tmp/psalm-optional/redis/RedisCluster.php" />
+        <file name="var/tmp/psalm-optional/relay/AdaptiveCache.php" />
+        <file name="var/tmp/psalm-optional/relay/Cluster.php" />
+        <file name="var/tmp/psalm-optional/relay/Event.php" />
+        <file name="var/tmp/psalm-optional/relay/Events.php" />
+        <file name="var/tmp/psalm-optional/relay/Exception.php" />
+        <file name="var/tmp/psalm-optional/relay/KeyType.php" />
+        <file name="var/tmp/psalm-optional/relay/Relay.php" />
+        <file name="var/tmp/psalm-optional/relay/Sentinel.php" />
+        <file name="var/tmp/psalm-optional/relay/Table.php" />
+    </stubs>
 
     <!--
         BruteForce.php's known TaintedFile reports are retained as exact code

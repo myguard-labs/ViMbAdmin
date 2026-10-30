@@ -24,11 +24,13 @@ use ViMbAdmin\Kernel\Container;
  */
 final class ResetTotpCommand implements CliCommand
 {
+    #[\Override]
     public function name(): string
     {
         return 'admin.cli-reset-totp';
     }
 
+    #[\Override]
     public function run(Container $container, array $args): int
     {
         $username = (isset($args['username']) && is_string($args['username'])) ? $args['username'] : null;

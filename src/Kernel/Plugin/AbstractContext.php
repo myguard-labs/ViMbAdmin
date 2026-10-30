@@ -45,11 +45,13 @@ abstract class AbstractContext implements \ViMbAdmin_Plugin_MutationContext
     }
 
     /** @return array<string, mixed> */
+    #[\Override]
     public function getOptions(): array
     {
         return $this->options;
     }
 
+    #[\Override]
     public function getD2EM()
     {
         /** @var \Doctrine\ORM\EntityManagerInterface $entityManager */
@@ -58,6 +60,7 @@ abstract class AbstractContext implements \ViMbAdmin_Plugin_MutationContext
         return $entityManager;
     }
 
+    #[\Override]
     public function getAdmin()
     {
         /** @var \Entities\Admin $admin */
@@ -66,6 +69,7 @@ abstract class AbstractContext implements \ViMbAdmin_Plugin_MutationContext
         return $admin;
     }
 
+    #[\Override]
     public function getDomain()
     {
         /** @var \Entities\Domain $domain */
@@ -74,6 +78,7 @@ abstract class AbstractContext implements \ViMbAdmin_Plugin_MutationContext
         return $domain;
     }
 
+    #[\Override]
     public function addMessage(mixed $message, ?string $class = null, ?int $type = null): void
     {
         // Kept for the legacy contract; native flash messages have no type axis.

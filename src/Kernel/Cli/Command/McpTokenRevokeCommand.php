@@ -21,11 +21,13 @@ use ViMbAdmin\Kernel\Container;
  */
 final class McpTokenRevokeCommand implements CliCommand
 {
+    #[\Override]
     public function name(): string
     {
         return 'mcp.cli-token-revoke';
     }
 
+    #[\Override]
     public function run(Container $container, array $args): int
     {
         $entityManager = $container->entityManager();

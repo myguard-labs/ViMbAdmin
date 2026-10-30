@@ -1585,6 +1585,7 @@ final class MailboxController extends AbstractController
         }
     }
 
+    #[\Override]
     protected function em(): EntityManagerInterface
     {
         $em = parent::em();

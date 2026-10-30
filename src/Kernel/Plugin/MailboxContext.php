@@ -29,6 +29,7 @@ final class MailboxContext extends AbstractContext implements \ViMbAdmin_Plugin_
         parent::__construct($em, $admin, $domain, $options, $flash);
     }
 
+    #[\Override]
     public function getMailbox()
     {
         /** @var \Entities\Mailbox $mailbox */

@@ -238,6 +238,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         return $this->container->options();
     }
 
+    #[\Override]
     protected function em(): \Doctrine\ORM\EntityManager
     {
         $em = parent::em();

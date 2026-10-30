@@ -147,6 +147,9 @@ jobs:
       - name: Psalm excludes generated proxies
         run: bash ci/test-psalm-proxies-ignored.sh
 
+      - name: Psalm configured project analysis
+        run: psalm --no-progress --output-format=text --config=psalm.xml
+
       - name: Psalm taint analysis
         run: psalm --no-progress --taint-analysis
 

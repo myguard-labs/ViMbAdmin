@@ -336,6 +336,12 @@ jobs:
         run: >-
           composer install --no-interaction --no-progress --prefer-dist --no-dev
 
+      - name: MCP authentication preserves bearer and token restrictions
+        run: php ci/test-maintenance-mcp-auth.php
+
+      - name: MCP dispatch preserves authorization and rollback behavior
+        run: php ci/test-maintenance-mcp-parity.php
+
       - name: Run all framework-free PHP regression tests
         run: bash tests/run-unit-tests.sh
 

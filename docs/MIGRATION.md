@@ -72,23 +72,23 @@ just the manual "do it now" button. Two rules:
 1. **Always make a backup before you click** — that's your undo.
 2. **Read the list it shows you before confirming** — so there are no surprises.
 
-1. [ ] **Back up the database first — always.** From a shell with DB access:
+3. [ ] **Back up the database first — always.** From a shell with DB access:
 
-       ```sh
-       mysqldump --single-transaction --routines --triggers \
-         -u <user> -p <vimbadmin_db> > vimbadmin-pre-migrate-$(date +%F).sql
-       ```
+   ```sh
+   mysqldump --single-transaction --routines --triggers \
+     -u <user> -p <vimbadmin_db> > vimbadmin-pre-migrate-$(date +%F).sql
+   ```
 
-       (A bad DDL on a populated table is not something the panel can undo for
-       you — keep this dump until the migration is verified.)
+   (A bad DDL on a populated table is not something the panel can undo for
+   you — keep this dump until the migration is verified.)
 
-2. [ ] **Review the pending SQL before applying.** Log in as a super-admin →
-       **Maintenance → Update database schema → "Show pending schema changes".**
-       Nothing is applied until you confirm; the page lists every statement.
+4. [ ] **Review the pending SQL before applying.** Log in as a super-admin →
+   **Maintenance → Update database schema → "Show pending schema changes".**
+   Nothing is applied until you confirm; the page lists every statement.
 
-3. [ ] **Apply.** Click **"Apply N statement(s)"**. The page reports
-       `Schema updated successfully — N statement(s) executed`, and the version
-       line shows `4 applied / 4 expected by code` → **up to date**.
+5. [ ] **Apply.** Click **"Apply N statement(s)"**. The page reports
+   `Schema updated successfully — N statement(s) executed`, and the version
+   line shows `4 applied / 4 expected by code` → **up to date**.
 
    - CLI equivalent (same code path), if you prefer:
 
@@ -120,18 +120,18 @@ new dist and re-apply only your site values**, rather than hand-merge.
 
 1. [ ] **Back up your live config:**
 
-       ```sh
-       cp application/configs/application.ini application/configs/application.ini.bak-$(date +%F)
-       ```
+   ```sh
+   cp application/configs/application.ini application/configs/application.ini.bak-$(date +%F)
+   ```
 
 2. [ ] **Seed from the dist:**
 
-       ```sh
-       cp application/configs/application.ini.dist application/configs/application.ini
-       ```
+   ```sh
+   cp application/configs/application.ini.dist application/configs/application.ini
+   ```
 
-       > Dockerised deployments do this automatically on first boot when no
-       > `application.ini` is present; on an in-place upgrade you do it yourself.
+   > Dockerised deployments do this automatically on first boot when no
+   > `application.ini` is present; on an in-place upgrade you do it yourself.
 
 3. [ ] **Re-apply your site values from the `.bak`** — at minimum:
 
@@ -145,24 +145,24 @@ new dist and re-apply only your site values**, rather than hand-merge.
      branding / locale you customised.
 
 4. [ ] **Recover before replacing a legacy short `securitysalt`.** If the
-       existing value is not exactly 64 bytes, keep the old config active and
-       disable TOTP for every enrolled administrator first:
+   existing value is not exactly 64 bytes, keep the old config active and
+   disable TOTP for every enrolled administrator first:
 
-       ```sh
-       ./bin/vimbtool.php -a admin.cli-reset-totp --all
-       ```
+   ```sh
+   ./bin/vimbtool.php -a admin.cli-reset-totp --all
+   ```
 
-       Confirm the command reports each affected administrator, then replace
-       the invalid value with a fresh 64-character ASCII salt, for example:
+   Confirm the command reports each affected administrator, then replace
+   the invalid value with a fresh 64-character ASCII salt, for example:
 
-       ```sh
-       php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
-       ```
+   ```sh
+   php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+   ```
 
-       The reset command discards the opaque encrypted TOTP secrets without
-       trying another key. Administrators must enrol TOTP again after the
-       upgrade. Do not replace the salt before running the reset: ciphertext
-       encrypted with different bytes cannot be recovered or migrated.
+   The reset command discards the opaque encrypted TOTP secrets without
+   trying another key. Administrators must enrol TOTP again after the
+   upgrade. Do not replace the salt before running the reset: ciphertext
+   encrypted with different bytes cannot be recovered or migrated.
 
 5. [ ] **Set the new doveadm + queue keys** (no equivalent existed before):
 
@@ -178,15 +178,15 @@ new dist and re-apply only your site values**, rather than hand-merge.
    ```
 
 6. [ ] **Blank the per-mailbox storage defaults** so the DB never pins a maildir
-       root — Dovecot derives it (Phase 3). The dist already ships these blank;
-       just confirm you did **not** carry over old `defaults.mailbox.homedir` /
-       `defaults.mailbox.maildir` values from your backup.
+   root — Dovecot derives it (Phase 3). The dist already ships these blank;
+   just confirm you did **not** carry over old `defaults.mailbox.homedir` /
+   `defaults.mailbox.maildir` values from your backup.
 
 7. [ ] Sanity-check the result boots:
 
-       ```sh
-       php bin/vimbtool.php -a maintenance.cli-schema-update --verbose   # "up to date"
-       ```
+   ```sh
+   php bin/vimbtool.php -a maintenance.cli-schema-update --verbose   # "up to date"
+   ```
 
 > Keep `application.ini.bak-*` until the panel is verified working end to end.
 
@@ -238,7 +238,7 @@ and the hard-won caveats (dict socket perms, `fs` param shapes, last-login
 scope). Drop these into your Dovecot `conf.d/` and adjust DB creds / API key:
 
 | Snippet | Purpose |
-|---|---|
+| --- | --- |
 | [`00-mail-storage.conf`](../contrib/dovecot/conf.d/00-mail-storage.conf) | `mail_path`/`mail_inbox_path` derive the maildir from **Dovecot config, not the DB**. **Drop `maildir AS mail` / `homedir AS home` (and the passdb prefetch) from your userdb queries** — else the per-row DB value wins. Pairs with the blank `defaults.mailbox.{homedir,maildir}` from Phase 2. |
 | [`95-doveadm-http.conf`](../contrib/dovecot/conf.d/95-doveadm-http.conf) | Exposes the doveadm HTTP API on `:8081` with the bearer key ViMbAdmin POSTs to. **Never publish 8081 to the host** — the docker network + key are the perimeter. The key here must equal `doveadm.http.api_key` from Phase 2. |
 | [`96-fs-posix.conf`](../contrib/dovecot/conf.d/96-fs-posix.conf) | Named `fs posix` filter so `doveadm fs delete -R` can remove a backup dir over the API (archive autoprune). |

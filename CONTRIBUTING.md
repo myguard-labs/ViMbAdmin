@@ -2,18 +2,18 @@
 
 **Please do not open a GitHub issue but ask the mailing list.**
 
-Full details: https://www.vimbadmin.net/support.php
+Full details: <https://www.vimbadmin.net/support.php>
 
-# How to contribute
+## How to contribute
 
-Third-party patches are welcomed for adding functionality, fixing bugs and just correcting typos on ViMbAdmin.
+Third-party patches are welcomed for adding functionality, fixing bugs and just
+correcting typos on ViMbAdmin.
 
-We want to keep it as easy as possible to contribute changes but there are a few guidelines that we  
+We want to keep it as easy as possible to contribute changes but there are a
+few guidelines that we\
 need contributors to follow so that we can accept them.
 
-
-
-## Getting Started
+### Getting Started
 
 * Make sure you have a [GitHub account](https://github.com/signup/free)
 * Submit a ticket for your issue, assuming one does not already exist.
@@ -21,7 +21,7 @@ need contributors to follow so that we can accept them.
   * Make sure you fill in the earliest version that you know has the issue.
 * Fork the repository on GitHub
 
-## Making Changes
+### Making Changes
 
 * Create a topic branch from where you want to base your work.
   * This is usually the master branch.
@@ -34,15 +34,13 @@ need contributors to follow so that we can accept them.
 * Check for unnecessary whitespace with `git diff --check` before committing.
 * Make sure your commit messages reference issue numbers where appropriate.
 
-
-## Submitting Changes
+### Submitting Changes
 
 * Push your changes to a topic branch in your fork of the repository.
 * Submit a pull request to the myguard-labs/ViMbAdmin repository.
 * In the pull request, state your agreement to the [Contributor License Agreement](https://github.com/opensolutions/ViMbAdmin/wiki/Contributor-License-Agreement).
 
-# Additional Resources
+## Additional Resources
 
 * [General GitHub documentation](https://docs.github.com/)
 * [GitHub pull request documentation](https://docs.github.com/en/pull-requests/how-tos/create-pull-requests/creating-a-pull-request)
-

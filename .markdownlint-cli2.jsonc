@@ -1,0 +1,11 @@
+{
+  "config": {
+    "default": true,
+    "MD013": {
+      // Keep literal commands (including cron entries) and table rows intact.
+      // Prose retains the default 80-column limit; no rules are disabled.
+      "code_blocks": false,
+      "tables": false
+    }
+  }
+}

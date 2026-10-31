@@ -1,7 +1,8 @@
 # ViMbAdmin — modernised fork
 
 > **Live demo:** **<https://vimbadmin.myguard.nl>** — demo account is read-only-ish
-> (password + 2FA changes locked, outgoing mail no-op'd); everything else is the real panel.
+> (password + 2FA changes locked, outgoing mail no-op'd); everything else is the
+> real panel.
 >
 > **Full write-up, history & guided tour:**
 > [ViMbAdmin: The Postfix + Dovecot Mailbox Admin Panel (Modernised for PHP 8.5)](https://deb.myguard.nl/articles/vimbadmin-mailbox-admin/)
@@ -31,7 +32,7 @@ on PHP 8.5 on a hardened stack, so we fixed it.
 
 It runs, and it's hard to break into.
 
-**No helper scripts, no Dovecot-side cron — mailbox ops are native**
+### No helper scripts, no Dovecot-side cron — mailbox ops are native
 
 - **Repair / optimize / archive / delete** run against Dovecot's built-in
   **doveadm HTTP API** (`force-resync`, `index`, `purge`, `backup`,
@@ -48,7 +49,7 @@ It runs, and it's hard to break into.
 Net: the Dovecot container ships **zero** ViMbAdmin scripts/cron; the only
 optional cron left is the panel's own queue-runner.
 
-**Brought into this decade**
+### Brought into this decade
 
 - **ZF1 is completely gone.** The HTTP/CLI kernel, routing, forms, config
   loader, sessions and auth are all native PHP 8 now — not a single `Zend_*`
@@ -326,7 +327,7 @@ authenticates — every command works against the Doctrine EM directly.
 **Global flags** (accepted by every action):
 
 | Flag | Meaning |
-|---|---|
+| --- | --- |
 | `-v`, `--verbose` | extra output (e.g. schema-update prints the SQL + DB version) |
 | `-d`, `--debug` | debug output |
 | `-h`, `--help` | usage + action list |
@@ -335,7 +336,7 @@ authenticates — every command works against the Doctrine EM directly.
 **Actions:**
 
 | Action | What it does | Options |
-|---|---|---|
+| --- | --- | --- |
 | `queue.cli-run` | Drain the **mailbox-task queue** in batches of up to `queue.runner.max_per_run` PENDING tasks until empty or lease-throttled. Periodic runner (image fires it on start + every 5 min). Concurrency is capped by the `queue.runner.max_concurrent` DB lease. | `--once` → drain one batch only |
 | `maintenance.cli-schema-update` | Apply pending **Doctrine schema migrations** (changes table structure). Same code as the in-panel **Maintenance → Update schema** button. Run on deploy/upgrade; the Docker image runs it on every start. | `--verbose` → also print the SQL + DB version |
 | `maintenance.cli-precompile-templates` | Compile every **Smarty template** ahead of time into persistent `var/templates_c`, so the first web request pays no compile cost. Safe to re-run; image runs it on start. | — |
@@ -462,7 +463,6 @@ isn't cold:
   domain, log, archive) page/sort/search **server-side** — the browser fetches
   only the visible page. **On by default**
 
-
 ## Archiving, quotas & disk deletion
 
 Archive and delete are **queue-driven over the doveadm HTTP API** — no tarballs,
@@ -515,7 +515,7 @@ and containers; a crashed runner's lease is reaped after a timeout so a slot is
 never lost.
 
 | Entry point | Immediate response | Drain bound | Execution context |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `queue.cli-run` | exit `0`; no output unless `--verbose` | Repeats `max_per_run` batches until empty/throttled; `--once` stops after one batch | CLI process |
 | `POST /queue/trigger` | HTTP `200` JSON `{"triggered":true}` after bearer/IP validation | Repeats until empty/throttled; stops starting another batch after 100 batches or once 60 seconds has elapsed (an in-flight batch completes) | Same FPM worker, after response send; no fork/spawn |
 | Queue page **Run now** | Redirect + flash status | One `max_per_run` batch | Synchronous web request |
@@ -556,7 +556,7 @@ quota-clone plugin (below).
 **Two separate quota concerns** — keep them apart:
 
 | | What | Where it lives | Who writes it |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Limit** | the cap per mailbox | `mailbox.quota` (bytes) | ViMbAdmin (you, in the GUI) |
 | **Usage** | how full the mailbox is now | `dovecot_quota` table | Dovecot, live |
 
@@ -591,7 +591,7 @@ the retired `maildir_size` / `homedir_size` / `size_at` columns).
 
 ## Layout
 
-```
+```text
 application/    entities, repositories, plugins, config and Smarty views
 src/Kernel/     native HTTP/CLI kernel, controllers, forms, auth and session
 library/        framework-free OSS + ViMbAdmin domain helpers

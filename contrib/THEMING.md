@@ -16,14 +16,14 @@ small and survives upgrades.
 1. Pick a name, e.g. `mytheme` (use only `[A-Za-z0-9_-]`).
 2. Create the stylesheet:
 
-   ```
+   ```text
    public/css/_skins/mytheme/skin.css
    ```
 
 3. Create the skin's (possibly empty) template directory — the skin loader
    refuses to activate a skin whose template dir is missing:
 
-   ```
+   ```sh
    mkdir -p application/views/_skins/mytheme
    ```
 
@@ -41,7 +41,7 @@ linked — no broken `<link>`, no error.
 Because it loads after Bootstrap and the stock CSS, your rules win with normal
 specificity. Start from the bundled example:
 
-```
+```text
 public/css/_skins/dark/skin.css
 ```
 
@@ -52,7 +52,7 @@ see the mechanism working, then copy it as a starting point.
 
 To change markup, mirror the path under `application/views/_skins/<skin>/`:
 
-```
+```text
 application/views/_skins/mytheme/header.phtml     # overrides views/header.phtml
 application/views/_skins/mytheme/footer.phtml     # overrides views/footer.phtml
 application/views/_skins/mytheme/domain/list.phtml

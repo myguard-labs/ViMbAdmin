@@ -43,7 +43,7 @@ Already modern underneath: Doctrine ORM 2.x, `symfony/cache`, Smarty 5.
 ## Destination: components, not a framework
 
 | ZF1 piece | Replaced with |
-|---|---|
+| --- | --- |
 | `Zend_Controller` (front controller + routing) | `nikic/fast-route` + a small PSR-15 dispatcher |
 | `Zend_Form` (19 classes) | `symfony/validator` + plain Smarty templates |
 | `Zend_Auth` / `Zend_Session` | a small Auth/Session service |
@@ -66,11 +66,13 @@ Each step is its own pull request with green CI; the application is fully workin
 at every commit.
 
 ### Phase 0 — stop the bleeding (do first, cheap) — **DONE**
+
 - **CI guard:** a lint that fails if any *new* file under `library/ViMbAdmin/`
   (outside `Controller/` and `Form/`) introduces a `Zend_` reference. This locks
   in "new code is framework-free" — already true for `Mcp/*`.
   Implemented as [`tests/lint-no-new-zend.sh`](../tests/lint-no-new-zend.sh),
-  wired into the `static` job of `.github/workflows/regression.yml`. It carries a
+  wired into the `static` job of `.github/workflows/regression.yml`. It carries
+  a
   baseline allowlist of the three existing legacy-glue files (`Plugin.php`,
   `Doveadm.php`, `Form.php`) and fails the build if any other in-scope file —
   new or previously clean — grows a `Zend_` reference; it also flags a baseline
@@ -80,9 +82,13 @@ at every commit.
   thinnest possible ZF1 glue.
 
 ### Phase 1 — extract domain logic out of the controllers (highest value)
+
 For each controller, one at a time:
-1. Move its business logic into a plain service in `ViMbAdmin\Service\` that takes
-   the Doctrine entity manager plus scalar parameters and returns data or throws —
+
+1. Move its business logic into a plain service in `ViMbAdmin\Service\` that
+takes
+   the Doctrine entity manager plus scalar parameters and returns data or throws
+   —
    no `$this->view`, no action helpers, no `Zend_`.
 2. The controller action shrinks to: read request → call service → assign to view.
 3. Unit-test the service (now possible without the framework).
@@ -91,6 +97,7 @@ After Phase 1 the business logic is framework-free and tested; ZF1 only does HTT
 plumbing.
 
 > **Progress.** The pattern is established and migrated controllers so far:
+>
 > - `DomainController` → [`library/ViMbAdmin/Service/Domain.php`](../library/ViMbAdmin/Service/Domain.php)
 >   (toggle-active, assign/remove admin, purge).
 > - `AdminController` → [`library/ViMbAdmin/Service/Admin.php`](../library/ViMbAdmin/Service/Admin.php)
@@ -104,6 +111,7 @@ plumbing.
 > the `unit` job of `.github/workflows/regression.yml`.
 >
 > Conventions for the remaining controllers:
+>
 > - Services are PSR-0 underscore classes (`ViMbAdmin_Service_Foo`) under
 >   `library/ViMbAdmin/Service/`, matching the existing `ViMbAdmin_Mcp_*`
 >   precedent. The backslash PSR-4 rename happens later, in Phase 5.
@@ -130,6 +138,7 @@ plumbing.
 > after Phase 4 thins the form coupling — left intentionally for later.
 
 ### Phase 2 — build the framework-free kernel alongside ZF1
+
 1. Add the libraries above via Composer.
 2. Write four small kernel pieces (roughly 250 lines total) under `src/Kernel/`:
    - **Container** (PHP-DI) — replaces the `Bootstrap::_init*` methods: Doctrine
@@ -156,7 +165,8 @@ plumbing.
 > pattern with a variable-length key/value tail that fast-route can't express
 > natively, and a hand parser is clearer + unit-testable with no framework).
 > Migration is opt-in via a "native controllers" allowlist that **starts empty**,
-> so `match()` returns `null` for everything and every request still goes to ZF1 —
+> so `match()` returns `null` for everything and every request still goes to ZF1
+> —
 > zero behaviour change. Fully tested with no DB in
 > [`tests/test-kernel-router.php`](../tests/test-kernel-router.php) (the `unit`
 > job). `src/` is PSR-4 (`ViMbAdmin\Kernel\`) and is held to a **zero-`Zend_`**
@@ -164,6 +174,7 @@ plumbing.
 >
 > **2b — kernel skeleton (DONE) + Container/Dispatcher (later).** The entry-point
 > skeleton is landed and proven against a local image build:
+>
 > - [`src/Kernel/Http/Kernel.php`](../src/Kernel/Http/Kernel.php) +
 >   [`Response`](../src/Kernel/Http/Response.php) — `handle(path): ?Response`
 >   decodes via the Router and serves only controllers on the native allowlist
@@ -179,7 +190,8 @@ plumbing.
 >   404; gate on → `/kernel-health` serves natively, `/auth/setup` + `/domain/list`
 >   fall back to ZF1.
 > - **Angie caveat:** the deployment vhost (`dockerized/src/vimbadmin/angie.conf`)
->   runs a positive-security route allowlist, so a genuinely NEW native URL must be
+>   runs a positive-security route allowlist, so a genuinely NEW native URL must
+>   be
 >   added there too (that is why `kernel-health` is angie-404'd today — it is a
 >   synthetic probe). Phase 3 migrates EXISTING controllers, whose URLs are already
 >   allowlisted, so no vhost change is needed for the real migration.
@@ -192,17 +204,20 @@ plumbing.
 > added with that part, where they are actually used.
 
 ### Phase 3 — migrate controllers to the shim (one at a time)
+
 Per controller: change `extends ViMbAdmin_Controller_PluginAction` to
 `extends AbstractController` and rename the handful of accessor calls. The body
 barely changes. The route flips from the ZF1 fallback to native dispatch. URLs are
 unchanged. Repeat for all 15.
 
 ### Phase 4 — replace `Zend_Form` (the largest chunk: 19 classes)
+
 Replace each form with `symfony/validator` constraints plus a plain, auto-escaped
 Smarty template partial. This removes the `setEscapeHtml` / `nofilter` pattern and
 the XSS footgun that comes with it.
 
 ### Phase 5 — auth/session and finish
+
 1. Replace `Zend_Auth` / `Zend_Session` with a small Auth/Session service using
    modern cookie defaults (SameSite, secure, current hashing), wired as PSR-15
    middleware.
@@ -214,16 +229,20 @@ the XSS footgun that comes with it.
 > **Ordering correction: the session foundation is a prerequisite, not the last
 > step.** Building Phase 2b/3/4 revealed that all three transitively need a
 > framework-free session:
+>
 > - the Phase 3 `AbstractController` shim must supply `getAdmin()` / `authorise()`
->   / `getSessionNamespace()` / `_assertCsrf()` before any real controller can move;
+>   / `getSessionNamespace()` / `_assertCsrf()` before any real controller can
+>   move;
 > - a full Phase 4 form replacement needs a **session-backed CSRF token** (today's
->   forms use the ZF1 hash element; `_assertCsrf()` uses a session token), plus a
+>   forms use the ZF1 hash element; `_assertCsrf()` uses a session token), plus
+>   a
 >   replacement for the `{addJSValidator}` client-side validation generated from
 >   the ZF1 form.
 >
 > So the practical sequence is **0 → 1 → 2a → (session + CSRF foundation) → 2b
 > skeleton → 3 → 4 → rest of 5**. The pieces below are being landed first, small
 > and inert (nothing wired yet, zero behaviour change), exactly like the Router:
+>
 > - [`src/Kernel/Session/SessionStorage.php`](../src/Kernel/Session/SessionStorage.php)
 >   — a narrow session port (has/get/set/remove) so security/auth services are
 >   unit-testable with an in-memory fake; [`NativeSessionStorage`](../src/Kernel/Session/NativeSessionStorage.php)
@@ -248,15 +267,18 @@ the XSS footgun that comes with it.
 > now delegates to the `Csrf` service over
 > [`src/Kernel/Session/MagicPropertyStorage.php`](../src/Kernel/Session/MagicPropertyStorage.php)
 > — a SessionStorage adapter that bridges any magic-property object (the ZF1
-> session namespace `getSessionNamespace()` returns) without naming the framework,
+> session namespace `getSessionNamespace()` returns) without naming the
+> framework,
 > so it stays in the zero-`Zend_` `src/` tree. The token lives under the same
 > `csrfToken` session key, so tokens minted by the old code keep validating across
-> the upgrade. Verified by unit tests (adapter + Csrf, 29 assertions) and against a
+> the upgrade. Verified by unit tests (adapter + Csrf, 29 assertions) and
+> against a
 > local image build: the app boots and the kernel CSRF classes autoload and
 > round-trip in the image runtime.
 >
 > - [`src/Kernel/Security/Auth.php`](../src/Kernel/Security/Auth.php) — the
->   framework-free `getAdmin()` / `authorise()` the Phase 3 shim needs. Depends on
+>   framework-free `getAdmin()` / `authorise()` the Phase 3 shim needs. Depends
+>   on
 >   the session port (where the identity array lives — the ZF1 auth layer stores
 >   an array carrying the admin's `id`) plus an admin-loader callable
 >   `fn(int $id): ?object` (so it is Doctrine-free and unit-testable). Answers
@@ -272,7 +294,8 @@ the XSS footgun that comes with it.
 > Still framework-bound, to wire next (validated against the local image build):
 > routing `addMessage()` through `FlashMessages` (two-sided — the producer trait
 > and the `{OSS_Message}` renderer drain switch together); wiring `getAdmin()` /
-> `authorise()` onto the `Auth` service; then the Container + Dispatcher behind the
+> `authorise()` onto the `Auth` service; then the Container + Dispatcher behind
+> the
 > Phase 2b kernel to serve the first real controller natively.
 
 ## Guardrails

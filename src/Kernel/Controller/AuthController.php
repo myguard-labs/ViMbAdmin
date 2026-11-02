@@ -1086,6 +1086,7 @@ final class AuthController extends AbstractController
         return new \ViMbAdmin_BruteForce($this->em(), $opts);
     }
 
+    #[\Override]
     protected function em(): \Doctrine\ORM\EntityManager
     {
         $em = parent::em();

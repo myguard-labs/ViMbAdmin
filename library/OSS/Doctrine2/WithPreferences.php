@@ -293,7 +293,7 @@ trait OSS_Doctrine2_WithPreferences
      * ===== END NOT IMPLEMENTED =====
      *
      * @param string $attribute The preference name
-     * @param string $value The value to assign to the preference
+     * @param string|string[] $value The value or values to assign to the preference
      * @param string $operator default '=' The operand (e.g. = (default), <, <=, :=, =, += etc)
      * @param int $expires default 0 The expiry as a UNIX timestamp. Default 0 which means never.
      * @param int $max The maximum index allowed. Defaults to 0 meaning no limit.
@@ -562,7 +562,7 @@ trait OSS_Doctrine2_WithPreferences
                     }
 
                     $preferenceValue = $this->_requiredPreferenceValue($pref->getValue());
-                    if ($key) {
+                    if ($key !== null && $key !== '') {
                         $key = "{$preferenceIndex}.{$key}";
                         $values = $this->_processKey(
                             $values,
@@ -669,6 +669,7 @@ trait OSS_Doctrine2_WithPreferences
      * This is  similar to the `getPreference()` method but it creates
      * and executes DQL instead of simply returning `$this->getPreferences()`.
      *
+     * Transient owners read their attached collection until an ID is assigned.
      * NOTICE: Function required due to `$this->getPreferences()` iteration failure.
      * FIXME This should not be necessary
      *
@@ -676,6 +677,20 @@ trait OSS_Doctrine2_WithPreferences
      */
     public function _getPreferences()
     {
+        if ($this->getId() === null) {
+            $preferences = $this->_validatedPreferenceResults(array_values($this->getPreferences()->toArray()));
+            $this->_getFullClassname();
+            $getOwner = 'get' . $this->_getShortClassname();
+            $owned = [];
+            foreach ($preferences as $preference) {
+                $owner = $preference->$getOwner();
+                if ($owner === null || $owner === $this) {
+                    $owned[] = $preference;
+                }
+            }
+            return $owned;
+        }
+
         $query = sprintf(
             "SELECT p FROM %sPreference p WHERE p.%s = %d",
             $this->_getFullClassname(),
@@ -714,18 +729,11 @@ trait OSS_Doctrine2_WithPreferences
             $pieces = explode(".", $key, 2);
             if (strlen($pieces[0]) && strlen($pieces[1])) {
                 if (!isset($config[ $pieces[0] ])) {
-                    if ($pieces[0] === '0' && !empty($config)) {
-                        $config = [$pieces[0] => $config];
-                    } else {
-                        $config[ $pieces[0] ] = [];
-                    }
+                    $config[ $pieces[0] ] = [];
                 } elseif (!is_array($config[$pieces[0]])) {
                     throw new \UnexpectedValueException("Cannot create preference sub-key '{$pieces[0]}' over a scalar");
                 }
                 $nested = $config[ $pieces[0] ];
-                if (!is_array($nested)) {
-                    throw new \UnexpectedValueException("Cannot create preference sub-key '{$pieces[0]}' over a scalar");
-                }
                 $config[ $pieces[0] ] = $this->_processKey($nested, $pieces[1], $value);
             } else {
                 //die("Invalid key '$key'");

@@ -49,6 +49,36 @@ final class PreferenceReuseContractState
     public static int $checks = 0;
 }
 
+/** Replays actual persisted rows at the query-order boundary. */
+final class PreferenceOrderContract
+{
+    use OSS_Doctrine2_WithPreferences;
+
+    /** @param list<object> $preferences */
+    public function __construct(private array $preferences)
+    {
+    }
+
+    /** @return list<object> */
+    public function _getPreferences(): array
+    {
+        return $this->preferences;
+    }
+}
+
+final class PreferenceSqlLog extends \Psr\Log\AbstractLogger
+{
+    /** @var list<string> */
+    public array $sql = [];
+
+    public function log($level, string|\Stringable $message, array $context = []): void
+    {
+        if (isset($context['sql']) && is_string($context['sql'])) {
+            $this->sql[] = $context['sql'];
+        }
+    }
+}
+
 /** @phpstan-assert true $passed */
 function preferenceReuseCheck(string $label, bool $passed): void
 {
@@ -87,6 +117,8 @@ if (PHP_VERSION_ID >= 80400) {
     $configuration->setProxyDir(sys_get_temp_dir());
     $configuration->setProxyNamespace('PreferenceContractProxies');
 }
+$sqlLog = new PreferenceSqlLog();
+$configuration->setMiddlewares([new \Doctrine\DBAL\Logging\Middleware($sqlLog)]);
 $parameters = ['driver' => 'pdo_mysql', 'host' => getenv('DB_HOST') ?: '127.0.0.1',
     'port' => (int) (getenv('DB_PORT') ?: 3306), 'user' => getenv('DB_USER') ?: 'root',
     'password' => getenv('DB_PASS') ?: '', 'charset' => 'utf8mb4'];
@@ -158,6 +190,88 @@ try {
         $owners['Mailbox'][] = (new Entities\Mailbox())->setUsername('mailbox@' . $domain->getDomain())
             ->setLocalPart('mailbox')->setName('Preference fixture')->setPassword('!')->setQuota(128)
             ->setDeletePending(false)->setActive(true)->setCreated(new DateTime('2026-01-01'))->setDomain($domain);
+    }
+    preferenceReuseCheck('SQL recorder observes real schema statements', $sqlLog->sql !== []);
+    foreach ($owners as $family => $familyOwners) {
+        $class = 'Entities\\' . $family . 'Preference';
+        foreach ($familyOwners as $ownerIndex => $target) {
+            $marker = $ownerIndex === 0 ? 'owner' : 'foreign';
+            $beforeSql = count($sqlLog->sql);
+            preferenceReuseCheck("$family $marker transient missing preference is false", $target->getId() === null
+                && $target->getPreference('transient-missing') === false);
+            $target->setPreference('transient-value', $marker . ':first');
+            $first = $target->loadPreference('transient-value');
+            preferenceReuseCheck("$family $marker transient read sees attached value", $first instanceof $class
+                && $target->getPreference('transient-value') === $marker . ':first');
+            $beforeUpdate = $target->getPreferences()->count();
+            $target->setPreference('transient-value', $marker . ':updated');
+            preferenceReuseCheck("$family $marker transient update preserves association identity", $target->loadPreference('transient-value') === $first
+                && $target->getPreferences()->count() === $beforeUpdate && $target->getPreference('transient-value') === $marker . ':updated');
+            $target->setPreference('transient-zero', '0');
+            $target->setPreference('transient-empty', '');
+            $target->setPreference('transient-tree.leaf', $marker . ':one', '=', 0, 1);
+            $target->setPreference('transient-tree.0', $marker . ':zero', '=', 0, 0);
+            $transientTree = $target->getAssocPreference('transient-tree', 1);
+            preferenceReuseCheck("$family $marker transient tree returns an array", is_array($transientTree));
+            ksort($transientTree);
+            preferenceReuseCheck("$family $marker transient values and indexed associations stay isolated", $target->getPreference('transient-zero') === '0'
+                && $target->getPreference('transient-empty') === '' && $target->getPreference('transient-tree.0', 0) === $marker . ':zero'
+                && $transientTree === [1 => ['leaf' => $marker . ':one']]);
+            $foreign = (new $class())->setAttribute('transient-foreign')->setIx(0)->setValue('foreign')->setExpire(0);
+            $owned = (new $class())->setAttribute('transient-owned')->setIx(0)->setValue('owned')->setExpire(0);
+            $unattached = (new $class())->setAttribute('transient-unattached')->setIx(0)->setValue('unattached')->setExpire(0);
+            preferenceReuseInvoke($foreign, 'set' . $family, $familyOwners[1 - $ownerIndex]);
+            preferenceReuseInvoke($owned, 'set' . $family, $target);
+            foreach ([$foreign, $owned, $unattached] as $preference) {
+                $target->addPreference($preference);
+            }
+            try {
+                preferenceReuseCheck("$family $marker transient collection excludes foreign owner", $target->getPreference('transient-foreign') === false);
+                preferenceReuseCheck("$family $marker transient collection retains current and unattached owners", $target->getPreference('transient-owned') === 'owned'
+                    && $target->getPreference('transient-unattached') === 'unattached');
+            } finally {
+                foreach ([$foreign, $owned, $unattached] as $preference) {
+                    $target->removePreference($preference);
+                }
+            }
+            foreach (['Attribute', 'Ix', 'Value'] as $nullField) {
+                $malformed = (new $class())->setAttribute('transient-invalid')->setIx(0)->setValue('invalid')->setExpire(0);
+                preferenceReuseInvoke($malformed, 'set' . $nullField, null);
+                $target->getPreferences()->add($malformed);
+                try {
+                    preferenceReuseCheck("$family $marker transient null $nullField rejects malformed state", $throws(
+                        static fn () => $target->getPreference('transient-invalid', 0, true),
+                        LogicException::class,
+                    ));
+                } finally {
+                    $target->getPreferences()->removeElement($malformed);
+                }
+            }
+            $invalidEntity = new stdClass();
+            $target->getPreferences()->add($invalidEntity);
+            try {
+                preferenceReuseCheck("$family $marker transient collection validates entity family", $throws(
+                    static fn () => $target->_getPreferences(),
+                    UnexpectedValueException::class,
+                ));
+            } finally {
+                $target->getPreferences()->removeElement($invalidEntity);
+            }
+            if ($family === 'Admin') {
+                preferenceReuseCheck("$marker transient Admin repeated compare-and-swap sees staged writes", $target->compareAndSwapPreference('transient-cas', false, 'one')
+                    && $target->compareAndSwapPreference('transient-cas', 'one', 'two')
+                    && !$target->compareAndSwapPreference('transient-cas', false, 'wrong')
+                    && $target->getPreference('transient-cas') === 'two');
+            }
+            preferenceReuseCheck("$family $marker transient API dispatches no SQL", count($sqlLog->sql) === $beforeSql);
+        }
+        $ownerClass = 'Entities\\' . $family;
+        $zeroOwner = new $ownerClass();
+        (new ReflectionProperty($zeroOwner, 'id'))->setValue($zeroOwner, 0);
+        $zeroOwner->addPreference((new $class())->setAttribute('zero-id-local')->setIx(0)->setValue('local-only')->setExpire(0));
+        $beforeZeroSql = count($sqlLog->sql);
+        preferenceReuseCheck("$family non-null ID zero retains the real query path", $zeroOwner->getPreference('zero-id-local') === false
+            && count($sqlLog->sql) > $beforeZeroSql);
     }
     foreach ($owners as $familyOwners) {
         foreach ($familyOwners as $owner) {
@@ -264,6 +378,12 @@ try {
             $target->setPreference('expired', $marker . ':expired', '=', $now - 3600);
             $target->setPreference(str_repeat('a', 255), $marker . ':boundary', ':=', 0, -1);
             $target->setPreference('tree.leaf', $marker . ':nested', '=', 0, 2);
+            $target->setPreference('zero-tree.0', $marker . ':zero-key', '=', 0, 2);
+            $target->setPreference('empty-tree.', $marker . ':empty-key', '=', 0, 2);
+            $target->setPreference('plain-tree', $marker . ':plain-key', '=', 0, 2);
+            $target->setPreference('order-tree.leaf', $marker . ':one', '=', 0, 1);
+            $target->setPreference('order-tree.0', $marker . ':zero', '=', 0, 0);
+            $target->setPreference('order-tree.deep.0', $marker . ':deep-zero', '=', 0, 2);
             $target->setPreference('integer-boundary', $marker . ':large', '=', 4102444800, 2147483647);
             $target->setPreference('integer-boundary', $marker . ':small', '=', 0, -2147483648);
         }
@@ -277,6 +397,13 @@ try {
         $owner = $em->find($ownerClass, $id);
         $other = $em->find($ownerClass, $otherId);
         preferenceReuseCheck("$family real clear/reload finds both owners", $owner instanceof $ownerClass && $other instanceof $ownerClass);
+        preferenceReuseCheck("$family transient values survive generated-ID flush and reload", $owner->getPreference('transient-value') === 'owner:updated'
+            && $other->getPreference('transient-value') === 'foreign:updated' && $owner->getPreference('transient-zero') === '0'
+            && $owner->getPreference('transient-empty') === '');
+        if ($family === 'Admin') {
+            preferenceReuseCheck('transient Admin CAS survives real flush and reload', $owner->getPreference('transient-cas') === 'two'
+                && $other->getPreference('transient-cas') === 'two');
+        }
         $preference = $owner->loadPreference('contract');
         preferenceReuseCheck("$family real clear/reload preserves scalar fields and concrete association", $preference instanceof $class
             && is_int($preference->getId()) && $preference->getId() > 0 && $preference->getAttribute() === 'contract'
@@ -299,6 +426,35 @@ try {
             && $owner->getPreference('integer-boundary', 2147483647) === 'owner:large'
             && $largeIndex !== false && $largeIndex->getExpire() === 4102444800);
         preferenceReuseCheck("$family associative value survives reload", $owner->getAssocPreference('tree') === [2 => ['leaf' => 'owner:nested']]);
+        preferenceReuseCheck("$family zero-string associative subkey survives reload", $owner->getAssocPreference('zero-tree') === [2 => [0 => 'owner:zero-key']]
+            && $other->getAssocPreference('zero-tree') === [2 => [0 => 'foreign:zero-key']]);
+        preferenceReuseCheck("$family empty and absent associative subkeys keep their flat shape", $owner->getAssocPreference('empty-tree') === [2 => 'owner:empty-key']
+            && $owner->getAssocPreference('plain-tree') === [2 => 'owner:plain-key']);
+        preferenceReuseCheck("$family nested preference rejects a scalar parent", $throws(
+            static fn () => preferenceReuseInvoke($owner, '_processPreferenceKey', ['leaf' => 'scalar'], 'leaf.child', 'value'),
+            UnexpectedValueException::class,
+        ));
+        foreach ([[$owner, 'owner'], [$other, 'foreign']] as [$target, $marker]) {
+            $orderedRows = array_values(array_filter(
+                $target->_getPreferences(),
+                static fn (object $row): bool => str_starts_with($row->getAttribute() ?? '', 'order-tree.'),
+            ));
+            usort($orderedRows, static fn (object $left, object $right): int => $left->getIx() <=> $right->getIx());
+            preferenceReuseCheck("$family $marker order controls use three persisted owner rows", count($orderedRows) === 3
+                && array_map(static fn (object $row): ?int => $row->getIx(), $orderedRows) === [0, 1, 2]
+                && count(array_filter($orderedRows, static fn (object $row): bool => is_int($row->getId()) && $row->getId() > 0)) === 3);
+            foreach ([[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]] as $order) {
+                $ordered = new PreferenceOrderContract(array_map(static fn (int $index): object => $orderedRows[$index], $order));
+                $actual = $ordered->getAssocPreference('order-tree');
+                preferenceReuseCheck("$family $marker ordered preference result is an array", is_array($actual));
+                ksort($actual);
+                preferenceReuseCheck("$family $marker nested zero subkeys preserve every persisted row for order " . implode(',', $order), $actual === [
+                    0 => [0 => $marker . ':zero'],
+                    1 => ['leaf' => $marker . ':one'],
+                    2 => ['deep' => [0 => $marker . ':deep-zero']],
+                ]);
+            }
+        }
         $owner->setPreference('contract', 'updated:' . $raw, '=', $now + 7200);
         $updated = $owner->loadPreference('contract');
         preferenceReuseCheck("$family update schedules existing row", $updated !== false && $updated->getId() === $preference->getId());

@@ -31,7 +31,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         return $this->_dispatcher()->dispatch(
             $this->_mcpEnabled(),
             $_SERVER['REQUEST_METHOD'] ?? 'GET',
-            static fn (): string|false => file_get_contents('php://input'),
+            static fn (): string|false => vimbadmin_mcp_read_request_body(),
             $_SERVER,
         );
     }
@@ -238,6 +238,7 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         return $this->container->options();
     }
 
+    #[\Override]
     protected function em(): \Doctrine\ORM\EntityManager
     {
         $em = parent::em();
@@ -247,4 +248,10 @@ class McpController extends \ViMbAdmin\Kernel\Mvc\AbstractController
         return $em;
     }
 
+}
+
+/** Read only the MCP request stream; its Psalm source model lives in a stub. */
+function vimbadmin_mcp_read_request_body(): string|false
+{
+    return file_get_contents('php://input');
 }

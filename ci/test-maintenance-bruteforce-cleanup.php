@@ -211,6 +211,138 @@ function cleanupRemoveTree(string $directory): void
     rmdir($directory);
 }
 
+final class CleanupReadFault
+{
+    public static string $path = '';
+    public static string $lock = '';
+    public static string $mode = 'normal';
+    public static int $failedReads = 0;
+    public static int $lockedFailedReads = 0;
+    public static int $unlinks = 0;
+    public static int $lockedUnlinks = 0;
+
+    public static function writerLocked(): bool
+    {
+        $probe = fopen(self::$lock, 'c');
+        if ($probe === false) {
+            throw new RuntimeException('could not probe the cleanup writer shard');
+        }
+        try {
+            $acquired = flock($probe, LOCK_EX | LOCK_NB);
+            if ($acquired) {
+                flock($probe, LOCK_UN);
+            }
+            return !$acquired;
+        } finally {
+            fclose($probe);
+        }
+    }
+}
+
+/** @param array{attempts:int,first:int,last:int,locked_until:int} $liveRecord */
+function cleanupReadFailureScenarios(string $root, int $now, array $liveRecord): void
+{
+    // Load the complete current class, changing only its namespace. Native
+    // metadata, shard locks and deletion remain real; only two exact-path I/O
+    // failures are injectable, including when CI runs with root privileges.
+    $source = file_get_contents(__DIR__ . '/../library/ViMbAdmin/BruteForce.php');
+    if (!is_string($source) || !str_starts_with($source, '<?php')) {
+        throw new RuntimeException('could not load the cleanup regression source');
+    }
+    eval(<<<'PHP'
+namespace BruteForceCleanupReadFault;
+use \CleanupReadFault;
+use \LogicException;
+use \RuntimeException;
+use \ViMbAdmin_Net;
+function file_get_contents(string $path): string|false
+{
+    if ($path === CleanupReadFault::$path && CleanupReadFault::$mode === 'read-failure') {
+        CleanupReadFault::$failedReads++;
+        CleanupReadFault::$lockedFailedReads += (int) CleanupReadFault::writerLocked();
+        return false;
+    }
+    return \file_get_contents($path);
+}
+function unlink(string $path): bool
+{
+    if ($path === CleanupReadFault::$path) {
+        CleanupReadFault::$unlinks++;
+        CleanupReadFault::$lockedUnlinks += (int) CleanupReadFault::writerLocked();
+        if (CleanupReadFault::$mode === 'unlink-failure') {
+            return false;
+        }
+    }
+    return \unlink($path);
+}
+PHP
+        . substr($source, 5));
+
+    $directory = $root . '/read-failure';
+    mkdir($directory, 0700, true);
+    $ip = '192.0.2.7';
+    $path = bruteForceStatePath($directory, $ip);
+    CleanupReadFault::$path = $path;
+    CleanupReadFault::$lock = bruteForceLockShardPath($directory, $ip);
+    $class = 'BruteForceCleanupReadFault\\ViMbAdmin_BruteForce';
+    $bruteForce = new $class(null, ['statedir' => $directory, 'max_entries' => 64]);
+    $candidate = new ReflectionMethod($bruteForce, '_evictionCandidate');
+    $evict = new ReflectionMethod($bruteForce, '_evictOverflow');
+    $load = new ReflectionMethod($bruteForce, '_load');
+    cleanupWriteRecord($path, $liveRecord);
+    $mtime = filemtime($path);
+    if (!is_int($mtime)) {
+        throw new RuntimeException('could not stat the cleanup read-failure fixture');
+    }
+    $sample = [basename($path) => $mtime];
+    cleanupCheck('readable live lockout is excluded from overflow sampling', $candidate->invoke($bruteForce, $path, $now) === null);
+    cleanupCheck('readable live lockout loads unchanged', $load->invoke($bruteForce, $ip) === $liveRecord);
+
+    CleanupReadFault::$mode = 'read-failure';
+    cleanupCheck('unreadable live lockout is excluded from overflow sampling', $candidate->invoke($bruteForce, $path, $now) === null);
+    // A previously sampled record can become unreadable before the locked
+    // recheck. The independent descriptor must observe the real writer lock.
+    cleanupCheck('failed locked recheck makes no eviction progress', $evict->invoke($bruteForce, 65, $sample, $now) === false);
+    cleanupCheck('read failure reaches the real exclusive writer shard', CleanupReadFault::$failedReads === 2 && CleanupReadFault::$lockedFailedReads === 1);
+    cleanupCheck('unreadable live lockout is never authorized for unlink', CleanupReadFault::$unlinks === 0 && is_file($path));
+    cleanupCheck('unreadable live lockout retains its exact bytes', file_get_contents($path) === json_encode($liveRecord, JSON_THROW_ON_ERROR));
+    $unavailable = false;
+    try {
+        $load->invoke($bruteForce, $ip);
+    } catch (RuntimeException $error) {
+        $unavailable = $error->getMessage() === 'bruteforce state persistence unavailable';
+    }
+    cleanupCheck('preserved unreadable state still fails closed in load', $unavailable);
+    CleanupReadFault::$mode = 'normal';
+    cleanupCheck('restoring reads reveals the original live lockout', $load->invoke($bruteForce, $ip) === $liveRecord);
+
+    $counting = array_replace($liveRecord, ['locked_until' => 0]);
+    $cases = [
+        'lockout expiry boundary' => json_encode(array_replace($liveRecord, ['locked_until' => $now]), JSON_THROW_ON_ERROR),
+        'stale lockout' => json_encode(array_replace($liveRecord, ['locked_until' => $now - 1]), JSON_THROW_ON_ERROR),
+        'readable malformed JSON' => '{',
+        'readable invalid integer' => json_encode(array_replace($counting, ['attempts' => '1']), JSON_THROW_ON_ERROR),
+    ];
+    foreach ($cases as $label => $bytes) {
+        file_put_contents($path, $bytes);
+        clearstatcache(true, $path);
+        cleanupCheck($label . ' remains intentionally evictable', is_int($candidate->invoke($bruteForce, $path, $now)));
+        $before = CleanupReadFault::$unlinks;
+        cleanupCheck($label . ' is removed under the writer shard', $evict->invoke($bruteForce, 65, $sample, $now) === false
+            && !file_exists($path) && CleanupReadFault::$unlinks === $before + 1
+            && CleanupReadFault::$lockedUnlinks === CleanupReadFault::$unlinks);
+    }
+
+    cleanupWriteRecord($path, $counting);
+    CleanupReadFault::$mode = 'unlink-failure';
+    $before = CleanupReadFault::$unlinks;
+    cleanupCheck('counting record remains evictable before an unlink failure', is_int($candidate->invoke($bruteForce, $path, $now)));
+    cleanupCheck('failed unlink under the writer shard makes no progress', $evict->invoke($bruteForce, 65, $sample, $now) === false
+        && is_file($path) && CleanupReadFault::$unlinks === $before + 1
+        && CleanupReadFault::$lockedUnlinks === CleanupReadFault::$unlinks);
+    CleanupReadFault::$mode = 'normal';
+}
+
 if (($argv[1] ?? '') === 'wait-without-ready') {
     usleep(30_000_000);
     exit(23);
@@ -261,7 +393,20 @@ $liveRecord = [
     'locked_until' => $now + 120,
 ];
 
+if (($argv[1] ?? '') === 'read-failure-only') {
+    try {
+        cleanupReadFailureScenarios($root, $now, $liveRecord);
+        cleanupCheck('focused assertion count', BruteForceCleanupAssertions::$checks === 19);
+    } finally {
+        cleanupRemoveTree($root);
+    }
+    $failures = BruteForceCleanupAssertions::$failures;
+    echo $failures === 0 ? "ALL PASSED (20 checks)\n" : "FAIL: {$failures} assertion(s) failed\n";
+    exit($failures === 0 ? 0 : 1);
+}
+
 try {
+    cleanupReadFailureScenarios($root, $now, $liveRecord);
     // Both startup failures and scenario failures must close pipes, terminate
     // live children, reap them, and remove their barrier files.
     $lifecycleDirectory = $root . '/lifecycle';
@@ -414,11 +559,11 @@ try {
         cleanupFinishChild($overflowChild, true);
     }
 
-    cleanupCheck('fixed assertion count', BruteForceCleanupAssertions::$checks === 14);
+    cleanupCheck('fixed assertion count', BruteForceCleanupAssertions::$checks === 33);
 } finally {
     cleanupRemoveTree($root);
 }
 
 $failures = BruteForceCleanupAssertions::$failures;
-echo $failures === 0 ? "ALL PASSED (15 checks)\n" : "FAIL: {$failures} assertion(s) failed\n";
+echo $failures === 0 ? "ALL PASSED (34 checks)\n" : "FAIL: {$failures} assertion(s) failed\n";
 exit($failures === 0 ? 0 : 1);

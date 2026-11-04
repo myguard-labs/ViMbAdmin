@@ -19,6 +19,14 @@ namespace ViMbAdmin\Kernel\Http;
  */
 final class Response
 {
+    public readonly string $body;
+    public readonly int $status;
+    public readonly string $contentType;
+    /** @var array<string,string> */
+    public readonly array $headers;
+    /** @var (callable():void)|null */
+    public readonly mixed $afterSend;
+
     /**
      * @param array<string,string>  $headers   extra headers beyond Content-Type
      * @param (callable():void)|null $afterSend work to run AFTER the response is
@@ -30,12 +38,18 @@ final class Response
      *        without forking a process.
      */
     public function __construct(
-        public readonly string $body,
-        public readonly int $status = 200,
-        public readonly string $contentType = 'text/html; charset=utf-8',
-        public readonly array $headers = [],
-        public readonly mixed $afterSend = null,
+        string $body,
+        int $status = 200,
+        string $contentType = 'text/html; charset=utf-8',
+        array $headers = [],
+        mixed $afterSend = null,
     ) {
+        // Explicit assignments let Psalm propagate taint to the HTTP emitter.
+        $this->body = $body;
+        $this->status = $status;
+        $this->contentType = $contentType;
+        $this->headers = $headers;
+        $this->afterSend = $afterSend;
     }
 
     public static function text(string $body, int $status = 200): self

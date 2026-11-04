@@ -1,0 +1,41 @@
+--- a/src/Psalm/Internal/Analyzer/FunctionLikeAnalyzer.php
++++ b/src/Psalm/Internal/Analyzer/FunctionLikeAnalyzer.php
+@@ -542,6 +542,18 @@
+                         $check_stmts = \false;
+                     }
+                 }
++                if ($statements_analyzer->data_flow_graph instanceof TaintFlowGraph && $cased_method_id !== null && $function_param->location) {
++                    $callable_types = [];
++                    foreach ($param_type->getAtomicTypes() as $callable_type) {
++                        if (($callable_type instanceof \Psalm\Type\Atomic\TClosure || $callable_type instanceof \Psalm\Type\Atomic\TCallable) && $callable_type->return_type) {
++                            $return_node = DataFlowNode::getForMethodArgument($cased_method_id . '@callable-return', $cased_method_id . '@callable-return', $offset, $function_param->location);
++                            $statements_analyzer->data_flow_graph->addNode($return_node);
++                            $callable_type = $callable_type->replace($callable_type->params, $callable_type->return_type->addParentNodes([$return_node->id => $return_node]));
++                        }
++                        $callable_types[] = $callable_type;
++                    }
++                    $param_type = $param_type->setTypes($callable_types);
++                }
+                 $param_type = $param_type->addParentNodes($parent_nodes);
+             } else {
+                 $param_type = new Union([new TMixed()], ['by_ref' => $function_param->by_ref, 'parent_nodes' => $parent_nodes]);
+--- a/src/Psalm/Internal/Analyzer/Statements/Expression/Call/ArgumentAnalyzer.php
++++ b/src/Psalm/Internal/Analyzer/Statements/Expression/Call/ArgumentAnalyzer.php
+@@ -788,6 +788,17 @@
+                 $statements_analyzer->data_flow_graph->addPath($method_node, $new_sink, 'arg', $added_taints, $removed_taints);
+             }
+         }
++        if ($statements_analyzer->data_flow_graph instanceof TaintFlowGraph) {
++            foreach ($input_type->getAtomicTypes() as $callable_type) {
++                if (($callable_type instanceof \Psalm\Type\Atomic\TClosure || $callable_type instanceof \Psalm\Type\Atomic\TCallable) && $callable_type->return_type && $callable_type->return_type->parent_nodes) {
++                    $return_node = DataFlowNode::getForMethodArgument($cased_method_id . '@callable-return', $cased_method_id . '@callable-return', $argument_offset, $function_param->location, $specialize_taint ? $function_call_location : null);
++                    $statements_analyzer->data_flow_graph->addNode($return_node);
++                    foreach ($callable_type->return_type->parent_nodes as $return_parent) {
++                        $statements_analyzer->data_flow_graph->addPath($return_parent, $return_node, 'callable-return', $added_taints, $removed_taints);
++                    }
++                }
++            }
++        }
+         $statements_analyzer->data_flow_graph->addNode($method_node);
+         $argument_value_node = DataFlowNode::getForAssignment('call to ' . $cased_method_id, $arg_location);
+         $statements_analyzer->data_flow_graph->addNode($argument_value_node);

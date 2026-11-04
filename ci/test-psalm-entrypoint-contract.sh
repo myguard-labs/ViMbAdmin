@@ -24,9 +24,59 @@ printf '<?php\n' >"$work/vendor/autoload.php"
     if (!$doc->load($argv[1])) exit(1);
     $doc->documentElement->removeAttribute("errorBaseline");
     $doc->save($argv[2]);
+    $xpath = new DOMXPath($doc);
+    $xpath->registerNamespace("p", "https://getpsalm.org/schema/config");
+    $sourceRoot = realpath(dirname($argv[1]));
+    $targetRoot = dirname($argv[2]);
+    $relative = static function (string $name): string {
+        if ($name === "" || str_contains($name, "\\") || str_contains($name, "\n")
+            || str_contains($name, "\r") || str_starts_with($name, "/")
+            || in_array("..", explode("/", $name), true)) {
+            throw new RuntimeException("Unsafe relocated Psalm path: " . $name);
+        }
+        return $name;
+    };
+    $files = [];
+    foreach ($xpath->query("/p:psalm/p:projectFiles/p:file") as $node) {
+        $name = $relative($node->getAttribute("name"));
+        if (!is_dir(dirname($targetRoot . "/" . $name))) {
+            mkdir(dirname($targetRoot . "/" . $name), 0700, true);
+        }
+        file_put_contents($targetRoot . "/" . $name, "<?php\n");
+        $files[] = $name;
+    }
+    file_put_contents($targetRoot . "/project-files.list", implode("\n", $files) . "\n");
+    // Auxiliary declarations must retain the real pinned model content.
+    $copy = static function (string $source, string $target) use (&$copy, $sourceRoot): void {
+        $resolved = realpath($source);
+        if ($resolved === false || !str_starts_with($resolved, $sourceRoot . "/") || is_link($source)) {
+            throw new RuntimeException("Missing or unsafe Psalm auxiliary input: " . $source);
+        }
+        if (is_dir($source)) {
+            if (!is_dir($target)) mkdir($target, 0700, true);
+            foreach (new DirectoryIterator($source) as $entry) {
+                if (!$entry->isDot()) $copy($entry->getPathname(), $target . "/" . $entry->getFilename());
+            }
+        } elseif (is_file($source)) {
+            if (!is_dir(dirname($target))) mkdir(dirname($target), 0700, true);
+            if (!copy($source, $target)) throw new RuntimeException("Cannot relocate Psalm auxiliary input");
+        } else {
+            throw new RuntimeException("Unsupported Psalm auxiliary input: " . $source);
+        }
+    };
+    foreach ($xpath->query("/p:psalm/p:extraFiles/* | /p:psalm/p:stubs/p:file") as $node) {
+        $name = $relative($node->getAttribute("name"));
+        $copy($sourceRoot . "/" . $name, $targetRoot . "/" . $name);
+    }
 ' "$repo_root/psalm.xml" "$work/psalm.xml"
 
 roots=('public/index.php' 'bin/nested/probe.php' 'tools/nested/probe.php' 'preload.php')
+root_names=('public/index.php' 'bin' 'tools' 'preload.php')
+while IFS= read -r path; do
+  [[ $path == public/index.php || $path == preload.php ]] && continue
+  roots+=("$path")
+  root_names+=("$path")
+done <"$work/project-files.list"
 for path in "${roots[@]}"; do
   # Distinct source keys attribute every finding to its own entrypoint domain.
   printf '<?php\nfile_get_contents($_GET["%s"]);\n' "$path" >"$work/$path"
@@ -67,19 +117,19 @@ assert_sinks() {
 }
 analyse "$work/psalm.xml"
 assert_sinks "${roots[@]}"
-echo 'Psalm detects source-to-file sinks in all four entrypoint domains.'
+echo 'Psalm detects source-to-file sinks in all configured entrypoint files and traversal domains.'
 
 # Each removed root must fail the same oracle used for the shipped config.
 for index in "${!roots[@]}"; do
   "$php" -r '
     $doc = new DOMDocument(); $doc->load($argv[1]);
     $xpath = new DOMXPath($doc); $xpath->registerNamespace("p", "https://getpsalm.org/schema/config");
-    $names = ["public/index.php", "bin", "tools", "preload.php"];
+    $name = $argv[3];
     foreach ($xpath->query("/p:psalm/p:projectFiles/*") as $node) {
-        if ($node->getAttribute("name") === $names[(int)$argv[3]]) $node->parentNode->removeChild($node);
+        if ($node->getAttribute("name") === $name) $node->parentNode->removeChild($node);
     }
     $doc->save($argv[2]);
-  ' "$work/psalm.xml" "$work/omitted.xml" "$index"
+  ' "$work/psalm.xml" "$work/omitted.xml" "${root_names[$index]}"
   analyse "$work/omitted.xml"
   if assert_sinks "${roots[@]}" >"$work/control.log" 2>&1; then
     echo "Removed root survived: ${roots[$index]}" >&2

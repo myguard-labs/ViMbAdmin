@@ -64,6 +64,10 @@ mapfile -t tracked_tests <"$manifest"
 selected_tests=("${tracked_tests[@]}")
 if [[ $# -eq 0 ]]; then
   selected_tests+=(ci/test-mcp-cli-restriction-summary.php)
+  selected_tests+=(ci/test-nonstyle-rate-limit-cleanup-contract.php)
+  selected_tests+=(ci/test-oss-genurl-components.php)
+  selected_tests+=(ci/test-archive-zero-destination-contract.php)
+  selected_tests+=(ci/test-automatic-alias-postflush-return-contract.php)
 fi
 if [[ $# -gt 0 ]]; then
   selected_tests=("$@")
@@ -81,6 +85,10 @@ fi
 
 if [[ $# -eq 0 ]]; then
   node ci/test-browser-auth-diagnostics.cjs
+  bash ci/test-browser-desktop-negative-control-contract.sh
+  bash ci/test-psalm-response-propagation.sh --runtime-only
+  bash ci/test-psalm-flash-propagation.sh --runtime-only
+  bash ci/test-psalm-mcp-body-source.sh --runtime-only
 fi
 
 for test in "${selected_tests[@]}"; do
@@ -110,8 +118,9 @@ for test in "${selected_tests[@]}"; do
   fi
   if ! verdict_ok "$test_output"; then
     last_line=$(grep -v '^[[:space:]]*$' "$test_output" | tail -n 1) || true
+    empty_message='<empty output>'
     printf 'Test exited 0 but printed no terminal verdict: %s\nlast line: %s\n' \
-      "$test" "${last_line:-<empty output>}" >&2
+      "$test" "${last_line:-$empty_message}" >&2
     exit 1
   fi
 done

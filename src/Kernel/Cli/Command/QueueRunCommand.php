@@ -26,11 +26,13 @@ use ViMbAdmin\Kernel\Container;
  */
 final class QueueRunCommand implements CliCommand
 {
+    #[\Override]
     public function name(): string
     {
         return 'queue.cli-run';
     }
 
+    #[\Override]
     public function run(Container $container, array $args): int
     {
         $verbose = array_key_exists('v', $args) || array_key_exists('verbose', $args);

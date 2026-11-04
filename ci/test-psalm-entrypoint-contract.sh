@@ -3,6 +3,7 @@
 # shellcheck disable=SC2016 # PHP source must remain literal in shell strings.
 set -euo pipefail
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+bash "$repo_root/.github/scripts/assert-psalm-optional-models.sh" "$repo_root"
 php=${PHP_BINARY:-php}
 if [[ -n ${PSALM_BIN:-} ]]; then
   psalm=$PSALM_BIN

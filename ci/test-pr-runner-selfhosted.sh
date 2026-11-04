@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 readonly root
 fixture=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-selfhosted-policy.XXXXXX")
 trap 'rm -rf -- "$fixture"' EXIT
@@ -10,7 +10,7 @@ contract=${PR_RUNNER_TEST_CONTRACT:-$root/.github/scripts/assert-pr-runner-isola
 export PR_RUNNER_WORKFLOW_DIR="$fixture/workflows"
 export PR_RUNNER_SLOT_FILE="$fixture/slot" RUNNER_ENVIRONMENT=self-hosted
 export RUNNER_NAME=builder02-docker-01 GITHUB_EVENT_NAME=pull_request
-PR_RUNNER_EXPECTED_SHA=$(git -C "$root" rev-parse HEAD)
+PR_RUNNER_EXPECTED_SHA=$(git -C "$root" -c safe.directory="$root" rev-parse HEAD)
 export PR_RUNNER_EXPECTED_SHA
 
 slot() {
@@ -79,23 +79,30 @@ slot "$RUNNER_NAME" /opt/actions-runner
 PR_RUNNER_EXPECTED_SHA=bad reject malformed-sha 'exact event head'
 PR_RUNNER_EXPECTED_SHA=0000000000000000000000000000000000000000 reject wrong-head 'exact event head'
 
-for mutation in selector missing-local-capability missing-jit missing-capability guard checkout credentials metadata expected trigger ordinary concurrency permissions host-mount extra-mount upload-if upload-permissions; do
+for mutation in selector missing-local-capability missing-jit missing-capability missing-selfhosted missing-docker wrong-run wrong-attempt guard checkout credentials metadata expected trigger ordinary concurrency permissions host-mount extra-mount upload-if upload-permissions corpus-credentials corpus-missing corpus-unpinned corpus-repository corpus-duplicate-own; do
   restore
   case $mutation in
-  selector)
-    sed -i '0,/runs-on: \[self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1\]/s//runs-on: ubuntu-24.04/' "$fixture/workflows/ci.yml"
-    expected='Every PR-triggered job'
-    ;;
-  missing-local-capability)
-    sed -i '0,/self-hosted, vimbadmin-owned-local-v1, docker/s//self-hosted, builder02, docker/' "$fixture/workflows/ci.yml"
-    expected='Every PR-triggered job'
-    ;;
-  missing-jit)
-    sed -i '0,/runs-on: \[self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1\]/s//runs-on: [self-hosted, vimbadmin-owned-local-v1, docker, vimbadmin-pristine-jit-v1]/' "$fixture/workflows/ci.yml"
-    expected='Every PR-triggered job'
-    ;;
-  missing-capability)
-    sed -i '0,/runs-on: \[self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1\]/s//runs-on: [self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input]/' "$fixture/workflows/ci.yml"
+  selector | missing-local-capability | missing-jit | missing-capability | missing-selfhosted | missing-docker | wrong-run | wrong-attempt)
+    MUTATION=$mutation python3 - "$fixture/workflows/ci.yml" <<'PYLABEL'
+import os, sys
+from pathlib import Path
+p = Path(sys.argv[1]); s = p.read_text()
+names = {'missing-local-capability': 'vimbadmin-owned-local-v1', 'missing-jit': 'jit-env-input',
+         'missing-capability': 'vimbadmin-pristine-jit-v1',
+         'missing-selfhosted': 'self-hosted', 'missing-docker': 'docker'}
+line = next(line for line in s.splitlines() if line.startswith('    runs-on:'))
+if os.environ['MUTATION'] == 'selector':
+    changed = '    runs-on: ubuntu-24.04'
+elif os.environ['MUTATION'] == 'wrong-run':
+    changed = line.replace('${{ github.run_id }}', '313')
+elif os.environ['MUTATION'] == 'wrong-attempt':
+    changed = line.replace('${{ github.run_attempt }}', '1')
+else:
+    label = '"' + names[os.environ['MUTATION']] + '-run-${{ github.run_id }}-${{ github.run_attempt }}"'
+    changed = line.replace(', ' + label, '').replace(label + ', ', '')
+assert changed != line
+p.write_text(s.replace(line, changed, 1))
+PYLABEL
     expected='Every PR-triggered job'
     ;;
   guard)
@@ -133,6 +140,26 @@ for mutation in selector missing-local-capability missing-jit missing-capability
   permissions)
     sed -i 's/contents: read/contents: write/' "$fixture/workflows/ci.yml"
     expected='least-privilege token policy'
+    ;;
+  corpus-missing)
+    sed -i '/path: .ci-ast-grep-corpus/{n;/persist-credentials: false/d;}' "$fixture/workflows/static-analysis.yml"
+    expected='Every PR-triggered job'
+    ;;
+  corpus-unpinned)
+    sed -i 's/ref: 9025c0dd887d7a6797352b6d7ab5db6ba58d4603/ref: master/' "$fixture/workflows/static-analysis.yml"
+    expected='Every PR-triggered job'
+    ;;
+  corpus-repository)
+    sed -i 's@repository: myguard-labs/ast-grep-essentials@repository: unrelated/repository@' "$fixture/workflows/static-analysis.yml"
+    expected='Every PR-triggered job'
+    ;;
+  corpus-duplicate-own)
+    sed -i '/repository: myguard-labs\/ast-grep-essentials/d; /path: .ci-ast-grep-corpus/d; s/ref: 9025c0dd887d7a6797352b6d7ab5db6ba58d4603/ref: ${{ github.event.pull_request.head.sha || github.sha }}/' "$fixture/workflows/static-analysis.yml"
+    expected='Every PR-triggered job'
+    ;;
+  corpus-credentials)
+    sed -i '/path: .ci-ast-grep-corpus/{n;s/persist-credentials: false/persist-credentials: true/;}' "$fixture/workflows/static-analysis.yml"
+    expected='Every PR-triggered job'
     ;;
   upload-if)
     sed -i "s/github.event_name != 'pull_request' \&\&/true \&\&/" "$fixture/workflows/security.yml"

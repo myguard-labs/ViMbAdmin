@@ -35,6 +35,21 @@ cat >"$test_root/psalm.xml" <<'XML'
 <psalm errorBaseline="psalm-taint-baseline.xml" />
 XML
 
+# Missing inputs fail before invoking Psalm or altering the baseline.
+if PSALM_REPO_ROOT=$test_root PSALM_BIN=$stub \
+  PSALM_STUB_LOG=$log PSALM_STUB_SOURCE=$source_baseline \
+  bash "$generator" >"$test_root/missing.out" 2>&1; then
+  echo 'Missing optional models were accepted.' >&2; exit 1
+fi
+grep -qF 'setup-php-container.sh psalm' "$test_root/missing.out"
+[[ ! -e $log ]]
+grep -qxF '<files psalm-version="old" />' "$target"
+for input in predis/src/ClientInterface.php redis/RedisArray.php redis/RedisCluster.php \
+  relay/{AdaptiveCache,Cluster,Event,Events,Exception,KeyType,Relay,Sentinel,Table}.php; do
+  mkdir -p "$test_root/var/tmp/psalm-optional/$(dirname "$input")"
+  printf '<?php\n' >"$test_root/var/tmp/psalm-optional/$input"
+done
+
 PSALM_REPO_ROOT=$test_root PSALM_BIN=$stub \
   PSALM_STUB_LOG=$log PSALM_STUB_SOURCE=$source_baseline \
   bash "$generator"

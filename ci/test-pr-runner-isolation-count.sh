@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 readonly root
 fixture=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-pr-job-count.XXXXXX")
 trap 'rm -rf -- "$fixture"' EXIT
@@ -14,7 +14,7 @@ else
   sudo -n install -o 0 -g 0 -m 0444 "$fixture/slot-source" "$fixture/slot"
 fi
 export RUNNER_NAME=builder02-docker-01 PR_RUNNER_SLOT_FILE="$fixture/slot"
-PR_RUNNER_EXPECTED_SHA=$(git -C "$root" rev-parse HEAD)
+PR_RUNNER_EXPECTED_SHA=$(git -C "$root" -c safe.directory="$root" rev-parse HEAD)
 export PR_RUNNER_EXPECTED_SHA
 cp -- "$root"/.github/workflows/{ci,regression,security,static-analysis}.yml "$fixture/workflows/"
 
@@ -29,7 +29,7 @@ grep -qF 'All pull-request jobs use authorized' "$fixture/output"
 
 cat >>"$fixture/workflows/regression.yml" <<'YAML'
   count_control:
-    runs-on: [self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1]
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -49,5 +49,7 @@ if grep -qF 'Every PR-triggered job must use the authorized Docker selector' "$f
   printf 'A valid extra job was misreported as a per-job defect.\n' >&2
   exit 1
 fi
+
+bash "$root/ci/test-pr-checkout-trust.sh"
 
 printf 'PR runner job-count controls passed.\n'

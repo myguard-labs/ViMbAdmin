@@ -18,7 +18,7 @@ concurrency:
 jobs:
   lint:
     name: PHP syntax lint (PHP ${{ matrix.php }})
-    runs-on: [self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1]
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 10
     strategy:
       max-parallel: 4
@@ -104,7 +104,7 @@ jobs:
 
   audit:
     name: Dependency security audit
-    runs-on: [self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1]
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 10
     container:
       # Published after reset; placement metadata only, never host credentials.

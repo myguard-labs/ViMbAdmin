@@ -27,6 +27,8 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 
+bash "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)/.github/scripts/assert-psalm-optional-models.sh" "$repo_root"
+
 if [ -n "${PSALM_BIN:-}" ]; then
   psalm=("$PSALM_BIN")
 elif [ -x vendor/bin/psalm ]; then

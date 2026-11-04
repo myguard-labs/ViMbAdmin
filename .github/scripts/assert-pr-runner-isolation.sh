@@ -46,8 +46,10 @@ if [[ ${#slot_lines[@]} != 2 || ${slot_lines[0]} != "$RUNNER_NAME" ||
   printf 'Published slot identity does not match this runner.\n' >&2
   exit 1
 fi
+checkout=$(pwd -P)
+readonly checkout
 if [[ ! ${PR_RUNNER_EXPECTED_SHA:-} =~ ^[0-9a-f]{40}$ ]] ||
-  [[ $(git rev-parse HEAD) != "$PR_RUNNER_EXPECTED_SHA" ]]; then
+  [[ $(git -C "$checkout" -c safe.directory="$checkout" rev-parse HEAD) != "$PR_RUNNER_EXPECTED_SHA" ]]; then
   printf 'Checkout does not match the exact event head.\n' >&2
   exit 1
 fi
@@ -113,10 +115,22 @@ for workflow in "${workflows[@]}"; do
   fi
 done
 
-awk '
+# Match all five run/attempt-scoped selectors exactly; extra labels alone do not isolate jobs.
+awk -v selector='    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]' '
   BEGIN { sq = sprintf("%c", 39) }
+  function finish_checkout() {
+    if (!checkout_block) return
+    if (checkout_credentials != 1 || checkout_refs != 1 || checkout_repositories > 1 || checkout_paths > 1) per_job_failed = 1
+    if (checkout_ref == "${{ github.event.pull_request.head.sha || github.sha }}" && checkout_repositories == 0 && checkout_paths == 0) checkout++
+    else if (FILENAME ~ /\/static-analysis\.yml$/ && job_id == "  refactor-metrics:" &&
+             checkout_repository == "myguard-labs/ast-grep-essentials" &&
+             checkout_ref == "9025c0dd887d7a6797352b6d7ab5db6ba58d4603" && checkout_path == ".ci-ast-grep-corpus") corpus++
+    else per_job_failed = 1
+    checkout_block = 0
+  }
   function finish_job() {
     if (!in_job) return
+    finish_checkout()
     if (upload_job) {
       uploads++
       if (upload_if != 1 || upload_needs != 1 || upload_permissions != 1 || upload_read != 1 || upload_write != 1) per_job_failed = 1
@@ -124,7 +138,7 @@ awk '
       jobs++
       if (upload_permissions || upload_read || upload_write) per_job_failed = 1
     }
-    if (runner != 1 || guard != 1 || checkout != 1 || credentials != 1 || expected != 1 || (container && metadata != 1)) per_job_failed = 1
+    if (runner != 1 || guard != 1 || checkout != 1 || corpus != ((FILENAME ~ /\/static-analysis\.yml$/ && job_id == "  refactor-metrics:") ? 1 : 0) || expected != 1 || (container && metadata != 1)) per_job_failed = 1
   }
   FNR == 1 {
     finish_job()
@@ -151,7 +165,8 @@ awk '
     in_volumes = 0
     guard = 0
     checkout = 0
-    credentials = 0
+    corpus = 0
+    job_id = $0
     expected = 0
     container = 0
     metadata = 0
@@ -182,7 +197,7 @@ awk '
     next
   }
   permission_block && !/^[[:space:]]*($|#)/ { permission_block = 0 }
-  in_job && /^    runs-on: \[self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1\][[:space:]]*$/ { runner++ }
+  in_job && $0 == selector { runner++ }
   in_job && /^      volumes:/ { in_volumes = 1; next }
   in_volumes && /^        - / {
     if ($0 != "        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro") per_job_failed = 1
@@ -191,14 +206,24 @@ awk '
   }
   in_volumes && !/^[[:space:]]*($|#)/ { in_volumes = 0 }
   in_job && /^    container:/ { container++ }
-  in_job && /^          persist-credentials: false$/ { credentials++ }
+  in_job && /^      - / { finish_checkout() }
+  in_job && /^      (- |  )uses: actions\/checkout@/ {
+    checkout_block = 1
+    checkout_credentials = checkout_refs = checkout_repositories = checkout_paths = 0
+    checkout_ref = checkout_repository = checkout_path = ""
+    next
+  }
+  checkout_block && /^          persist-credentials:/ {
+    if ($0 == "          persist-credentials: false") checkout_credentials++
+    else per_job_failed = 1
+  }
+  checkout_block && /^          ref:/ { checkout_refs++; checkout_ref = substr($0, 16) }
+  checkout_block && /^          repository:/ { checkout_repositories++; checkout_repository = substr($0, 23) }
+  checkout_block && /^          path:/ { checkout_paths++; checkout_path = substr($0, 17) }
   in_job && /^          PR_RUNNER_EXPECTED_SHA: >-$/ { expected_fold = 1; next }
   expected_fold {
     if ($0 ~ /^            \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}$/) expected++
     expected_fold = 0
-  }
-  in_job && /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/ {
-    checkout++
   }
   in_job && /run: bash \.github\/scripts\/assert-pr-runner-isolation\.sh/ {
     guard++

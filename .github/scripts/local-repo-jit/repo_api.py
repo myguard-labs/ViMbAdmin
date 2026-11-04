@@ -26,6 +26,27 @@ def require(value, reason):
     if not value:
         raise Refused(reason)
 
+
+def scoped_job_labels(run_id, run_attempt):
+    """Routing only, not authority against a fork copying these public labels.
+
+    A separately qualified producer must publish only this exact set after reset
+    and verify the POST and GET label sets before starting a listener. This helper
+    grants no production mint or listener authority to the maintained proof tool.
+    """
+    require(type(run_id) is int and run_id > 0 and type(run_attempt) is int and run_attempt > 0,
+            'invalid routing run identity')
+    suffix = '-run-' + str(run_id) + '-' + str(run_attempt)
+    return [label + suffix for label in ('self-hosted', 'vimbadmin-owned-local-v1', 'docker',
+                                        'jit-env-input', CAPABILITY)]
+
+
+def require_scoped_job_labels(labels, run_id, run_attempt):
+    expected = scoped_job_labels(run_id, run_attempt)
+    require(isinstance(labels, list) and len(labels) == len(expected)
+            and all(isinstance(label, str) for label in labels)
+            and set(labels) == set(expected), 'scoped routing labels mismatch')
+
 class RepoAPI:
     def __init__(self, external=False, transport=None, guard=None):
         require(external or transport is not None, 'external mode not enabled')
@@ -72,7 +93,8 @@ class RepoAPI:
     def mint(self, name, group, labels):
         require(type(group) is int and group > 0, 'invalid group id')
         require(re.fullmatch(r'vi-local-ci-[a-z0-9-]{6,50}', name), 'runner name refused')
-        require(CAPABILITY not in labels, 'production capability not authorized by proof tool')
+        require(not any(isinstance(label, str) and (label.casefold() == CAPABILITY or label.casefold().startswith(CAPABILITY + '-run-'))
+                        for label in labels), 'production capability not authorized by proof tool')
         status, result = self.request('POST', 'actions/runners/generate-jitconfig',
                                      {'name': name, 'runner_group_id': group,
                                       'labels': labels, 'work_folder': '_work'})

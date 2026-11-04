@@ -20,7 +20,7 @@ concurrency:
 jobs:
   semgrep:
     name: Semgrep
-    runs-on: [self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1]
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 20
     outputs:
       sarif-artifact-id: ${{ steps.sarif_artifact.outputs.artifact-id }}
@@ -139,7 +139,7 @@ jobs:
       always() && github.event_name != 'pull_request' &&
       needs.semgrep.outputs.sarif-artifact-id != ''
     needs: semgrep
-    runs-on: [self-hosted, vimbadmin-owned-local-v1, docker, jit-env-input, vimbadmin-pristine-jit-v1]
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 10
     permissions:
       contents: read

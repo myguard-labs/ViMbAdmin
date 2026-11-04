@@ -636,3 +636,11 @@ invasive checks in a disposable container. The runner executes every required
 minor and retains per-version logs and a JSON summary. This named suite is
 part of the complete CI gate; dedicated fixture, syntax, coverage and static
 checks still apply. See [project instructions](AGENTS.md).
+
+Standalone Psalm calls also require the optional analysis models referenced by
+`psalm.xml`. In a disposable PHP container, prepare them with the pinned
+`bash .github/scripts/setup-php-container.sh psalm` profile; this also selects
+the patched Psalm toolchain. Before a direct `psalm --no-progress --taint-analysis`
+call, run `bash .github/scripts/assert-psalm-optional-models.sh`. The baseline,
+proxy and entrypoint scripts run this presence check themselves. The preflight
+does not download dependencies or replace setup's checksum validation.

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+bash "$root/.github/scripts/assert-psalm-optional-models.sh" "$root"
+bash "$root/ci/test-psalm-model-preflight.sh"
 php_bin=${PHP_BIN:-php}
 psalm_bin=${PSALM_BIN:-$(command -v psalm)}
 setup_script=${PSALM_MODEL_SETUP_SCRIPT:-$root/.github/scripts/setup-php-container.sh}

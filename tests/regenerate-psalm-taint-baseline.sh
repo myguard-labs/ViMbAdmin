@@ -6,7 +6,8 @@
 
 set -euo pipefail
 
-repo_root=${PSALM_REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
+script_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+repo_root=${PSALM_REPO_ROOT:-$script_root}
 cd "$repo_root"
 
 mode='write'
@@ -27,7 +28,7 @@ if [ "$#" -gt 1 ]; then
   exit 2
 fi
 
-bash "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)/.github/scripts/assert-psalm-optional-models.sh" "$repo_root"
+bash "$script_root/.github/scripts/assert-psalm-optional-models.sh" "$repo_root"
 
 if [ -n "${PSALM_BIN:-}" ]; then
   psalm=("$PSALM_BIN")

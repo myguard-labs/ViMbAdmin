@@ -639,8 +639,22 @@ checks still apply. See [project instructions](AGENTS.md).
 
 Standalone Psalm calls also require the optional analysis models referenced by
 `psalm.xml`. In a disposable PHP container, prepare them with the pinned
-`bash .github/scripts/setup-php-container.sh psalm` profile; this also selects
-the patched Psalm toolchain. Before a direct `psalm --no-progress --taint-analysis`
-call, run `bash .github/scripts/assert-psalm-optional-models.sh`. The baseline,
-proxy and entrypoint scripts run this presence check themselves. The preflight
-does not download dependencies or replace setup's checksum validation.
+`psalm` setup profile. Setup verifies the pinned downloads and creates a patched
+launcher under `var/tmp/psalm-tool.*/tool/bin/psalm`. To retain the exact launcher
+selected by setup in the calling shell, use its GitHub environment-file output:
+
+```bash
+selection_dir=$(mktemp -d) || exit 1
+touch "$selection_dir/env" "$selection_dir/path" || exit 1
+GITHUB_ENV="$selection_dir/env" GITHUB_PATH="$selection_dir/path" \
+  bash .github/scripts/setup-php-container.sh psalm || exit 1
+PSALM_BIN=$(sed -n 's/^PSALM_BIN=//p' "$selection_dir/env") || exit 1
+test -n "$PSALM_BIN" || exit 1
+export PSALM_BIN
+rm -rf -- "${selection_dir:?}"
+bash .github/scripts/assert-psalm-optional-models.sh || exit 1
+"$PSALM_BIN" --no-progress --taint-analysis
+```
+
+The baseline, proxy and entrypoint scripts run the presence check themselves.
+The preflight does not download dependencies or replace setup's checksum validation.

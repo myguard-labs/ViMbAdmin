@@ -12,7 +12,6 @@ on:
 
 permissions:
   contents: read
-  security-events: write   # upload SARIF to the GitHub Security tab
 
 concurrency:
   group: sast-${{ github.event_name }}-${{ github.event.number || github.ref }}
@@ -21,10 +20,15 @@ concurrency:
 jobs:
   semgrep:
     name: Semgrep
-    runs-on: ubuntu-24.04
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 20
+    outputs:
+      sarif-artifact-id: ${{ steps.sarif_artifact.outputs.artifact-id }}
     # CodeQL has no PHP support; Semgrep is the SAST engine for this codebase.
     container:
+      # Published after reset; placement metadata only, never host credentials.
+      volumes:
+        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         semgrep/semgrep@sha256:b94b53d02fd4a022f9eac4e2af1380f5c3c4c21400e79d3336bdff1d1db5e796
     defaults:
@@ -39,6 +43,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Trust checkout for Semgrep Git operations
         run: |
@@ -113,9 +120,51 @@ jobs:
             "${baseline_args[@]}" \
             --error
 
-      - name: Upload SARIF
-        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # yamllint disable-line rule:line-length
+      # Always preserve the scan result, including a failing non-PR scan.
+      # The immutable artifact ID binds the consumer to this job and run.
+      - name: Preserve SARIF for non-PR upload
+        id: sarif_artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always() && github.event_name != 'pull_request'
         with:
-          sarif_file: semgrep.sarif
+          name: semgrep-${{ github.sha }}-${{ github.run_attempt }}
+          path: semgrep.sarif
+          if-no-files-found: error
+          retention-days: 1
+
+  sarif-upload:
+    name: Publish non-PR SARIF
+    # PR code never receives the Security write token. No cross-run artifacts.
+    if: >-
+      always() && github.event_name != 'pull_request' &&
+      needs.semgrep.outputs.sarif-artifact-id != ''
+    needs: semgrep
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write  # Only this non-PR job uploads SARIF.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Assert pull-request runner isolation
+        run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Download this run's scan artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.semgrep.outputs.sarif-artifact-id }}
+          path: sarif
+          merge-multiple: true
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # yamllint disable-line rule:line-length
+        with:
+          sarif_file: sarif/semgrep.sarif
           category: semgrep

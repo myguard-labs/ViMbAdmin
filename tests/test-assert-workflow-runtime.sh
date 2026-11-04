@@ -51,6 +51,62 @@ cp -- .github/workflows/security.yml "$fixture"
 cp -- .github/workflows/regression.yml "$regression_fixture"
 run_contract
 
+# The two real jobs have distinct checkout requirements. Exercise each one
+# independently so a valid peer cannot mask a missing or weakened input.
+mutate_checkout_job() {
+  python3 - "$fixture" "$1" "$2" <<'PYJOB'
+import pathlib, re, sys
+path = pathlib.Path(sys.argv[1])
+job, mutation = sys.argv[2:]
+s = path.read_text()
+pattern = r'(?ms)^  ' + re.escape(job) + r':\n.*?(?=^  [A-Za-z0-9_-]+:\n|\Z)'
+match = re.search(pattern, s)
+if not match:
+    raise SystemExit('job not found')
+block = match.group()
+old = {'missing': '          persist-credentials: false\n',
+       'enabled': '          persist-credentials: false',
+       'badref': '          ref: ${{ github.event.pull_request.head.sha || github.sha }}',
+       'unpinned': 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+       'depth': '          fetch-depth: 0',
+       'ref-to-depth': '          ref: ${{ github.event.pull_request.head.sha || github.sha }}'}[mutation]
+new = {'missing': '', 'enabled': '          persist-credentials: true',
+       'badref': '          ref: main', 'unpinned': 'actions/checkout@v4',
+       'depth': '          fetch-depth: 1',
+       'ref-to-depth': '          fetch-depth: 0'}[mutation]
+if block.count(old) != 1:
+    raise SystemExit('mutation target not unique')
+path.write_text(s[:match.start()] + block.replace(old, new, 1) + s[match.end():])
+PYJOB
+}
+for job in semgrep sarif-upload; do
+  for mutation in missing enabled badref unpinned; do
+    cp -- .github/workflows/security.yml "$fixture"
+    mutate_checkout_job "$job" "$mutation"
+    expect_rejected "$job $mutation checkout" 'Security workflow'
+  done
+done
+cp -- .github/workflows/security.yml "$fixture"
+mutate_checkout_job semgrep depth
+expect_rejected 'semgrep incorrect fetch-depth' 'Security workflow'
+cp -- .github/workflows/security.yml "$fixture"
+mutate_checkout_job sarif-upload ref-to-depth
+expect_rejected 'sarif-upload ref replaced by fetch-depth' \
+  'Security workflow checkout must disable persisted credentials.'
+cp -- .github/workflows/security.yml "$fixture"
+cat >> "$fixture" <<'EXTRA_JOB'
+  extra-checkout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+EXTRA_JOB
+expect_rejected 'extra job with checkout' 'Security workflow checkout must disable persisted credentials.'
+cp -- .github/workflows/security.yml "$fixture"
+
 bash ci/test-workflow-timeouts.sh
 
 cp -- .github/workflows/regression.yml "$regression_fixture"
@@ -60,14 +116,21 @@ expect_rejected 'a runtime image outside the approved mirror' \
   'Workflow runtime images must use approved registry-mirror digests:'
 cp -- .github/workflows/regression.yml "$regression_fixture"
 
-sed -i '0,/^    container:$/ { /^    container:$/ { N; s/^    container:\n      image:.*$/    container: php:8.4/; } }' \
-  "$regression_fixture"
+python3 - "$regression_fixture" <<'PYFIX'
+import pathlib, re, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+s, count = re.subn(r'(?m)^    container:\n(?:^      .*\n)+', '    container: php:8.4\n', s, count=1)
+if count != 1:
+    raise SystemExit('scalar fixture mutation did not apply')
+p.write_text(s)
+PYFIX
 grep -qFx '    container: php:8.4' "$regression_fixture" || {
   printf 'Scalar container fixture mutation did not apply.\n' >&2
   exit 1
 }
 if command -v actionlint >/dev/null; then
-  actionlint "$regression_fixture"
+  actionlint -config-file "$PWD/.github/actionlint.yaml" "$regression_fixture"
 fi
 expect_rejected 'an actionlint-valid scalar container image' \
   'scalar or inline container syntax is unsupported'
@@ -78,7 +141,7 @@ sed -i '/      - name: Smarty 5 JS-template escaping/i\
         uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f\
 ' "$regression_fixture"
 if command -v actionlint >/dev/null; then
-  actionlint "$regression_fixture"
+  actionlint -config-file "$PWD/.github/actionlint.yaml" "$regression_fixture"
 fi
 expect_rejected 'an action blocked by repository policy' \
   'The repository action policy does not allow shivammathur/setup-php.'
@@ -106,7 +169,7 @@ expect_actionlint_valid_rejected 'quoted and reordered checkout inputs' \
 
 checkout_ref=$(sed -n \
   's/^      - uses: actions\/checkout@\([0-9a-f]\{40\}\)$/\1/p' \
-  .github/workflows/security.yml)
+  .github/workflows/security.yml | head -n 1)
 readonly checkout_ref
 cp -- .github/workflows/security.yml "$fixture"
 sed -i "/          persist-credentials: false/a\\

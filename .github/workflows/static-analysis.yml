@@ -18,9 +18,12 @@ concurrency:
 jobs:
   phpstan:
     name: PHPStan
-    runs-on: ubuntu-24.04
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 20
     container:
+      # Published after reset; placement metadata only, never host credentials.
+      volumes:
+        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     # The complete project targets PHPStan level 10. Existing debt is generated
@@ -66,6 +69,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       # The merge ref can omit its event-time base object when the base branch
       # moves before this job starts. Fetch that immutable object explicitly so
@@ -111,9 +117,12 @@ jobs:
 
   psalm-taint:
     name: Psalm taint analysis
-    runs-on: ubuntu-24.04
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 20
     container:
+      # Published after reset; placement metadata only, never host credentials.
+      volumes:
+        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     steps:
@@ -128,6 +137,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PHP container
         run: bash .github/scripts/setup-php-container.sh psalm
@@ -147,14 +159,20 @@ jobs:
       - name: Psalm excludes generated proxies
         run: bash ci/test-psalm-proxies-ignored.sh
 
+      - name: Verify optional Psalm client models
+        run: bash ci/test-psalm-optional-model-contract.sh
+
       - name: Psalm taint analysis
         run: psalm --no-progress --taint-analysis
 
   php-cs-fixer:
     name: PSR-12 formatting
-    runs-on: ubuntu-24.04
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 10
     container:
+      # Published after reset; placement metadata only, never host credentials.
+      volumes:
+        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     # The formatting contract lives in .php-cs-fixer.dist.php with risky fixers
@@ -177,6 +195,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PHP container
         run: bash .github/scripts/setup-php-container.sh formatter
@@ -195,7 +216,7 @@ jobs:
 
   refactor-metrics:
     name: Tracked refactor metrics contract
-    runs-on: ubuntu-24.04
+    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
     timeout-minutes: 10
     steps:
       # actions/checkout v7
@@ -206,6 +227,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       # actions/setup-node v6.3.0
       - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f

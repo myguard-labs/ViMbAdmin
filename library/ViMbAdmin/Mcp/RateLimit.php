@@ -132,15 +132,20 @@ class ViMbAdmin_Mcp_RateLimit
             }
             $temporary = null;
         } finally {
-            if (is_string($temporary) && is_file($temporary)) {
-                @unlink($temporary);
-            }
+            $this->_removeTemporary($temporary);
             flock($fh, LOCK_UN);
             fclose($fh);
         }
     }
 
     // ---- internals -----------------------------------------------------
+
+    private function _removeTemporary(string|false|null $temporary): void
+    {
+        if (is_string($temporary) && is_file($temporary)) {
+            @unlink($temporary);
+        }
+    }
 
     private function _file(int|string|null $tokenId, string $bucket): string
     {

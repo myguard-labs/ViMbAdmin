@@ -1,2 +1,2 @@
 self-hosted-runner:
-  labels: [builder02, lxc, docker]
+  labels: [builder02, lxc, docker, jit-env-input, vimbadmin-pristine-jit-v1, vimbadmin-owned-local-v1]

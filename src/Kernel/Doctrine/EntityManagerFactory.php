@@ -38,6 +38,9 @@ use InvalidArgumentException;
  */
 final class EntityManagerFactory
 {
+    /** @var \WeakMap<\Closure, array<string,string>>|null */
+    private static ?\WeakMap $entityAutoloaders = null;
+
     /** @return array<string,mixed> */
     private static function stringMap(mixed $value, string $name): array
     {
@@ -270,7 +273,17 @@ final class EntityManagerFactory
         $repositoriesPath = self::requiredString($dconfig['repositories_path'], 'resources.doctrine2.repositories_path');
         $map = [$modelsNamespace => $modelsPath, $repositoriesNamespace => $repositoriesPath];
 
-        spl_autoload_register(static function (string $class) use ($map): void {
+        // Only a currently registered callback suppresses an identical map.
+        // Weak keys let unregistered callbacks disappear without retaining them.
+        $autoloaders = self::$entityAutoloaders ??= new \WeakMap();
+        foreach (spl_autoload_functions() as $registered) {
+            if ($registered instanceof \Closure && isset($autoloaders[$registered])
+                && $autoloaders[$registered] === $map) {
+                return;
+            }
+        }
+
+        $loader = static function (string $class) use ($map): void {
             foreach ($map as $prefix => $base) {
                 if ($class === $prefix || str_starts_with($class, $prefix . '\\')) {
                     $relative = str_replace('\\', DIRECTORY_SEPARATOR, $class) . '.php';
@@ -285,7 +298,9 @@ final class EntityManagerFactory
                     return;
                 }
             }
-        });
+        };
+        spl_autoload_register($loader);
+        $autoloaders[$loader] = $map;
     }
 
     /**

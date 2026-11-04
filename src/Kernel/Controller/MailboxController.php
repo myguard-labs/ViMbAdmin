@@ -47,7 +47,7 @@ use ViMbAdmin\Kernel\Session\MagicPropertyStorage;
  *
  * @package ViMbAdmin
  * @subpackage Kernel
- * @method \Doctrine\ORM\EntityManager em()
+ * @method \Doctrine\ORM\EntityManagerInterface em()
  * @method \Entities\Admin|null admin()
  */
 final class MailboxController extends AbstractController
@@ -1585,6 +1585,7 @@ final class MailboxController extends AbstractController
         }
     }
 
+    #[\Override]
     protected function em(): EntityManagerInterface
     {
         $em = parent::em();

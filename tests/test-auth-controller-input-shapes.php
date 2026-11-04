@@ -308,7 +308,7 @@ function authInputShapeController(
     AuthInputShapeAdminRepository::$count = $adminCount;
     $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([
         __DIR__ . '/../application/Entities',
-    ]);
+    ], cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter());
     if (PHP_VERSION_ID >= 80400) {
         $configuration->enableNativeLazyObjects(true);
     } else {
@@ -434,6 +434,40 @@ function authInputShapeLogin(AuthController $controller, string $password): \ViM
 }
 
 echo "== auth controller input shapes ==\n";
+
+// Exercise the real post-auth redirect and retain unrelated session state.
+$postAuthCases = [
+    'backslash authority' => ['\\outside.example', '/'],
+    'slash backslash authority' => ['/\\outside.example', '/'],
+    'repeated slash backslash authority' => ['//\\outside.example', '/'],
+    'repeated backslash authority' => ['\\\\outside.example', '/'],
+    'scheme' => ['https://outside.example', '/'],
+    'control character' => ["mailbox/\nlist", '/'],
+    'relative local path' => ['mailbox/list', '/mailbox/list'],
+    'rooted local path' => ['/mailbox/list', '/mailbox/list'],
+];
+foreach ($postAuthCases as $label => [$destination, $expectedLocation]) {
+    $admin = authInputShapeAdmin(true);
+    $fixture = authInputShapeController(41, $admin, 'totp');
+    $fixture['session']->set('postAuthRedirect', $destination);
+    $fixture['session']->set('unrelated_session_sentinel', 'preserved');
+    $response = (new ReflectionMethod(AuthController::class, 'grantPendingLogin'))->invoke(
+        $fixture['controller'],
+        $admin,
+        new \ViMbAdmin\Kernel\Session\MagicPropertyStorage($fixture['session']),
+    );
+    $identity = $fixture['session']->get('identity');
+    authInputShapeCheck(
+        "post-auth redirect {$label} remains application-local and preserves session",
+        $response instanceof \ViMbAdmin\Kernel\Http\Response
+            && $response->status === 302
+            && ($response->headers['Location'] ?? null) === $expectedLocation
+            && is_array($identity)
+            && ($identity['id'] ?? null) === 41
+            && $fixture['session']->get('csrfToken') === 'csrf-sentinel'
+            && $fixture['session']->get('unrelated_session_sentinel') === 'preserved'
+    );
+}
 
 $adminOptions = [
     'securitysalt' => str_repeat('s', 64),
@@ -1059,7 +1093,7 @@ authInputShapeCheck(
     $authFixtureCleanup && !file_exists($authFixtureRoot)
 );
 
-authInputShapeCheck('fixed assertion count', AuthInputShapeState::$checks === 35);
+authInputShapeCheck('fixed assertion count', AuthInputShapeState::$checks === 43);
 
 echo AuthInputShapeState::$failures === 0
     ? "ALL PASSED\n"

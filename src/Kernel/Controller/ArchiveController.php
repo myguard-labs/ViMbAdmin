@@ -351,7 +351,7 @@ final class ArchiveController extends AbstractController
 
             // Remove the backup files first; abort (keeping the row) if doveadm fails.
             try {
-                if ($dest) {
+                if ($dest !== null && $dest !== '') {
                     $doveadm = \ViMbAdmin_Doveadm::fromOptions($this->container->options());
                     $claim->remote(fn () => $doveadm->fsDelete($dest));
                 }
@@ -504,7 +504,7 @@ final class ArchiveController extends AbstractController
 
             // 2) Sync the backup back into the live store.
             try {
-                if ($dest) {
+                if ($dest !== null && $dest !== '') {
                     $doveadm = \ViMbAdmin_Doveadm::fromOptions($options);
                     $claim->remote(fn () => $doveadm->restoreFrom($user, $dest));
                 }
@@ -518,7 +518,7 @@ final class ArchiveController extends AbstractController
 
             // 3) Remove the backup files (a leftover backup dir is non-fatal).
             try {
-                if ($dest) {
+                if ($dest !== null && $dest !== '') {
                     $doveadm = \ViMbAdmin_Doveadm::fromOptions($options);
                     $claim->remote(fn () => $doveadm->fsDelete($dest));
                 }
@@ -572,6 +572,7 @@ final class ArchiveController extends AbstractController
 
     }
 
+    #[\Override]
     protected function em(): EntityManagerInterface
     {
         $em = parent::em();
@@ -582,6 +583,7 @@ final class ArchiveController extends AbstractController
         return $em;
     }
 
+    #[\Override]
     protected function admin(): ?Admin
     {
         $admin = parent::admin();

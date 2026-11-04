@@ -125,6 +125,10 @@ class OSS_Utils
      * * ''HTTP_X_FORWARDED_HOST'': Use ''$_SERVER['HTTP_X_FORWARDED_HOST']''
      * * ''REPLEACE'': set with value from utils.genurl.host_replace
      *
+     * Route components retain legacy PHP truthiness: false, '' and '0' omit
+     * the segment and its slash; true appends '1'. Other non-empty strings
+     * append unchanged, in module/controller/action order.
+     *
      * @param string|bool $controller default false The controller to call.
      * @param string|bool $action default false The action to call (controller must be set if setting action)
      * @param string|bool $module default false The module to use. Set to false to ignore.

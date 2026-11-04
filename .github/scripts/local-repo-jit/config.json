@@ -1,0 +1,12 @@
+{
+  "repository": "myguard-labs/ViMbAdmin",
+  "runner_name": "vi-local-ci-208c2d13-01",
+  "runner_version": "2.336.0",
+  "production_capability": "vimbadmin-pristine-jit-v1",
+  "runtime_qualification": "UNQUALIFIED",
+  "external_authority": false,
+  "q2_manifest_sha256": "ee81956ba51a16c083f47fcc23c502575a6fb18c673cb039e9f22267a4837284",
+  "v2_manifest_sha256": "2ae75af3884be1dd90b5a6167243fcc256814f031bbaee06a3fe014866cb53c3",
+  "runtime_image": null,
+  "baseline_context_seal": null
+}

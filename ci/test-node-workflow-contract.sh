@@ -207,7 +207,10 @@ consumer_run_line() {
             else marker = marker char
           } else if (char == "\\") {
             escaped = substr(rest, i + 1, 1)
-            if (escaped == "") return value
+            if (escaped == "") {
+              unsupported_delimiter = 1
+              return value
+            }
             if (quote == "\"" && escaped !~ /[$`"\\]/) {
               marker = marker char
             } else {
@@ -230,10 +233,11 @@ consumer_run_line() {
           }
         }
         if (quote != "") {
-          if (ansi_delimiter) unsupported_delimiter = 1
+          unsupported_delimiter = 1
           return value
         }
         consumed = i - 1
+        if (!consumed) unsupported_delimiter = 1
         if (consumed > 0) {
           heredoc_delimiters[++heredoc_tail] = marker
           heredoc_strip_tabs[heredoc_tail] = operator ~ /^<<-/
@@ -249,8 +253,9 @@ consumer_run_line() {
       }
       return value
     }
-    function update_control_depth(value, i, char, word, at_command) {
-      # Count only if/fi at unquoted command boundaries; other grammar is outside this check.
+    function update_control_depth(value, i, char, word, at_command, loops, braces) {
+      # Only completed single-line loop/group prefixes are bounded here. Never
+      # credit a later line after unsupported compound/function syntax.
       at_command = !literal_quote && !continued_line
       for (i = 1; i <= length(value); i++) {
         char = substr(value, i, 1)
@@ -272,18 +277,31 @@ consumer_run_line() {
         if (!at_command || char ~ /[[:space:]]/) continue
         at_command = 0
         word = substr(value, i)
-        if (word ~ /^\[\[([[:space:]]|$)/ && operator_is_unquoted(value, i)) {
+        if (!operator_is_unquoted(value, i)) continue
+        if (char == "(" || word ~ /^[A-Za-z_][A-Za-z0-9_]*[[:space:]]*\([[:space:]]*\)/ ||
+            word ~ /^(case|select|function)([[:space:];&|()]|$)/) unsupported_shell = 1
+        if (word ~ /^\[\[([[:space:]]|$)/) {
           test_expression = 1
           i++
           continue
         }
-        if (word !~ /^(if|fi|then|else|elif|while|until|do|!|time|\{)([[:space:];&|()]|$)/) continue
+        if (word !~ /^(if|fi|then|else|elif|while|until|for|do|done|!|time|\{|\})([[:space:];&|()]|$)/) continue
         sub(/[[:space:];&|()].*$/, "", word)
         if (word == "if") control_depth++
         else if (word == "fi" && control_depth) control_depth--
-        at_command = word != "fi"
+        else if (word ~ /^(while|until|for)$/) loops++
+        else if (word == "done") {
+          if (loops) loops--
+          else unsupported_shell = 1
+        } else if (word == "{") braces++
+        else if (word == "}") {
+          if (braces) braces--
+          else unsupported_shell = 1
+        }
+        at_command = word != "fi" && word != "done" && word != "}"
         i += length(word) - 1
       }
+      if (loops || braces) unsupported_shell = 1
     }
     function reset_literal_context(delimiter) {
       for (delimiter in heredoc_delimiters) delete heredoc_delimiters[delimiter]
@@ -291,6 +309,8 @@ consumer_run_line() {
       control_depth = 0
       test_expression = 0
       unsupported_delimiter = 0
+      unsupported_shell = 0
+      explicit_literal_indent = 0
       continued_list = 0
       continued_line = 0
       literal_quote = ""
@@ -346,7 +366,14 @@ consumer_run_line() {
         value = trim(substr($0, index($0, "run:") + 4))
         if (value ~ /^[|>]([+-][1-9]?|[1-9][+-]?)?([[:space:]]+#.*|[[:space:]]*)$/) {
           run_style = substr(value, 1, 1)
-          if (run_style == "|") reset_literal_context()
+          if (run_style == "|") {
+            reset_literal_context()
+            if (match(substr(value, 1, 3), /[1-9]/)) {
+              # YAML indentation indicators are relative to the run key.
+              explicit_literal_indent = 1
+              literal_indent = run_indent + substr(value, RSTART, 1)
+            }
+          }
           in_run = 1
           next
         }
@@ -365,9 +392,10 @@ consumer_run_line() {
           folded_nonblank++
           if (value == consumer) folded_line = NR
         } else {
-          if (value != "" && (!literal_indent || indent < literal_indent)) {
+          if (!explicit_literal_indent && value != "" && (!literal_indent || indent < literal_indent)) {
             literal_indent = indent
           }
+          if (explicit_literal_indent && indent < literal_indent) unsupported_shell = 1
           if (heredoc_head <= heredoc_tail) {
             shell_line = substr($0, literal_indent + 1)
             if (heredoc_strip_tabs[heredoc_head]) sub(/^\t+/, "", shell_line)
@@ -379,7 +407,7 @@ consumer_run_line() {
           }
 
           shell_code = shell_without_comment(substr($0, literal_indent + 1))
-          if (value == consumer && !literal_quote && !continued_line && !control_depth && !continued_list && !test_expression && !unsupported_delimiter) {
+          if (value == consumer && !literal_quote && !continued_line && !control_depth && !continued_list && !test_expression && !unsupported_delimiter && !unsupported_shell) {
             print NR
             exit
           }
@@ -389,6 +417,8 @@ consumer_run_line() {
             continued_list = shell_code ~ /(&&|\|\|)[[:space:]]*$/
           }
           advance_literal_context(shell_code)
+          # Bodies start after the logical opener, never on its continuation.
+          if (heredoc_head <= heredoc_tail && (continued_line || literal_quote)) unsupported_delimiter = 1
         }
       }
     }
@@ -1111,6 +1141,73 @@ if [[ ${NODE_CONTRACT_FIXTURE_MODE:-0} != 1 ]]; then
     [[ -z $nested_bracket_prefix_line ]] || fail "prefixed double-bracket fi operand closed a real conditional: $bracket_prefix_command"
   done
   printf '%s\n' 'Positive and negative boundaries: finite command prefixes preserve double-bracket operand context'
+
+  check_parser_boundary() {
+    local label=$1 body=$2 expected=$3 actual
+    actual=$(consumer_run_line "$body" 'npm ci --prefix bin --ignore-scripts')
+    [[ ${actual:-none} == "$expected" ]] ||
+      fail "$label: expected consumer line $expected, got ${actual:-none}"
+    printf 'Parser boundary passed: %s\n' "$label"
+  }
+
+  # Explicit scalar indentation stays fixed even when initial content is deeper.
+  check_parser_boundary 'explicit-indent heredoc body is not a consumer' \
+    $'        run: |2\n            : <<EOF\n            EOF\n            npm ci --prefix bin --ignore-scripts\n          EOF' none
+  check_parser_boundary 'explicit-indent consumer after exact heredoc terminator' \
+    $'        run: |2-\n            : <<EOF\n            EOF\n            npm ci --prefix bin --ignore-scripts\n          EOF\n          npm ci --prefix bin --ignore-scripts' 6
+  check_parser_boundary 'explicit-indent ordinary consumer and chomping order' \
+    $'        run: |+2\n          npm ci --prefix bin --ignore-scripts' 2
+  check_parser_boundary 'explicit-indent underindented content fails closed' \
+    $'        run: |4\n          :\n            npm ci --prefix bin --ignore-scripts' none
+  check_parser_boundary 'inferred-indent header comment digits stay comments' \
+    $'        run: | # 2 is not an indicator\n            : <<EOF\n            EOF\n            npm ci --prefix bin --ignore-scripts' 4
+
+  # Delimiter words split across physical lines are outside the bounded lexer.
+  check_parser_boundary 'split-delimiter word fails closed' \
+    $'        run: |\n          : <<EO\\\n          F\n          npm ci --prefix bin --ignore-scripts\n          EOF' none
+  for unfinished_delimiter in "'EOF" '"EOF' "EOF\\" ''; do
+    printf -v unfinished_delimiter_body '        run: |\n          : <<%s\n          EOF\n          npm ci --prefix bin --ignore-scripts' "$unfinished_delimiter"
+    check_parser_boundary "unfinished-delimiter fails closed: $unfinished_delimiter" "$unfinished_delimiter_body" none
+  done
+  check_parser_boundary 'complete concatenated delimiter stays supported' \
+    $'        run: |\n          : <<E"O"F\n          npm ci --prefix bin --ignore-scripts\n          EOF\n          npm ci --prefix bin --ignore-scripts' 5
+  check_parser_boundary 'unfinished-delimiter state resets at later run' \
+    $'        run: |\n          : <<EO\\\n          F\n        run: |\n          npm ci --prefix bin --ignore-scripts' 5
+
+  # A queued heredoc must not consume the continued logical opener as its body.
+  check_parser_boundary 'continued-opener argument is not a terminator' \
+    $'        run: |\n          : <<EOF \\\n          EOF\n          literal body\n          npm ci --prefix bin --ignore-scripts\n          EOF' none
+  check_parser_boundary 'continued-opener quote fails closed' \
+    $'        run: |\n          : <<EOF "open\n          EOF\n          close"\n          npm ci --prefix bin --ignore-scripts\n          EOF' none
+  check_parser_boundary 'ordinary opener still distinguishes body and consumer' \
+    $'        run: |\n          : <<EOF\n          npm ci --prefix bin --ignore-scripts\n          EOF\n          npm ci --prefix bin --ignore-scripts' 5
+  check_parser_boundary 'continued-opener state resets at later run' \
+    $'        run: |\n          : <<EOF \\\n          EOF\n        run: |\n          npm ci --prefix bin --ignore-scripts' 5
+
+  # Reject unsupported multiline compounds/functions instead of inferring execution.
+  unsupported_commands=(
+    'while false; do' 'until true; do' 'for item in; do'
+    'case absent in present)' 'select item in;' 'unused() {'
+    'unused () {' 'function unused {' '{' '('
+  )
+  unsupported_closures=('done' 'done' 'done' 'esac' 'done' '}' '}' '}' '}' ')')
+  for unsupported_case in "${!unsupported_commands[@]}"; do
+    unsupported_command=${unsupported_commands[unsupported_case]}
+    printf -v unsupported_command_body '        run: |\n          %s\n          npm ci --prefix bin --ignore-scripts\n          %s' \
+      "$unsupported_command" "${unsupported_closures[unsupported_case]}"
+    check_parser_boundary "unsupported-context body fails closed: $unsupported_command" "$unsupported_command_body" none
+  done
+  check_parser_boundary 'unsupported-context remains sticky after closing syntax' \
+    $'        run: |\n          while false; do\n          done\n          npm ci --prefix bin --ignore-scripts' none
+  check_parser_boundary 'unsupported-context state resets at later run' \
+    $'        run: |\n          unused() {\n          npm ci --prefix bin --ignore-scripts\n          }\n        run: |\n          npm ci --prefix bin --ignore-scripts' 6
+  check_parser_boundary 'quoted compound syntax and arguments stay literal' \
+    $'        run: |\n          printf "%s" "while false; do"\n          printf "%s" "unused() {"\n          printf "%s" "case absent in"\n          echo while false\n          npm ci --prefix bin --ignore-scripts' 6
+  check_parser_boundary 'heredoc compound syntax stays literal' \
+    $'        run: |\n          : <<EOF\n          while false; do\n          unused() {\n          EOF\n          npm ci --prefix bin --ignore-scripts' 6
+  check_parser_boundary 'completed finite loop and group prefixes remain supported' \
+    $'        run: |\n          while false; do :; done\n          until true; do :; done\n          for item in skipped; do :; done\n          { :; }\n          npm ci --prefix bin --ignore-scripts' 6
+  # End of bounded literal parser regressions.
 
   concatenated_delimiter_body=$'        run: |\n          cat <<\'PAY\'LOAD\n          fixture text\n          PAYLOAD\n          npm ci --prefix bin --ignore-scripts'
   concatenated_delimiter_line=$(consumer_run_line "$concatenated_delimiter_body" 'npm ci --prefix bin --ignore-scripts')

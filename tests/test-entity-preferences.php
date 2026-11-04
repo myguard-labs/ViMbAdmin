@@ -111,7 +111,7 @@ function preferenceContractThrows(string $message, \Closure $operation): bool
 
 echo "== nullable preference contracts ==\n";
 
-$configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([]);
+$configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([], cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter());
 if (PHP_VERSION_ID >= 80400) {
     $configuration->enableNativeLazyObjects(true);
 } else {

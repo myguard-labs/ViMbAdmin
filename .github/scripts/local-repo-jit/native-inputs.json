@@ -1,0 +1,229 @@
+{
+  "archive_sha256": "04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d",
+  "runtime_version": "8.0.28",
+  "members": {
+    "externals/node24_alpine/bin/node": {
+      "sha256": "0d8f38f3b4fb672913f7c7b1ab2321b8d57bcb7d28e3e544f11dfe9678053657",
+      "needed": [
+        "libc.musl-x86_64.so.1"
+      ]
+    },
+    "externals/node24/bin/node": {
+      "sha256": "41a74efb34cbde5c7632cdac0cf8bd1a14d0b8d73dc1e82755014d9a9ce70f5c",
+      "needed": [
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libpthread.so.0",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "externals/node20_alpine/bin/node": {
+      "sha256": "9d1bf97678655401b9b9192e98e5f769214b47f56d51ca8c9bbc30eb95c83efe",
+      "needed": [
+        "libc.musl-x86_64.so.1"
+      ]
+    },
+    "externals/node20/bin/node": {
+      "sha256": "6295488653f0d93b0a157841746fef7e72cc4328cfb60c4bbe0ca2668a836ffd",
+      "needed": [
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libpthread.so.0",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "bin/Runner.PluginHost": {
+      "sha256": "ba4652b987e3f5dea52a7c3fe81e6b4ed22bc5b64f46f3e6bf2ef10f08948f1b",
+      "needed": [
+        "libpthread.so.0",
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    },
+    "bin/libhostfxr.so": {
+      "sha256": "cc3da77a417ba76ce9d5cc6f1e79de9ab6b7bf6656be46af596ef62a725d8be2",
+      "needed": [
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "bin/libcoreclrtraceptprovider.so": {
+      "sha256": "797f5a1091f6eaa77c881372d34b483c520156c6a143370433f967096c927a77",
+      "needed": [
+        "liblttng-ust.so.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    },
+    "bin/Runner.Worker": {
+      "sha256": "a23441ed55e5e967ecfb7b9467310693ea73e429a97596ebdc979745cbcdba15",
+      "needed": [
+        "libpthread.so.0",
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    },
+    "bin/libcoreclr.so": {
+      "sha256": "d7b3c27140f0155953a20b966627f105c30fdd65f7c8cdc7a8873e012c2d1843",
+      "needed": [
+        "libgcc_s.so.1",
+        "libpthread.so.0",
+        "librt.so.1",
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "bin/libhostpolicy.so": {
+      "sha256": "1adb460df7ddd7a5f37918bb59b71e9d00abe9c179e1babe2438dc01b5bdeb1e",
+      "needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "bin/libSystem.Native.so": {
+      "sha256": "7606141d203b8468ed632a3dbbc831ca6e69ef2eb8a02d31889f887ef3e08bbf",
+      "needed": [
+        "librt.so.1",
+        "libc.so.6"
+      ]
+    },
+    "bin/libSystem.Globalization.Native.so": {
+      "sha256": "7c7caf6997537a497a4894e152e753b59b8b11af722b37fdcd78684acb9e1ea7",
+      "needed": [
+        "libdl.so.2",
+        "libc.so.6"
+      ]
+    },
+    "bin/createdump": {
+      "sha256": "3961a8127eca0c8675db14e0ced7f68e8f71d8d17cd4d2ecee465fc40bd2356d",
+      "needed": [
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    },
+    "bin/libSystem.Security.Cryptography.Native.OpenSsl.so": {
+      "sha256": "3708ad406bd6524fa332ffe132d4a9a1fc1b382980edd10838e7a9dba59cb918",
+      "needed": [
+        "libdl.so.2",
+        "libpthread.so.0",
+        "libc.so.6"
+      ]
+    },
+    "bin/libmscordaccore.so": {
+      "sha256": "c8a495e7ef273a845cb795eb650912a9ba24d3d334b6a817206d3def55f56bf9",
+      "needed": [
+        "libgcc_s.so.1",
+        "libpthread.so.0",
+        "librt.so.1",
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "bin/libmscordbi.so": {
+      "sha256": "abc827fb49b04e263f77600b4b43506eeb30bd4104fd112447f8f3100aaa4a8a",
+      "needed": [
+        "libmscordaccore.so",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "bin/libclrgc.so": {
+      "sha256": "2972286d485bef23406b45329d564d9f98bf9517b0a3419483051d9cce24d1b1",
+      "needed": [
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    },
+    "bin/libSystem.Net.Security.Native.so": {
+      "sha256": "fe8b79970cca6a2a03919fdfd8a1331a6e18223e3ced0f09a5da55d0be8710a3",
+      "needed": [
+        "libdl.so.2",
+        "libc.so.6"
+      ]
+    },
+    "bin/libclrjit.so": {
+      "sha256": "71954dda1fb157a2633297163e9cfb2290e87f0e0bb0c9e16b6b46e75f183e8e",
+      "needed": [
+        "libgcc_s.so.1",
+        "libpthread.so.0",
+        "librt.so.1",
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ]
+    },
+    "bin/libSystem.IO.Compression.Native.so": {
+      "sha256": "af2ea733b4896f68f29496c258bbebcdfeba8a161a7f1ad82c27d26d322d8dbb",
+      "needed": [
+        "libz.so.1",
+        "libm.so.6",
+        "libc.so.6"
+      ]
+    },
+    "bin/Runner.Listener": {
+      "sha256": "b73c247aa9f0b4198aeb00ae924b7b137c0a717e5dc1066919a80fa4876fdda4",
+      "needed": [
+        "libpthread.so.0",
+        "libdl.so.2",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ]
+    }
+  },
+  "optional_trace_provider": "bin/libcoreclrtraceptprovider.so",
+  "optional_missing_sonames": [
+    "liblttng-ust.so.0"
+  ],
+  "ubuntu_unselected_members": [
+    "externals/node20_alpine/bin/node",
+    "externals/node24_alpine/bin/node"
+  ],
+  "dynamic_system_libraries": [
+    "libssl.so.3",
+    "libcrypto.so.3",
+    "libicuuc.so.74",
+    "libicui18n.so.74",
+    "libgssapi_krb5.so.2"
+  ]
+}

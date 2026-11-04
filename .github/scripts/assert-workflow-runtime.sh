@@ -311,16 +311,27 @@ if ! awk '
   }
   function finish_checkout() {
     if (!in_checkout) return
-    if (field != 4) failed = 1
+    if ((checkout_job == "semgrep" && field != 4) ||
+        (checkout_job == "sarif-upload" && field != 3)) failed = 1
     in_checkout = 0
   }
   {
     current_indent = indent($0)
+    if ($0 == "jobs:") in_jobs = 1
+    else if (in_jobs && current_indent == 0 && $0 !~ /^[[:space:]]*($|#)/) in_jobs = 0
+    if (in_jobs && $0 ~ /^  [a-zA-Z0-9_-]+:$/) {
+      job = $0
+      sub(/^  /, "", job)
+      sub(/:$/, "", job)
+    }
     if (in_checkout && $0 !~ /^[[:space:]]*$/ &&
         current_indent <= checkout_indent) finish_checkout()
 
     if (index($0, "actions/checkout@")) {
       checkout_occurrences++
+      checkout_job = job
+      if (!in_jobs || (job != "semgrep" && job != "sarif-upload")) failed = 1
+      checkout_by_job[job]++
       if ($0 !~ /^      - uses: actions\/checkout@/) {
         failed = 1
         next
@@ -338,16 +349,19 @@ if ! awk '
     if ($0 ~ /^[[:space:]]*$/) next
 
     if (field == 0 && $0 == "        with:") field = 1
-    else if (field == 1 && $0 == "          fetch-depth: 0") field = 2
-    else if (field == 2 &&
-             $0 == "          ref: ${{ github.event.pull_request.head.sha || github.sha }}") field = 3
-    else if (field == 3 &&
-             $0 == "          persist-credentials: false") field = 4
+    else if (checkout_job == "semgrep" && field == 1 && $0 == "          fetch-depth: 0") field = 2
+    else if (((checkout_job == "semgrep" && field == 2) ||
+              (checkout_job == "sarif-upload" && field == 1)) &&
+             $0 == "          ref: ${{ github.event.pull_request.head.sha || github.sha }}") field++
+    else if (((checkout_job == "semgrep" && field == 3) ||
+              (checkout_job == "sarif-upload" && field == 2)) &&
+             $0 == "          persist-credentials: false") field++
     else failed = 1
   }
   END {
     finish_checkout()
-    exit checkout_occurrences == 1 && !failed ? 0 : 1
+    exit checkout_occurrences == 2 && checkout_by_job["semgrep"] == 1 &&
+         checkout_by_job["sarif-upload"] == 1 && !failed ? 0 : 1
   }
 ' "$security_workflow"; then
   printf 'Security workflow checkout must disable persisted credentials.\n' >&2

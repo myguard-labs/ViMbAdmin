@@ -1,0 +1,29 @@
+{
+  "repo_api.py": {
+    "sha256": "7c3b26bca040cc08f50afcc7fd8d2dbf98c8101aae4b16c78dd706a6748aad98"
+  },
+  "vm_backend.py": {
+    "sha256": "28ce2f77c64a9f90191f0417b51fbaa4a6e252912754ea07db93a7798e9d0bbb"
+  },
+  "native_preflight.py": {
+    "sha256": "12330fcb7fe11bc73b040e69de678fd1cd04f0f9051dd878c9e65bf98237cd7b"
+  },
+  "native_phase.py": {
+    "sha256": "1e6025d01b76544509b517f99b7e8a20de879088ef687d5f865a6b90011ca291"
+  },
+  "runner_setup.py": {
+    "sha256": "8b096fe34e6f0b2f8352ffb8ec052ca49e601c6b1848202472a72e94fafe8016"
+  },
+  "baseline_budget.py": {
+    "sha256": "2f44f596f5efa7993c1ecb186e5d8e284809e42793dcf8f5924ea55e9961b010"
+  },
+  "failure_observation.py": {
+    "sha256": "24c1032494b8b032ee6348e2870be597863d777c9494386b4f0acf1021dad836"
+  },
+  "guest_capacity.py": {
+    "sha256": "84c1c5271be3a088d1872f9bce3366711ce3d572e8a5495e267361756fc089b9"
+  },
+  "owned_overlay.py": {
+    "sha256": "53261264f60e034e65b9046febffb6f7f69490e8b085f715f37fdba59f5bb4c3"
+  }
+}

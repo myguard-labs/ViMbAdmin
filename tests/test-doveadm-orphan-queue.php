@@ -157,7 +157,7 @@ $doveadm = $source('library/ViMbAdmin/Doveadm.php');
 $doveadmCode = preg_replace('/^\s*\/\/.*$/m', '', $doveadm) ?? $doveadm;
 $check(
     'one easy handle is reset per request and released at lifecycle end',
-    substr_count($doveadm, '$this->_handle = curl_init();') === 1
+    count(array_filter(token_get_all($doveadm), static fn (array|string $token): bool => is_array($token) && $token[0] === T_STRING && $token[1] === 'curl_init')) === 1
     && str_contains($doveadm, 'curl_reset($ch);')
     && !str_contains($doveadmCode, 'curl_close(')
     && preg_match('/__destruct\(\).*?\$this->_handle = null;/s', $doveadm) === 1

@@ -79,7 +79,7 @@ jobs:
           git cat-file -e "${PHPSTAN_BASE_SHA}^{commit}"
 
       - name: Setup PHP container
-        run: bash .github/scripts/setup-php-container.sh static
+        run: bash .github/scripts/setup-php-container.sh phpstan
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -130,7 +130,7 @@ jobs:
         run: bash .github/scripts/assert-pr-runner-isolation.sh
 
       - name: Setup PHP container
-        run: bash .github/scripts/setup-php-container.sh static
+        run: bash .github/scripts/setup-php-container.sh psalm
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
@@ -179,7 +179,7 @@ jobs:
         run: bash .github/scripts/assert-pr-runner-isolation.sh
 
       - name: Setup PHP container
-        run: bash .github/scripts/setup-php-container.sh static
+        run: bash .github/scripts/setup-php-container.sh formatter
 
       - name: Formatting contract self-test
         run: bash tests/test-php-cs-fixer-contract.sh
@@ -222,3 +222,35 @@ jobs:
 
       - name: Refactor metrics contract regression
         run: bash ci/test-refactor-metrics.sh
+
+      - name: PHP setup profile selection regression
+        run: python3 ci/test-php-setup-profiles.py
+
+      - name: Checkout immutable structural rule corpus
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: myguard-labs/ast-grep-essentials
+          ref: 9025c0dd887d7a6797352b6d7ab5db6ba58d4603
+          path: .ci-ast-grep-corpus
+          persist-credentials: false
+
+      - name: Install locked structural scan engine
+        run: npm ci --ignore-scripts --prefix .ci-ast-grep-corpus
+
+      - name: Structural scan execution and failure controls
+        run: python3 ci/test-ast-grep.py --corpus .ci-ast-grep-corpus
+
+      # Structural matches are review candidates, as in local pre-commit.
+      # Tool/configuration errors and incomplete source coverage fail the job.
+      - name: Scan tracked sources with ast-grep
+        run: >-
+          python3 ci/run-ast-grep.py --corpus .ci-ast-grep-corpus
+          --output "${RUNNER_TEMP:?}/ast-grep-report"
+
+      - name: Preserve complete structural finding locations and coverage
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ast-grep-candidates
+          path: ${{ runner.temp }}/ast-grep-report/report.json
+          if-no-files-found: error
+          retention-days: 14

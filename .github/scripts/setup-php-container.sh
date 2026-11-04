@@ -29,35 +29,44 @@ install_apcu() (
   make install
 )
 
-install_verified_phar() {
+install_verified_phar() (
   local name=$1 expected_sha256=$2 url=$3
   local destination="/usr/local/bin/$name" temporary
   temporary=$(mktemp)
-  curl --fail --silent --show-error --location "$url" --output "$temporary"
+  trap 'rm -f -- "${temporary:?}"' EXIT
+  curl --fail --silent --show-error --location \
+    --connect-timeout 30 --max-time 300 --retry 3 --retry-max-time 600 \
+    "$url" --output "$temporary"
   printf '%s  %s\n' "$expected_sha256" "$temporary" | sha256sum --check --status
   install -m 0755 "$temporary" "$destination"
-  rm -f "$temporary"
   if [[ $name == psalm ]]; then
     "$destination" --root=/tmp --version
   else
     "$destination" --version
   fi
-}
+)
 
-install_verified_phar composer "$composer_sha256" \
-  "https://getcomposer.org/download/$composer_version/composer.phar"
-
+# Validate before downloading or changing the container. Formatting parses the
+# tracked sources without Composer dependencies or application extensions.
 case "$profile" in
-tools)
-  exit 0
-  ;;
-runtime | cache | static)
+formatter | tools | runtime | cache | static | phpstan | psalm)
   ;;
 *)
   printf 'Unknown PHP container profile: %s\n' "$profile" >&2
   exit 64
   ;;
 esac
+
+if [[ $profile == formatter ]]; then
+  install_verified_phar php-cs-fixer "$php_cs_fixer_sha256" \
+    "https://github.com/PHP-CS-Fixer/PHP-CS-Fixer/releases/download/v$php_cs_fixer_version/php-cs-fixer.phar"
+  printf 'memory_limit=-1\n' >/usr/local/etc/php/conf.d/ci-memory.ini
+  exit 0
+fi
+
+install_verified_phar composer "$composer_sha256" \
+  "https://getcomposer.org/download/$composer_version/composer.phar"
+[[ $profile != tools ]] || exit 0
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
@@ -82,13 +91,17 @@ if [[ $profile == cache ]]; then
   printf 'apc.enable_cli=1\n' >/usr/local/etc/php/conf.d/apcu-cli.ini
 fi
 
-if [[ $profile == static ]]; then
+if [[ $profile == static || $profile == phpstan ]]; then
   install_verified_phar phpstan "$phpstan_sha256" \
     "https://github.com/phpstan/phpstan/releases/download/$phpstan_version/phpstan.phar"
+fi
+if [[ $profile == static || $profile == psalm ]]; then
   # Psalm owns only the taint lens (see psalm.xml), so keep its dependency out
   # of the application's Composer graph.
   install_verified_phar psalm "$psalm_sha256" \
     "https://github.com/vimeo/psalm/releases/download/$psalm_version/psalm.phar"
+fi
+if [[ $profile == static ]]; then
   # PHP-CS-Fixer enforces the PSR-12 formatting contract in .php-cs-fixer.dist.php.
   install_verified_phar php-cs-fixer "$php_cs_fixer_sha256" \
     "https://github.com/PHP-CS-Fixer/PHP-CS-Fixer/releases/download/v$php_cs_fixer_version/php-cs-fixer.phar"
@@ -104,7 +117,8 @@ for extension in "${required_extensions[@]}"; do
   }
 done
 
-if php -m | grep -Eiq '^(pcov|xdebug)$'; then
+modules=$(php -m)
+if grep -Eiq '^(pcov|xdebug)$' <<<"$modules"; then
   printf 'Coverage extension loaded despite coverage: none contract.\n' >&2
   exit 1
 fi

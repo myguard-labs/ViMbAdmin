@@ -1,0 +1,15 @@
+[MESSAGES CONTROL]
+# Project commits keep error, fatal and warning diagnostics. These thresholds
+# and layout preferences are optional design advice, not correctness gates.
+# In particular, retain cyclic-import, resource-management and all W checks.
+disable=
+    line-too-long,
+    too-many-lines,
+    too-many-instance-attributes,
+    too-few-public-methods,
+    too-many-return-statements,
+    too-many-branches,
+    too-many-arguments,
+    too-many-locals,
+    too-many-statements,
+    too-many-positional-arguments

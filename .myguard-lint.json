@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "retired_tools": {
+    "psalm": "PHPStan owns types; psalm.xml explicitly configures Psalm taint only. Keep psalm(taint).",
+    "phpmd": "Advisory clean-code/design/unused-code thresholds are outside this focused precommit gate. Unique maintainability hints are relinquished, not claimed covered by PHPStan.",
+    "lizard(complexity)": "Advisory complexity reporting is optional for project commits; no safety equivalence claimed.",
+    "jscpd(copy-paste)": "Broad advisory duplication scan is optional; retained pinned PHP clone-contract self-test in CI has narrower coverage.",
+    "codespell": "Spelling advice is optional for project commits; syntax and documentation structure lint remain.",
+    "vale(prose)": "No project Vale style rules exist; optional prose style is outside correctness gate.",
+    "shfmt(style, advisory)": "Optional whitespace preferences; ShellCheck remains required.",
+    "vulture(dead code)": "Heuristic unused-symbol advice is optional for these Python CI helpers; retain Ruff, Mypy, Bandit and Pylint correctness checks. No equivalent dead-code coverage is claimed.",
+    "editorconfig-checker(advisory)": "Additional whitespace and encoding preferences are optional beyond retained language parsers and formatters; no correctness or security equivalence is claimed."
+  }
+}

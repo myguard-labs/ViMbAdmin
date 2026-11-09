@@ -20,7 +20,7 @@ fi
 
 if [[ $helper_only == 1 ]]; then
   "$php" "$root/ci/patch-psalm-named-taint.php" "$original" "$work/patched" >"$work/apply.log" 2>&1
-  "$work/patched/bin/psalm" --version
+  (cd "$work/patched/engine" && "$work/patched/bin/psalm" --version)
   if "$php" "$root/ci/patch-psalm-named-taint.php" "$original" "$work/patched" >"$work/existing.log" 2>&1; then
     echo 'FAIL: helper accepted an existing output' >&2
     exit 1

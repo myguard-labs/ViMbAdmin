@@ -113,6 +113,27 @@ def run_profile(profile, **settings):
 
 
 class SetupProfiles(unittest.TestCase):
+    def test_psalm_version_probe_uses_isolated_engine_directory(self):
+        source = (ROOT / "ci/test-psalm-named-argument-taint.sh").read_text()
+        probe = next(line.strip() for line in source.splitlines() if '"$work/patched/bin/psalm" --version' in line)
+        with tempfile.TemporaryDirectory(prefix="psalm-version-probe-") as scratch:
+            directory = Path(scratch)
+            checkout = directory / "checkout"
+            checkout.mkdir()
+            (checkout / "composer.json").write_text("{}")
+            engine = directory / "patched/engine"
+            engine.mkdir(parents=True)
+            launcher = directory / "patched/bin/psalm"
+            launcher.parent.mkdir()
+            launcher.write_text('#!/bin/bash\n[[ $PWD == "$work/patched/engine" && $1 == --version ]]\n')
+            launcher.chmod(0o755)
+            result = subprocess.run(
+                ["bash", "-c", probe], cwd=checkout,
+                env=controlled_environment(scratch, work=scratch),
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_phar_integrity_failure_stops_before_install(self):
         source = SOURCE.read_text()
         installer = re.search(

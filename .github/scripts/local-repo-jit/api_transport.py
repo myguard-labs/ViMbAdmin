@@ -332,6 +332,9 @@ class APITransport:
                    "Accept": "application/vnd.github+json", "Accept-Encoding": "identity",
                    "Content-Type": "application/json", "User-Agent": "vimbadmin-local-jit",
                    "X-GitHub-Api-Version": "2026-03-10"}
+        # Fixed api.github.com:443; explicit PROTOCOL_TLS_CLIENT verifies the
+        # certificate and hostname using system roots, with TLS 1.2 minimum.
+        # nosemgrep: python.lang.security.audit.httpsconnection-detected.httpsconnection-detected
         connection = http.client.HTTPSConnection(HOST, port=443, timeout=IO_TIMEOUT, context=self._context)
         try:
             connection.set_debuglevel(0)  # Never inherit process-wide HTTP debug logging.

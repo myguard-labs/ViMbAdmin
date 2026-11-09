@@ -174,6 +174,45 @@ class TransportTests(unittest.TestCase):
                 self.assertNotIn(TOKEN, str(value))
                 self.assertNotIn(AMBIENT, str(value))
 
+    def test_tls_context_uses_system_trust_and_fails_closed_on_load_error(self):
+        paths = ssl.get_default_verify_paths()
+        loads = []
+        real_load = ssl.SSLContext.load_verify_locations
+
+        def load(context, *args, **kwargs):
+            loads.append((args, kwargs))
+            return real_load(context, *args, **kwargs)
+
+        with (patch.object(ssl.SSLContext, "load_verify_locations", new=load),
+              patch.dict(os.environ, {"SSLKEYLOGFILE": "/nonexistent-fixture/keylog"})):
+            client = transport.APITransport(TOKEN, self.binding, runner_group_id=1)
+        self.assertEqual(loads, [((), {"cafile": paths.openssl_cafile, "capath": paths.openssl_capath})])
+        self.assertTrue(client._context.check_hostname)
+        self.assertEqual(client._context.verify_mode, ssl.CERT_REQUIRED)
+        self.assertEqual(client._context.minimum_version, ssl.TLSVersion.TLSv1_2)
+        self.assertIsNone(client._context.keylog_filename)
+        self.assertGreater(client._context.cert_store_stats()["x509_ca"], 0)
+        with (patch.object(ssl.SSLContext, "load_verify_locations", side_effect=OSError("fixture trust unavailable")),
+              self.assertRaisesRegex(OSError, "fixture trust unavailable")):
+            transport.APITransport(TOKEN, self.binding, runner_group_id=1)
+        self.assertEqual(self.calls, [])
+
+    def test_real_https_connect_passes_fixed_hostname_and_verified_context(self):
+        raw = Mock()
+        wrapped = []
+
+        def reject_certificate(context, sock, *, server_hostname):
+            wrapped.append((context, sock, server_hostname))
+            raise ssl.SSLCertVerificationError("fixture certificate rejected")
+
+        with (patch.object(transport.http.client, "HTTPSConnection", REAL_HTTPS_CONNECTION),
+              patch.object(socket, "create_connection", return_value=raw) as connect,
+              patch.object(ssl.SSLContext, "wrap_socket", new=reject_certificate)):
+            self.refused()
+        connect.assert_called_once_with(("api.github.com", 443), transport.IO_TIMEOUT, None)
+        self.assertEqual(wrapped, [(self.client._context, raw, "api.github.com")])
+        self.assertEqual(self.calls, [])
+
     def test_actual_http_encoder_parser_with_fake_tls_socket_and_debug_disabled(self):
         class WireSocket:
             def __init__(self):

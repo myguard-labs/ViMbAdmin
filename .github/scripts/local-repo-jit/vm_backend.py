@@ -8,6 +8,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import public_recipe_selection
+
 PROJECT = 'vimbadmin'
 ROOT = Path(__file__).resolve().parent
 PREFIX = 'vi-local-ci-208c2d13-vm-q2-'
@@ -58,6 +60,11 @@ assert json.loads(d('info','--format','{{json .}}'))['Images']==0
 open('/var/lib/local-ci/dirty','w').write('owned-public-reset-marker')
 print(json.dumps({'child_id':child,'child_cancelled_reaped_removed':True,'dirty_marker_written':True}))
 '''
+
+
+def lifecycle_script(selection='historical'):
+    profile = public_recipe_selection.select(selection)
+    return LIFECYCLE.replace(ALPINE_SHA, profile['alpine_sha256']).replace(ALPINE, profile['alpine_image'])
 
 
 class Refused(RuntimeError):
@@ -190,6 +197,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('stage', choices=('provision', 'lifecycle'))
     parser.add_argument('--execute-reviewed-stage', action='store_true')
+    parser.add_argument('--recipe-selection', choices=('historical', 'public-c22-alpine-c24'), default='historical')
     image_group = parser.add_mutually_exclusive_group(required=True)
     image_group.add_argument('--image')
     image_group.add_argument('--built-image', choices=('provision', 'runtime'))
@@ -216,7 +224,7 @@ def main():
     else:
         first = owner.create(args.image, 'lifecycle', 'life-q1')
         owner.ready(first)
-        first_proof = owner.guest(first, 'python3 -', LIFECYCLE)
+        first_proof = owner.guest(first, 'python3 -', lifecycle_script(args.recipe_selection))
         # Dirty-state refusal must be observed before replacing the guest.
         dirty = owner.guest_response(first, 'python3 -', FRESH)
         if dirty.get('exitcode') != 1 or dirty.get('signal') or 'AssertionError' not in dirty.get('err-data', ''):

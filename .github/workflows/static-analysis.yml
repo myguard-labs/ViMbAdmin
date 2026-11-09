@@ -30,7 +30,7 @@ jobs:
     # into one baseline, which CI verifies has no stale or hand-edited drift.
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       # actions/checkout v7
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -127,7 +127,7 @@ jobs:
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       # actions/checkout v7
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -180,7 +180,7 @@ jobs:
     # It parses sources directly and needs neither Composer nor proxies.
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       # actions/checkout v7
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 ROOT = Path(__file__).resolve().parent
-CODE_SEAL = '4abebdc3d17e3964b048fa2e8e3e8ef2019b3f49ccac6d33736850197f798f94'
+CODE_SEAL = '4ac263f2b873970274ab778d3ac6ebd97285c69c15eac23c152c153a9ffe17b7'
 REPO = 'myguard-labs/ViMbAdmin'
 RUNNER_NAME = 'vi-local-ci-208c2d13-01'
 Q2_SEAL = 'ee81956ba51a16c083f47fcc23c502575a6fb18c673cb039e9f22267a4837284'
@@ -28,10 +28,20 @@ def require(value, reason):
 
 def frozen(directory, seal, filename, module_name):
     manifest = directory / 'code-inputs.json'
+    require(directory == directory.resolve(strict=True) and manifest.is_file() and not manifest.is_symlink(),
+            'regular frozen manifest required')
     require(hashlib.sha256(manifest.read_bytes()).hexdigest() == seal, 'frozen manifest changed')
+    entries = json.loads(manifest.read_text())
+    require(type(entries) is dict and 0 < len(entries) <= 64 and filename in entries, 'frozen closure schema refused')
+    for name, entry in entries.items():
+        require(isinstance(name, str) and re.fullmatch(r'[a-z][a-z0-9_]*\.py', name)
+                and type(entry) is dict and set(entry) == {'sha256'}
+                and isinstance(entry['sha256'], str) and re.fullmatch('[0-9a-f]{64}', entry['sha256']),
+                'frozen closure schema refused')
+        leaf = directory / name
+        require(leaf.is_file() and not leaf.is_symlink()
+                and hashlib.sha256(leaf.read_bytes()).hexdigest() == entry['sha256'], 'frozen source closure changed')
     source = directory / filename
-    require(hashlib.sha256(source.read_bytes()).hexdigest() == json.loads(manifest.read_text())[filename]['sha256'],
-            'frozen source changed')
     spec = importlib.util.spec_from_file_location(module_name, source)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -40,6 +50,8 @@ def frozen(directory, seal, filename, module_name):
 
 v2 = frozen(ROOT, CODE_SEAL, 'repo_api.py', 'v2_repo_contract')
 q2 = frozen(ROOT, CODE_SEAL, 'vm_backend.py', 'q2_id_backend')
+request_model = frozen(ROOT, CODE_SEAL, 'request_model.py', 'local_jit_request_model')
+trusted_provider = frozen(ROOT, CODE_SEAL, 'trusted_provider.py', 'local_jit_trusted_provider')
 require(v2.REPO == REPO, 'repository contract changed')
 
 
@@ -54,12 +66,45 @@ def validate_config(config):
     return config
 
 
+def validate_request(request: dict, *, qualification=None, admission=None) -> dict:
+    """Offline data consistency only; never verifies or grants execution authority."""
+    require(type(request) is dict, 'request object required')
+    if request.get('mode') == 'fixture-proof':
+        require(set(request) == {'schema', 'mode', 'config'} and request['schema'] == request_model.SCHEMA,
+                'fixture request fields refused')
+        require(qualification is None and admission is None, 'fixture records refused')
+        require(type(request['config']) is dict and request['config'].get('external_authority') is False,
+                'fixture authority refused')
+        validate_config(request['config'])
+        return {'mode': 'fixture-proof', 'consistency_only': True, 'authority_verified': False,
+                'runtime_qualified': False, 'execution_allowed': False}
+    pins = {'code_manifest_sha256': CODE_SEAL,
+            'native_manifest_sha256': hashlib.sha256((ROOT / 'native-inputs.json').read_bytes()).hexdigest(),
+            'q2_manifest_sha256': Q2_SEAL, 'v2_manifest_sha256': V2_SEAL}
+    return request_model.validate_request(request, qualification=qualification, admission=admission,
+                                          maintained_pins=pins)
+
+
+def read_request_record(path: str) -> dict:
+    """Read at most the schema byte limit plus one; diagnostics omit file contents."""
+    try:
+        with Path(path).open('rb') as source:
+            data = source.read(request_model.MAX_RECORD_BYTES + 1)
+    except OSError:
+        raise Refused('request record unavailable') from None
+    return request_model.decode_record(data)
+
+
 if TYPE_CHECKING:
+    from repo_api import QualifiedJobAPI as QualifiedJobAPIBase
     from repo_api import RepoAPI as RepoAPIBase
     from repo_api import Supervisor as SupervisorBase
+    from trusted_provider import LocalQualificationProvider as TrustedProviderBase
 else:
     RepoAPIBase = v2.RepoAPI
     SupervisorBase = v2.Supervisor
+    QualifiedJobAPIBase = v2.QualifiedJobAPI
+    TrustedProviderBase = trusted_provider.LocalQualificationProvider
 
 
 class RepoAPI(RepoAPIBase):
@@ -74,6 +119,21 @@ class RepoAPI(RepoAPIBase):
     def dispatch(self, workflow, ref, sha, marker, mode):
         require(ref not in ('master', 'main'), 'default branch is not a private proof ref')
         return super().dispatch(workflow, ref, sha, marker, mode)
+
+
+class QualifiedJobAPI(QualifiedJobAPIBase):
+    """Offline qualified API integration; supplied records remain data only."""
+
+    def __init__(self, request, *, qualification=None, admission=None, **kwargs):
+        checked = validate_request(request, qualification=qualification, admission=admission)
+        require(checked['mode'] == 'qualified-actual', 'qualified actual request required')
+        super().__init__(request, checked['request_sha256'], **kwargs)
+
+
+class TrustedLocalQualificationProvider(TrustedProviderBase):
+    """Protected local-store verifier; no anchor or runtime is provisioned here."""
+
+    receipt_type = v2.VerifiedJobReceipt
 
 
 class Listener:
@@ -242,8 +302,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--validate-config', action='store_true')
     parser.add_argument('--run', action='store_true')
+    parser.add_argument('--validate-request', metavar='JSON')
+    parser.add_argument('--qualification-record', metavar='JSON')
+    parser.add_argument('--admission-record', metavar='JSON')
     args = parser.parse_args()
     require(not args.run, 'actual backend unqualified; live enablement requires qualified local route')
+    if args.validate_request:
+        require(not args.validate_config, 'choose one validation mode')
+        request = read_request_record(args.validate_request)
+        qualification = read_request_record(args.qualification_record) if args.qualification_record else None
+        admission = read_request_record(args.admission_record) if args.admission_record else None
+        print(json.dumps(validate_request(request, qualification=qualification, admission=admission)))
+        return
+    require(not args.qualification_record and not args.admission_record, 'request records require request validation')
     require(args.validate_config, 'only configuration validation is enabled')
     validate_config(json.loads((ROOT / 'config.json').read_text()))
     print(json.dumps({'repository': REPO, 'runner_name': RUNNER_NAME, 'runtime': 'UNQUALIFIED', 'external_enabled': False}))

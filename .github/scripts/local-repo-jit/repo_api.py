@@ -1,11 +1,14 @@
 """Maintained repository API/lifecycle contracts extracted without Incus controller."""
 
+import copy
+import hashlib
 import json
 import re
 import subprocess
 import time
 import urllib.error
 import urllib.request
+from typing import NamedTuple
 
 REPO = 'myguard-labs/ViMbAdmin'
 
@@ -177,6 +180,152 @@ class RepoAPI:
                 and jobs[0].get('status') == 'in_progress', 'cancellation placement unproved')
         status, _ = self.request('POST', 'actions/runs/' + str(run_id) + '/cancel')
         require(status == 202, 'owned cancellation failed')
+
+
+class VerifiedJobReceipt(NamedTuple):
+    """Verifier-issued snapshot, never a decoded supplied qualification record.
+
+    The trusted provider must independently verify immutable qualification,
+    current guest/head/job and admission binding. claim_unused must atomically
+    consume that exact binding, returning True only to its single winner. There
+    is a protected local-store provider in trusted_provider; live transport
+    remains unavailable pending its separate qualification.
+    """
+
+    request_sha256: str
+    repository: str
+    candidate_sha: str
+    qualification_id: str
+    admission_id: str
+    verified_at: int
+    expires_at: int
+
+
+class QualifiedJobAPI(RepoAPI):
+    """Qualified-actual API contract exercised only through injected transport.
+
+    Caller schema-validates the complete request first. Supplied record equality
+    is insufficient: verify and claim_unused are separate trusted operations.
+    All failure paths retain unresolved ownership; no uncertain ID is deleted.
+    """
+
+    def __init__(self, request, request_sha256, *, external=False, transport=None,
+                 verifier=None, guard=None, clock=time.time):
+        require(external is False and callable(transport),
+                'qualified live transport unavailable; injected transport required')
+        require(callable(guard) and callable(getattr(verifier, 'verify', None))
+                and callable(getattr(verifier, 'claim_unused', None)),
+                'independent verifier and owned guest guard required')
+        super().__init__(transport=transport, guard=guard)
+        self.binding = copy.deepcopy(request)
+        self.digest = hashlib.sha256(json.dumps(self.binding, sort_keys=True,
+                                                separators=(',', ':'), ensure_ascii=True).encode('ascii')).hexdigest()
+        require(self.digest == request_sha256 and self.binding['repository'] == REPO
+                and self.binding['mode'] == 'qualified-actual', 'validated request binding required')
+        self.verifier, self.clock = verifier, clock
+        self.started = False
+        self.admitted = False
+        self.cleanup_pending = None
+
+    def request(self, method, path, body=None):
+        raise Refused('qualified API requires admitted job flow')
+
+    def _send(self, method, path, body=None):
+        require(self.admitted, 'verified admission required before transport')
+        # Never fall through RepoAPI's credential/urllib path, even if mutated.
+        require(callable(self.transport) and self.token is None, 'qualified live transport unavailable')
+        return super().request(method, path, body)
+
+    def _admit(self):
+        self.guard()
+        receipt = self.verifier.verify(copy.deepcopy(self.binding))
+        require(type(receipt) is VerifiedJobReceipt, 'independent verified receipt required')
+        require((receipt.request_sha256, receipt.repository, receipt.candidate_sha,
+                 receipt.qualification_id, receipt.admission_id) ==
+                (self.digest, REPO, self.binding['candidate_sha'],
+                 self.binding['qualification_id'], self.binding['admission_id']),
+                'verified receipt binding changed')
+        now = self.clock()
+        require(type(receipt.verified_at) is int and type(receipt.expires_at) is int
+                and receipt.verified_at <= now < receipt.expires_at <= receipt.verified_at + 300,
+                'verified receipt stale or malformed')
+        require(self.verifier.claim_unused(receipt) is True, 'unused bound admission required')
+        self.guard()
+        self.admitted = True
+
+    def _current_job(self):
+        binding = self.binding
+        status, run = self._send('GET', 'actions/runs/' + str(binding['run_id']))
+        require(status == 200 and type(run) is dict
+                and type(run.get('id')) is int and run['id'] == binding['run_id']
+                and type(run.get('run_attempt')) is int and run['run_attempt'] == binding['run_attempt']
+                and run.get('head_sha') == binding['candidate_sha']
+                and type(run.get('repository')) is dict and run['repository'].get('full_name') == REPO,
+                'current run identity changed')
+        status, job = self._send('GET', 'actions/jobs/' + str(binding['job_id']))
+        require(status == 200 and type(job) is dict
+                and type(job.get('id')) is int and job['id'] == binding['job_id']
+                and type(job.get('run_id')) is int and job['run_id'] == binding['run_id']
+                and type(job.get('run_attempt')) is int and job['run_attempt'] == binding['run_attempt']
+                and job.get('head_sha') == binding['candidate_sha']
+                and job.get('status') == 'queued' and 'runner_id' in job
+                and (job['runner_id'] is None or (type(job['runner_id']) is int and job['runner_id'] == 0)),
+                'current queued job identity changed')
+        require_scoped_job_labels(job.get('labels'), binding['run_id'], binding['run_attempt'])
+
+    def _runner(self, runner, expected_id=None):
+        require(type(runner) is dict and type(runner.get('id')) is int and runner['id'] > 0
+                and (expected_id is None or runner['id'] == expected_id)
+                and runner.get('name') == self.binding['runner_name'], 'runner identity mismatch')
+        labels = runner.get('labels')
+        require(type(labels) is list and all(type(label) is dict for label in labels),
+                'runner label objects required')
+        require_scoped_job_labels([label.get('name') for label in labels],
+                                  self.binding['run_id'], self.binding['run_attempt'])
+        return runner['id']
+
+    def delete_idle(self, rid):
+        require(type(rid) is int and rid in self.owned_runners, 'foreign runner deletion refused')
+        status, runner = self._send('GET', 'actions/runners/' + str(rid))
+        require(status == 200, 'owned cleanup identity unproved')
+        self._runner(runner, rid)
+        require(runner.get('busy') is False, 'busy or unknown runner deletion refused')
+        status, _ = self._send('DELETE', 'actions/runners/' + str(rid))
+        require(status == 204, 'owned runner deletion failed')
+        del self.owned_runners[rid]
+
+    def begin(self, group, listener):
+        require(not self.started, 'one admission permits one mint attempt')
+        self.started = True
+        require(type(group) is int and group > 0 and callable(listener), 'job handoff parameters refused')
+        self._admit()
+        self._current_job()
+        labels = scoped_job_labels(self.binding['run_id'], self.binding['run_attempt'])
+        status, result = self._send('POST', 'actions/runners/generate-jitconfig',
+                                      {'name': self.binding['runner_name'], 'runner_group_id': group,
+                                       'labels': labels, 'work_folder': '_work'})
+        require(status == 201 and type(result) is dict, 'repository job JIT request refused')
+        # Never derive cleanup ownership from an unbound POST/GET response.
+        rid = self._runner(result.get('runner'))
+        self.owned_runners[rid] = self.binding['runner_name']
+        try:
+            payload = result.get('encoded_jit_config')
+            require(type(payload) is str and bool(payload), 'invalid job JIT payload')
+            status, runner = self._send('GET', 'actions/runners/' + str(rid))
+            require(status == 200, 'created runner lookup refused')
+            self._runner(runner, rid)
+            self.guard()
+            process = listener(rid, payload)
+            return rid, process
+        except Exception:
+            # Failed handoff may have started a listener: busy/foreign/unknown
+            # cleanup refuses and keeps the exact owned ID for reconciliation.
+            try:
+                self.delete_idle(rid)
+            except (OSError, ValueError, RuntimeError):
+                self.cleanup_pending = rid
+            raise
+
 
 class Supervisor:
     def __init__(self, guest, api):

@@ -44,7 +44,7 @@ jobs:
       image: ${{ matrix.image }}
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -59,6 +59,14 @@ jobs:
 
       - name: Test pull-request runner isolation policy
         run: bash tests/test-pr-runner-isolation.sh
+
+      - name: Fresh runner bootstrap dependency controls
+        if: matrix.php == '8.3'
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: >-
+          python3 -m unittest discover -s ci
+          -p test_local_repo_jit_bootstrap.py -v
 
       - name: Setup container tools
         run: bash .github/scripts/setup-php-container.sh tools
@@ -114,7 +122,7 @@ jobs:
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

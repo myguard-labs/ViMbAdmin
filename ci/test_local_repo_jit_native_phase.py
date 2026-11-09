@@ -222,8 +222,8 @@ class Phase(unittest.TestCase):
         for fault in ('error', 'short', 'digest', 'mode'):
             with self.subTest(fault=fault):
                 case = Phase()
-                case.setUp()
                 try:
+                    case.setUp()
                     case.engine.serial_export_fault = fault
                     with self.assertRaises(ERRORS):
                         case.run_phase()
@@ -249,8 +249,8 @@ class Phase(unittest.TestCase):
         for directory, error in ((False, OSError), (True, OSError), (False, InterruptedError), (True, InterruptedError)):
             with self.subTest(directory=directory, error=error):
                 case = Phase()
-                case.setUp()
                 try:
+                    case.setUp()
                     def boundary(target, case=case, directory=directory):
                         root = str(case.directory / 'serial-observations')
                         return target == root if directory else target.startswith(root + '/') and target.endswith('.bin')
@@ -307,8 +307,8 @@ class Phase(unittest.TestCase):
         for code in (0, 1, 125, 137, 143, 255):
             with self.subTest(code=code):
                 case = Phase()
-                case.setUp()
                 try:
+                    case.setUp()
                     receipt = case.create()
                     case.engine.containers[receipt['id']]['State'].update(Running=False, Pid=0, ExitCode=code)
                     p.cleanup(case.owner, receipt)
@@ -327,8 +327,8 @@ class Phase(unittest.TestCase):
         ):
             with self.subTest(state=state):
                 case = Phase()
-                case.setUp()
                 try:
+                    case.setUp()
                     receipt = case.create()
                     case.engine.containers[receipt['id']]['State'].update(state)
                     with self.assertRaises(ERRORS):

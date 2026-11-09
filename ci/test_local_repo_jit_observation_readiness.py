@@ -24,8 +24,8 @@ class Readiness(unittest.TestCase):
 
         for console in [b'', b'MYGUARD_CI_BOUNDARY:root_ready:pass:none\n']:
             case = fixtures.Phase()
-            case.setUp()
             try:
+                case.setUp()
                 with patch.object(fixtures.p, 'observe_failure', return_value=failure_observation.parse_console(console)), self.assertRaises(fixtures.ERRORS):
                     case.run_phase()
                 self.assertFalse((case.directory / 'native-proof.json').exists())

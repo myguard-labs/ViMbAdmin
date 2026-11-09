@@ -644,16 +644,24 @@ launcher under `var/tmp/psalm-tool.*/tool/bin/psalm`. To retain the exact launch
 selected by setup in the calling shell, use its GitHub environment-file output:
 
 ```bash
-selection_dir=$(mktemp -d) || exit 1
-touch "$selection_dir/env" "$selection_dir/path" || exit 1
-GITHUB_ENV="$selection_dir/env" GITHUB_PATH="$selection_dir/path" \
-  bash .github/scripts/setup-php-container.sh psalm || exit 1
-PSALM_BIN=$(sed -n 's/^PSALM_BIN=//p' "$selection_dir/env") || exit 1
-test -n "$PSALM_BIN" || exit 1
-export PSALM_BIN
-rm -rf -- "${selection_dir:?}"
-bash .github/scripts/assert-psalm-optional-models.sh || exit 1
-"$PSALM_BIN" --no-progress --taint-analysis
+setup_psalm() {
+  local selection_dir selected
+  selection_dir=$(mktemp -d) || return 1
+  if ! touch "$selection_dir/env" "$selection_dir/path" ||
+     ! GITHUB_ENV="$selection_dir/env" GITHUB_PATH="$selection_dir/path" \
+       bash .github/scripts/setup-php-container.sh psalm ||
+     ! selected=$(sed -n 's/^PSALM_BIN=//p' "$selection_dir/env") ||
+     [[ -z $selected || $selected == *$'\n'* ]]; then
+    rm -rf -- "$selection_dir"
+    return 1
+  fi
+  PSALM_BIN=$selected
+  export PSALM_BIN
+  rm -rf -- "$selection_dir" || return 1
+  bash .github/scripts/assert-psalm-optional-models.sh &&
+    "$PSALM_BIN" --no-progress --taint-analysis
+}
+setup_psalm
 ```
 
 The baseline, proxy and entrypoint scripts run the presence check themselves.

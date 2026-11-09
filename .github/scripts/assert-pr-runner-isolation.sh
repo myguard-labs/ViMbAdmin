@@ -23,11 +23,17 @@ pull_request | push | schedule | workflow_dispatch) ;;
   exit 1
   ;;
 esac
+fresh_runner=false
 case ${RUNNER_NAME:-} in
 builder02-docker-01 | builder02-docker-02 | builder03-docker-01 | vi-local-ci-208c2d13-01) ;;
 *)
-  printf 'Runner is not an authorized Docker slot.\n' >&2
-  exit 1
+  fresh_runner=true
+  if [[ ${RUNNER_NAME:-} =~ ^vi-local-ci-[0-9a-f]{12}-[0-9a-f]{24}$ ]]; then
+    :
+  else
+    printf 'Runner is not an authorized Docker slot.\n' >&2
+    exit 1
+  fi
   ;;
 esac
 # Own Docker/KVM producer publishes this placement-only file from its own
@@ -39,12 +45,69 @@ if [[ ! -f $slot_file || -L $slot_file ]] ||
   printf 'Missing or invalid published slot metadata.\n' >&2
   exit 1
 fi
-mapfile -t slot_lines <"$slot_file"
-if [[ ${#slot_lines[@]} != 2 || ${slot_lines[0]} != "$RUNNER_NAME" ||
-  ${slot_lines[1]} != /opt/actions-runner ]] ||
-  [[ $(tail -c 1 -- "$slot_file" | od -An -tu1 | tr -d ' ') != 10 ]]; then
-  printf 'Published slot identity does not match this runner.\n' >&2
-  exit 1
+if [[ $fresh_runner == true ]]; then
+  # This validates public placement consistency only. Q5 must independently
+  # verify and consume trusted authority and bind the numeric API job identity.
+  python=$(command -v python3) || {
+    printf 'Fresh runner isolation requires Python 3 with pathlib and maintained consumer helpers.\n' >&2
+    exit 1
+  }
+  case $python in
+  /usr/bin/python3) ;;
+  *)
+    printf 'Fresh runner isolation refuses a shadowed Python interpreter.\n' >&2
+    exit 1
+    ;;
+  esac
+  PYTHONDONTWRITEBYTECODE=1 "$python" -I - "$slot_file" <<'PYBIND'
+import os
+import sys
+try:
+    from pathlib import Path
+    import importlib.util
+
+    # Fixed checkout closure only; neither cwd/PYTHONPATH nor symlinked helper
+    # aliases may supply the public placement validator. This is not attestation
+    # against guest root, and it grants no execution authority.
+    directory = Path('.github/scripts/local-repo-jit').absolute()
+    if directory.resolve(strict=True) != directory:
+        raise ValueError('consumer directory alias refused')
+    names = ('guest_capacity', 'public_recipe_selection', 'baseline_budget', 'request_model', 'runner_setup')
+    for name in names:
+        source = directory / (name + '.py')
+        if not source.is_file() or source.resolve(strict=True) != source:
+            raise ValueError('consumer source alias/missing file refused')
+    # Load these exact source bytes in dependency order. Ordinary imports may
+    # reuse an inherited .pyc even with PYTHONDONTWRITEBYTECODE set.
+    for name in names:
+        source = directory / (name + '.py')
+        spec = importlib.util.spec_from_file_location(name, source)
+        helper = importlib.util.module_from_spec(spec)
+        sys.modules[name] = helper
+        exec(compile(source.read_bytes(), str(source), 'exec'), helper.__dict__)
+        if Path(helper.__file__) != directory / (name + '.py'):
+            raise ValueError('consumer import origin refused')
+except (ImportError, OSError, SyntaxError, ValueError):
+    sys.exit('Fresh runner isolation requires Python 3 with pathlib and maintained consumer helpers.')
+
+try:
+    helper.validate_slot(
+        sys.argv[1], runner_name=os.environ.get('RUNNER_NAME', ''),
+        candidate_sha=os.environ.get('PR_RUNNER_EXPECTED_SHA', ''),
+        repository=os.environ.get('GITHUB_REPOSITORY', ''),
+        run_id=os.environ.get('GITHUB_RUN_ID', ''),
+        run_attempt=os.environ.get('GITHUB_RUN_ATTEMPT', ''))
+except (OSError, ValueError):
+    sys.exit('Published slot request does not match this runner/workflow.')
+PYBIND
+else
+  mapfile -t slot_lines <"$slot_file"
+  if [[ ${#slot_lines[@]} != 2 || ${slot_lines[0]} != "$RUNNER_NAME" ||
+    ${slot_lines[1]} != /opt/actions-runner ]] ||
+    [[ $(tail -c 1 -- "$slot_file" | od -An -tu1 | tr -d ' ') != 10 ]]; then
+    printf 'Published slot identity does not match this runner.\n' >&2
+    exit 1
+  fi
 fi
 checkout=$(pwd -P)
 readonly checkout

@@ -6,6 +6,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,10 @@ PREFIX = 'vi-local-ci-208c2d13-v4-capacity-r3-q1-'
 NAME = PREFIX + 'provision-q1'
 OUTPUT = ROOT / 'capacity-native-baseline-q1'
 IMAGE_RECEIPT = ROOT / 'public-capacity-context-q1-build-receipts/creation-receipt.json'
+PUBLIC_MANIFEST = 'eacfa8df288469027b5aa36cf6c24191256a51c3e2484e0422db22f27237b0ce'
+PUBLIC_CONTEXT = 'ac139d74960dbb2f1a756f6f16990aa37ce1f2ac534cc32f5b3f9b718b17250c'
+PUBLIC_SELECTION = '25902319f1dc0716c230fbdbea7d161245f06698ac4b625bdc1e2d42a4df1bcb'
+PUBLIC_REQUEST_MODEL = 'cacd08733aeeb8272991294c7790b8c6534682c4c05d9c6455c9fe05c4843c56'
 
 
 class Refused(RuntimeError):
@@ -50,6 +55,9 @@ def inputs():
     manifest = json.loads((ROOT / 'code-inputs.json').read_text())
     for name in ('vm_backend.py', 'native_preflight.py'):
         require(sha(ROOT / name) == manifest[name]['sha256'], 'maintained executable source changed')
+    selection = ROOT / 'public_recipe_selection.py'
+    require(selection.is_file() and not selection.is_symlink() and sha(selection) == PUBLIC_SELECTION,
+            'maintained selection helper changed')
     spec = importlib.util.spec_from_file_location('capacity_owned_backend', source)
     backend = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(backend)
@@ -93,9 +101,45 @@ def durable(path, record):
         os.close(directory)
 
 
-def admit(path=None):
+def inventory_contract(selection='historical', bank=None):
+    """Select one reviewed inventory; selection never grants runtime authority."""
+    if selection == 'historical':
+        require(bank is None, 'historical bank override refused')
+        require(WORKSPACE is not None, 'owned external workspace required')
+        return WORKSPACE / 'public-capacity-context-q1', CONTEXT_SEAL, 50
+    require(selection == 'public-c22-alpine-c24', 'explicit reviewed recipe selection required')
+    require(bank is not None, 'explicit selected public bank required')
+    bank = Path(bank)
+    require(bank.is_absolute() and bank == bank.resolve(strict=True), 'canonical selected public bank required')
+    manifest_path = bank / 'manifest.json'
+    require(manifest_path.is_file() and not manifest_path.is_symlink() and manifest_path.stat().st_nlink == 1,
+            'regular selected public bank manifest required')
+    require(sha(manifest_path) == PUBLIC_MANIFEST, 'selected public bank manifest changed')
+    manifest = json.loads(manifest_path.read_text())
+    expected = dict(manifest['config']['contracts'])
+    expected['public_bank.py'] = manifest['config']['materializer_sha256']
+    expected['request_model.py'] = PUBLIC_REQUEST_MODEL
+    for name, fingerprint in expected.items():
+        leaf = ROOT / name
+        require(leaf.is_file() and not leaf.is_symlink() and sha(leaf) == fingerprint,
+                'selected public bank maintained source changed')
+    import public_bank
+    import public_recipe_selection
+    profile = public_recipe_selection.select(selection)
+    require(manifest['schema'] == 'vimbadmin-public-bank-v1'
+            and manifest['selection'] == selection and manifest['config']['selection'] == profile
+            and manifest['config']['recipe_sha256'] == profile['recipe_sha256']
+            and manifest['context_seal_sha256'] == PUBLIC_CONTEXT, 'selected public bank contract changed')
+    actual = public_bank.tree_seal(bank)
+    actual.pop('manifest.json')
+    require(actual == manifest['files'], 'selected public bank inventory changed')
+    return bank / 'context', PUBLIC_CONTEXT, 224
+
+
+def admit(path=None, *, selection='historical', bank=None):
     path = IMAGE_RECEIPT if path is None else path
-    require(CONTEXT_SEAL is not None, 'materialized reviewed context required')
+    context, context_seal, count = inventory_contract(selection, bank)
+    require(context_seal is not None, 'materialized reviewed context required')
     require(path == IMAGE_RECEIPT and path.is_file() and not path.is_symlink(), 'completed exact build receipt required')
     require(not path.parent.is_symlink() and path.parent.stat().st_uid == os.geteuid()
             and path.parent.stat().st_mode & 0o777 == 0o700, 'private owned build receipt directory required')
@@ -103,17 +147,47 @@ def admit(path=None):
     require(set(value) == {'image', 'project', 'runlabel', 'context_seal_sha256', 'runner_archive_sha256', 'runner_version', 'runtime_qualification'}, 'build receipt schema changed')
     require(isinstance(value['image'], str) and re.fullmatch('sha256:[0-9a-f]{64}', value['image']), 'full created image ID required')
     require(value['project'] == 'vimbadmin' and value['runlabel'] == 'vi-local-ci-208c2d13-v4-capacity-r3-image-q1'
-            and value['context_seal_sha256'] == CONTEXT_SEAL and value['runner_archive_sha256'] == ARCHIVE
+            and value['context_seal_sha256'] == context_seal and value['runner_archive_sha256'] == ARCHIVE
             and value['runner_version'] == '2.336.0' and value['runtime_qualification'] == 'UNQUALIFIED', 'build input binding refused')
-    context = WORKSPACE / 'public-capacity-context-q1'
-    require(sha(context / 'context-seal.json') == CONTEXT_SEAL, 'actual seed context seal changed')
+    require(sha(context / 'context-seal.json') == context_seal, 'actual seed context seal changed')
     sealed = json.loads((context / 'context-seal.json').read_text())
     paths = list(context.rglob('*'))
     require({str(path.relative_to(context)) for path in paths if path.is_file() and path.name != 'context-seal.json'} == set(sealed)
             and not any(path.is_symlink() for path in paths), 'public seed inventory changed')
-    require(len(sealed) == 50 and all(not (context / name).is_symlink() and sha(context / name) == digest for name, digest in sealed.items()), 'actual public seed inputs changed')
-    import runner_setup
-    runner_setup.verify_materialized(context)
+    require(len(sealed) == count and all(not (context / name).is_symlink() and sha(context / name) == digest for name, digest in sealed.items()), 'actual public seed inputs changed')
+    if selection == 'historical':
+        import runner_setup
+        runner_setup.verify_materialized(context)
+    return value
+
+
+def build_selected(bank, command=None):
+    """Build only the fixed NEW bank; a completed image remains UNQUALIFIED."""
+    context, seal, count = inventory_contract('public-c22-alpine-c24', bank)
+    require(WORKSPACE is not None and WORKSPACE.is_dir() and WORKSPACE == WORKSPACE.resolve(strict=True)
+            and WORKSPACE.stat().st_uid == os.geteuid() and stat.S_IMODE(WORKSPACE.stat().st_mode) == 0o700
+            and not WORKSPACE.is_relative_to(context.parent) and not context.parent.is_relative_to(WORKSPACE)
+            and not WORKSPACE.is_relative_to(ROOT), 'isolated owned build workspace required')
+    require(IMAGE_RECEIPT == WORKSPACE / 'public-capacity-context-q1-build-receipts/creation-receipt.json',
+            'selected build receipt purpose refused')
+    private = IMAGE_RECEIPT.parent
+    private.mkdir(mode=0o700)
+    config = private / 'empty-docker-config'
+    config.mkdir(mode=0o700)
+    durable(private / 'build-inputs.json', {'selection': 'public-c22-alpine-c24', 'bank_manifest_sha256': PUBLIC_MANIFEST,
+            'context_seal_sha256': seal, 'context_inputs': count, 'runtime_qualification': 'UNQUALIFIED'})
+    iid = private / 'created-image.id'
+    command = subprocess.run if command is None else command
+    result = command(['docker', '--config', str(config), 'build', '--network=none', '--pull=false',
+                      '--iidfile', str(iid), str(context)], check=True, env={'PATH': os.defpath})
+    require(iid.is_file() and not iid.is_symlink(), 'regular created image ID required')
+    identity = iid.read_text().strip()
+    require(result.returncode == 0 and re.fullmatch('sha256:[0-9a-f]{64}', identity),
+            'own build did not return an immutable image ID')
+    value = {'image': identity, 'project': 'vimbadmin', 'runlabel': 'vi-local-ci-208c2d13-v4-capacity-r3-image-q1',
+             'context_seal_sha256': seal, 'runner_archive_sha256': ARCHIVE,
+             'runner_version': '2.336.0', 'runtime_qualification': 'UNQUALIFIED'}
+    durable(IMAGE_RECEIPT, value)
     return value
 
 
@@ -306,12 +380,15 @@ def recover(value):
 
 
 def main():
-    global WORKSPACE, OUTPUT, IMAGE_RECEIPT, CONTEXT_SEAL
+    global WORKSPACE, OUTPUT, IMAGE_RECEIPT, CONTEXT_SEAL, V4_SEAL
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--workspace', type=Path, required=True)
+    parser.add_argument('--recipe-selection', choices=('historical', 'public-c22-alpine-c24'), default='historical')
+    parser.add_argument('--public-bank', type=Path)
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument('--execute-reviewed-phase', action='store_true')
     modes.add_argument('--cleanup-reviewed-failed', action='store_true')
+    modes.add_argument('--build-selected-public-bank', action='store_true')
     args = parser.parse_args()
     WORKSPACE = args.workspace.resolve()
     require(WORKSPACE.is_dir() and not args.workspace.is_symlink()
@@ -321,8 +398,14 @@ def main():
     OUTPUT = WORKSPACE / 'capacity-native-baseline-q1'
     IMAGE_RECEIPT = WORKSPACE / 'public-capacity-context-q1-build-receipts/creation-receipt.json'
     CONTEXT_SEAL = sha_context_seal()
+    if args.build_selected_public_bank:
+        require(args.recipe_selection == 'public-c22-alpine-c24', 'explicit NEW build selection required')
+        build_selected(args.public_bank)
+        return
     require(args.execute_reviewed_phase or args.cleanup_reviewed_failed, 'fresh phase-specific FIFO grant required')
-    value = admit()
+    value = admit(selection=args.recipe_selection, bank=args.public_bank)
+    if args.recipe_selection == 'public-c22-alpine-c24':
+        CONTEXT_SEAL, V4_SEAL = value['context_seal_sha256'], PUBLIC_MANIFEST
     if args.cleanup_reviewed_failed:
         recover(value)
     else:

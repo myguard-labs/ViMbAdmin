@@ -1,0 +1,175 @@
+"""One bounded private guest-agent request; stdin is never a transcript."""
+import base64
+import fcntl
+import json
+import os
+import secrets
+import socket
+import stat
+import sys
+import time
+from pathlib import Path
+
+WORK = Path('/work/vi-local-ci-208c2d13-vm-q2')
+MAX_REQUEST = 1048576
+MAX_SCRIPT = 65536
+MAX_STDIN = 524288
+MAX_OUTPUT = 1048576
+MAX_FRAME = 4 * MAX_OUTPUT
+DEADLINE = 180
+
+
+class Refused(ValueError):
+    pass
+
+
+def require(value):
+    if not value:
+        raise Refused('guest protocol refused')
+
+
+def unique(pairs):
+    result = {}
+    for key, value in pairs:
+        require(key not in result)
+        result[key] = value
+    return result
+
+
+def request(raw):
+    require(type(raw) is bytes and 0 < len(raw) <= MAX_REQUEST)
+    try:
+        value = json.loads(raw, object_pairs_hook=unique)
+    except (ValueError, UnicodeError, RecursionError):
+        raise Refused('guest request refused') from None
+    require(type(value) is dict and set(value) == {'script', 'stdin', 'capture'})
+    for name, limit in (('script', MAX_SCRIPT), ('stdin', MAX_STDIN)):
+        require(type(value[name]) is str)
+        try:
+            size = len(value[name].encode('utf-8'))
+        except UnicodeError:
+            raise Refused('guest request refused') from None
+        require(size <= limit and (name != 'script' or (size > 0 and '\0' not in value[name])))
+    require(type(value['capture']) is bool)
+    return value
+
+
+class Agent:
+    """The caller owns the socket and its exclusive lock until terminal output.
+
+    Connected -> synchronized -> executing -> exited. Any malformed reply,
+    truncation or deadline is terminal failure; a timed-out guest is not reused.
+    The outer owner must then retire its VM. No retry can re-execute a script.
+    """
+    def __init__(self, connection, reader, deadline, clock=time.monotonic):
+        self.connection, self.reader = connection, reader
+        self.deadline, self.clock = deadline, clock
+
+    def call(self, command, arguments=None, *, sync=False):
+        remaining = self.deadline - self.clock()
+        require(remaining > 0)
+        self.connection.settimeout(min(5, remaining))
+        value = {'execute': command}
+        if arguments is not None:
+            value['arguments'] = arguments
+        wire = json.dumps(value, ensure_ascii=True, separators=(',', ':')).encode() + b'\n'
+        self.connection.sendall((b'\xff' if sync else b'') + wire)
+        for _ in range(32 if sync else 1):
+            remaining = self.deadline - self.clock()
+            require(remaining > 0)
+            self.connection.settimeout(min(5, remaining))
+            line = self.reader.readline(MAX_FRAME + 1)
+            require(0 < len(line) <= MAX_FRAME and line.endswith(b'\n'))
+            if sync:
+                delimiter = line.find(b'\xff')
+                if delimiter < 0:
+                    continue
+                line = line[delimiter + 1:]
+            try:
+                response = json.loads(line, object_pairs_hook=unique)
+            except (ValueError, UnicodeError, RecursionError):
+                raise Refused('guest response refused') from None
+            require(type(response) is dict and set(response) == {'return'})
+            return response['return']
+        raise Refused('guest synchronization refused')
+
+
+def output(status, name, capture):
+    require(not status.get(name.replace('-data', '-truncated'), False))
+    if not capture:
+        return ''
+    encoded = status.get(name, '')
+    require(type(encoded) is str and len(encoded) <= 4 * ((MAX_OUTPUT + 2) // 3))
+    try:
+        data = base64.b64decode(encoded, validate=True)
+    except (ValueError, UnicodeError):
+        raise Refused('guest output refused') from None
+    require(len(data) <= MAX_OUTPUT)
+    return data.decode('utf-8', 'replace')
+
+
+def execute(value, agent, *, clock=time.monotonic, sleep=time.sleep):
+    # One guest-exec only: retrying a lost reply could run a private action twice.
+    result = agent.call('guest-exec', {'path': '/bin/sh', 'arg': ['-c', value['script']],
+                        'input-data': base64.b64encode(value['stdin'].encode()).decode('ascii'),
+                        'capture-output': value['capture']})
+    require(type(result) is dict and set(result) == {'pid'}
+            and type(result['pid']) is int and result['pid'] > 0)
+    while clock() < agent.deadline:
+        status = agent.call('guest-exec-status', {'pid': result['pid']})
+        require(type(status) is dict and type(status.get('exited')) is bool)
+        if not status['exited']:
+            require(set(status) == {'exited'})
+            sleep(min(0.1, max(0, agent.deadline - clock())))
+            continue
+        require(set(status) <= {'exited', 'exitcode', 'signal', 'out-data', 'err-data',
+                                'out-truncated', 'err-truncated'})
+        require(('exitcode' in status) != ('signal' in status))
+        name = 'exitcode' if 'exitcode' in status else 'signal'
+        require(type(status[name]) is int and 0 <= status[name] <= 255
+                and (name != 'signal' or status[name] > 0))
+        return {'exitcode': status.get('exitcode'), 'signal': status.get('signal'),
+                'out-data': output(status, 'out-data', value['capture']),
+                'err-data': output(status, 'err-data', value['capture'])}
+    raise Refused('guest execution deadline exceeded; retire owned VM')
+
+
+def serve(raw, work=WORK, factory=socket.socket):
+    value = request(raw)
+    info = work.lstat()
+    require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+            and stat.S_IMODE(info.st_mode) == 0o700)
+    endpoint = work / 'qga.sock'
+    info = endpoint.lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid == os.geteuid())
+    lock = os.open(work / 'qga.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+    try:
+        info = os.fstat(lock)
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid()
+                and info.st_nlink == 1 and stat.S_IMODE(info.st_mode) == 0o600)
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with factory(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            connection.settimeout(5)
+            connection.connect(str(endpoint))
+            with connection.makefile('rb') as reader:
+                agent = Agent(connection, reader, time.monotonic() + DEADLINE)
+                token = secrets.randbits(63)
+                require(agent.call('guest-sync-delimited', {'id': token}, sync=True) == token)
+                return execute(value, agent)
+    finally:
+        os.close(lock)
+
+
+def main():
+    try:
+        result = serve(sys.stdin.buffer.read(MAX_REQUEST + 1))
+    except (OSError, ValueError, TypeError, OverflowError):
+        # A QGA error can echo its arguments. Never include exception text.
+        print('guest request failed; retire owned VM', file=sys.stderr)
+        return 1
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

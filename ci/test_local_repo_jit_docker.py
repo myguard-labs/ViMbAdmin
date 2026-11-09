@@ -580,6 +580,8 @@ class PublicSeed(unittest.TestCase):
         (self.source / 'qga.py').write_text("WORK='/work/vi-local-ci-208c2d13-vm-q2'\n")
         (self.source / 'iso/user-data').write_text('#cloud-config\n{}\n')
         (self.source / 'iso/meta-data').write_text('instance-id: fixture\n')
+        (self.source / 'base.qcow2').write_bytes(b'public-base')
+        (self.source / 'base.sha256').write_text('public-base-digest')
         (self.source / 'public-disk').write_bytes(b'public-immutable-payload')
         (self.source / 'seed.iso').write_bytes(b'old-public-seed')
         self.archive = self.root / s.ARCHIVE
@@ -611,7 +613,7 @@ class PublicSeed(unittest.TestCase):
         with patch.object(s.subprocess, 'run', side_effect=self.iso):
             s.stage(self.archive, output)
         self.assertEqual({str(path): s.sha(Path(path)) for path in before}, before)
-        self.assertEqual((output / 'public-disk').stat().st_ino, (self.source / 'public-disk').stat().st_ino)
+        self.assertNotEqual((output / 'public-disk').stat().st_ino, (self.source / 'public-disk').stat().st_ino)
         self.assertNotEqual((output / 'Dockerfile').stat().st_ino, (self.source / 'Dockerfile').stat().st_ino)
         provision = (output / 'iso/provision.py').read_text()
         self.assertLess(provision.index('/mnt/install-runner.py'), provision.index("pathlib.Path('/var/lib/local-ci/provisioned').touch()"))
@@ -621,12 +623,12 @@ class PublicSeed(unittest.TestCase):
         with patch.object(s.subprocess, 'run', side_effect=self.iso), self.assertRaises(FileExistsError):
             s.stage(self.archive, output)
 
-    def test_stage_cross_filesystem_copy_preserves_inputs_mode_and_seal(self):
+    def test_stage_copy_preserves_inputs_mode_and_seal(self):
         output = self.root / 'prepared'
         (self.source / 'public-disk').chmod(0o550)
         before = {str(path): (s.sha(path), path.stat().st_mode, path.stat().st_ino)
                   for path in self.source.rglob('*') if path.is_file()}
-        with patch.object(s.os, 'link', side_effect=OSError(errno.EXDEV, 'cross-device fixture')), patch.object(s.subprocess, 'run', side_effect=self.iso):
+        with patch.object(s.subprocess, 'run', side_effect=self.iso):
             s.stage(self.archive, output)
         self.assertEqual({path: (s.sha(Path(path)), Path(path).stat().st_mode, Path(path).stat().st_ino)
                           for path in before}, before)
@@ -636,24 +638,24 @@ class PublicSeed(unittest.TestCase):
         seal = json.loads((output / 'context-seal.json').read_text())
         self.assertTrue(all(s.sha(output / path) == digest for path, digest in seal.items()))
 
-    def test_stage_non_exdev_errors_never_copy_or_seal(self):
+    def test_stage_copy_errors_never_seal(self):
         for number in (errno.EPERM, errno.EACCES, errno.EEXIST, errno.EIO):
             with self.subTest(errno=number):
                 output = self.root / ('error-' + str(number))
-                with patch.object(s.os, 'link', side_effect=OSError(number, 'link fixture')), patch.object(s.shutil, 'copyfileobj') as copied, patch.object(s.subprocess, 'run') as iso, self.assertRaises(OSError) as raised:
+                with patch.object(s, 'copy_public', side_effect=OSError(number, 'copy fixture')), patch.object(s.shutil, 'copyfileobj') as copied, patch.object(s.subprocess, 'run') as iso, self.assertRaises(OSError) as raised:
                     s.stage(self.archive, output)
                 self.assertEqual(raised.exception.errno, number)
                 copied.assert_not_called()
                 iso.assert_not_called()
                 self.assertFalse((output / 'context-seal.json').exists())
 
-    def test_stage_cross_filesystem_partial_copy_failure_never_seals_or_retries(self):
+    def test_stage_partial_copy_failure_never_seals_or_retries(self):
         output = self.root / 'partial'
         before = s.sha(self.source / 'public-disk')
         def partial(_source, target):
             target.write(b'partial')
             raise OSError(errno.ENOSPC, 'copy fixture')
-        with patch.object(s.os, 'link', side_effect=OSError(errno.EXDEV, 'cross-device fixture')), patch.object(s.shutil, 'copyfileobj', side_effect=partial), patch.object(s.subprocess, 'run') as iso, self.assertRaises(OSError) as raised:
+        with patch.object(s.shutil, 'copyfileobj', side_effect=partial), patch.object(s.subprocess, 'run') as iso, self.assertRaises(OSError) as raised:
             s.stage(self.archive, output)
         self.assertEqual(raised.exception.errno, errno.ENOSPC)
         self.assertFalse((output / 'context-seal.json').exists())
@@ -662,41 +664,43 @@ class PublicSeed(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             s.stage(self.archive, output)
 
-    def test_stage_cross_filesystem_corrupt_copy_refuses_original_digest(self):
+    def test_stage_corrupt_copy_refuses_original_digest(self):
         output = self.root / 'corrupt'
         def corrupt(_source, target):
             target.write(b'wrong public copy')
-        with patch.object(s.os, 'link', side_effect=OSError(errno.EXDEV, 'cross-device fixture')), patch.object(s.shutil, 'copyfileobj', side_effect=corrupt), patch.object(s.subprocess, 'run') as iso, self.assertRaisesRegex(ValueError, 'copied public input fingerprint'):
+        with patch.object(s.shutil, 'copyfileobj', side_effect=corrupt), patch.object(s.subprocess, 'run') as iso, self.assertRaisesRegex(ValueError, 'copied public input fingerprint'):
             s.stage(self.archive, output)
         self.assertFalse((output / 'context-seal.json').exists())
         iso.assert_not_called()
 
-    def test_stage_cross_filesystem_collision_preserves_existing_destination(self):
+    def test_stage_copy_collision_preserves_existing_destination(self):
         output = self.root / 'collision'
-        def collide(_source, destination):
-            Path(destination).write_bytes(b'existing fixture')
-            raise OSError(errno.EXDEV, 'cross-device fixture')
-        with patch.object(s.os, 'link', side_effect=collide), patch.object(s.subprocess, 'run') as iso, self.assertRaises(FileExistsError):
+        real_copy = s.copy_public
+        def collide(source, destination, digest):
+            if destination.name == 'public-disk':
+                Path(destination).write_bytes(b'existing fixture')
+            real_copy(source, destination, digest)
+        with patch.object(s, 'copy_public', side_effect=collide), patch.object(s.subprocess, 'run') as iso, self.assertRaises(FileExistsError):
             s.stage(self.archive, output)
         self.assertEqual((output / 'public-disk').read_bytes(), b'existing fixture')
         self.assertFalse((output / 'context-seal.json').exists())
         iso.assert_not_called()
 
-    def test_stage_cross_filesystem_source_drift_before_sealing_is_refused(self):
+    def test_stage_source_drift_before_sealing_is_refused(self):
         output = self.root / 'drift'
         def changed(argv, **kwargs):
             self.iso(argv, **kwargs)
             (self.source / 'public-disk').write_bytes(b'changed public fixture')
-        with patch.object(s.os, 'link', side_effect=OSError(errno.EXDEV, 'cross-device fixture')), patch.object(s.subprocess, 'run', side_effect=changed), self.assertRaisesRegex(ValueError, 'public input changed during staging'):
+        with patch.object(s.subprocess, 'run', side_effect=changed), self.assertRaisesRegex(ValueError, 'public input changed during staging'):
             s.stage(self.archive, output)
         self.assertFalse((output / 'context-seal.json').exists())
 
     def test_stage_capacity_refusal_precedes_link_or_copy(self):
         output = self.root / 'capacity'
-        with patch.object(s, 'host_ready', side_effect=ValueError('host capacity budget unproved')), patch.object(s.os, 'link') as linked, patch.object(s.shutil, 'copyfileobj') as copied, patch.object(s.subprocess, 'run') as iso, self.assertRaisesRegex(ValueError, 'capacity budget'):
+        with patch.object(s, 'host_ready', side_effect=ValueError('host capacity budget unproved')), patch.object(s, 'copy_public') as copied_public, patch.object(s.shutil, 'copyfileobj') as copied, patch.object(s.subprocess, 'run') as iso, self.assertRaisesRegex(ValueError, 'capacity budget'):
             s.stage(self.archive, output)
         self.assertFalse(output.exists())
-        linked.assert_not_called()
+        copied_public.assert_not_called()
         copied.assert_not_called()
         iso.assert_not_called()
 
@@ -797,13 +801,18 @@ class PublicSeed(unittest.TestCase):
                 return s.os.stat_result(values)
             return result
         with (patch.object(pathlib, 'Path', side_effect=mapped), patch.object(pwd, 'getpwnam', return_value=account),
-              patch.object(shutil, 'chown'), patch.object(s.os, 'chown'), patch.object(real_path, 'stat', stat),
+              patch.object(shutil, 'chown'), patch.object(s.os, 'chown'),
+              patch.object(s.os, 'fchown') as slot_owner,
+              patch.object(s.os, 'fchmod', wraps=s.os.fchmod) as slot_mode,
+              patch.object(real_path, 'stat', stat),
               patch.object(sys, 'path', list(sys.path)),
               patch.dict(sys.modules, {'native_policy': policy}),
               patch.object(subprocess, 'check_output', side_effect=check_output)):
             # Maintained installer runs with private mapped paths and mocked operations.
             exec(compile(install, '<private-installer-fixture>', 'exec'), {})  # noqa: S102 - fixed public installer in mapped fixture  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
             policy.verify.assert_called_once()
+            self.assertEqual(slot_owner.call_args.args[1:], (0, 0))
+            self.assertEqual(slot_mode.call_args.args[1:], (0o444,))
             self.assertEqual((guest / 'run/myguard-ci-slot').read_text(), m.RUNNER_NAME + '\n/opt/actions-runner\n')
             with self.assertRaisesRegex(AssertionError, 'preexisting'):
                 # Maintained installer runs with private mapped paths and mocked operations.

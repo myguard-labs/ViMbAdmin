@@ -327,7 +327,7 @@ jobs:
       image: ${{ matrix.image }}
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -542,7 +542,7 @@ jobs:
       image: ${{ matrix.image }}
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -628,7 +628,7 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

@@ -29,16 +29,18 @@ def sync_directory(path):
         os.close(fd)
 
 
-def fresh_overlay(base, expected, work, command=subprocess.run):
+def fresh_overlay(base, expected, work, command=subprocess.run, *, selection='historical'):
+    profile = budget.selected(selection)
+    virtual_bytes = profile['virtual_bytes']
     parent = work.lstat()
     require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == os.geteuid()
             and parent.st_mode & 0o777 == 0o700, 'private owned work directory required')
     source = base.lstat()
-    require(stat.S_ISREG(source.st_mode) and expected == budget.BASE_SHA and sha(base) == expected, 'immutable base identity changed')
+    require(stat.S_ISREG(source.st_mode) and expected == profile['base_sha256'] and sha(base) == expected, 'immutable base identity changed')
     baseline = json.loads(command(['qemu-img', 'info', '--output=json', str(base)],
                                  check=True, capture_output=True, text=True).stdout)
     require(baseline['format'] == 'qcow2' and not baseline.get('backing-filename')
-            and 0 < baseline['virtual-size'] <= VIRTUAL_BYTES, 'unbound base backing chain/geometry')
+            and 0 < baseline['virtual-size'] <= virtual_bytes, 'unbound base backing chain/geometry')
     # The read-only base may itself be hardlinked public data. It is never an output.
     destination = work / 'owned.qcow2'
     receipt_path = work / 'overlay-origin.json'
@@ -50,8 +52,8 @@ def fresh_overlay(base, expected, work, command=subprocess.run):
         origin = {'project': 'vimbadmin', 'run': RUN, 'base_sha256': expected,
                   'base_device': source.st_dev, 'base_inode': source.st_ino,
                   'overlay_device': identity.st_dev, 'overlay_inode': identity.st_ino,
-                  'overlay_virtual_bytes': VIRTUAL_BYTES, 'scope': 'baseline-install-only'}
-        origin.update({'root_start_bytes': budget.ROOT_START_BYTES, 'minimum_root_bytes': budget.MIN_ROOT_BYTES,
+                  'overlay_virtual_bytes': virtual_bytes, 'scope': 'baseline-install-only', 'recipe_selection': selection}
+        origin.update({'root_start_bytes': profile['root_start_bytes'], 'minimum_root_bytes': budget.MIN_ROOT_BYTES,
                        'filesystem_headroom_bytes': budget.FILESYSTEM_HEADROOM_BYTES,
                        'provision_headroom_bytes': budget.PROVISION_HEADROOM_BYTES})
         with receipt_path.open('x') as stream:
@@ -60,13 +62,13 @@ def fresh_overlay(base, expected, work, command=subprocess.run):
         # Stable descriptor, not a check-then-name resize: replacement cannot redirect writes.
         descriptor = '/proc/self/fd/' + str(fd)
         command(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(base),
-                 descriptor, str(VIRTUAL_BYTES)], pass_fds=(fd,), check=True,
+                 descriptor, str(virtual_bytes)], pass_fds=(fd,), check=True,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         os.fsync(fd)
         result = command(['qemu-img', 'info', '--output=json', descriptor], pass_fds=(fd,),
                          check=True, capture_output=True, text=True)
         metadata = json.loads(result.stdout)
-        require(metadata['format'] == 'qcow2' and metadata['virtual-size'] == VIRTUAL_BYTES
+        require(metadata['format'] == 'qcow2' and metadata['virtual-size'] == virtual_bytes
                 and metadata['backing-filename'] == str(base), 'fresh overlay geometry/backing refused')
         actual, named = os.fstat(fd), destination.lstat()
         require(actual.st_nlink == 1 and (actual.st_dev, actual.st_ino) == (named.st_dev, named.st_ino)
@@ -82,8 +84,9 @@ def fresh_overlay(base, expected, work, command=subprocess.run):
         os.close(fd)
 
 
-def standalone(path, command=subprocess.run):
+def standalone(path, command=subprocess.run, *, selection='historical'):
+    virtual_bytes = budget.selected(selection)['virtual_bytes']
     metadata = json.loads(command(['qemu-img', 'info', '--output=json', str(path)],
                                  check=True, capture_output=True, text=True).stdout)
-    require(metadata['format'] == 'qcow2' and metadata['virtual-size'] == VIRTUAL_BYTES
+    require(metadata['format'] == 'qcow2' and metadata['virtual-size'] == virtual_bytes
             and not metadata.get('backing-filename'), 'sealed export is not standalone grown QCOW2')

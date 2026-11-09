@@ -1,0 +1,94 @@
+"""Offline guest bootstrap from the finite verified public ISO input plan."""
+import hashlib
+import os
+import pathlib
+import pwd
+import shutil
+import stat
+import subprocess
+
+PACKAGES = @@GUEST_PACKAGES@@
+ARCHIVE_SHA256 = '@@ARCHIVE_SHA256@@'
+ROOT = pathlib.Path('/mnt')
+
+
+def require(value):
+    if not value:
+        raise ValueError('guest provisioning input refused')
+
+
+def command(argv, **kwargs):
+    return subprocess.run(argv, check=True, timeout=600,
+                          env={'PATH': os.defpath, 'DEBIAN_FRONTEND': 'noninteractive'}, **kwargs)
+
+
+def verify(path, size, expected):
+    info = path.lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_size == size)
+    with path.open('rb') as stream:
+        require(hashlib.file_digest(stream, 'sha256').hexdigest() == expected)
+
+
+def main():
+    # No network solver, unpinned repository or registration operation is used.
+    paths = []
+    for package in PACKAGES:
+        path = ROOT / 'packages' / (package['id'] + '.deb')
+        verify(path, package['bytes'], package['sha256'])
+        paths.append(str(path))
+    require(sorted(path.name for path in (ROOT / 'packages').iterdir())
+            == sorted(pathlib.Path(path).name for path in paths))
+    command(['apt-get', '-y', '--no-download', '--no-install-recommends',
+             '-o', 'Dir::Etc::sourcelist=/dev/null', '-o', 'Dir::Etc::sourceparts=-',
+             'install', *paths])
+    for package in PACKAGES:
+        actual = command(['dpkg-query', '-W', '-f=${Version}', package['name']],
+                         capture_output=True, text=True).stdout
+        require(actual == package['version'])
+    state = pathlib.Path('/var/lib/local-ci')
+    require(not state.exists() and not state.is_symlink())
+    # Root owns the marker namespace. Runner may traverse to its private
+    # children but cannot list or replace the marker or another session.
+    state.mkdir(mode=0o711)
+    os.chmod(state, 0o711)
+    for name in ('work', 'sessions'):
+        (state / name).mkdir(mode=0o700)
+    # Account and session directories are fresh and have no password or keys.
+    try:
+        pwd.getpwnam('runner')
+    except KeyError:
+        command(['useradd', '--create-home', '--shell', '/bin/bash', '--groups', 'docker', 'runner'])
+    else:
+        raise ValueError('runner account preexists')
+    account = pwd.getpwnam('runner')
+    require(account.pw_uid != 0 and account.pw_dir == '/home/runner')
+    home = pathlib.Path(account.pw_dir)
+    os.chmod(home, 0o700)
+    for path in (state / 'work', state / 'sessions'):
+        os.chown(path, account.pw_uid, account.pw_gid)
+    for name in ('.ssh', '.docker', '.config/gh'):
+        require(not (home / name).exists() and not (home / name).is_symlink())
+    fixtures = pathlib.Path('/opt/public-fixtures')
+    fixtures.mkdir(mode=0o755)
+    # An explicit maintained lifecycle fixture is mandatory. Its public origin
+    # and byte selection must be accepted by the later bank unit. Never search
+    # for it on the host or silently omit it. Docker starts with no loaded image.
+    fixture = ROOT / 'alpine.tar'
+    info = fixture.lstat()
+    require(stat.S_ISREG(info.st_mode) and 0 < info.st_size <= 536870912)
+    verify(fixture, info.st_size, '@@ALPINE_SHA256@@')
+    shutil.copyfile(fixture, fixtures / 'alpine.tar')
+    verify(fixtures / 'alpine.tar', info.st_size, '@@ALPINE_SHA256@@')
+    command(['systemctl', 'enable', '--now', 'docker.service'])
+    command(['systemctl', 'enable', '--now', 'qemu-guest-agent.service'])
+    archive = ROOT / 'actions-runner-linux-x64-2.336.0.tar.gz'
+    with archive.open('rb') as stream:
+        require(hashlib.file_digest(stream, 'sha256').hexdigest() == ARCHIVE_SHA256)
+    command(['python3', '/mnt/install-runner.py'])
+    os.chmod(pathlib.Path('/opt/actions-runner'), 0o700)
+    # Exactly one success marker, after the maintained archive/native installer.
+    pathlib.Path('/var/lib/local-ci/provisioned').touch()
+
+
+if __name__ == '__main__':
+    main()

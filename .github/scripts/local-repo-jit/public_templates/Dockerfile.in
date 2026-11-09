@@ -1,0 +1,9 @@
+FROM docker.io/library/debian@sha256:@@IMAGE_SHA256@@
+LABEL myguard.project="vimbadmin" myguard.run="vi-local-ci-208c2d13-vm-jit-inputs-v3" myguard.recipe="@@RECIPE_SHA256@@"
+@@TOOL_COPIES@@
+RUN @@TOOL_INSTALL@@
+WORKDIR /opt/vm
+COPY base.qcow2 /opt/vm/base.qcow2
+COPY base.sha256 outer.py qga.py seed.iso /opt/vm/
+RUN ["/usr/bin/python3", "-c", "import hashlib,pathlib; p=pathlib.Path('base.qcow2'); expected=pathlib.Path('base.sha256').read_text().strip(); actual=hashlib.file_digest(p.open('rb'),'sha256').hexdigest(); assert actual == expected; pathlib.Path('/work').mkdir(mode=0o700); [pathlib.Path(n).chmod(0o444) for n in ('base.qcow2','base.sha256','seed.iso')]; [pathlib.Path(n).chmod(0o555) for n in ('outer.py','qga.py')]"]
+ENTRYPOINT ["/usr/bin/python3", "/opt/vm/outer.py"]

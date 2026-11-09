@@ -1,0 +1,198 @@
+"""Own one disposable VM. Only a clean provision phase exports a standalone disk."""
+import hashlib
+import json
+import os
+import signal
+import socket
+import stat
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+root = Path('/opt/vm')
+work = Path('/work/vi-local-ci-208c2d13-vm-q2')
+BASE_SHA256 = '@@BASE_SHA256@@'
+VIRTUAL_BYTES = 6442450944
+_SERIAL = ['-serial', 'null']
+# Kept as executable source so the maintained two-line capacity replacement is
+# applied without depending on surrounding indentation. This is fixed source,
+# never caller input. Both raw and capacity-coupled forms are tested.
+_OVERLAY_CREATE = """subprocess.run(['qemu-img', 'create', '-f', 'qcow2', '-F', 'qcow2', '-b', str(root / 'base.qcow2'), str(work / 'owned.qcow2')], check=True, stdout=subprocess.DEVNULL)"""
+
+
+class Refused(ValueError):
+    pass
+
+
+def require(value):
+    if not value:
+        raise Refused('owned VM lifecycle refused')
+
+
+def command(args, **kwargs):
+    return subprocess.run(args, check=True, timeout=30, env={'PATH': os.defpath}, **kwargs)
+
+
+def metadata(path):
+    return json.loads(command(['qemu-img', 'info', '--output=json', str(path)],
+                             capture_output=True, text=True).stdout)
+
+
+def create_overlay(expected):
+    base = root / 'base.qcow2'
+    info = base.lstat()
+    require(stat.S_ISREG(info.st_mode) and expected == BASE_SHA256)
+    with base.open('rb') as stream:
+        require(hashlib.file_digest(stream, 'sha256').hexdigest() == expected)
+    original = metadata(base)
+    require(original['format'] == 'qcow2' and not original.get('backing-filename')
+            and 0 < original['virtual-size'] <= VIRTUAL_BYTES)
+    # Even the legacy exact preimage is bounded by the outer alarm. All normal
+    # commands also have their own shorter timeout.
+    exec(_OVERLAY_CREATE, {'subprocess': subprocess, 'root': root, 'work': work, 'expected': expected})  # noqa: S102 - Fixed reviewed source, with the maintained capacity transform.
+    overlay = work / 'owned.qcow2'
+    current = metadata(overlay)
+    if current['virtual-size'] < VIRTUAL_BYTES:
+        command(['qemu-img', 'resize', str(overlay), str(VIRTUAL_BYTES)], stdout=subprocess.DEVNULL)
+    current = metadata(overlay)
+    require(current['format'] == 'qcow2' and current['virtual-size'] == VIRTUAL_BYTES
+            and current['backing-filename'] == str(base))
+    after = base.lstat()
+    require((info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            == (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns, after.st_ctime_ns))
+
+
+def argv(phase):
+    require(phase in ('provision', 'lifecycle'))
+    serial = _SERIAL
+    if serial[-1] == 'null':
+        serial = ['-chardev', 'ringbuf,id=ci-serial,size=65536', '-serial', 'chardev:ci-serial']
+    args = ['qemu-system-x86_64', '-no-user-config', '-nodefaults', '-no-reboot',
+            '-machine', 'q35,accel=kvm', '-cpu', 'host', '-smp', '2', '-m', '2048',
+            '-display', 'none', '-monitor', 'none', *serial,
+            '-drive', 'file=' + str(work / 'owned.qcow2') + ',format=qcow2,if=virtio',
+            '-qmp', 'unix:' + str(work / 'qmp.sock') + ',server=on,wait=off',
+            '-device', 'virtio-serial-pci', '-chardev',
+            'socket,path=' + str(work / 'qga.sock') + ',server=on,wait=off,id=qga',
+            '-device', 'virtserialport,chardev=qga,name=org.qemu.guest_agent.0',
+            '-netdev', 'user,id=net0', '-device', 'virtio-net-pci,netdev=net0']
+    if phase == 'provision':
+        args += ['-drive', 'file=' + str(root / 'seed.iso') + ',format=raw,media=cdrom,readonly=on']
+    return args
+
+
+def qmp(process, deadline, factory=socket.socket, clock=time.monotonic, sleep=time.sleep):
+    while clock() < deadline:
+        require(process.poll() is None)
+        connection = factory(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(min(3, deadline - clock()))
+            connection.connect(str(work / 'qmp.sock'))
+            return connection
+        except OSError:
+            connection.close()
+            sleep(0.1)
+    raise Refused('QMP readiness deadline exceeded')
+
+
+def exchange(connection, reader, name, greeting=False):
+    if not greeting:
+        connection.sendall(json.dumps({'execute': name, 'id': name}).encode() + b'\n')
+    for _ in range(32):
+        line = reader.readline(131072)
+        require(0 < len(line) < 131072 and line.endswith(b'\n'))
+        response = json.loads(line)
+        require(type(response) is dict and 'error' not in response)
+        if greeting:
+            require('QMP' in response)
+            return
+        if 'event' in response:
+            continue
+        require(response.get('id') == name and 'return' in response)
+        return
+    raise Refused('QMP response unresolved')
+
+
+def reap(process):
+    if process.poll() is None:
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+
+
+def supervise(phase, launch=subprocess.Popen, factory=socket.socket):
+    process = launch(argv(phase), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, close_fds=True, env={'PATH': os.defpath})
+    try:
+        with qmp(process, time.monotonic() + 30, factory) as connection, connection.makefile('rb') as reader:
+            exchange(connection, reader, '', greeting=True)
+            exchange(connection, reader, 'qmp_capabilities')
+            try:
+                require(process.wait(timeout=840) == 0)
+            except subprocess.TimeoutExpired:
+                exchange(connection, reader, 'system_powerdown')
+                try:
+                    process.wait(timeout=20)
+                except subprocess.TimeoutExpired:
+                    pass
+                raise Refused('VM lifetime exceeded; no export') from None
+    finally:
+        reap(process)
+
+
+def export():
+    destination = work / 'sealed.qcow2'
+    fd = os.open(destination, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        identity = os.fstat(fd)
+        name = '/proc/self/fd/' + str(fd)
+        command(['qemu-img', 'convert', '-O', 'qcow2', str(work / 'owned.qcow2'), name],
+                pass_fds=(fd,), stdout=subprocess.DEVNULL)
+        value = json.loads(command(['qemu-img', 'info', '--output=json', name], pass_fds=(fd,),
+                                   capture_output=True, text=True).stdout)
+        require(value['format'] == 'qcow2' and value['virtual-size'] == VIRTUAL_BYTES
+                and not value.get('backing-filename'))
+        current = destination.lstat()
+        require(stat.S_ISREG(current.st_mode) and current.st_nlink == 1
+                and (current.st_dev, current.st_ino) == (identity.st_dev, identity.st_ino))
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def alarm(_number, _frame):
+    raise Refused('outer total deadline exceeded; no export')
+
+
+def main():
+    require(len(sys.argv) == 2 and sys.argv[1] in ('provision', 'lifecycle'))
+    phase = sys.argv[1]
+    os.umask(0o077)
+    # Exclusive mkdir is the ownership transition. No preexisting work is reused.
+    work.mkdir(mode=0o700)
+    info = work.lstat()
+    require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid()
+            and stat.S_IMODE(info.st_mode) == 0o700)
+    for number in (signal.SIGALRM, signal.SIGTERM, signal.SIGINT):
+        signal.signal(number, alarm)
+    signal.alarm(900)
+    try:
+        expected = (root / 'base.sha256').read_text().strip()
+        create_overlay(expected)
+        supervise(phase)
+        if phase == 'provision':
+            export()
+        else:
+            # The maintained capacity transformer appends a provision export
+            # assertion at module scope. Lifecycle has no sealed export.
+            raise SystemExit(0)
+    finally:
+        signal.alarm(0)
+
+
+if __name__ == '__main__':
+    main()

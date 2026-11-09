@@ -29,10 +29,12 @@ class RunnerBootstrap(unittest.TestCase):
             shutil.copyfile(CHECKOUT / '.github/scripts/local-repo-jit' / (name + '.py'),
                             self.helpers / (name + '.py'))
         shutil.copytree(ROOT / '.github/workflows', self.directory / '.github/workflows')
-        gitdir = subprocess.check_output(['git', '-C', str(CHECKOUT), 'rev-parse', '--absolute-git-dir'],
+        gitdir = subprocess.check_output(['git', '-c', 'safe.directory=' + str(CHECKOUT), '-C', str(CHECKOUT),
+                                         'rev-parse', '--absolute-git-dir'],
                                         env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'), text=True).strip()
         (self.directory / '.git').write_text('gitdir: ' + gitdir + '\n')
-        self.sha = subprocess.check_output(['git', '-C', str(CHECKOUT), 'rev-parse', 'HEAD'],
+        self.sha = subprocess.check_output(['git', '-c', 'safe.directory=' + str(CHECKOUT), '-C', str(CHECKOUT),
+                                           'rev-parse', 'HEAD'],
                                           env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'), text=True).strip()
         self.request = {
             'schema': model.SCHEMA, 'mode': 'qualified-actual',

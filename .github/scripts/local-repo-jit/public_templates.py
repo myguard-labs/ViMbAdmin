@@ -155,11 +155,17 @@ def _render(descriptor, source, *, profile=None):
     if len({p['name'] for p in tools}) != len(tools) or len({p['name'] for p in guest}) != len(guest):
         raise TemplateError('duplicate package name')
     tool_paths = ['toolchain/' + row['id'] + '.deb' for row in tools]
-    copies = '\n'.join('COPY ' + path + ' /opt/public-toolchain/' + Path(path).name for path in tool_paths)
+    install_options = '-y --no-download'
+    if profile is not None and profile['name'] != 'historical':
+        copies = 'COPY ' + ' '.join(tool_paths) + ' /opt/public-toolchain/'
+        # APT must acquire these local files into its cache; sources stay disabled.
+        install_options = '-y'
+    else:
+        copies = '\n'.join('COPY ' + path + ' /opt/public-toolchain/' + Path(path).name for path in tool_paths)
     checks = '\n'.join(row['sha256'] + '  /opt/public-toolchain/' + row['id'] + '.deb' for row in tools) + '\n'
     # JSON exec form keeps pins inert and does not depend on build-host shell.
     shell = ('printf %s ' + shlex.quote(checks) + ' > /tmp/public-toolchain.sha256; sha256sum -c /tmp/public-toolchain.sha256; '
-             'DEBIAN_FRONTEND=noninteractive apt-get -y --no-download --no-install-recommends '
+             'DEBIAN_FRONTEND=noninteractive apt-get ' + install_options + ' --no-install-recommends '
              '-o Dir::Etc::sourcelist=/dev/null -o Dir::Etc::sourceparts=- install '
              + ' '.join('/opt/public-toolchain/' + row['id'] + '.deb' for row in tools)
              + '; ' + '; '.join('test "$(dpkg-query -W -f=\'${Version}\' ' + shlex.quote(row['name'])

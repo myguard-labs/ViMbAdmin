@@ -4,10 +4,12 @@ from __future__ import annotations
 import ast
 import base64
 import copy
+import dataclasses
 import hashlib
 import io
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -150,6 +152,45 @@ class Templates(unittest.TestCase):
             templates.generate(self.descriptor.canonical, {}, expected_sha256=self.descriptor.sha256)
         with self.assertRaises(templates.public_recipe.RecipeError):
             templates.generate(self.descriptor.canonical, {}, expected_sha256='0' * 64)
+
+    def test_selected_toolchain_copy_groups_exact_leaves_without_changing_other_bytes(self):
+        profile = templates.literal(self.source['public_recipe_selection.py'], 'PUBLIC')
+        historical = templates.literal(self.source['public_recipe_selection.py'], 'HISTORICAL')
+        tool = next(row for row in self.descriptor.artifacts if row.kind == 'toolchain')
+        other = tuple(row for row in self.descriptor.artifacts if row.kind != 'toolchain')
+        for count in (1, 129):
+            tools = tuple([dataclasses.replace(tool, id='tool-test-' + str(index),
+                          url='https://example.org/test-' + str(index) + '_1.0_amd64.deb')
+                           for index in range(count)])
+            descriptor = types.SimpleNamespace(artifacts=other + tools, sha256=self.descriptor.sha256)
+            legacy = templates._render(descriptor, self.source)
+            self.assertEqual(legacy.files, templates._render(descriptor, self.source, profile=historical).files)
+            selected = templates._render(descriptor, self.source, profile=profile)
+            docker = selected.files['Dockerfile'].decode()
+            copies = [shlex.split(line) for line in docker.splitlines() if line.startswith('COPY toolchain/')]
+            expected = ['toolchain/' + row.id + '.deb' for row in tools]
+            self.assertEqual(copies, [['COPY', *expected, '/opt/public-toolchain/']])
+            self.assertEqual(selected.plan['docker_copy_inputs'], legacy.plan['docker_copy_inputs'])
+            for name in legacy.files:
+                if name not in ('Dockerfile', 'iso/provision.py'):
+                    self.assertEqual(selected.files[name], legacy.files[name])
+            without_copies = lambda text: '\n'.join(line for line in text.splitlines()
+                                                    if not line.startswith('COPY toolchain/'))
+            legacy_install = legacy.files['Dockerfile'].decode().replace('apt-get -y --no-download', 'apt-get -y')
+            self.assertEqual(without_copies(docker), without_copies(legacy_install))
+            self.assertEqual(selected, templates._render(descriptor, self.source, profile=profile))
+
+    def test_selected_offline_install_allows_authenticated_local_file_acquisition(self):
+        profile = templates.literal(self.source['public_recipe_selection.py'], 'PUBLIC')
+        docker = templates._render(self.descriptor, self.source, profile=profile).files['Dockerfile'].decode()
+        commands = [json.loads(line[4:])[-1] for line in docker.splitlines()
+                    if line.startswith('RUN ') and 'apt-get' in line]
+        self.assertEqual(len(commands), 1)
+        command = commands[0]
+        self.assertNotIn('--no-download', command)
+        self.assertIn('-o Dir::Etc::sourcelist=/dev/null -o Dir::Etc::sourceparts=- install /opt/public-toolchain/', command)
+        self.assertLess(command.index('sha256sum -c'), command.index('apt-get -y'))
+        self.assertLess(command.index('apt-get -y'), command.index('dpkg-query -W'))
 
     def test_missing_and_drifted_sources_refuse_before_verifier(self):
         with tempfile.TemporaryDirectory() as temp:

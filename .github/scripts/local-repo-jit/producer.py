@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 ROOT = Path(__file__).resolve().parent
-CODE_SEAL = '4ac263f2b873970274ab778d3ac6ebd97285c69c15eac23c152c153a9ffe17b7'
+CODE_SEAL = 'bfe5d1d3185bb2050cc51f723b79dada16e813a5d27a514f5ede7d4fdf923556'
 REPO = 'myguard-labs/ViMbAdmin'
 RUNNER_NAME = 'vi-local-ci-208c2d13-01'
 Q2_SEAL = 'ee81956ba51a16c083f47fcc23c502575a6fb18c673cb039e9f22267a4837284'

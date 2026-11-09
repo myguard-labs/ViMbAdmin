@@ -178,14 +178,38 @@ class Observation(unittest.TestCase):
         self.assertEqual(value, observation.unavailable())
         self.assertNotIn('PRIVATE_CANARY', output.getvalue())
 
+    def test_guest_fixture_setup_failure_cleans_owned_directory(self):
+        import test_local_repo_jit_docker as fixtures
+
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            owned = root / 'owned'
+            sentinel = root / 'outside'
+            sentinel.write_text('preserve')
+
+            class FailingSeed(unittest.TestCase):
+                def setUp(self):
+                    owned.mkdir()
+                    self.addCleanup(owned.rmdir)
+                    raise RuntimeError('injected setup failure')
+
+            nested = Observation('test_guest_marker_explicit_serial_and_errors')
+            with patch.object(fixtures, 'PublicSeed', FailingSeed):
+                result = unittest.TestResult()
+                nested.run(result)
+            self.assertEqual(len(result.errors), 1)
+            self.assertIn('injected setup failure', result.errors[0][1])
+            self.assertFalse(owned.exists())
+            self.assertEqual(sentinel.read_text(), 'preserve')
+
     def test_guest_marker_explicit_serial_and_errors(self):
         import ast
         from unittest.mock import Mock
 
         import test_local_repo_jit_docker as fixtures
         case = fixtures.PublicSeed()
-        case.setUp()
         self.addCleanup(case.doCleanups)
+        case.setUp()
         (case.source / 'iso/install-runner.py').write_text(fixtures.s.INSTALL)
         dockerfile = case.source / 'Dockerfile'
         dockerfile.write_text(dockerfile.read_text().replace('vi-local-ci-208c2d13-vm-image-q2', 'vi-local-ci-208c2d13-vm-jit-inputs-v3'))

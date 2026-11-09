@@ -35,7 +35,46 @@ reject() {
   fi
   printf 'PASS rejected %s\n' "$label"
 }
-restore() { cp -- "$root"/.github/workflows/*.yml "$fixture/workflows/"; }
+restore_hosted() { cp -- "$root"/.github/workflows/*.yml "$fixture/workflows/"; }
+restore() {
+  restore_hosted
+  python3 -B - "$fixture/workflows" <<'PYLEGACY'
+import sys
+from pathlib import Path
+legacy = '    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]'
+for path in Path(sys.argv[1]).glob('*.yml'):
+    text = path.read_text().replace('    runs-on: ubuntu-24.04', legacy)
+    text = text.replace('    container:\n', '    container:\n      volumes:\n        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro\n')
+    path.write_text(text)
+PYLEGACY
+}
+
+# Current hosted workflows must pass without any local JIT metadata.
+if ! RUNNER_ENVIRONMENT=github-hosted RUNNER_NAME='GitHub Actions fixture' run_guard; then
+  printf 'FAIL hosted placement positive control.\n' >&2
+  cat "$fixture/output" >&2
+  exit 1
+fi
+printf 'PASS hosted placement without a local slot\n'
+slot "$RUNNER_NAME" /opt/actions-runner
+reject selfhosted-spoof-on-hosted-workflows 'Every PR-triggered job'
+RUNNER_ENVIRONMENT=unknown reject unknown-runtime 'authorized hosted or self-hosted'
+for mutation in hosted-selector paid-selector hosted-permissions hosted-checkout hosted-slot; do
+  restore_hosted
+  case $mutation in
+  hosted-selector) sed -i '0,/runs-on: ubuntu-24.04/s//runs-on: self-hosted/' "$fixture/workflows/ci.yml" ;;
+  paid-selector) sed -i '0,/runs-on: ubuntu-24.04/s//runs-on: ubuntu-24.04-large/' "$fixture/workflows/ci.yml" ;;
+  hosted-permissions) sed -i 's/contents: read/contents: write/' "$fixture/workflows/ci.yml" ;;
+  hosted-checkout) sed -i '0,/persist-credentials: false/s//persist-credentials: true/' "$fixture/workflows/ci.yml" ;;
+  hosted-slot) sed -i '/^    container:/a\      volumes:\n        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro' "$fixture/workflows/ci.yml" ;;
+  esac
+  expected='Every PR-triggered job'
+  [[ "$mutation" != hosted-permissions ]] || expected='least-privilege token policy'
+  RUNNER_ENVIRONMENT=github-hosted reject "$mutation" "$expected"
+done
+# Retain legacy slot/consumer refusal coverage against an explicit legacy
+# workflow projection, not against the current hosted placement.
+restore
 
 for runner in builder02-docker-01 builder02-docker-02 builder03-docker-01 vi-local-ci-208c2d13-01; do
   RUNNER_NAME=$runner
@@ -57,7 +96,7 @@ printf 'PASS local slot accepts four supported events and rejects cross-slot met
 RUNNER_NAME=builder02-docker-01
 slot "$RUNNER_NAME" /opt/actions-runner
 GITHUB_EVENT_NAME=pull_request
-RUNNER_ENVIRONMENT=github-hosted reject hosted-runtime 'authorized self-hosted'
+RUNNER_ENVIRONMENT=github-hosted reject hosted-runtime-on-legacy-workflows 'Every PR-triggered job'
 RUNNER_NAME=builder02-runner-01 reject non-docker-slot 'authorized Docker slot'
 RUNNER_NAME=unknown reject unknown-runner 'authorized Docker slot'
 GITHUB_EVENT_NAME=pull_request_target reject privileged-event 'ordinary supported event'
@@ -185,4 +224,4 @@ cp "$fixture/workflows/ci.yml" "$fixture/workflows/extra.yaml"
 reject extra-workflow 'Unexpected workflow inventory'
 rm "$fixture/workflows/extra.yaml"
 run_guard
-printf 'Self-hosted placement positive and negative controls passed.\n'
+printf 'Hosted and legacy placement positive and negative controls passed.\n'

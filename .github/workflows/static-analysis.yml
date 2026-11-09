@@ -18,12 +18,10 @@ concurrency:
 jobs:
   phpstan:
     name: PHPStan
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
       # Published after reset; placement metadata only, never host credentials.
-      volumes:
-        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     # The complete project targets PHPStan level 10. Existing debt is generated
@@ -117,12 +115,10 @@ jobs:
 
   psalm-taint:
     name: Psalm taint analysis
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     container:
       # Published after reset; placement metadata only, never host credentials.
-      volumes:
-        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     steps:
@@ -167,12 +163,10 @@ jobs:
 
   php-cs-fixer:
     name: PSR-12 formatting
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     container:
       # Published after reset; placement metadata only, never host credentials.
-      volumes:
-        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     # The formatting contract lives in .php-cs-fixer.dist.php with risky fixers
@@ -216,7 +210,7 @@ jobs:
 
   refactor-metrics:
     name: Tracked refactor metrics contract
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       # actions/checkout v7

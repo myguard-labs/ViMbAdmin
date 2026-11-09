@@ -9,13 +9,25 @@ readonly workflows=(
   "$workflow_dir/static-analysis.yml"
 )
 
-# This is a fail-closed placement/preflight contract, not attestation against
-# guest root. The host supervisor owns single-job JIT identity and pristine reset.
-# Never expose its credential or mount its state namespace into a job container.
-if [[ ${RUNNER_ENVIRONMENT:-} != self-hosted ]]; then
-  printf 'Checks require an authorized self-hosted runner.\n' >&2
-  exit 1
-fi
+# Placement is checked against the fixed workflow policy, not used as an
+# attestation against job root. Standard hosted jobs have no local JIT slot.
+case ${RUNNER_ENVIRONMENT:-} in
+  github-hosted)
+    selector='    runs-on: ubuntu-24.04'
+    metadata_required=0
+    ;;
+  self-hosted)
+    # The selector contains literal GitHub expressions for exact workflow matching.
+    # shellcheck disable=SC2016
+    selector='    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]'
+    metadata_required=1
+    ;;
+  *)
+    printf 'Checks require an authorized hosted or self-hosted runner.\n' >&2
+    exit 1
+    ;;
+esac
+readonly selector metadata_required
 case ${GITHUB_EVENT_NAME:-} in
 pull_request | push | schedule | workflow_dispatch) ;;
 *)
@@ -23,6 +35,7 @@ pull_request | push | schedule | workflow_dispatch) ;;
   exit 1
   ;;
 esac
+if [[ "$metadata_required" == 1 ]]; then
 fresh_runner=false
 case ${RUNNER_NAME:-} in
 builder02-docker-01 | builder02-docker-02 | builder03-docker-01 | vi-local-ci-208c2d13-01) ;;
@@ -109,6 +122,7 @@ else
     exit 1
   fi
 fi
+fi
 checkout=$(pwd -P)
 readonly checkout
 if [[ ! ${PR_RUNNER_EXPECTED_SHA:-} =~ ^[0-9a-f]{40}$ ]] ||
@@ -178,8 +192,8 @@ for workflow in "${workflows[@]}"; do
   fi
 done
 
-# Match all five run/attempt-scoped selectors exactly; extra labels alone do not isolate jobs.
-awk -v selector='    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]' '
+# Match the selected placement exactly; arbitrary labels do not isolate jobs.
+awk -v selector="$selector" -v metadata_required="$metadata_required" '
   BEGIN { sq = sprintf("%c", 39) }
   function finish_checkout() {
     if (!checkout_block) return
@@ -201,7 +215,7 @@ awk -v selector='    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.
       jobs++
       if (upload_permissions || upload_read || upload_write) per_job_failed = 1
     }
-    if (runner != 1 || guard != 1 || checkout != 1 || corpus != ((FILENAME ~ /\/static-analysis\.yml$/ && job_id == "  refactor-metrics:") ? 1 : 0) || expected != 1 || (container && metadata != 1)) per_job_failed = 1
+    if (runner != 1 || guard != 1 || checkout != 1 || corpus != ((FILENAME ~ /\/static-analysis\.yml$/ && job_id == "  refactor-metrics:") ? 1 : 0) || expected != 1 || (container && metadata != metadata_required)) per_job_failed = 1
   }
   FNR == 1 {
     finish_job()
@@ -263,7 +277,7 @@ awk -v selector='    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.
   in_job && $0 == selector { runner++ }
   in_job && /^      volumes:/ { in_volumes = 1; next }
   in_volumes && /^        - / {
-    if ($0 != "        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro") per_job_failed = 1
+    if (!metadata_required || $0 != "        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro") per_job_failed = 1
     else metadata++
     next
   }
@@ -296,7 +310,7 @@ awk -v selector='    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.
     # Every PR-triggered job across the four workflows must be accounted for,
     # so adding or removing one requires updating this count deliberately.
     if (per_job_failed) {
-      print "Every PR-triggered job must use the authorized Docker selector, pin the PR head without credentials, publish container metadata, and run the isolation guard exactly once." > "/dev/stderr"
+      print "Every PR-triggered job must use the authorized Docker selector, pin the PR head without credentials, use only the selected container metadata policy, and run the isolation guard exactly once." > "/dev/stderr"
     }
     if (uploads != 1) { print "Exactly one non-PR SARIF upload job is required." > "/dev/stderr"; failed = 1 }
     if (jobs != 13) {
@@ -309,4 +323,4 @@ awk -v selector='    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.
   exit 1
 }
 
-printf 'All pull-request jobs use authorized disposable runner placement; host JIT/reset proof is required separately.\n'
+printf 'All pull-request jobs use authorized disposable runner placement.\n'

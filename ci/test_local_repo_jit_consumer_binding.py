@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 CHECKOUT = Path(__file__).resolve().parents[1]
 ROOT = CHECKOUT / '.github/scripts/local-repo-jit'
+LEGACY_SELECTOR = '    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]'
 sys.path.insert(0, str(ROOT))
 import request_model as model
 import runner_setup as setup
@@ -39,6 +40,12 @@ class ConsumerBinding(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name)
         self.slot = self.directory / 'slot'
+        workflows = self.directory / '.github/workflows'
+        workflows.mkdir(parents=True)
+        for source in (CHECKOUT / '.github/workflows').glob('*.yml'):
+            text = source.read_text().replace('    runs-on: ubuntu-24.04', LEGACY_SELECTOR)
+            text = text.replace('    container:\n', '    container:\n      volumes:\n        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro\n')
+            (workflows / source.name).write_text(text)
         self.request = request_fixture()
         self.expected = {
             'runner_name': self.request['runner_name'], 'candidate_sha': self.request['candidate_sha'],
@@ -59,6 +66,7 @@ class ConsumerBinding(unittest.TestCase):
         env = dict(os.environ, RUNNER_ENVIRONMENT='self-hosted', GITHUB_EVENT_NAME='pull_request',
                    RUNNER_NAME=self.request['runner_name'], GITHUB_REPOSITORY=model.REPOSITORY,
                    GITHUB_RUN_ID='312', GITHUB_RUN_ATTEMPT='2', PR_RUNNER_SLOT_FILE=str(self.slot),
+                   PR_RUNNER_WORKFLOW_DIR=str(self.directory / '.github/workflows'),
                    PR_RUNNER_EXPECTED_SHA=self.request['candidate_sha'])
         env.update(changes)
         return subprocess.run(['bash', str(CHECKOUT / '.github/scripts/assert-pr-runner-isolation.sh')],
@@ -120,8 +128,12 @@ class ConsumerBinding(unittest.TestCase):
                         {'mode': 'fixture-proof'}]:
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 setup.installer_for(dict(self.request, **changes))
-        with patch.object(setup, 'Q2', None), self.assertRaisesRegex(ValueError, 'fresh bound runner'):
-            setup.stage(None, self.directory / 'never-created', request=dict(self.request, runner_name='forged'))
+        import test_local_repo_jit_docker as fixtures
+        case = fixtures.PublicSeed()
+        self.addCleanup(case.doCleanups)
+        case.setUp()
+        with self.assertRaisesRegex(ValueError, 'fresh bound runner'):
+            fixtures.s.stage(case.archive, self.directory / 'never-created', request=dict(self.request, runner_name='forged'))
         self.assertFalse((self.directory / 'never-created').exists())
 
     def test_workflow_missing_forged_and_numeric_noncanonical_values(self):

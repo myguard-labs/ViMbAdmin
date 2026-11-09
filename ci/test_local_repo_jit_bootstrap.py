@@ -14,6 +14,7 @@ CHECKOUT = Path(__file__).resolve().parents[1]
 ROOT = Path(os.environ.get('PR_BOOTSTRAP_TEST_ROOT', CHECKOUT))
 HELPERS = ('guest_capacity', 'public_recipe_selection', 'baseline_budget', 'request_model', 'runner_setup')
 BASH = shutil.which('bash')
+LEGACY_SELECTOR = '    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]'
 sys.path.insert(0, str(CHECKOUT / '.github/scripts/local-repo-jit'))
 import request_model as model
 import runner_setup as setup
@@ -29,6 +30,10 @@ class RunnerBootstrap(unittest.TestCase):
             shutil.copyfile(CHECKOUT / '.github/scripts/local-repo-jit' / (name + '.py'),
                             self.helpers / (name + '.py'))
         shutil.copytree(ROOT / '.github/workflows', self.directory / '.github/workflows')
+        for workflow in (self.directory / '.github/workflows').glob('*.yml'):
+            text = workflow.read_text().replace('    runs-on: ubuntu-24.04', LEGACY_SELECTOR)
+            text = text.replace('    container:\n', '    container:\n      volumes:\n        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro\n')
+            workflow.write_text(text)
         gitdir = subprocess.check_output(['git', '-c', 'safe.directory=' + str(CHECKOUT), '-C', str(CHECKOUT),
                                          'rev-parse', '--absolute-git-dir'],
                                         env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'), text=True).strip()

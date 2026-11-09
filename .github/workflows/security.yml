@@ -20,15 +20,13 @@ concurrency:
 jobs:
   semgrep:
     name: Semgrep
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       sarif-artifact-id: ${{ steps.sarif_artifact.outputs.artifact-id }}
     # CodeQL has no PHP support; Semgrep is the SAST engine for this codebase.
     container:
       # Published after reset; placement metadata only, never host credentials.
-      volumes:
-        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro
       image: >-
         semgrep/semgrep@sha256:b94b53d02fd4a022f9eac4e2af1380f5c3c4c21400e79d3336bdff1d1db5e796
     defaults:
@@ -139,7 +137,7 @@ jobs:
       always() && github.event_name != 'pull_request' &&
       needs.semgrep.outputs.sarif-artifact-id != ''
     needs: semgrep
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-[[ ${RUNNER_ENVIRONMENT:-} == self-hosted ]]
+[[ ${RUNNER_ENVIRONMENT:-} == github-hosted ]]
 [[ ${GITHUB_RUN_ID:-} =~ ^[0-9]+$ && ${GITHUB_RUN_ATTEMPT:-} =~ ^[0-9]+$ ]]
 [[ ${DOVEADM_PHP_MINOR:-} =~ ^8\.[3456]$ ]]
 [[ ${DOVEADM_BASE_IMAGE:-} =~ ^mirror\.gcr\.io/library/php@sha256:[0-9a-f]{64}$ ]]

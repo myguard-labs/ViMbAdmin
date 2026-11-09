@@ -55,7 +55,7 @@ class NativeDriver(unittest.TestCase):
         state_path.write_text(json.dumps({'calls': [], 'scenario': scenario}))
         env = {**os.environ, 'PATH': str(self.bin) + os.pathsep + os.environ['PATH'],
                'TMPDIR': str(directory), 'NATIVE_DOCKER_STATE': str(state_path),
-               'RUNNER_ENVIRONMENT': 'self-hosted', 'GITHUB_RUN_ID': '307', 'GITHUB_RUN_ATTEMPT': '1',
+               'RUNNER_ENVIRONMENT': 'github-hosted', 'GITHUB_RUN_ID': '307', 'GITHUB_RUN_ATTEMPT': '1',
                'DOVEADM_PHP_MINOR': minor, 'DOVEADM_SOURCE_TREE': self.tree, 'DOVEADM_CONTEXT_ONLY': '0',
                'DOVEADM_BASE_IMAGE': 'mirror.gcr.io/library/php@sha256:' + 'a' * 64,
                'DOVEADM_BUILD_ESSENTIAL_VERSION': '12.12', 'DOVEADM_LIBCURL_DEV_VERSION': '8.14.1-2+deb13u7'}

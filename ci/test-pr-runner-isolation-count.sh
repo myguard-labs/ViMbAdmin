@@ -20,7 +20,7 @@ cp -- "$root"/.github/workflows/{ci,regression,security,static-analysis}.yml "$f
 
 run_guard() {
   PR_RUNNER_WORKFLOW_DIR="$fixture/workflows" GITHUB_EVENT_NAME=pull_request \
-    RUNNER_ENVIRONMENT=self-hosted \
+    RUNNER_ENVIRONMENT=github-hosted \
     bash "$root/.github/scripts/assert-pr-runner-isolation.sh" >"$fixture/output" 2>&1
 }
 
@@ -29,7 +29,7 @@ grep -qF 'All pull-request jobs use authorized' "$fixture/output"
 
 cat >>"$fixture/workflows/regression.yml" <<'YAML'
   count_control:
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

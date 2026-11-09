@@ -955,7 +955,7 @@ class PolicyBank(unittest.TestCase):
         stat = commands / 'stat'
         stat.write_text('#!/usr/bin/python3\nimport os,sys\np=sys.argv[-1];s=os.stat(p)\nprint("0:0:444" if p==' + repr(str(self.slot)) + ' and s.st_mode&0o777==0o444 else str(s.st_uid)+":"+str(s.st_gid)+":"+oct(s.st_mode&0o777)[2:])\n')
         git.chmod(0o700); stat.chmod(0o700)
-        self.env = {'PATH': str(commands) + ':' + os.defpath, 'RUNNER_ENVIRONMENT': 'self-hosted',
+        self.env = {'PATH': str(commands) + ':' + os.defpath, 'RUNNER_ENVIRONMENT': 'github-hosted',
                     'RUNNER_NAME': m.RUNNER_NAME, 'GITHUB_EVENT_NAME': 'pull_request',
                     'PR_RUNNER_SLOT_FILE': str(self.slot), 'PR_RUNNER_WORKFLOW_DIR': str(self.workflows),
                     'PR_RUNNER_EXPECTED_SHA': SHA}
@@ -965,7 +965,7 @@ class PolicyBank(unittest.TestCase):
                               capture_output=True, text=True, check=False, env=self.env, cwd=CHECKOUT)
 
     def test_all_fourteen_owned_selectors_and_thirteen_job_count(self):
-        selectors = sum(path.read_text().count('runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]') for path in self.workflows.iterdir())
+        selectors = sum(path.read_text().count('runs-on: ubuntu-24.04') for path in self.workflows.iterdir())
         self.assertEqual(selectors, 14)
         result = self.guard()
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -974,7 +974,7 @@ class PolicyBank(unittest.TestCase):
         with regression.open('a') as out:
             out.write('''
   count_control:
-    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -992,7 +992,7 @@ class PolicyBank(unittest.TestCase):
 
     def test_legacy_selector_rejected_and_existing_assets_enrolls_tests(self):
         path = self.workflows / 'ci.yml'
-        path.write_text(path.read_text().replace('vimbadmin-owned-local-v1-run-', 'builder02-run-', 1))
+        path.write_text(path.read_text().replace('runs-on: ubuntu-24.04', 'runs-on: self-hosted', 1))
         result = self.guard()
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('Every PR-triggered job', result.stderr)
@@ -1006,6 +1006,12 @@ class PolicyBank(unittest.TestCase):
         self.assertNotIn('    container:', assets)
 
     def test_own_metadata_cross_name_mode_and_shape_errors(self):
+        self.env['RUNNER_ENVIRONMENT'] = 'self-hosted'
+        legacy = '    runs-on: ["self-hosted-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-owned-local-v1-run-${{ github.run_id }}-${{ github.run_attempt }}", "docker-run-${{ github.run_id }}-${{ github.run_attempt }}", "jit-env-input-run-${{ github.run_id }}-${{ github.run_attempt }}", "vimbadmin-pristine-jit-v1-run-${{ github.run_id }}-${{ github.run_attempt }}"]'
+        for workflow in self.workflows.iterdir():
+            text = workflow.read_text().replace('    runs-on: ubuntu-24.04', legacy)
+            text = text.replace('    container:\n', '    container:\n      volumes:\n        - /run/myguard-ci-slot:/run/myguard-ci-slot:ro\n')
+            workflow.write_text(text)
         for text in ['builder02-docker-01\n/opt/actions-runner\n', m.RUNNER_NAME + '\n/opt/actions-runner',
                      m.RUNNER_NAME + '\n/opt/actions-runner\nextra\n']:
             self.slot.chmod(0o644); self.slot.write_text(text); self.slot.chmod(0o444)

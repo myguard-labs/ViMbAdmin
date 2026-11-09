@@ -35,7 +35,7 @@ grep -qF 'dubious ownership' "$fixture/error"
 before=$(sha256sum "$fixture/checkout/.git/config")
 run_guard() {
   (cd "$fixture/checkout" && env -u SUDO_UID GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
-    RUNNER_ENVIRONMENT=self-hosted RUNNER_NAME=vi-local-ci-208c2d13-01 \
+    RUNNER_ENVIRONMENT=github-hosted RUNNER_NAME=vi-local-ci-208c2d13-01 \
     PR_RUNNER_SLOT_FILE="$fixture/slot" GITHUB_EVENT_NAME=pull_request \
     PR_RUNNER_EXPECTED_SHA="$1" bash "$root/.github/scripts/assert-pr-runner-isolation.sh") \
     >"$fixture/out" 2>"$fixture/error"

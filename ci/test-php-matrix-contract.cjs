@@ -537,7 +537,7 @@ try {
   fs.writeFileSync(path.join(fakeBin, 'git'), '#!/bin/sh\nif [ "$1" = archive ]; then\n  "$REAL_GIT" "$@" > "$CAPTURED_ARCHIVE" || exit $?\n  cat "$CAPTURED_ARCHIVE"\nelse\n  exec "$REAL_GIT" "$@"\nfi\n', { mode: 0o755 });
   const env = { ...process.env, PATH: `${fakeBin}:${process.env.PATH}`, DOCKER_LOG: dockerLog,
     REAL_GIT: realGit, CAPTURED_ARCHIVE: capturedArchive,
-    RUNNER_ENVIRONMENT: 'self-hosted', GITHUB_RUN_ID: '307', GITHUB_RUN_ATTEMPT: '1',
+    RUNNER_ENVIRONMENT: 'github-hosted', GITHUB_RUN_ID: '307', GITHUB_RUN_ATTEMPT: '1',
     DOVEADM_PHP_MINOR: '8.3', DOVEADM_BASE_IMAGE: `mirror.gcr.io/library/php@sha256:${'a'.repeat(64)}`,
     DOVEADM_BUILD_ESSENTIAL_VERSION: '12.12', DOVEADM_LIBCURL_DEV_VERSION: '8.14.1-2+deb13u7',
     DOVEADM_CONTEXT_ONLY: '1', DOVEADM_SOURCE_TREE: tree, TMPDIR: nativeRoot };

@@ -131,25 +131,30 @@ for control in loaded missing apt-failure compile-failure; do
 done
 
 # Exercise the real PHAR installer with a local fake transfer and real checksum.
-sed -n '/^install_verified_phar() {$/,/^}$/p' .github/scripts/setup-php-container.sh >"$scratch/phar-installer.sh"
+sed -n '/^install_verified_phar() ($/,/^)/p' .github/scripts/setup-php-container.sh >"$scratch/phar-installer.sh"
+[[ -s $scratch/phar-installer.sh && $(grep -c '^install_verified_phar() ($' "$scratch/phar-installer.sh") == 1 ]] || {
+  echo 'FAIL: expected exactly one PHAR installer' >&2; exit 1
+}
 cat >"$scratch/phar-driver.sh" <<'DRIVER'
 set -euo pipefail
 fixture=$1
 expected=$2
 helper=$3
 curl() {
-  local connect='' total='' url='' output=''
+  local connect='' total='' retry='' retry_max='' url='' output=''
   while (($#)); do
     case $1 in
       --connect-timeout) connect=$2; shift 2 ;;
       --max-time) total=$2; shift 2 ;;
+      --retry) retry=$2; shift 2 ;;
+      --retry-max-time) retry_max=$2; shift 2 ;;
       --output) output=$2; shift 2 ;;
       https://example.invalid/tool.phar) url=$1; shift ;;
       --fail|--silent|--show-error|--location) shift ;;
       *) exit 91 ;;
     esac
   done
-  [[ $connect == 30 && $total == 300 && $url == https://example.invalid/tool.phar && -n $output ]] || exit 92
+  [[ $connect == 30 && $total == 300 && $retry == 3 && $retry_max == 600 && $url == https://example.invalid/tool.phar && -n $output ]] || exit 92
   printf '#!/bin/sh\nexit 0\n' >"$output"
 }
 # shellcheck disable=SC1090 # Exact extracted helper under test.
@@ -167,9 +172,9 @@ fi
 sed 's/--connect-timeout 30 //g' "$scratch/phar-installer.sh" >"$scratch/phar-no-connect.sh"
 sed 's/--max-time 300 //g' "$scratch/phar-installer.sh" >"$scratch/phar-no-total.sh"
 for item in connect total; do
-  if bash "$scratch/phar-driver.sh" "$scratch/phar-$item" "$expected_sha" "$scratch/phar-no-$item.sh"; then
-    echo "FAIL: PHAR installer accepted missing $item timeout" >&2; exit 1
-  fi
+  status=0
+  bash "$scratch/phar-driver.sh" "$scratch/phar-$item" "$expected_sha" "$scratch/phar-no-$item.sh" || status=$?
+  [[ $status == 92 ]] || { echo "FAIL: missing $item timeout returned $status" >&2; exit 1; }
   [[ ! -e $scratch/phar-$item/installed ]]
 done
 printf 'OK: PHAR timeout and checksum controls\n'

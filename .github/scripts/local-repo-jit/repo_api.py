@@ -82,7 +82,8 @@ class RepoAPI:
                                               'Accept': 'application/vnd.github+json',
                                               'X-GitHub-Api-Version': '2026-03-10'})
         try:
-            with urllib.request.urlopen(req, timeout=30) as response:
+            # Initial URL uses the fixed GitHub HTTPS origin and a validated repository path.
+            with urllib.request.urlopen(req, timeout=30) as response:  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
                 raw = response.read()
                 return response.status, json.loads(raw) if raw else {}
         except urllib.error.HTTPError as error:

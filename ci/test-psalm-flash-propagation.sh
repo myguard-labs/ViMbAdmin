@@ -10,6 +10,7 @@ fi
 if [[ $mode == all ]]; then
   : "${PSALM_BIN:?Select the checked, patched Psalm 6.16.1 launcher with PSALM_BIN}"
   engine=$(command -v -- "$PSALM_BIN")
+  bash "$repo_root/ci/test-psalm-flash-cleanup.sh"
 else
   engine=''
 fi
@@ -17,8 +18,23 @@ if [[ -n ${FLASH_PROOF_DIR:-} ]]; then
   mkdir -m 700 -- "$FLASH_PROOF_DIR"
   proof_dir=$FLASH_PROOF_DIR
 else
-  proof_dir=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-flash-propagation.XXXXXX")
+  proof_parent=$(cd -- "${TMPDIR:-/tmp}" && pwd -P)
+  proof_dir=$(mktemp -d "$proof_parent/vimbadmin-flash-propagation.XXXXXX")
+  [[ -d $proof_dir && ! -L $proof_dir && $(cd -- "$proof_dir" && pwd -P) == "$proof_dir" ]] || exit 1
+  case $proof_dir in
+    "$proof_parent"/vimbadmin-flash-propagation.*) ;;
+    *) exit 1 ;;
+  esac
+  cleanup() {
+    local status=$?
+    if [[ $status == 0 && -n $proof_dir && -d $proof_dir && ! -L $proof_dir && $(cd -- "$proof_dir" && pwd -P) == "$proof_dir" ]]; then
+      rm -rf -- "${proof_dir:?}"
+    fi
+    return "$status"
+  }
+  trap cleanup EXIT
 fi
+# Caller-owned evidence is always retained; default evidence is retained on failure.
 printf 'Flash propagation evidence: %s\n' "$proof_dir"
 php /dev/stdin "$repo_root" "$proof_dir" "$mode" "$engine" <<'PHP'
 <?php

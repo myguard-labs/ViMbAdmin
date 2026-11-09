@@ -80,7 +80,8 @@ def load_mutant(filename, before, after):
         raise RuntimeError('nonunique maintained mutation preimage')
     module = types.ModuleType('capacity_control_mutant')
     module.__file__ = str(path)
-    exec(compile(source.replace(before, after), str(path), 'exec'), module.__dict__)  # noqa: S102 - fixed maintained source, named test-only mutation
+    # Test-only mutants use the fixed checkout and the in-file control table.
+    exec(compile(source.replace(before, after), str(path), 'exec'), module.__dict__)  # noqa: S102 - fixed maintained source, named test-only mutation  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
     return module
 
 

@@ -801,11 +801,13 @@ class PublicSeed(unittest.TestCase):
               patch.object(sys, 'path', list(sys.path)),
               patch.dict(sys.modules, {'native_policy': policy}),
               patch.object(subprocess, 'check_output', side_effect=check_output)):
-            exec(compile(install, '<private-installer-fixture>', 'exec'), {})  # noqa: S102 - fixed public installer in mapped fixture
+            # Maintained installer runs with private mapped paths and mocked operations.
+            exec(compile(install, '<private-installer-fixture>', 'exec'), {})  # noqa: S102 - fixed public installer in mapped fixture  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
             policy.verify.assert_called_once()
             self.assertEqual((guest / 'run/myguard-ci-slot').read_text(), m.RUNNER_NAME + '\n/opt/actions-runner\n')
             with self.assertRaisesRegex(AssertionError, 'preexisting'):
-                exec(compile(install, '<private-installer-fixture>', 'exec'), {})  # noqa: S102 - fixed public installer in mapped fixture
+                # Maintained installer runs with private mapped paths and mocked operations.
+                exec(compile(install, '<private-installer-fixture>', 'exec'), {})  # noqa: S102 - fixed public installer in mapped fixture  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
             for error in [ValueError('required native dependency missing'), ValueError('native loader inspection unresolved')]:
                 shutil.rmtree(guest / 'opt/actions-runner')
                 shutil.rmtree(guest / 'opt/local-ci-inputs')
@@ -813,7 +815,8 @@ class PublicSeed(unittest.TestCase):
                 (guest / 'run/myguard-ci-slot').unlink(missing_ok=True)
                 policy.verify.side_effect = error
                 with self.assertRaises(ValueError):
-                    exec(compile(install, '<private-installer-fixture>', 'exec'), {})  # noqa: S102 - bounded private mapped fixture
+                    # Maintained installer runs with private mapped paths and mocked operations.
+                    exec(compile(install, '<private-installer-fixture>', 'exec'), {})  # noqa: S102 - bounded private mapped fixture  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
                 self.assertFalse((guest / 'var/lib/local-ci/runner-inputs-ready').exists())
 
 

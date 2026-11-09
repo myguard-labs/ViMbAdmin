@@ -197,7 +197,8 @@ class Observation(unittest.TestCase):
         payload = b'MYGUARD_CI_BOUNDARY:root_ready:fail:ValueError\n'
         fake.write.return_value = len(payload)
         namespace = {'os': fake, 'print': Mock()}
-        exec(compile(ast.Module(body=[definition], type_ignores=[]), '<guest-marker-fragment>', 'exec'), namespace)  # noqa: S102 - fixed generated AST, injected OS and print fakes
+        # Compile the generated fixture function with mocked OS operations.
+        exec(compile(ast.Module(body=[definition], type_ignores=[]), '<guest-marker-fragment>', 'exec'), namespace)  # noqa: S102 - fixed generated AST, injected OS and print fakes  # nosemgrep: python.lang.security.audit.exec-detected.exec-detected
         self.assertTrue(namespace['boundary']('root_ready', 'fail', 'ValueError'))
         fake.open.assert_called_once_with('/dev/ttyS0', os.O_WRONLY | os.O_NOCTTY | os.O_NONBLOCK)
         fake.write.assert_called_once_with(9, payload); fake.close.assert_called_once_with(9)

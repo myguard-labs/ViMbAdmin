@@ -38,10 +38,47 @@ def descriptor():
 
 
 def module(name, raw):
+    """Load trusted generated test source, with normal builtins; not a sandbox."""
     value = types.ModuleType('generated_' + name)
     # Synthetic filenames keep coverage attribution distinct for generated code.
+    # Callers use hash-verified templates with descriptor() or a literal fixture.
+    # The generated __main__ guards stay inactive in this fresh named module.
+    # nosemgrep: semgrep.locked.python.lang.security.audit.exec-detected.exec-detected
     exec(compile(raw, str(ROOT / 'public_templates' / (name + '.generated.py')), 'exec'), value.__dict__)  # noqa: S102 - Execute only the pinned generated source under test.
     return value
+
+
+class GeneratedModules(unittest.TestCase):
+    def test_full_source_uses_fresh_non_main_namespace(self):
+        raw = b"""VALUE = 'initial'
+def read():
+    return VALUE
+if __name__ == '__main__':
+    raise AssertionError('fixture entrypoint executed')
+"""
+        first = module('fixture', raw)
+        second = module('fixture', raw)
+        self.assertEqual(first.__name__, 'generated_fixture')
+        self.assertEqual(first.read(), 'initial')
+        self.assertIs(first.read.__globals__, first.__dict__)
+        self.assertIsNot(first.__dict__, second.__dict__)
+        first.VALUE = 'changed'
+        self.assertEqual(first.read(), 'changed')
+        self.assertEqual(second.read(), 'initial')
+
+    def test_verified_generated_sources_load_without_starting_entrypoints(self):
+        result = templates._render(descriptor(), templates.sources(ROOT))
+        for name, path in (('qga', 'qga.py'), ('outer', 'outer.py'), ('provision', 'iso/provision.py')):
+            with self.subTest(name=name), \
+                    mock.patch.object(subprocess, 'run', side_effect=AssertionError('unexpected command')) as run, \
+                    mock.patch.object(os, 'umask', side_effect=AssertionError('unexpected entrypoint')) as umask:
+                first = module(name, result.files[path])
+                second = module(name, result.files[path])
+                self.assertEqual(first.__name__, 'generated_' + name)
+                self.assertIs(first.main.__globals__, first.__dict__)
+                self.assertIsNot(first.main, second.main)
+                run.assert_not_called()
+                umask.assert_not_called()
 
 
 class Connection:

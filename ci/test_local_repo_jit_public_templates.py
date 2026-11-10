@@ -386,14 +386,32 @@ class Templates(unittest.TestCase):
             name = Path(file).stem
             tree = ast.parse(self.result.files[file])
             guard = ast.Module(body=[tree.body[-1]], type_ignores=[])
-            called = mock.Mock(return_value=0)
-            namespace = {'__name__': '__main__', 'main': called}
+            # Only the exact maintained entry guard from hash-verified templates.
+            # Normal builtins remain available; the fake main is not a sandbox.
+            expected = ast.parse("if __name__ == '__main__':\n    " +
+                                 ('raise SystemExit(main())' if name == 'qga' else 'main()'))
+            self.assertEqual(ast.dump(guard), ast.dump(expected))
             code = compile(guard, str(ROOT / 'public_templates' / (name + '.generated.py')), 'exec')
-            try:
-                exec(code, namespace)  # noqa: S102 - Only the real entry guard, with a fake main.
-            except SystemExit as error:
-                self.assertEqual(error.code, 0)
-            called.assert_called_once_with()
+            cases = [('__main__', 0, None), ('__main__', 7, None),
+                     ('generated_entryguard', 0, None), ('__main__ ', 0, None),
+                     ('', 0, None), ('__main__', 0, RuntimeError('entryguard sentinel'))]
+            for module_name, status, failure in cases:
+                with self.subTest(file=file, module_name=module_name, status=status, failure=failure):
+                    called = mock.Mock(return_value=status, side_effect=failure)
+                    namespace = {'__name__': module_name, 'main': called}
+                    exits = name == 'qga' and module_name == '__main__' and failure is None
+                    outcome = (self.assertRaisesRegex(RuntimeError, 'entryguard sentinel') if failure else
+                               self.assertRaises(SystemExit) if exits else contextlib.nullcontext())
+                    with outcome as raised:
+                        # Namespace fixtures stay data; source equality is checked before compilation.
+                        # nosemgrep: semgrep.locked.python.lang.security.audit.exec-detected.exec-detected
+                        exec(code, namespace)  # noqa: S102 - Execute only the exact entry guard asserted above.
+                    if module_name == '__main__':
+                        called.assert_called_once_with()
+                    else:
+                        called.assert_not_called()
+                    if exits:
+                        self.assertEqual(raised.exception.code, status)
 
 
 class GuestProtocol(unittest.TestCase):

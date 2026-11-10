@@ -118,7 +118,7 @@ mkdir -p "$test_root/upstream" "$test_root/var/tmp/psalm-tool.fixture/tool/bin"
 printf '#!/bin/sh\necho upstream\n' >"$test_root/upstream/psalm"
 printf '#!/bin/sh\necho patched\n' >"$test_root/var/tmp/psalm-tool.fixture/tool/bin/psalm"
 chmod +x "$test_root/upstream/psalm" "$test_root/var/tmp/psalm-tool.fixture/tool/bin/psalm"
-awk '/^selection_dir=\$\(mktemp -d\)/ {capture=1} capture && /^```$/ {exit} capture {print}' README.md >"$test_root/readme-example"
+awk '/^setup_psalm\(\) \{/ {capture=1} capture && /^```$/ {exit} capture {print}' README.md >"$test_root/readme-example"
 [[ -s $test_root/readme-example ]]
 cat >"$test_root/readme-runner" <<'SH'
     unset PSALM_BIN

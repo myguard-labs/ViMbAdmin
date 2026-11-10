@@ -22,11 +22,13 @@ use ViMbAdmin\Kernel\View\SmartyView;
  */
 final class PrecompileTemplatesCommand implements CliCommand
 {
+    #[\Override]
     public function name(): string
     {
         return 'maintenance.cli-precompile-templates';
     }
 
+    #[\Override]
     public function run(Container $container, array $args): int
     {
         $verbose = array_key_exists('v', $args) || array_key_exists('verbose', $args);

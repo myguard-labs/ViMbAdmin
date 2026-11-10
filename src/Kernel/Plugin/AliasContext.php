@@ -29,6 +29,7 @@ final class AliasContext extends AbstractContext implements \ViMbAdmin_Plugin_Al
         parent::__construct($em, $admin, $domain, $options, $flash);
     }
 
+    #[\Override]
     public function getAlias()
     {
         /** @var \Entities\Alias $alias */

@@ -9,7 +9,7 @@ require_once __DIR__ . '/../library/ViMbAdmin/MailboxQueue.php';
 
 function mailboxUsernameEntityManager(): \Doctrine\ORM\EntityManager
 {
-    $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([]);
+    $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([], cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter());
     if (PHP_VERSION_ID >= 80400) {
         $configuration->enableNativeLazyObjects(true);
     } else {

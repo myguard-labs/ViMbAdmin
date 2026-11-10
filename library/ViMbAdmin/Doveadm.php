@@ -288,10 +288,11 @@ class ViMbAdmin_Doveadm
 
         if (function_exists('curl_init')) {
             if ($this->_handle === null) {
-                $this->_handle = curl_init();
-                if ($this->_handle === false) {
+                $handle = curl_init();
+                if ($handle === false) {
                     throw new ViMbAdmin_Exception(_('doveadm HTTP: failed to initialize cURL request'));
                 }
+                $this->_handle = $handle;
             }
             $ch = $this->_handle;
             // The easy handle is reused across calls, so curl_reset() drops

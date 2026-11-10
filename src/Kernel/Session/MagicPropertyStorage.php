@@ -22,21 +22,25 @@ final class MagicPropertyStorage implements SessionStorage
     {
     }
 
+    #[\Override]
     public function has(string $key): bool
     {
         return isset($this->store->$key);
     }
 
+    #[\Override]
     public function get(string $key): mixed
     {
         return $this->store->$key ?? null;
     }
 
+    #[\Override]
     public function set(string $key, mixed $value): void
     {
         $this->store->$key = $value;
     }
 
+    #[\Override]
     public function remove(string $key): void
     {
         unset($this->store->$key);

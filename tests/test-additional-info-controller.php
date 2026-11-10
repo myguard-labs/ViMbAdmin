@@ -114,7 +114,7 @@ final class AdditionalInfoTestRepositoryFactory implements RepositoryFactory
  */
 function additionalInfoEntityManager(EntityRepository $repository): EntityManager
 {
-    $configuration = ORMSetup::createAttributeMetadataConfiguration([]);
+    $configuration = ORMSetup::createAttributeMetadataConfiguration([], cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter());
     if (PHP_VERSION_ID >= 80400) {
         $configuration->enableNativeLazyObjects(true);
     } else {

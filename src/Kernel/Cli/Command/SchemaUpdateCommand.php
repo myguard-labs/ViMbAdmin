@@ -21,11 +21,13 @@ use ViMbAdmin\Kernel\Container;
  */
 final class SchemaUpdateCommand implements CliCommand
 {
+    #[\Override]
     public function name(): string
     {
         return 'maintenance.cli-schema-update';
     }
 
+    #[\Override]
     public function run(Container $container, array $args): int
     {
         $verbose = array_key_exists('v', $args) || array_key_exists('verbose', $args);

@@ -717,6 +717,7 @@ final class AdminController extends AbstractController
         return new Response('ok');
     }
 
+    #[\Override]
     protected function em(): EntityManagerInterface
     {
         $em = parent::em();
@@ -727,6 +728,7 @@ final class AdminController extends AbstractController
         return $em;
     }
 
+    #[\Override]
     protected function admin(): ?Admin
     {
         $admin = parent::admin();

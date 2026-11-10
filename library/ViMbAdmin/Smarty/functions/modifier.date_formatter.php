@@ -20,11 +20,11 @@
  *
  * @link http://www.smarty.net/manual/en/language.modifier.date.format.php date_format (Smarty online manual)
  * @author Monte Ohrt <monte at ohrt dot com>
- * @param string $string       input date string
- * @param string $format       strftime format for output
- * @param string $default_date default date if $string is empty
+ * @param int|string|null $string input date or Unix timestamp
+ * @param string|null $format  strftime format for output
+ * @param int|string|null $default_date default date if $string is empty
  * @param string $formatter    either 'strftime' or 'auto'
- * @return string |void
+ * @return string|null
  * @uses smarty_make_timestamp()
  * @see http://www.smarty.net/forums/viewtopic.php?t=10632
  */
@@ -53,25 +53,26 @@ function smarty_modifier_date_formatter($string, $format = null, $default_date =
     } elseif ($default_date != '') {
         $timestamp = $make_ts($default_date);
     } else {
-        return;
+        return null;
     }
 
     if ($formatter == 'strftime' || ($formatter == 'auto' && strpos($format, '%') !== false)) {
-        if (DIRECTORY_SEPARATOR == '\\') {
-            $_win_from = ['%D', '%h', '%n', '%r', '%R', '%t', '%T'];
-            $_win_to = ['%m/%d/%y', '%b', "\n", '%I:%M:%S %p', '%H:%M', "\t", '%H:%M:%S'];
-            if (strpos($format, '%e') !== false) {
-                $_win_from[] = '%e';
-                $_win_to[] = sprintf('%\' 2d', date('j', $timestamp));
-            }
-            if (strpos($format, '%l') !== false) {
-                $_win_from[] = '%l';
-                $_win_to[] = sprintf('%\' 2d', date('h', $timestamp));
-            }
-            $format = str_replace($_win_from, $_win_to, $format);
+        // Use Smarty's maintained strftime adapter, including locale, Windows
+        // compatibility and its qualified PHP 8.1+ deprecation handling.
+        static $legacyFormatter = null;
+        $legacyFormatter ??= (new \Smarty\Smarty())->getModifierCallback('date_format');
+        if (!is_callable($legacyFormatter)) {
+            throw new \LogicException('Smarty date_format adapter is unavailable');
+        }
+        // A date object preserves our already-resolved epoch, including zero,
+        // without triggering the adapter's empty-input or MySQL-date parsing.
+        $formatted = $legacyFormatter(new \DateTimeImmutable('@' . $timestamp), $format, '', 'strftime');
+
+        if ($formatted !== null && $formatted !== false && !is_string($formatted)) {
+            throw new \LogicException('Smarty date_format adapter returned an invalid result');
         }
 
-        return date($format, $timestamp);
+        return $formatted === false ? '' : $formatted;
     } else {
         return date($format, $timestamp);
     }

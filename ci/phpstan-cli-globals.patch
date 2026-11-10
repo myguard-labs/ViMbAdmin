@@ -1,0 +1,11 @@
+--- a/src/DependencyInjection/ContainerFactory.php
++++ b/src/DependencyInjection/ContainerFactory.php
+@@ -112,7 +112,7 @@
+         ];
+         $configurator->setDebugMode(\true);
+         $configurator->setTempDirectory($tempDirectory);
+-        $configurator->addParameters(array_merge(['rootDir' => $this->rootDirectory, 'currentWorkingDirectory' => $this->currentWorkingDirectory, 'cliArgumentsVariablesRegistered' => ini_get('register_argc_argv') === '1', 'tmpDir' => $tempDirectory, 'additionalConfigFiles' => $additionalConfigFiles, 'allConfigFiles' => $allConfigFiles, 'composerAutoloaderProjectPaths' => $composerAutoloaderProjectPaths, 'generateBaselineFile' => $generateBaselineFile, 'usedLevel' => $usedLevel, 'cliAutoloadFile' => $cliAutoloadFile, 'env' => Environment::getCleanedArray()], $additionalParameters));
++        $configurator->addParameters(array_merge(['rootDir' => $this->rootDirectory, 'currentWorkingDirectory' => $this->currentWorkingDirectory, 'cliArgumentsVariablesRegistered' => (PHP_SAPI === 'cli' || ini_get('register_argc_argv') === '1'), 'tmpDir' => $tempDirectory, 'additionalConfigFiles' => $additionalConfigFiles, 'allConfigFiles' => $allConfigFiles, 'composerAutoloaderProjectPaths' => $composerAutoloaderProjectPaths, 'generateBaselineFile' => $generateBaselineFile, 'usedLevel' => $usedLevel, 'cliAutoloadFile' => $cliAutoloadFile, 'env' => Environment::getCleanedArray()], $additionalParameters));
+         $configurator->addDynamicParameters(['singleReflectionFile' => $singleReflectionFile, 'singleReflectionInsteadOfFile' => $singleReflectionInsteadOfFile, 'analysedPaths' => $analysedPaths, 'analysedPathsFromConfig' => $analysedPathsFromConfig]);
+         $configurator->addConfig($this->configDirectory . '/config.neon');
+         foreach ($additionalConfigFiles as $additionalConfigFile) {

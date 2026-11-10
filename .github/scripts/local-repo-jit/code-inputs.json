@@ -1,0 +1,38 @@
+{
+  "repo_api.py": {
+    "sha256": "b89d279de6df1320a93746f9e6521b569e2cadba09a7acf7f61e3bb17a44488c"
+  },
+  "vm_backend.py": {
+    "sha256": "27a393aee686a9cde3079d4c3e6cd706d3f788c922f706bd2fdcebfe6e6c64a1"
+  },
+  "native_preflight.py": {
+    "sha256": "12330fcb7fe11bc73b040e69de678fd1cd04f0f9051dd878c9e65bf98237cd7b"
+  },
+  "native_phase.py": {
+    "sha256": "d74caa90a3d279a915a4c77c4419376cc6b97ca4496c92d1e9ffe5c1f66a8ac1"
+  },
+  "runner_setup.py": {
+    "sha256": "8a79d72a0a546cc124659893583984e2428e5933d59cf3d88bebf903abbebfbf"
+  },
+  "baseline_budget.py": {
+    "sha256": "55a6aa98111dbcdcb49bfcd5197da569cc44b002f71a86e175adc1a269190955"
+  },
+  "failure_observation.py": {
+    "sha256": "24c1032494b8b032ee6348e2870be597863d777c9494386b4f0acf1021dad836"
+  },
+  "guest_capacity.py": {
+    "sha256": "84c1c5271be3a088d1872f9bce3366711ce3d572e8a5495e267361756fc089b9"
+  },
+  "owned_overlay.py": {
+    "sha256": "8656cf272975d80dc61e7b04f7965fcd9fef8d792159ab4a82e072814beb69a6"
+  },
+  "request_model.py": {
+    "sha256": "cacd08733aeeb8272991294c7790b8c6534682c4c05d9c6455c9fe05c4843c56"
+  },
+  "trusted_provider.py": {
+    "sha256": "9f1877b5149b3f724da79b73d39a5d681dd47710445bdf2dc341530abf32c40e"
+  },
+  "public_recipe_selection.py": {
+    "sha256": "25902319f1dc0716c230fbdbea7d161245f06698ac4b625bdc1e2d42a4df1bcb"
+  }
+}

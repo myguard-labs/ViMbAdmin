@@ -147,9 +147,9 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
      *
      * @param ViMbAdmin_Plugin_MailboxContext $controller
      * @param array<string, mixed>|null $options
-     * @return void
+     * @return bool
      */
-    public function mailbox_add_addPostflush(ViMbAdmin_Plugin_MailboxContext $controller, $options)
+    public function mailbox_add_addPostflush(ViMbAdmin_Plugin_MailboxContext $controller, $options): bool
     {
         $domain = $controller->getDomain()->requiredDomainName();
         $mailbox = $controller->getMailbox()->requiredUsername();
@@ -157,7 +157,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
         if ($this->defaultAliases) {
             // no default aliases are required to exist if the whole domain is aliased
             if ($this->hasActiveDomainAlias($controller)) {
-                return;
+                return true;
             }
 
             $created = false;
@@ -179,6 +179,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 $controller->getD2EM()->flush();
             }
         }
+        return true;
     }
 
     /**
@@ -256,9 +257,9 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
      *
      * @param ViMbAdmin_Plugin_AliasContext $controller
      * @param array<string, mixed>|null $options
-     * @return void
+     * @return bool
      */
-    public function alias_add_addPostflush(ViMbAdmin_Plugin_AliasContext $controller, $options)
+    public function alias_add_addPostflush(ViMbAdmin_Plugin_AliasContext $controller, $options): bool
     {
         $domain = $controller->getDomain()->requiredDomainName();
 
@@ -268,7 +269,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
 
             // no default aliases are required to exist if the whole domain is aliased
             if ($this->hasActiveDomainAlias($controller)) {
-                return;
+                return true;
             }
 
             // create automatic aliases, if required
@@ -291,6 +292,7 @@ class ViMbAdminPlugin_MailboxAutomaticAliases extends ViMbAdmin_Plugin implement
                 $controller->getD2EM()->flush();
             }
         }
+        return true;
     }
 
     /**

@@ -38,10 +38,11 @@ jobs:
             image: >-
               mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
+      # Published after reset; placement metadata only, never host credentials.
       image: ${{ matrix.image }}
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -50,9 +51,20 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Test pull-request runner isolation policy
         run: bash tests/test-pr-runner-isolation.sh
+
+      - name: Fresh runner bootstrap dependency controls
+        if: matrix.php == '8.3'
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: >-
+          python3 -m unittest discover -s ci
+          -p test_local_repo_jit_bootstrap.py -v
 
       - name: Setup container tools
         run: bash .github/scripts/setup-php-container.sh tools
@@ -82,6 +94,12 @@ jobs:
       - name: PHP syntax check
         run: bash ci/check-php-syntax.sh
 
+      - name: Maintenance session identity oracle controls
+        run: php ci/test-maintenance-session-identity.php
+
+      - name: Maintenance resource child bootstrap and barrier controls
+        run: php ci/test-maintenance-resource-child-bootstrap.php
+
       - name: Verify batched syntax checks and failure controls
         if: matrix.php == '8.3'
         run: bash ci/test-php-syntax-batching.sh
@@ -95,11 +113,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     container:
+      # Published after reset; placement metadata only, never host credentials.
       image: >-
         mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -108,6 +127,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup container tools
         run: bash .github/scripts/setup-php-container.sh tools

@@ -47,7 +47,7 @@ function preferenceQueryParameters(\Doctrine\ORM\QueryBuilder $query): array
 
 $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([
     __DIR__ . '/../application/Entities',
-]);
+], cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter());
 if (PHP_VERSION_ID >= 80400) {
     $configuration->enableNativeLazyObjects(true);
 } else {

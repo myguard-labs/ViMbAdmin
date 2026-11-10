@@ -1,0 +1,7 @@
+<?php
+
+// Analysis-only MCP boundary; fixed local file reads keep their native model.
+/** @psalm-taint-source input */
+function vimbadmin_mcp_read_request_body(): string|false
+{
+}

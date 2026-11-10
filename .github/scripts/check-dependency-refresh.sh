@@ -10,6 +10,6 @@ readonly base_sha=${DEPENDENCY_BASE_SHA:?immutable dependency base SHA is requir
 base_lock=$(mktemp "${TMPDIR:-/tmp}/vimbadmin-dependency-base.XXXXXX")
 trap 'rm -f -- "$base_lock"' EXIT
 
-git fetch --no-tags --depth=1 origin "$base_sha"
-git show "$base_sha:composer.lock" >"$base_lock"
+git -c safe.directory="$PWD" fetch --no-tags --depth=1 origin "$base_sha"
+git -c safe.directory="$PWD" show "$base_sha:composer.lock" >"$base_lock"
 php tools/refresh-dependencies.php --base-lock "$base_lock" --check

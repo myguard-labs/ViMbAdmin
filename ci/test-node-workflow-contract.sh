@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 readonly root
-readonly setup_node='actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f'
+readonly setup_node='actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
 readonly node_major=22
 readonly regression=${NODE_CONTRACT_REGRESSION_WORKFLOW:-$root/.github/workflows/regression.yml}
 readonly static_analysis=${NODE_CONTRACT_STATIC_ANALYSIS_WORKFLOW:-$root/.github/workflows/static-analysis.yml}

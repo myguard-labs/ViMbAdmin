@@ -22,7 +22,7 @@ import public_bank
 
 
 def phase(source=None):
-    """Extract only affected definitions without bypassing production inputs()."""
+    """Extract trusted maintained definitions; this fixture is not a sandbox."""
     source = ROOT / 'native_phase.py' if source is None else source
     wanted = {'Refused', 'require', 'sha', 'inventory_contract', 'admit', 'main', 'frozen', 'inputs', 'build_selected', 'durable', 'sync_directory'}
     tree = ast.parse(source.read_text(), filename=str(source))
@@ -33,8 +33,47 @@ def phase(source=None):
     module = types.ModuleType('selected_native_contract')
     module.__dict__.update(argparse=argparse, hashlib=hashlib, importlib=importlib, json=json, os=os, re=re, stat=stat, subprocess=subprocess, Path=Path, ROOT=ROOT,
                            WORKSPACE=None, IMAGE_RECEIPT=None, CONTEXT_SEAL=None, V4_SEAL=None, PREFIX='fixture-native-')
-    exec(compile(ast.Module(body=selected, type_ignores=[]), str(source), 'exec'), module.__dict__)  # noqa: S102 - reviewed local AST only
+    # Only callers below choose native_phase.py or producer.py from this checkout.
+    # Definitions retain normal builtins; selection skips their runtime bootstrap.
+    # nosemgrep: semgrep.locked.python.lang.security.audit.exec-detected.exec-detected
+    exec(compile(ast.Module(body=selected, type_ignores=[]), str(source), 'exec'), module.__dict__)  # noqa: S102 - trusted maintained source
     return module
+
+
+class PhaseFixture(unittest.TestCase):
+    def test_maintained_sources_use_fresh_namespace_without_bootstrap(self):
+        read_text = Path.read_text
+        for source, expected in [(None, ROOT / 'native_phase.py'), (ROOT / 'producer.py', ROOT / 'producer.py')]:
+            with self.subTest(source=source), mock.patch.object(Path, 'read_text', autospec=True, side_effect=read_text) as read, \
+                    mock.patch.object(importlib.util, 'spec_from_file_location') as loader, \
+                    mock.patch.object(subprocess, 'run') as command:
+                first = phase(source)
+                second = phase(source)
+                self.assertEqual(read.call_args_list, [mock.call(expected), mock.call(expected)])
+                loader.assert_not_called()
+                command.assert_not_called()
+                self.assertIsNot(first.__dict__, second.__dict__)
+                first.WORKSPACE = 'owned fixture state'
+                self.assertIsNone(second.WORKSPACE)
+                for name in ('backend', 'NATIVE', 'v2', 'q2', 'request_model', 'Owner', 'Listener'):
+                    self.assertNotIn(name, first.__dict__)
+                # Selected definitions actually execute, including their refusal path.
+                self.assertIsNone(first.require(True, 'accepted'))
+                with self.assertRaisesRegex(first.Refused, 'fixture refusal'):
+                    first.require(False, 'fixture refusal')
+                self.assertIsNot(first.Refused, second.Refused)
+
+    def test_unselected_bootstrap_effects_are_not_executed(self):
+        source = ROOT / 'native_phase.py'
+        sentinel = "raise AssertionError('unselected bootstrap executed')\n"
+        text = sentinel + source.read_text()
+        with mock.patch.object(Path, 'read_text', return_value=text) as read:
+            module = phase()
+        read.assert_called_once_with()
+        self.assertIsNone(module.WORKSPACE)
+        self.assertEqual(module.sha(source), hashlib.sha256(source.read_bytes()).hexdigest())
+        with self.assertRaisesRegex(module.Refused, 'owned external workspace required'):
+            module.inventory_contract()
 
 
 class SelectedInventory(unittest.TestCase):

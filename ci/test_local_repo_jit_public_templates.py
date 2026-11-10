@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ast
 import base64
+import contextlib
 import copy
 import dataclasses
 import hashlib
@@ -317,11 +318,23 @@ class Templates(unittest.TestCase):
         transformed = ast.parse(generated['outer.py'])
         overlay = next(ast.literal_eval(node.value) for node in transformed.body if isinstance(node, ast.Assign)
                        and any(isinstance(t, ast.Name) and t.id == '_OVERLAY_CREATE' for t in node.targets))
-        calls = []
-        fake = types.SimpleNamespace(fresh_overlay=lambda *args: calls.append(args))
-        with mock.patch.dict(sys.modules, {'owned_overlay': fake}):
-            exec(overlay, {'root': Path('/opt/vm'), 'expected': 'public-base', 'work': Path('/private')})  # noqa: S102 - Exercise the maintained executable source replacement.
-        self.assertEqual(calls, [(Path('/opt/vm/base.qcow2'), 'public-base', Path('/private'))])
+        # Exact maintained snippet, from hash-verified templates and a synthetic descriptor.
+        # Normal builtins remain available; the fake import is a sentinel, not a sandbox.
+        self.assertEqual(overlay, "from owned_overlay import fresh_overlay\n"
+                                 "fresh_overlay(root / 'base.qcow2', expected, work)")
+        cases = [(Path('/opt/vm'), 'public-base', Path('/private'), False),
+                 (Path('/finite root'), "quote'\n__import__('unreachable')", Path('/finite work'), False),
+                 (Path('/opt/vm'), 'public-base', Path('/private'), True)]
+        for root, expected, work, refuses in cases:
+            with self.subTest(root=root, expected=expected, refuses=refuses):
+                called = mock.Mock(side_effect=RuntimeError('overlay sentinel') if refuses else None)
+                fake = types.SimpleNamespace(fresh_overlay=called)
+                outcome = self.assertRaisesRegex(RuntimeError, 'overlay sentinel') if refuses else contextlib.nullcontext()
+                with mock.patch.dict(sys.modules, {'owned_overlay': fake}), outcome:
+                    # Fixture values are namespace data; the reviewed source is never interpolated.
+                    # nosemgrep: semgrep.locked.python.lang.security.audit.exec-detected.exec-detected
+                    exec(overlay, {'root': root, 'expected': expected, 'work': work})  # noqa: S102 - Exercise only the exact maintained snippet asserted above.
+                called.assert_called_once_with(root / 'base.qcow2', expected, work)
         self.assertIn('ringbuf,id=ci-serial,size=65536', generated['outer.py'])
         provision = generated['iso/provision.py']
         self.assertLess(provision.index('guest_capacity.root_ready()'), provision.index('main()\n'))

@@ -12,6 +12,7 @@ original=$(realpath "${1:?Supply the CI-pinned upstream Psalm PHAR}")
 if [[ -n ${PSALM_NAMED_EVIDENCE_DIR:-} ]]; then
   work=$PSALM_NAMED_EVIDENCE_DIR
   mkdir "$work"
+  work=$(cd "$work" && pwd -P)
 else
   work=$(mktemp -d "${TMPDIR:-/tmp}/psalm-named-taint.XXXXXX")
   status=0

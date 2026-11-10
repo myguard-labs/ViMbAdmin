@@ -134,6 +134,49 @@ class SetupProfiles(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_psalm_evidence_directory_paths_and_probe_failures(self):
+        source = (ROOT / "ci/test-psalm-named-argument-taint.sh").read_text()
+        prefix = source.split('  if "$php" "$root/ci/patch-psalm-named-taint.php"', 1)[0]
+        with tempfile.TemporaryDirectory(prefix="psalm evidence ") as scratch:
+            directory = Path(scratch)
+            driver = directory / "driver.sh"
+            driver.write_text(prefix + "  echo probe-complete\nfi\n")
+            upstream = directory / "upstream.phar"
+            upstream.touch()
+            fake_php = directory / "fake-php"
+            fake_php.write_text(r'''#!/bin/bash
+output=$3
+mkdir -p "$output/bin"
+[[ ${NO_ENGINE:-0} == 1 ]] || mkdir -p "$output/engine"
+cat >"$output/bin/psalm" <<'EOF'
+#!/bin/bash
+[[ $PWD == "$EXPECTED_ENGINE" && $1 == --version ]] || exit 98
+exit "${LAUNCHER_STATUS:-0}"
+EOF
+chmod +x "$output/bin/psalm"
+''')
+            fake_php.chmod(0o755)
+            for name, evidence, settings, expected in (
+                ("absolute", str(directory / "absolute evidence"), {}, 0),
+                ("relative", "relative evidence", {}, 0),
+                ("launcher failure", "bad launcher", {"LAUNCHER_STATUS": "42"}, 42),
+                ("missing engine", "missing engine", {"NO_ENGINE": "1"}, 1),
+            ):
+                with self.subTest(name=name):
+                    environment = controlled_environment(
+                        scratch, PHP_BINARY=str(fake_php),
+                        PSALM_NAMED_EVIDENCE_DIR=evidence,
+                        EXPECTED_ENGINE=str(directory / evidence / "patched/engine"),
+                        **settings,
+                    )
+                    result = subprocess.run(
+                        ["bash", str(driver), "--helper-only", str(upstream)],
+                        cwd=directory, env=environment, capture_output=True,
+                        text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, expected, result.stderr)
+                    self.assertEqual("probe-complete" in result.stdout, expected == 0)
+
     def test_phar_integrity_failure_stops_before_install(self):
         source = SOURCE.read_text()
         installer = re.search(

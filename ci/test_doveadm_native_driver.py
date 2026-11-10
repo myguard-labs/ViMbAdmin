@@ -45,7 +45,14 @@ class NativeDriver(unittest.TestCase):
 
     @classmethod
     def git(cls, *args):
-        return subprocess.check_output(['git', *args], cwd=cls.repo, text=True)
+        # Isolate every fixture operation, including init/add/write-tree.
+        env = {key: value for key, value in os.environ.items()
+               if not key.startswith('GIT_')}
+        env.update(GIT_OPTIONAL_LOCKS='0', GIT_CONFIG_NOSYSTEM='1',
+                   GIT_CONFIG_GLOBAL=os.devnull)
+        return subprocess.check_output(
+            ['git', '-c', 'safe.directory=' + str(cls.repo), *args],
+            cwd=cls.repo, env=env, text=True)
 
     def run_driver(self, scenario='normal', minor='8.3', extra=None):
         temp = tempfile.TemporaryDirectory(prefix='case-', dir=self.repo)

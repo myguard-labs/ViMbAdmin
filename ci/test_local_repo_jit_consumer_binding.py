@@ -20,6 +20,18 @@ import request_model as model
 import runner_setup as setup
 
 
+def checkout_head():
+    # Fixture identity must not follow an inherited Git repository or config.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith('GIT_')}
+    env.update(GIT_OPTIONAL_LOCKS='0', GIT_CONFIG_NOSYSTEM='1',
+               GIT_CONFIG_GLOBAL=os.devnull)
+    return subprocess.check_output(
+        ['git', '-c', 'safe.directory=' + str(CHECKOUT), '-C', str(CHECKOUT),
+         'rev-parse', 'HEAD'],
+        env=env, text=True).strip()
+
+
 def request_fixture():
     request = {
         'schema': model.SCHEMA, 'mode': 'qualified-actual',
@@ -203,8 +215,7 @@ class ConsumerBinding(unittest.TestCase):
             self.assertEqual(self.validate(runner_name=request['runner_name'], run_id=str(value), run_attempt=str(value)), model.request_digest(request))
 
     def test_workflow_accepts_exact_head_semantics_and_rejects_cross_binding(self):
-        sha = subprocess.check_output(['git', '-C', str(CHECKOUT), 'rev-parse', 'HEAD'],
-                                      env=dict(os.environ, GIT_OPTIONAL_LOCKS='0'), text=True).strip()
+        sha = checkout_head()
         self.request['candidate_sha'] = sha
         self.request['runner_name'] = model.runner_name(self.request)
         self.publish(setup.slot_metadata(self.request))

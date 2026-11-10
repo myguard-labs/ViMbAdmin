@@ -7,8 +7,8 @@ const path = require('node:path');
 const yaml = require('yaml');
 const workflow = yaml.parse(fs.readFileSync(path.join(__dirname, '../.github/workflows/security.yml'), 'utf8'),
   { uniqueKeys: true, maxAliasCount: 100 });
-const uploadPin = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02';
-const downloadPin = 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093';
+const uploadPin = 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9';
+const downloadPin = 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333';
 const hostedRunner = 'ubuntu-24.04';
 const condition = "always() && github.event_name != 'pull_request' && needs.semgrep.outputs.sarif-artifact-id != ''";
 function check(w) {
@@ -37,11 +37,14 @@ function check(w) {
     'artifact-ids': '${{ needs.semgrep.outputs.sarif-artifact-id }}', path: 'sarif', 'merge-multiple': true
   });
   const upload = publish.steps.find(step => step.name === 'Upload SARIF');
-  assert.equal(upload.uses, 'github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2');
+  assert.equal(upload.uses, 'github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066');
   assert.deepEqual(upload.with, { sarif_file: 'sarif/semgrep.sarif', category: 'semgrep' });
 }
 check(workflow);
 const controls = [
+  w => { w.jobs.semgrep.steps.find(s => s.id === 'sarif_artifact').uses = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'; },
+  w => { w.jobs['sarif-upload'].steps.find(s => s.uses === downloadPin).uses = 'actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093'; },
+  w => { w.jobs['sarif-upload'].steps.find(s => s.name === 'Upload SARIF').uses = 'github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2'; },
   w => { w.permissions['security-events'] = 'write'; },
   w => { w.jobs.semgrep.permissions = { 'security-events': 'write' }; },
   w => { w.jobs.semgrep.outputs['sarif-artifact-id'] = '${{ steps.other.outputs.artifact-id }}'; },

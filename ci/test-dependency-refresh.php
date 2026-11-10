@@ -268,6 +268,8 @@ try {
     $stub = <<<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+[[ ${1:-} == -c && ${2:-} == "safe.directory=$PWD" ]] || exit 97
+shift 2
 case "$1" in
   fetch) exit "${DEPENDENCY_TEST_FETCH_EXIT:-0}" ;;
   show) cat "$DEPENDENCY_TEST_BASE_LOCK" ;;

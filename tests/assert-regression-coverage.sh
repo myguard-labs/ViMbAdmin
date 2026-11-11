@@ -131,6 +131,7 @@ SH
       VIMBADMIN_RUNNER_NODE_LOG="$node_log" \
       VIMBADMIN_RUNNER_BASH_LOG="$bash_log" \
       "$runner_path") >"$output" 2>&1; then
+    cat "$output" >&2
     rm -rf -- "${harness_root:?}"
     return 1
   fi

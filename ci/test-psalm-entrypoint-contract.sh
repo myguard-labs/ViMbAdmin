@@ -120,6 +120,21 @@ analyse "$work/psalm.xml"
 assert_sinks "${roots[@]}"
 echo 'Psalm detects source-to-file sinks in all configured entrypoint files and traversal domains.'
 
+# Missing strict project files and analysis models must fail configuration.
+for resource in ci/test-nonstyle-rate-limit-cleanup-contract.php var/tmp/psalm-optional; do
+  mv -- "$work/$resource" "$work/removed-resource"
+  if analyse "$work/psalm.xml" >"$work/missing-resource.log" 2>&1; then
+    echo "Missing Psalm fixture resource was accepted: $resource" >&2
+    exit 1
+  fi
+  grep -qF 'Could not resolve config path' "$work/missing-resource.log"
+  grep -qF "$resource" "$work/missing-resource.log"
+  mv -- "$work/removed-resource" "$work/$resource"
+  analyse "$work/psalm.xml"
+  assert_sinks "${roots[@]}"
+  echo "Negative control detects missing resource and restored sinks: $resource"
+done
+
 # Each removed root must fail the same oracle used for the shipped config.
 for index in "${!roots[@]}"; do
   "$php" -r '

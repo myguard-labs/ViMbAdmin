@@ -419,21 +419,20 @@ console.log('OK: retained full-minor owners and seven actual runtime discovery o
 const psalmPipeline = yaml.parse(fs.readFileSync(path.join(__dirname, '../.github/workflows/static-analysis.yml'), 'utf8'));
 const psalmPipelineCommands = [
   'bash ci/test-psalm-optional-model-contract.sh',
+  'psalm --no-progress --output-format=text --config=psalm.xml',
   'psalm --no-progress --taint-analysis'
 ];
 function checkPsalmPipeline(workflow) {
   const job = workflow.jobs['psalm-taint'];
   assert.equal(job.if, undefined, 'complete Psalm job remains unconditional');
-  assert.equal(job.steps.length, 10, 'complete Psalm pipeline has ten steps');
-  assert.ok(!job.steps.some(step => step.run === 'psalm --no-progress --output-format=text --config=psalm.xml'),
-    'retired ordinary Psalm owner must remain absent');
+  assert.equal(job.steps.length, 11, 'complete Psalm pipeline has eleven steps');
   let previous = -1;
   for (const command of psalmPipelineCommands) {
     const owners = job.steps.filter(step => step.run === command);
     assert.equal(owners.length, 1, `${command}: exact pipeline owner required`);
     assert.equal(owners[0].if, undefined, `${command}: unconditional pipeline owner required`);
     const index = job.steps.indexOf(owners[0]);
-    assert.ok(index > previous, 'model check and taint remain ordered');
+    assert.ok(index > previous, 'model check, configured analysis and taint remain ordered');
     previous = index;
   }
 }
@@ -453,14 +452,14 @@ for (const mutate of [
   job => { job.steps.reverse(); },
   job => { job.steps.push({ run: psalmPipelineCommands[0] }); },
   job => { job.steps.push({ run: psalmPipelineCommands[1] }); },
-  job => { job.steps[0] = { run: 'psalm --no-progress --output-format=text --config=psalm.xml' }; }
+  job => { job.steps.push({ run: psalmPipelineCommands[2] }); }
 ]) {
   const changed = JSON.parse(JSON.stringify(psalmPipeline));
   mutate(changed.jobs['psalm-taint']);
   assert.throws(() => checkPsalmPipeline(changed), assert.AssertionError);
 }
 checkPsalmPipeline(psalmPipeline);
-console.log('OK: actual ten-step model/taint Psalm pipeline; omission, replacement, conditional, order, duplicate and retired-owner controls; restored green');
+console.log('OK: actual eleven-step model/configured/taint Psalm pipeline; omission, replacement, conditional, order and duplicate controls; restored green');
 
 // Exercise the real builder without Docker: a private uncommitted tree must
 // determine the context, and cleanup must require matching creation receipts.

@@ -109,7 +109,7 @@ class ViMbAdmin_BruteForce
     private $_window    = 900;
     /** @var int */
     private $_lockout   = 900;
-    /** @var string */
+    /** @var string|null */
     private $_statedir  = null;
     /** @var list<string> */
     private $_whitelist = [];
@@ -195,7 +195,8 @@ class ViMbAdmin_BruteForce
      * Abort the request with 429 if the request's source IP is currently
      * locked out. Call early in the login flow (_preLogin).
      *
-     * @throws never returns when locked (sends 429 + exits)
+     * Sends 429 and exits when locked; returns when the request is allowed.
+     *
      * @throws RuntimeException when state cannot be read or locked
      * @param mixed $request
      * @return void
@@ -755,6 +756,9 @@ class ViMbAdmin_BruteForce
      */
     private function _reapStale(int $now): bool
     {
+        if ($this->_statedir === null) {
+            return false;
+        }
         $directoryStat = @lstat($this->_statedir);
         if (!is_array($directoryStat) || !isset($directoryStat['mode'])
             || !is_int($directoryStat['mode']) || ($directoryStat['mode'] & 0170000) !== 0040000) {
@@ -889,7 +893,10 @@ class ViMbAdmin_BruteForce
         }
 
         $json = @file_get_contents($path);
-        $record = is_string($json) ? json_decode($json, true) : null;
+        if (!is_string($json)) {
+            return null;
+        }
+        $record = json_decode($json, true);
         if (!is_array($record)) {
             // Malformed state is not a live lockout, and _load() would refuse
             // it anyway; let the cap reclaim it.

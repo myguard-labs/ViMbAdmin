@@ -74,7 +74,18 @@ final class SmartyView
         if (array_key_exists('plugins', $dirs) && $dirs['plugins'] !== '') {
             // The OSS template plugins ({genUrl}, {OSS_Message}, {addJSValidator}…).
             $plugins = self::pluginDirectories($dirs['plugins']);
-            @$this->smarty->addPluginsDir($plugins);
+            // Use Smarty 5's existing compatibility extension directly: the
+            // deprecated addPluginsDir wrapper only normalizes paths and calls
+            // this adapter, but also emits a deprecation during plugin loading.
+            foreach ($this->smarty->getExtensions() as $extension) {
+                if ($extension instanceof \Smarty\Extension\BCPluginsAdapter) {
+                    foreach ((array) $plugins as $plugin) {
+                        $path = $this->smarty->_realpath(rtrim($plugin, '/\\') . DIRECTORY_SEPARATOR, true);
+                        $extension->loadPluginsFromDir($path);
+                    }
+                    break;
+                }
+            }
         }
     }
 
@@ -154,11 +165,47 @@ final class SmartyView
      */
     public function compileAll(): int
     {
-        // force_compile = false: compile only what is missing or whose source
-        // changed (mtime), so a re-run on a warm templates_c is cheap.
+        // Smarty's bulk compiler catches individual failures and returns a count.
+        // Compile without rendering so exceptions reach the command's error handler.
+        $directories = $this->smarty->getTemplateDir();
+        if (!is_array($directories)) {
+            throw new \LogicException('Smarty template directories must be an array');
+        }
         $count = 0;
         foreach (['.phtml', '.js'] as $ext) {
-            $count += (int) $this->smarty->compileAllTemplates($ext, false);
+            $resources = [];
+            foreach ($directories as $key => $directory) {
+                if (!is_string($directory)) {
+                    throw new \LogicException('Smarty template directory must be a string');
+                }
+                $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(
+                    $directory,
+                    \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::FOLLOW_SYMLINKS
+                ));
+                foreach ($files as $file) {
+                    if (!$file instanceof \SplFileInfo) {
+                        throw new \LogicException('Smarty template iterator must yield file information');
+                    }
+                    $filename = $file->getFilename();
+                    if (
+                        str_starts_with($filename, '.') || str_contains($filename, '.svn')
+                        || !str_ends_with($filename, $ext)
+                    ) {
+                        continue;
+                    }
+                    // Keep the same relative resource identity used when rendering.
+                    $name = substr($file->getPathname(), strlen($directory));
+                    // Qualify shadowed files using Smarty's native directory key.
+                    $resource = isset($resources[$name]) ? '[' . $key . ']' . $name : $name;
+                    $resources[$name] = true;
+                    $template = $this->smarty->createTemplate($resource);
+                    $template->caching = \Smarty\Smarty::CACHING_OFF;
+                    if ($template->mustCompile()) {
+                        $template->compileTemplateSource();
+                        $count++;
+                    }
+                }
+            }
         }
 
         return $count;
@@ -192,7 +239,14 @@ final class SmartyView
      */
     public function setSkin(string $skin): void
     {
-        if ($skin === '' || str_contains($skin, "\0") || str_contains($skin, '/') || str_contains($skin, '\\') || $skin === '.' || $skin === '..') {
+        if (
+            $skin === ''
+            || str_contains($skin, "\0")
+            || str_contains($skin, '/')
+            || str_contains($skin, '\\')
+            || $skin === '.'
+            || $skin === '..'
+        ) {
             throw new \InvalidArgumentException('Smarty skin must be a single safe directory name');
         }
         $base = $this->templateBase();
@@ -282,7 +336,13 @@ final class SmartyView
 
     private static function templateName(string $name): void
     {
-        if ($name === '' || str_contains($name, "\0") || str_contains($name, '\\') || str_contains($name, ':') || $name[0] === '/') {
+        if (
+            $name === ''
+            || str_contains($name, "\0")
+            || str_contains($name, '\\')
+            || str_contains($name, ':')
+            || $name[0] === '/'
+        ) {
             throw new \InvalidArgumentException('Smarty template name must be a safe relative path');
         }
         foreach (explode('/', $name) as $part) {
@@ -304,8 +364,10 @@ final class SmartyView
             }
             $rootReal = realpath($root);
             $candidateReal = realpath($root . '/' . $name);
-            if (is_string($rootReal) && is_string($candidateReal)
-                && ($candidateReal === $rootReal || str_starts_with($candidateReal, $rootReal . '/'))) {
+            if (
+                is_string($rootReal) && is_string($candidateReal)
+                && ($candidateReal === $rootReal || str_starts_with($candidateReal, $rootReal . '/'))
+            ) {
                 return true;
             }
         }

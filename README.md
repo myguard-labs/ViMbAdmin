@@ -636,3 +636,33 @@ invasive checks in a disposable container. The runner executes every required
 minor and retains per-version logs and a JSON summary. This named suite is
 part of the complete CI gate; dedicated fixture, syntax, coverage and static
 checks still apply. See [project instructions](AGENTS.md).
+
+Standalone Psalm calls also require the optional analysis models referenced by
+`psalm.xml`. In a disposable PHP container, prepare them with the pinned
+`psalm` setup profile. Setup verifies the pinned downloads and creates a patched
+launcher under `var/tmp/psalm-tool.*/tool/bin/psalm`. To retain the exact launcher
+selected by setup in the calling shell, use its GitHub environment-file output:
+
+```bash
+setup_psalm() {
+  local selection_dir selected
+  selection_dir=$(mktemp -d) || return 1
+  if ! touch "$selection_dir/env" "$selection_dir/path" ||
+     ! GITHUB_ENV="$selection_dir/env" GITHUB_PATH="$selection_dir/path" \
+       bash .github/scripts/setup-php-container.sh psalm ||
+     ! selected=$(sed -n 's/^PSALM_BIN=//p' "$selection_dir/env") ||
+     [[ -z $selected || $selected == *$'\n'* ]]; then
+    rm -rf -- "$selection_dir"
+    return 1
+  fi
+  PSALM_BIN=$selected
+  export PSALM_BIN
+  rm -rf -- "$selection_dir" || return 1
+  bash .github/scripts/assert-psalm-optional-models.sh &&
+    "$PSALM_BIN" --no-progress --taint-analysis
+}
+setup_psalm
+```
+
+The baseline, proxy and entrypoint scripts run the presence check themselves.
+The preflight does not download dependencies or replace setup's checksum validation.

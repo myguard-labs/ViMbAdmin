@@ -18,11 +18,18 @@ namespace ViMbAdmin\Kernel\Flash;
  */
 final class FlashMessage
 {
+    public readonly string $text;
+    public readonly string $level;
+    public readonly bool $isHtml;
+
     public function __construct(
-        public readonly string $text,
-        public readonly string $level = FlashMessages::SUCCESS,
-        public readonly bool $isHtml = false,
+        string $text,
+        string $level = FlashMessages::SUCCESS,
+        bool $isHtml = false,
     ) {
+        $this->text = $text;
+        $this->level = $level;
+        $this->isHtml = $isHtml;
     }
 
     /**

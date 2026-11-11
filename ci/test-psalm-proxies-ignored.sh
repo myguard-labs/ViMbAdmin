@@ -14,6 +14,7 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+bash "$repo_root/.github/scripts/assert-psalm-optional-models.sh" "$repo_root"
 cd "$repo_root"
 
 if [ -n "${PSALM_BIN:-}" ]; then

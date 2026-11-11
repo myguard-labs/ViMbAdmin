@@ -84,6 +84,7 @@ final class AuthController extends AbstractController
         if (!is_string($value)
             || preg_match('/[\x00-\x1F\x7F]/', $value) === 1
             || str_starts_with($value, '//')
+            || str_starts_with(ltrim($value, '/'), '\\')
             || preg_match('/^[A-Za-z][A-Za-z0-9+.-]*:/', $value) === 1) {
             return $default;
         }
@@ -1086,6 +1087,7 @@ final class AuthController extends AbstractController
         return new \ViMbAdmin_BruteForce($this->em(), $opts);
     }
 
+    #[\Override]
     protected function em(): \Doctrine\ORM\EntityManager
     {
         $em = parent::em();

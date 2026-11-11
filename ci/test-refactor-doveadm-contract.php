@@ -4,6 +4,160 @@ declare(strict_types=1);
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+// Native faults are opt-in and fail closed outside Docker's network-none mode.
+$arguments = $_SERVER['argv'] ?? [];
+$nativeMode = is_array($arguments) && is_string($arguments[1] ?? null) ? $arguments[1] : '';
+if ($nativeMode === '--native-curl-init-failure' || $nativeMode === '--native-curl-init-child') {
+    $interfaces = scandir('/sys/class/net');
+    if (!is_file('/.dockerenv') || $interfaces === false
+        || array_diff($interfaces, ['.', '..', 'lo']) !== []) {
+        throw new RuntimeException('Native cURL failure tests require Docker --network none');
+    }
+    if (!extension_loaded('curl')) {
+        throw new RuntimeException('Native cURL failure tests require ext-curl');
+    }
+
+    if ($nativeMode === '--native-curl-init-failure') {
+        $fixture = sys_get_temp_dir() . '/doveadm-curl-init-' . bin2hex(random_bytes(12));
+        if (!mkdir($fixture, 0700)) {
+            throw new RuntimeException('Cannot create private native cURL fixture');
+        }
+        $library = $fixture . '/curl-fault.so';
+        /**
+         * @param list<string> $command
+         * @param array<string,string>|null $environment
+         */
+        function doveadmNativeCommand(array $command, ?array $environment = null): int
+        {
+            $pipes = [];
+            $process = proc_open($command, [0 => ['file', '/dev/null', 'r'], 1 => STDOUT, 2 => STDERR], $pipes, null, $environment);
+            if (!is_resource($process)) {
+                throw new RuntimeException('Cannot start native cURL fixture command');
+            }
+            return proc_close($process);
+        }
+        try {
+            // A missing compiler/header is a failed prerequisite, never a skip.
+            $compiled = doveadmNativeCommand([
+                'cc', '-shared', '-fPIC', '-Wall', '-Wextra', '-Werror', '-O2',
+                '-o', $library, __DIR__ . '/support/doveadm-curl-init-failure.c', '-ldl',
+            ]);
+            if ($compiled !== 0 || !is_file($library)) {
+                throw new RuntimeException('Native cURL fixture requires a C compiler and libcurl development headers');
+            }
+            echo 'Native cURL fixture library SHA256: ' . hash_file('sha256', $library) . "\n";
+            $environment = getenv();
+            if (!is_array($environment)) {
+                throw new RuntimeException('Cannot read native fixture environment');
+            }
+            $environment['LD_PRELOAD'] = $library;
+            foreach (['return-false', 'warning-throws', 'repeat-false'] as $scenario) {
+                $environment['DOVEADM_TEST_CURL_LOG'] = $fixture . '/' . $scenario . '.events';
+                $environment['DOVEADM_TEST_CURL_SCENARIO'] = $scenario;
+                if (doveadmNativeCommand([PHP_BINARY, __FILE__, '--native-curl-init-child'], $environment) !== 0) {
+                    throw new RuntimeException('Native cURL retry contract failed: ' . $scenario);
+                }
+            }
+        } finally {
+            foreach (['return-false', 'warning-throws', 'repeat-false'] as $scenario) {
+                $path = $fixture . '/' . $scenario . '.events';
+                if (is_file($path)) {
+                    unlink($path);
+                }
+            }
+            if (is_file($library)) {
+                unlink($library);
+            }
+            rmdir($fixture);
+        }
+        echo "ALL PASSED\n";
+        exit(0);
+    }
+
+    $scenario = getenv('DOVEADM_TEST_CURL_SCENARIO');
+    $log = getenv('DOVEADM_TEST_CURL_LOG');
+    if (!in_array($scenario, ['return-false', 'warning-throws', 'repeat-false'], true)
+        || !is_string($log) || !is_file((string) getenv('LD_PRELOAD'))) {
+        throw new RuntimeException('Native cURL child requires an explicit private fault library');
+    }
+    $warningState = new class () {
+        public int $count = 0;
+        public bool $convert = false;
+    };
+    set_error_handler(static function (int $level, string $message) use ($warningState): bool {
+        if ($level !== E_WARNING || !str_contains($message, 'curl_init(): Could not initialize a new cURL handle')) {
+            throw new ErrorException($message, 0, $level);
+        }
+        $warningState->count++;
+        if ($warningState->convert) {
+            throw new ErrorException($message, 0, $level);
+        }
+        return true;
+    });
+    try {
+        // Verify the native seam before calling any application transport method.
+        putenv('DOVEADM_TEST_CURL_FAIL_INIT=1');
+        if (curl_init() !== false || $warningState->count !== 1) {
+            throw new RuntimeException('Native cURL init-failure preflight did not activate');
+        }
+        $probe = curl_init(null);
+        if (!$probe instanceof CurlHandle || curl_setopt($probe, CURLOPT_URL, 'http://no-network.invalid/') !== false) {
+            throw new RuntimeException('Native cURL configuration-block preflight did not activate');
+        }
+        $probe = null;
+        $warningState->count = 0;
+        file_put_contents($log, '');
+        $warningState->convert = $scenario === 'warning-throws';
+        $client = new ViMbAdmin_Doveadm('http://no-network.invalid/doveadm/v1', 'private-fixture-dummy-key');
+        $invoke = static function () use ($client): Throwable {
+            try {
+                $client->mailboxList('private-fixture@example.test');
+            } catch (Throwable $error) {
+                return $error;
+            }
+            throw new RuntimeException('Native fixture unexpectedly performed a successful transfer');
+        };
+        putenv('DOVEADM_TEST_CURL_FAIL_INIT=1');
+        $error = $invoke();
+        $expected = $warningState->convert ? ErrorException::class : ViMbAdmin_Exception::class;
+        if (!$error instanceof $expected
+            || (!$warningState->convert && $error->getMessage() !== 'doveadm HTTP: failed to initialize cURL request')) {
+            throw new RuntimeException('Failed initialization must retain its diagnostic');
+        }
+        if ($scenario === 'repeat-false') {
+            putenv('DOVEADM_TEST_CURL_FAIL_INIT=1');
+            $error = $invoke();
+            if (!$error instanceof ViMbAdmin_Exception
+                || $error->getMessage() !== 'doveadm HTTP: failed to initialize cURL request') {
+                throw new RuntimeException('Repeated initialization failure must remain controlled and retryable');
+            }
+        }
+        $error = $invoke();
+        if (!$error instanceof ViMbAdmin_Exception
+            || $error->getMessage() !== 'doveadm HTTP: failed to configure cURL request') {
+            throw new RuntimeException('Same-object retry must acquire a native handle after initialization failure');
+        }
+        $error = $invoke();
+        if (!$error instanceof ViMbAdmin_Exception
+            || $error->getMessage() !== 'doveadm HTTP: failed to configure cURL request') {
+            throw new RuntimeException('A subsequent request must reuse its valid native handle');
+        }
+        $events = file_get_contents($log);
+        $expectedFailures = $scenario === 'repeat-false' ? 2 : 1;
+        if (!is_string($events) || substr_count($events, "init_false\n") !== $expectedFailures
+            || substr_count($events, "init_ok\n") !== 1
+            || str_contains($events, 'unexpected_')) {
+            throw new RuntimeException('Native cURL event counts or no-transfer boundary violated');
+        }
+        echo 'PASS: native preflight, initial failure, same-object retry and reuse: ' . $scenario . "\n";
+    } finally {
+        restore_error_handler();
+        putenv('DOVEADM_TEST_CURL_FAIL_INIT');
+    }
+    echo "ALL PASSED\n";
+    exit(0);
+}
+
 $failures = 0;
 $assertions = 0;
 $check = static function (string $label, bool $ok) use (&$failures, &$assertions): void {

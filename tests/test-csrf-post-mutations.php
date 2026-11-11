@@ -281,7 +281,7 @@ final class CsrfMutationEntityManager extends EntityManagerDecorator
     /** @param array<string,EntityRepository<covariant object>> $repositories */
     public function __construct(array $repositories)
     {
-        $configuration = ORMSetup::createAttributeMetadataConfiguration([]);
+        $configuration = ORMSetup::createAttributeMetadataConfiguration([], cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter());
         if (PHP_VERSION_ID >= 80400) {
             $configuration->enableNativeLazyObjects(true);
         } else {

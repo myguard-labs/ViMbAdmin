@@ -14,6 +14,16 @@
         lens for this repository. Invoke Psalm's taint-analysis mode.
     -->
     <projectFiles>
+        <file name="ci/test-refactor-doveadm-contract.php" />
+        <file name="ci/test-archive-zero-destination-contract.php" />
+        <file name="ci/test-maintenance-resource-claims.php" />
+        <file name="ci/test-oss-genurl-components.php" />
+        <file name="ci/test-entity-autoloader-registration.php" />
+        <file name="ci/test-refactor-autoload-contract.php" />
+        <file name="ci/test-maintenance-session-identity.php" />
+        <file name="ci/support/maintenance-session-identity.php" />
+        <file name="ci/patch-psalm-named-taint.php" />
+        <file name="ci/patch-psalm-callable-taint.php" />
         <directory name="src" />
         <directory name="library" />
         <directory name="application" />
@@ -21,6 +31,13 @@
         <directory name="bin" />
         <directory name="tools" />
         <file name="preload.php" />
+        <file name="ci/test-nonstyle-rate-limit-cleanup-contract.php" />
+        <file name="ci/test-cli-precompile-contract.php" />
+        <file name="ci/test-cli-schema-result-contract.php" />
+        <file name="ci/test-smarty-date-formatter-contract.php" />
+        <file name="ci/test-smarty-filesize-contract.php" />
+        <file name="ci/test-smarty-shorten-contract.php" />
+        <file name="ci/test-smarty-unixdate-contract.php" />
         <!--
             Psalm honours only one ignoreFiles element; a second one is
             silently dropped. Keep every ignored directory in this block.
@@ -32,6 +49,28 @@
             <directory name="application/Proxies" />
         </ignoreFiles>
     </projectFiles>
+
+    <!-- Optional client declarations are scanned only; Composer never loads them. -->
+    <extraFiles>
+        <directory name="var/tmp/psalm-optional/predis/src" />
+    </extraFiles>
+    <enableExtensions>
+        <extension name="redis" />
+    </enableExtensions>
+    <stubs>
+        <file name="ci/psalm-stubs/mcp-request-body.phpstub" />
+        <file name="var/tmp/psalm-optional/redis/RedisArray.php" />
+        <file name="var/tmp/psalm-optional/redis/RedisCluster.php" />
+        <file name="var/tmp/psalm-optional/relay/AdaptiveCache.php" />
+        <file name="var/tmp/psalm-optional/relay/Cluster.php" />
+        <file name="var/tmp/psalm-optional/relay/Event.php" />
+        <file name="var/tmp/psalm-optional/relay/Events.php" />
+        <file name="var/tmp/psalm-optional/relay/Exception.php" />
+        <file name="var/tmp/psalm-optional/relay/KeyType.php" />
+        <file name="var/tmp/psalm-optional/relay/Relay.php" />
+        <file name="var/tmp/psalm-optional/relay/Sentinel.php" />
+        <file name="var/tmp/psalm-optional/relay/Table.php" />
+    </stubs>
 
     <!--
         BruteForce.php's known TaintedFile reports are retained as exact code

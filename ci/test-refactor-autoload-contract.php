@@ -289,14 +289,21 @@ INI;
         }
     };
     $pluginHost = new PluginHost($enabledContext, $pluginDirectory);
+    $pluginClass = 'ViMbAdminPlugin_WorkflowProbe';
+    $pluginFile = realpath($pluginDirectory . '/WorkflowProbe.php');
+    $pluginReflection = class_exists($pluginClass, false) ? new ReflectionClass($pluginClass) : null;
     autoloadContractCheck(
         'plugin discovery: the enabled filename/class convention instantiates WorkflowProbe',
         $pluginHost->observerCount() === 1
+        && $pluginReflection !== null
+        && is_string($pluginFile)
+        && $pluginReflection->getFileName() === $pluginFile
     );
     autoloadContractCheck(
         'plugin discovery: the dynamically loaded observer receives its hook',
         $pluginHost->notify('mailbox', 'edit', 'post', $enabledContext)
-        && ViMbAdminPlugin_WorkflowProbe::$events === ['mailbox_edit_post']
+        && $pluginReflection !== null
+        && $pluginReflection->getStaticPropertyValue('events') === ['mailbox_edit_post']
     );
     $malformedPluginContext = new class () {
         public function getOptions(): string
@@ -342,6 +349,98 @@ INI;
         'Smarty discovery: the configured plugin directory resolves a modifier by filename',
         $smarty->render('probe.phtml') === 'discovered:mailbox'
     );
+    // Exercise the real pinned Smarty extension with handlers registered for
+    // different masks; no temporary wrapper may steal the caller's handler.
+    foreach ([E_USER_WARNING, E_NOTICE | E_USER_NOTICE | E_USER_DEPRECATED] as $mask) {
+        $suffix = $mask === E_USER_WARNING ? 'warnmask' : 'noticemask';
+        $dir = $scratch . '/diagnostic-' . $suffix;
+        mkdir($dir);
+        file_put_contents(
+            $dir . '/modifier.' . $suffix . '.php',
+            "<?php\ntrigger_error('plugin-warning', E_USER_WARNING);\n"
+            . "trigger_error('plugin-notice', E_USER_NOTICE);\n"
+            . "end(explode(',', 'a,b'));\n"
+            . "trigger_error('plugin-deprecation', E_USER_DEPRECATED);\n"
+            . 'function smarty_modifier_' . $suffix . '(string $value): string { return $value; }' . "\n"
+        );
+        $seen = [];
+        set_error_handler(static function (int $severity, string $message) use (&$seen): bool {
+            if (error_reporting() & $severity) {
+                $seen[] = [$severity, $severity === E_NOTICE ? 'native-notice' : $message];
+            }
+            return true;
+        }, $mask);
+        $previousLevel = error_reporting($mask);
+        try {
+            $diagnosticView = new SmartyView(['plugins' => $dir]);
+            trigger_error('after-registration', $mask === E_USER_WARNING ? E_USER_WARNING : E_USER_NOTICE);
+        } finally {
+            error_reporting($previousLevel);
+            restore_error_handler();
+        }
+        $messages = array_column($seen, 1);
+        autoloadContractCheck(
+            'Smarty diagnostics: caller mask and handler preserved ' . $suffix,
+            in_array('after-registration', $messages, true)
+            && ($mask === E_USER_WARNING
+                ? $messages === ['plugin-warning', 'after-registration']
+                : $messages === ['plugin-notice', 'native-notice', 'plugin-deprecation', 'after-registration'])
+        );
+        autoloadContractCheck(
+            'Smarty diagnostics: legacy API deprecation is absent ' . $suffix,
+            !array_filter($messages, static fn (string $message): bool => str_contains($message, 'addPluginsDir'))
+        );
+    }
+    $nativeWarningDir = $scratch . '/diagnostic-native-warning';
+    mkdir($nativeWarningDir);
+    file_put_contents(
+        $nativeWarningDir . '/modifier.nativewarning.php',
+        "<?php file_get_contents(__DIR__ . '/absent');\nfunction smarty_modifier_nativewarning(string \$value): string { return \$value; }\n"
+    );
+    $nativeWarnings = 0;
+    set_error_handler(static function (int $severity) use (&$nativeWarnings): bool {
+        if ((error_reporting() & $severity) !== 0) {
+            ++$nativeWarnings;
+        }
+        return true;
+    }, E_WARNING);
+    $previousLevel = error_reporting(E_WARNING);
+    try {
+        new SmartyView(['plugins' => $nativeWarningDir]);
+        file_get_contents($nativeWarningDir . '/absent-after');
+    } finally {
+        error_reporting($previousLevel);
+        restore_error_handler();
+    }
+    autoloadContractCheck('Smarty diagnostics: native warning handler mask preserved', $nativeWarnings === 2);
+
+    $throwDir = $scratch . '/diagnostic-throw';
+    mkdir($throwDir);
+    file_put_contents($throwDir . '/modifier.throwprobe.php', "<?php throw new RuntimeException('plugin-exception');\n");
+    $afterException = false;
+    set_error_handler(static function () use (&$afterException): bool {
+        $afterException = true;
+        return true;
+    }, E_USER_WARNING);
+    try {
+        autoloadContractCheck(
+            'Smarty diagnostics: plugin exception propagates',
+            autoloadContractError(
+                static fn (): SmartyView => new SmartyView(['plugins' => $throwDir]),
+                RuntimeException::class,
+                'plugin-exception'
+            )
+        );
+        trigger_error('after-exception', E_USER_WARNING);
+    } finally {
+        restore_error_handler();
+    }
+    autoloadContractCheck('Smarty diagnostics: caller handler survives exception', $afterException);
+    autoloadContractCheck(
+        'Smarty diagnostics: absent optional directory remains accepted',
+        !autoloadContractAnyError(static fn (): SmartyView => new SmartyView(['plugins' => $scratch . '/no-such-plugins']))
+    );
+
     autoloadContractCheck(
         'Smarty boundary: traversal is rejected before template discovery',
         autoloadContractError(
@@ -364,5 +463,9 @@ INI;
 } finally {
     autoloadContractRemoveTree($scratch);
 }
+
+(static function (): void {
+    require __DIR__ . '/test-entity-autoloader-registration.php';
+})();
 
 echo 'ALL PASSED (' . AutoloadContractState::$checks . " checks)\n";

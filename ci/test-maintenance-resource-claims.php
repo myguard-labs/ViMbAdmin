@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 define('MAINTENANCE_TASK_HELPERS_ONLY', true);
 require __DIR__ . '/test-maintenance-task-ownership.php';
+require_once __DIR__ . '/support/maintenance-session-identity.php';
 
 const MAINTENANCE_RESOURCE_LOCAL_TIMEOUT_NS = 30_000_000_000;
 
@@ -558,14 +559,17 @@ final class MaintenanceArchiveBackend extends \ViMbAdmin_Doveadm
     public function __construct()
     {
     }
+    #[\Override]
     public function backup($user, $dest)
     {
         ($this->pausedBackup)();
         return [];
     }
+    #[\Override]
     public function mailboxDelete($user)
     {
     }
+    #[\Override]
     public function quotaRecalc($user)
     {
         return [];
@@ -586,6 +590,7 @@ final class MaintenanceArchiveBackend extends \ViMbAdmin_Doveadm
 final class MaintenanceArchiveRunner extends \ViMbAdmin_Service_QueueRunner
 {
     public MaintenanceArchiveBackend $backend;
+    #[\Override]
     protected function newDoveadm($progress)
     {
         return $this->backend;
@@ -597,6 +602,7 @@ final class MaintenanceHttpProgressRunner extends \ViMbAdmin_Service_QueueRunner
     /** @var array<string,mixed> */
     public array $backendOptions = [];
     public Closure $whileWaiting;
+    #[\Override]
     protected function newDoveadm($progress)
     {
         $waiting = $this->whileWaiting;
@@ -1726,6 +1732,7 @@ try {
         public function __construct(private int $archiveId)
         {
         }
+        #[\Override]
         public function log(mixed $level, string|Stringable $message, array $context = []): void
         {
             $sql = $context['sql'] ?? null;
@@ -1802,6 +1809,7 @@ try {
         public function __construct(private int $archiveId)
         {
         }
+        #[\Override]
         public function log(mixed $level, string|Stringable $message, array $context = []): void
         {
             $sql = $context['sql'] ?? null;
@@ -1872,6 +1880,7 @@ try {
         public function __construct(private string $username, private array $options)
         {
         }
+        #[\Override]
         public function log(mixed $level, string|Stringable $message, array $context = []): void
         {
             $sql = $context['sql'] ?? null;
@@ -2149,6 +2158,7 @@ $sessionLogger = new class ($observer) extends \Psr\Log\AbstractLogger {
     public function __construct(private \Doctrine\DBAL\Connection $observer)
     {
     }
+    #[\Override]
     public function log(mixed $level, string|Stringable $message, array $context = []): void
     {
         if (isset($context['sql']) && is_string($context['sql']) && str_starts_with($context['sql'], 'INSERT INTO resource_claim')) {
@@ -2187,6 +2197,7 @@ echo 'resource-session-receipt '.json_encode([
     'acquisitions' => $sessionLogger->acquisitions,
 ], JSON_THROW_ON_ERROR)."\n";
 maintenanceTaskCheck('24-resource purge keeps peak sessions constant', $sessionLogger->acquisitions === 24 && $sessionLogger->peak <= $baselineSessions + 1);
+maintenanceSessionIdentityCheck($baselineSessionIds, $sessionLogger->sessionIds);
 maintenanceTaskCheck('24-resource purge releases every durable token', maintenanceTaskInteger($observer->fetchOne("SELECT COUNT(*) FROM resource_claim WHERE username LIKE '%@bulk-sessions.test'")) === 0);
 
 
@@ -2453,13 +2464,16 @@ try {
 // safety boundary must roll back the physical DELETE, not accept that receipt.
 $faultConfiguration = new \Doctrine\DBAL\Configuration();
 $faultConfiguration->setMiddlewares([new class () implements \Doctrine\DBAL\Driver\Middleware {
+    #[\Override]
     public function wrap(\Doctrine\DBAL\Driver $driver): \Doctrine\DBAL\Driver
     {
         return new class ($driver) extends \Doctrine\DBAL\Driver\Middleware\AbstractDriverMiddleware {
             /** @inheritDoc */
+            #[\Override]
             public function connect(array $params): \Doctrine\DBAL\Driver\Connection
             {
                 return new class (parent::connect($params)) extends \Doctrine\DBAL\Driver\Middleware\AbstractConnectionMiddleware {
+                    #[\Override]
                     public function prepare(string $sql): \Doctrine\DBAL\Driver\Statement
                     {
                         $statement = parent::prepare($sql);
@@ -2467,9 +2481,11 @@ $faultConfiguration->setMiddlewares([new class () implements \Doctrine\DBAL\Driv
                             return $statement;
                         }
                         return new class ($statement) extends \Doctrine\DBAL\Driver\Middleware\AbstractStatementMiddleware {
+                            #[\Override]
                             public function execute(): \Doctrine\DBAL\Driver\Result
                             {
                                 return new class (parent::execute()) extends \Doctrine\DBAL\Driver\Middleware\AbstractResultMiddleware {
+                                    #[\Override]
                                     public function rowCount(): int
                                     {
                                         return 0;

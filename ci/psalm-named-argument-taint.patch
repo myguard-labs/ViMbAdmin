@@ -1,0 +1,131 @@
+--- a/src/Psalm/Internal/Analyzer/Statements/Expression/Call/ArgumentsAnalyzer.php
++++ b/src/Psalm/Internal/Analyzer/Statements/Expression/Call/ArgumentsAnalyzer.php
+@@ -346,6 +346,7 @@
+             $args = array_reverse($args, \true);
+         }
+         $arg_function_params = [];
++        $named_taint_offsets = [];
+         $matched_args = [];
+         $named_args_was_used = \false;
+         foreach ($args as $argument_offset => $arg) {
+@@ -391,11 +392,15 @@
+                 }
+             } elseif ($arg->name && (!$function_storage || $function_storage->allow_named_arg_calls)) {
+                 $named_args_was_used = \true;
+-                foreach ($function_params as $candidate_param) {
++                foreach ($function_params as $candidate_offset => $candidate_param) {
+                     if ($candidate_param->name === $arg->name->name || $candidate_param->is_variadic) {
+                         if ($candidate_param->name === $arg->name->name) {
+                             if (isset($matched_args[$candidate_param->name])) {
+                                 IssueBuffer::maybeAdd(new InvalidNamedArgument('Parameter $' . $arg->name->name . ' has already been used in ' . ($cased_method_id ?: $method_id), new CodeLocation($statements_analyzer, $arg->name), (string) $method_id), $statements_analyzer->getSuppressedIssues());
++                            }
++                            // Taint edges use declaration positions, not supplied named-argument order.
++                            if ($statements_analyzer->data_flow_graph instanceof TaintFlowGraph && !$candidate_param->is_variadic) {
++                                $named_taint_offsets[$argument_offset] = $candidate_offset;
+                             }
+                             $matched_args[$candidate_param->name] = \true;
+                         }
+@@ -425,7 +430,7 @@
+             }
+             $arg_value_type = $statements_analyzer->node_data->getType($arg->value);
+             foreach ($arg_function_params[$argument_offset] as $i => $function_param) {
+-                if (\Psalm\Internal\Analyzer\Statements\Expression\Call\ArgumentAnalyzer::checkArgumentMatches($statements_analyzer, $cased_method_id, $method_id instanceof MethodIdentifier ? $method_id : null, $self_fq_class_name, $static_fq_class_name, $code_location, $function_param, $argument_offset + $i, $i, $function_storage->allow_named_arg_calls ?? \true, $arg, $arg_value_type, $context, $class_generic_params, $template_result, $function_storage->specialize_call ?? \true, $in_call_map) === \false) {
++                if (\Psalm\Internal\Analyzer\Statements\Expression\Call\ArgumentAnalyzer::checkArgumentMatches($statements_analyzer, $cased_method_id, $method_id instanceof MethodIdentifier ? $method_id : null, $self_fq_class_name, $static_fq_class_name, $code_location, $function_param, $argument_offset + $i, $i, $function_storage->allow_named_arg_calls ?? \true, $arg, $arg_value_type, $context, $class_generic_params, $template_result, $function_storage->specialize_call ?? \true, $in_call_map, $named_taint_offsets[$argument_offset] ?? \null) === \false) {
+                     return \false;
+                 }
+             }
+@@ -438,9 +443,9 @@
+                 foreach ($arg_function_params[$argument_offset] as $function_param) {
+                     if ($function_param->sinks) {
+                         if (!$function_storage || $function_storage->specialize_call) {
+-                            $sink = TaintSink::getForMethodArgument($cased_method_id, $cased_method_id, $argument_offset, $function_param->location, $code_location);
++                            $sink = TaintSink::getForMethodArgument($cased_method_id, $cased_method_id, $named_taint_offsets[$argument_offset] ?? $argument_offset, $function_param->location, $code_location);
+                         } else {
+-                            $sink = TaintSink::getForMethodArgument($cased_method_id, $cased_method_id, $argument_offset, $function_param->location);
++                            $sink = TaintSink::getForMethodArgument($cased_method_id, $cased_method_id, $named_taint_offsets[$argument_offset] ?? $argument_offset, $function_param->location);
+                         }
+                         $sink->taints = $function_param->sinks;
+                         $statements_analyzer->data_flow_graph->addSink($sink);
+--- a/src/Psalm/Internal/Analyzer/Statements/Expression/Call/ArgumentAnalyzer.php
++++ b/src/Psalm/Internal/Analyzer/Statements/Expression/Call/ArgumentAnalyzer.php
+@@ -97,7 +97,7 @@
+      * @param  array<string, array<string, Union>> $class_generic_params
+      * @return false|null
+      */
+-    public static function checkArgumentMatches(StatementsAnalyzer $statements_analyzer, ?string $cased_method_id, ?MethodIdentifier $method_id, ?string $self_fq_class_name, ?string $static_fq_class_name, CodeLocation $function_call_location, ?FunctionLikeParameter $function_param, int $argument_offset, int $unpacked_argument_offset, bool $allow_named_args, PhpParser\Node\Arg $arg, ?Union $arg_value_type, Context $context, array $class_generic_params, ?TemplateResult $template_result, bool $specialize_taint, bool $in_call_map): ?bool
++    public static function checkArgumentMatches(StatementsAnalyzer $statements_analyzer, ?string $cased_method_id, ?MethodIdentifier $method_id, ?string $self_fq_class_name, ?string $static_fq_class_name, CodeLocation $function_call_location, ?FunctionLikeParameter $function_param, int $argument_offset, int $unpacked_argument_offset, bool $allow_named_args, PhpParser\Node\Arg $arg, ?Union $arg_value_type, Context $context, array $class_generic_params, ?TemplateResult $template_result, bool $specialize_taint, bool $in_call_map, ?int $taint_parameter_offset = \null): ?bool
+     {
+         $codebase = $statements_analyzer->getCodebase();
+         if (!$arg_value_type) {
+@@ -140,7 +140,7 @@
+                 }
+             }
+         }
+-        if (self::checkFunctionLikeTypeMatches($statements_analyzer, $codebase, $cased_method_id, $method_id, $self_fq_class_name, $static_fq_class_name, $function_call_location, $function_param, $allow_named_args, $arg_value_type, $argument_offset, $unpacked_argument_offset, $arg, $context, $class_generic_params, $template_result, $specialize_taint, $in_call_map) === \false) {
++        if (self::checkFunctionLikeTypeMatches($statements_analyzer, $codebase, $cased_method_id, $method_id, $self_fq_class_name, $static_fq_class_name, $function_call_location, $function_param, $allow_named_args, $arg_value_type, $argument_offset, $unpacked_argument_offset, $arg, $context, $class_generic_params, $template_result, $specialize_taint, $in_call_map, $taint_parameter_offset) === \false) {
+             return \false;
+         }
+         return null;
+@@ -149,7 +149,7 @@
+      * @param  array<string, array<string, Union>> $class_generic_params
+      * @return false|null
+      */
+-    private static function checkFunctionLikeTypeMatches(StatementsAnalyzer $statements_analyzer, Codebase $codebase, ?string $cased_method_id, ?MethodIdentifier $method_id, ?string $self_fq_class_name, ?string $static_fq_class_name, CodeLocation $function_call_location, FunctionLikeParameter $function_param, bool $allow_named_args, Union $arg_value_type, int $argument_offset, int $unpacked_argument_offset, PhpParser\Node\Arg $arg, Context $context, ?array $class_generic_params, ?TemplateResult $template_result, bool $specialize_taint, bool $in_call_map): ?bool
++    private static function checkFunctionLikeTypeMatches(StatementsAnalyzer $statements_analyzer, Codebase $codebase, ?string $cased_method_id, ?MethodIdentifier $method_id, ?string $self_fq_class_name, ?string $static_fq_class_name, CodeLocation $function_call_location, FunctionLikeParameter $function_param, bool $allow_named_args, Union $arg_value_type, int $argument_offset, int $unpacked_argument_offset, PhpParser\Node\Arg $arg, Context $context, ?array $class_generic_params, ?TemplateResult $template_result, bool $specialize_taint, bool $in_call_map, ?int $taint_parameter_offset = \null): ?bool
+     {
+         if (!$function_param->type) {
+             if (!$codebase->infer_types_from_usage && !$statements_analyzer->data_flow_graph) {
+@@ -235,7 +235,7 @@
+                 IssueBuffer::maybeAdd(new MixedArgument('Argument ' . ($argument_offset + 1) . ' of ' . $cased_method_id . ' cannot unpack ' . $arg_value_type->getId() . ', expecting iterable', new CodeLocation($statements_analyzer->getSource(), $arg->value), $cased_method_id), $statements_analyzer->getSuppressedIssues());
+                 if ($cased_method_id) {
+                     $arg_location = new CodeLocation($statements_analyzer->getSource(), $arg->value);
+-                    self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $argument_offset, $arg_location, $function_call_location, $function_param, $arg_value_type, $arg->value, $context, $specialize_taint);
++                    self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $taint_parameter_offset ?? $argument_offset, $arg_location, $function_call_location, $function_param, $arg_value_type, $arg->value, $context, $specialize_taint);
+                 }
+                 return null;
+             }
+@@ -321,7 +321,7 @@
+         if ($arg instanceof VirtualArg && $context->collect_initializations) {
+             return null;
+         }
+-        if (self::verifyType($statements_analyzer, $arg_value_type, $param_type, $fleshed_out_signature_type, $cased_method_id, $method_id, $argument_offset, new CodeLocation($statements_analyzer->getSource(), $arg->value), $arg->value, $context, $function_param, $arg->unpack, $unpacked_atomic_array, $specialize_taint, $in_call_map, $function_call_location) === \false) {
++        if (self::verifyType($statements_analyzer, $arg_value_type, $param_type, $fleshed_out_signature_type, $cased_method_id, $method_id, $argument_offset, new CodeLocation($statements_analyzer->getSource(), $arg->value), $arg->value, $context, $function_param, $arg->unpack, $unpacked_atomic_array, $specialize_taint, $in_call_map, $function_call_location, $taint_parameter_offset) === \false) {
+             return \false;
+         }
+         return null;
+@@ -330,7 +330,7 @@
+      * @param TKeyedArray|TArray|TClassStringMap|null $unpacked_atomic_array
+      * @return  null|false
+      */
+-    public static function verifyType(StatementsAnalyzer $statements_analyzer, Union $input_type, Union $param_type, ?Union $signature_param_type, ?string $cased_method_id, ?MethodIdentifier $method_id, int $argument_offset, CodeLocation $arg_location, PhpParser\Node\Expr $input_expr, Context $context, FunctionLikeParameter $function_param, bool $unpack, ?Atomic $unpacked_atomic_array, bool $specialize_taint, bool $in_call_map, CodeLocation $function_call_location): ?bool
++    public static function verifyType(StatementsAnalyzer $statements_analyzer, Union $input_type, Union $param_type, ?Union $signature_param_type, ?string $cased_method_id, ?MethodIdentifier $method_id, int $argument_offset, CodeLocation $arg_location, PhpParser\Node\Expr $input_expr, Context $context, FunctionLikeParameter $function_param, bool $unpack, ?Atomic $unpacked_atomic_array, bool $specialize_taint, bool $in_call_map, CodeLocation $function_call_location, ?int $taint_parameter_offset = \null): ?bool
+     {
+         $codebase = $statements_analyzer->getCodebase();
+         if ($param_type->hasMixed()) {
+@@ -342,7 +342,7 @@
+                 }
+             }
+             if ($cased_method_id) {
+-                self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $argument_offset, $arg_location, $function_call_location, $function_param, $input_type, $input_expr, $context, $specialize_taint);
++                self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $taint_parameter_offset ?? $argument_offset, $arg_location, $function_call_location, $function_param, $input_type, $input_expr, $context, $specialize_taint);
+             }
+             return null;
+         }
+@@ -368,7 +368,7 @@
+                 }
+             }
+             if ($cased_method_id) {
+-                self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $argument_offset, $arg_location, $function_call_location, $function_param, $input_type, $input_expr, $context, $specialize_taint);
++                self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $taint_parameter_offset ?? $argument_offset, $arg_location, $function_call_location, $function_param, $input_type, $input_expr, $context, $specialize_taint);
+             }
+             if ($input_type->isMixed()) {
+                 return null;
+@@ -425,7 +425,7 @@
+             $input_type = $union_comparison_results->replacement_union_type;
+         }
+         if ($cased_method_id) {
+-            self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $argument_offset, $arg_location, $function_call_location, $function_param, $input_type, $input_expr, $context, $specialize_taint);
++            self::processTaintedness($statements_analyzer, $cased_method_id, $method_id, $taint_parameter_offset ?? $argument_offset, $arg_location, $function_call_location, $function_param, $input_type, $input_expr, $context, $specialize_taint);
+             if ($function_param->assert_untainted) {
+                 $input_type = $input_type->setParentNodes([]);
+                 $replace_input_type = \true;

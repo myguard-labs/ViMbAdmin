@@ -249,7 +249,7 @@ final class WorkflowHarness
 
     public function __construct(public bool $setup = false, bool $guest = false, bool $plugins = true, bool $mailboxPlugin = true)
     {
-        $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([]);
+        $configuration = \Doctrine\ORM\ORMSetup::createAttributeMetadataConfiguration([], cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter());
         if (PHP_VERSION_ID >= 80400) {
             $configuration->enableNativeLazyObjects(true);
         } else {

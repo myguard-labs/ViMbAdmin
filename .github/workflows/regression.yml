@@ -29,12 +29,25 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: PR runner job count reports observed and expected values
         run: bash ci/test-pr-runner-isolation-count.sh
 
+      - name: Owned local repository JIT contracts
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          command -v python3 >/dev/null
+          python3 --version
+          python3 -m unittest discover -s ci -p 'test_local_repo_jit*.py' -v
+          python3 ci/local_repo_jit_negative_controls.py --receipt-dir "$(mktemp -d "${RUNNER_TEMP:?}/local-repo-jit-controls.XXXXXX")"
+          python3 ci/local_repo_jit_capacity_negative_controls.py --receipt-dir "$(mktemp -d "${RUNNER_TEMP:?}/capacity-controls.XXXXXX")/receipts"
+
       # actions/setup-node v6.3.0
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
           package-manager-cache: false
@@ -82,12 +95,16 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Maintained PHP matrix and runtime lane contract
         if: matrix.browser == 'chromium'
         run: |
           npm ci --prefix ci --ignore-scripts --no-audit --no-fund
           node ci/test-php-matrix-contract.cjs
+          node ci/test-selfhosted-sarif.cjs
 
       # Source/static controls are engine-independent; run once in Chromium.
       # Keep each real engine suite and its local image/vendor setup below.
@@ -304,10 +321,11 @@ jobs:
             image: >-
               mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
+      # Published after reset; placement metadata only, never host credentials.
       image: ${{ matrix.image }}
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -316,6 +334,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Trust checkout for tracked-test discovery
         run: |
@@ -327,7 +348,7 @@ jobs:
 
       # The full unit runner also executes the browser diagnostic Node tests.
       # actions/setup-node v6.3.0
-      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
           package-manager-cache: false
@@ -344,6 +365,24 @@ jobs:
 
       - name: Run all framework-free PHP regression tests
         run: bash tests/run-unit-tests.sh
+
+      - name: PHP06 cli precompile contract
+        run: php ci/test-cli-precompile-contract.php
+
+      - name: PHP06 cli schema result contract
+        run: php ci/test-cli-schema-result-contract.php
+
+      - name: PHP06 smarty date formatter contract
+        run: php ci/test-smarty-date-formatter-contract.php
+
+      - name: PHP06 smarty filesize contract
+        run: php ci/test-smarty-filesize-contract.php
+
+      - name: PHP06 smarty shorten contract
+        run: php ci/test-smarty-shorten-contract.php
+
+      - name: PHP06 smarty unixdate contract
+        run: php ci/test-smarty-unixdate-contract.php
 
       - name: Native controller discovery honours configured entity paths
         run: bash ci/test-entry-autoload-control.sh
@@ -368,6 +407,9 @@ jobs:
 
       - name: Live adapters retain runtime discovery contracts
         run: php ci/test-refactor-autoload-contract.php
+
+      - name: Verify entity autoloader registration idempotency
+        run: php ci/test-entity-autoloader-registration.php
 
       - name: Equal list pagination adapters share one policy owner
         run: php ci/test-refactor-list-contract.php
@@ -492,10 +534,11 @@ jobs:
             image: >-
               mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
+      # Published after reset; placement metadata only, never host credentials.
       image: ${{ matrix.image }}
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -504,6 +547,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PHP container
         run: bash .github/scripts/setup-php-container.sh cache
@@ -560,6 +606,7 @@ jobs:
             image: >-
               mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
     container:
+      # Published after reset; placement metadata only, never host credentials.
       image: ${{ matrix.image }}
     services:
       mariadb:
@@ -575,7 +622,7 @@ jobs:
           --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - name: Prepare PHP container for checkout
-        run: apt-get update && apt-get install --yes git
+        run: apt-get update && apt-get install --yes git python3
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -584,6 +631,9 @@ jobs:
 
       - name: Assert pull-request runner isolation
         run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Setup PHP container
         run: bash .github/scripts/setup-php-container.sh runtime
@@ -844,3 +894,58 @@ jobs:
           DB_PASS: ci
           VIMBADMIN_DESTRUCTIVE_DB_TESTS: '1'
         run: php ci/test-refactor-preference-contract.php
+
+  doveadm-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      max-parallel: 4
+      fail-fast: false
+      matrix:
+        include:
+          - php: '8.3'
+            image: >-
+              mirror.gcr.io/library/php@sha256:6cb44388b6ffc8c9a35b4cfdf518d0565e0cf9150e479add338b498874d7e971
+            build-essential-version: '12.12'
+            libcurl-dev-version: '8.14.1-2+deb13u7'
+          - php: '8.4'
+            image: >-
+              mirror.gcr.io/library/php@sha256:9cc9310a457019cd6b682109eb3c5dd8bf73498e7d3b9ee5c33d0d0b83d0faf3
+            build-essential-version: '12.9'
+            libcurl-dev-version: '7.88.1-10+deb12u15'
+          - php: '8.5'
+            image: >-
+              mirror.gcr.io/library/php@sha256:19667d836740e24a3ba340532c7349ab59bb961b86f20e3c85a58150644e5e55
+            build-essential-version: '12.9'
+            libcurl-dev-version: '7.88.1-10+deb12u15'
+          - php: '8.6'
+            image: >-
+              mirror.gcr.io/library/php@sha256:10335e12340a170d0c49d98829c65a827df6bd6d2ad8a6ee08b030e8fca31163
+            build-essential-version: '12.12'
+            libcurl-dev-version: '8.14.1-2+deb13u7'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Assert pull-request runner isolation
+        run: bash .github/scripts/assert-pr-runner-isolation.sh
+        env:
+          PR_RUNNER_EXPECTED_SHA: >-
+            ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Canonical native driver ownership contracts without Docker
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 -m unittest discover -s ci -p test_doveadm_native_driver.py -v
+          python3 ci/doveadm_native_negative_controls.py
+
+      - name: Build and run isolated native curl failure contracts
+        run: bash .github/scripts/run-doveadm-native.sh
+        env:
+          DOVEADM_BASE_IMAGE: ${{ matrix.image }}
+          DOVEADM_PHP_MINOR: ${{ matrix.php }}
+          DOVEADM_BUILD_ESSENTIAL_VERSION: ${{ matrix.build-essential-version }}
+          DOVEADM_LIBCURL_DEV_VERSION: ${{ matrix.libcurl-dev-version }}

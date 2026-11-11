@@ -54,7 +54,7 @@ static_workflow_has_phpstan_runtime_contract || exit 1
 
 unit_runner_executes_tracked_tests_and_subset() {
   local harness_root runner_path stub_path output
-  local git_log php_log node_log
+  local git_log php_log node_log bash_log
 
   harness_root=$(mktemp -d "${TMPDIR:-/tmp}/vimbadmin-unit-runner.XXXXXX")
   runner_path=$PWD/$unit_runner
@@ -63,10 +63,12 @@ unit_runner_executes_tracked_tests_and_subset() {
   git_log=$harness_root/git.log
   php_log=$harness_root/php.log
   node_log=$harness_root/node.log
+  bash_log=$harness_root/bash.log
   mkdir -p "$stub_path" "$harness_root/tests"
   : >"$git_log"
   : >"$php_log"
   : >"$node_log"
+  : >"$bash_log"
   : >"$harness_root/tests/test-untracked-sentinel.php"
 
   cat >"$stub_path/git" <<'SH'
@@ -89,7 +91,7 @@ if [ "$#" -ne 1 ]; then
   exit 98
 fi
 case "$1" in
-  tests/test-runner-contract-a.php|tests/test-runner-contract-b.php|ci/test-mcp-cli-restriction-summary.php) ;;
+  tests/test-runner-contract-a.php|tests/test-runner-contract-b.php|ci/test-mcp-cli-restriction-summary.php|ci/test-nonstyle-rate-limit-cleanup-contract.php|ci/test-oss-genurl-components.php|ci/test-archive-zero-destination-contract.php|ci/test-automatic-alias-postflush-return-contract.php) ;;
   *)
     printf 'Unexpected php argv in unit runner: %s\n' "$*" >&2
     exit 98
@@ -108,24 +110,47 @@ if [ "$#" -ne 1 ] || [ "$1" != ci/test-browser-auth-diagnostics.cjs ]; then
 fi
 printf '%s\n' "$1" >> "$VIMBADMIN_RUNNER_NODE_LOG"
 SH
-  chmod +x "$stub_path/git" "$stub_path/php" "$stub_path/node"
+  cat >"$stub_path/bash" <<'SH'
+#!/bin/sh
+case "$1" in
+  */tests/run-unit-tests.sh) exec /bin/bash "$@" ;;
+  ci/test-browser-desktop-negative-control-contract.sh)
+    [ "$#" -eq 1 ] || exit 98 ;;
+  ci/test-psalm-response-propagation.sh|ci/test-psalm-flash-propagation.sh|ci/test-psalm-mcp-body-source.sh)
+    [ "$#" -eq 2 ] && [ "$2" = --runtime-only ] || exit 98 ;;
+  *) printf 'Unexpected Bash argv in unit runner: %s\n' "$*" >&2; exit 98 ;;
+esac
+printf '%s\n' "$*" >> "$VIMBADMIN_RUNNER_BASH_LOG"
+SH
+  chmod +x "$stub_path/git" "$stub_path/php" "$stub_path/node" "$stub_path/bash"
 
   if ! (cd "$harness_root" &&
     PATH="$stub_path:/usr/bin:/bin" \
       VIMBADMIN_RUNNER_GIT_LOG="$git_log" \
       VIMBADMIN_RUNNER_PHP_LOG="$php_log" \
       VIMBADMIN_RUNNER_NODE_LOG="$node_log" \
+      VIMBADMIN_RUNNER_BASH_LOG="$bash_log" \
       "$runner_path") >"$output" 2>&1; then
+    cat "$output" >&2
     rm -rf -- "${harness_root:?}"
     return 1
   fi
 
   if [[ $(wc -l <"$git_log") -ne 1 ]] ||
     ! grep -qxF 'ls-files tests/test-*.php' "$git_log" ||
-    [[ $(wc -l <"$php_log") -ne 3 ]] ||
+    [[ $(wc -l <"$php_log") -ne 7 ]] ||
     [[ $(grep -cxF 'tests/test-runner-contract-a.php' "$php_log") -ne 1 ]] ||
     [[ $(grep -cxF 'tests/test-runner-contract-b.php' "$php_log") -ne 1 ]] ||
     [[ $(grep -cxF 'ci/test-mcp-cli-restriction-summary.php' "$php_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-nonstyle-rate-limit-cleanup-contract.php' "$php_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-oss-genurl-components.php' "$php_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-archive-zero-destination-contract.php' "$php_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-automatic-alias-postflush-return-contract.php' "$php_log") -ne 1 ]] ||
+    [[ $(wc -l <"$bash_log") -ne 4 ]] ||
+    [[ $(grep -cxF 'ci/test-browser-desktop-negative-control-contract.sh' "$bash_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-psalm-response-propagation.sh --runtime-only' "$bash_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-psalm-flash-propagation.sh --runtime-only' "$bash_log") -ne 1 ]] ||
+    [[ $(grep -cxF 'ci/test-psalm-mcp-body-source.sh --runtime-only' "$bash_log") -ne 1 ]] ||
     [[ $(wc -l <"$node_log") -ne 1 ]] ||
     ! grep -qxF 'ci/test-browser-auth-diagnostics.cjs' "$node_log"; then
     rm -rf -- "${harness_root:?}"
@@ -135,11 +160,13 @@ SH
   : >"$git_log"
   : >"$php_log"
   : >"$node_log"
+  : >"$bash_log"
   if ! (cd "$harness_root" &&
     PATH="$stub_path:/usr/bin:/bin" \
       VIMBADMIN_RUNNER_GIT_LOG="$git_log" \
       VIMBADMIN_RUNNER_PHP_LOG="$php_log" \
       VIMBADMIN_RUNNER_NODE_LOG="$node_log" \
+      VIMBADMIN_RUNNER_BASH_LOG="$bash_log" \
       "$runner_path" tests/test-runner-contract-b.php) \
     >"$output" 2>&1; then
     rm -rf -- "${harness_root:?}"
@@ -149,7 +176,8 @@ SH
   if [[ $(wc -l <"$git_log") -ne 1 ]] ||
     [[ $(wc -l <"$php_log") -ne 1 ]] ||
     ! grep -qxF 'tests/test-runner-contract-b.php' "$php_log" ||
-    [[ -s $node_log ]]; then
+    [[ -s $node_log ]] ||
+    [[ -s $bash_log ]]; then
     rm -rf -- "${harness_root:?}"
     return 1
   fi

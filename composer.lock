@@ -123,7 +123,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/doctrine/collections/zipball/7713da39d8e237f28411d6a616a3dce5e20d5de2",
                 "reference": "7713da39d8e237f28411d6a616a3dce5e20d5de2",
-                "shasum": "77e4c186d4bfb3df912dc5d1b36e1c988fa235bf"
+                "shasum": ""
             },
             "require": {
                 "doctrine/deprecations": "^1",
@@ -199,17 +199,17 @@
         },
         {
             "name": "doctrine/dbal",
-            "version": "4.5.0",
+            "version": "4.6.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/doctrine/dbal.git",
-                "reference": "c435cd7ea33e17d2a89288caf994cf3d4549b879"
+                "reference": "1b56fbfb22704712786fea81ff4bb156fcc6427e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/doctrine/dbal/zipball/c435cd7ea33e17d2a89288caf994cf3d4549b879",
-                "reference": "c435cd7ea33e17d2a89288caf994cf3d4549b879",
-                "shasum": "a4ce8035b924676d83f6a79a6668f1c6b65cb6bd"
+                "url": "https://api.github.com/repos/doctrine/dbal/zipball/1b56fbfb22704712786fea81ff4bb156fcc6427e",
+                "reference": "1b56fbfb22704712786fea81ff4bb156fcc6427e",
+                "shasum": ""
             },
             "require": {
                 "doctrine/deprecations": "^1.1.5",
@@ -221,14 +221,15 @@
                 "doctrine/coding-standard": "14.0.0",
                 "fig/log-test": "^1",
                 "jetbrains/phpstorm-stubs": "2023.2",
-                "phpstan/phpstan": "2.1.30",
+                "phpstan/phpstan": "2.3.4",
                 "phpstan/phpstan-phpunit": "2.0.7",
                 "phpstan/phpstan-strict-rules": "^2",
                 "phpunit/phpunit": "11.5.56",
                 "slevomat/coding-standard": "8.31.1",
                 "squizlabs/php_codesniffer": "4.0.4",
                 "symfony/cache": "^6.3.8|^7.0|^8.0",
-                "symfony/console": "^5.4|^6.3|^7.0|^8.0"
+                "symfony/console": "^5.4|^6.3|^7.0|^8.0",
+                "symfony/service-contracts": "^2.2 || ^3.0"
             },
             "suggest": {
                 "symfony/console": "For helpful console commands such as SQL execution and import of files."
@@ -285,7 +286,7 @@
             ],
             "support": {
                 "issues": "https://github.com/doctrine/dbal/issues",
-                "source": "https://github.com/doctrine/dbal/tree/4.5.0"
+                "source": "https://github.com/doctrine/dbal/tree/4.6.0"
             },
             "funding": [
                 {
@@ -301,24 +302,24 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-09-24T16:11:26+00:00"
+            "time": "2026-11-14T18:08:09+00:00"
         },
         {
             "name": "doctrine/deprecations",
-            "version": "1.1.6",
+            "version": "1.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/doctrine/deprecations.git",
-                "reference": "d4fe3e6fd9bb9e72557a19674f44d8ac7db4c6ca"
+                "reference": "d2e16653a734c8784c1851ad68b02f997b53ca82"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/doctrine/deprecations/zipball/d4fe3e6fd9bb9e72557a19674f44d8ac7db4c6ca",
-                "reference": "d4fe3e6fd9bb9e72557a19674f44d8ac7db4c6ca",
-                "shasum": "179fa008c1e0c2ed29e8d4e7ac715e352c5258f2"
+                "url": "https://api.github.com/repos/doctrine/deprecations/zipball/d2e16653a734c8784c1851ad68b02f997b53ca82",
+                "reference": "d2e16653a734c8784c1851ad68b02f997b53ca82",
+                "shasum": ""
             },
             "require": {
-                "php": "^7.1 || ^8.0"
+                "php": "^7.4 || ^8.0"
             },
             "conflict": {
                 "phpunit/phpunit": "<=7.5 || >=14"
@@ -347,9 +348,9 @@
             "homepage": "https://www.doctrine-project.org/",
             "support": {
                 "issues": "https://github.com/doctrine/deprecations/issues",
-                "source": "https://github.com/doctrine/deprecations/tree/1.1.6"
+                "source": "https://github.com/doctrine/deprecations/tree/1.2.0"
             },
-            "time": "2026-02-07T07:09:04+00:00"
+            "time": "2026-11-11T10:04:49+00:00"
         },
         {
             "name": "doctrine/event-manager",
@@ -363,7 +364,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/doctrine/event-manager/zipball/dda33921b198841ca8dbad2eaa5d4d34769d18cf",
                 "reference": "dda33921b198841ca8dbad2eaa5d4d34769d18cf",
-                "shasum": "5f1af72437b8b865f99d1c98e7e470306c4921e8"
+                "shasum": ""
             },
             "require": {
                 "php": "^8.1"
@@ -454,7 +455,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/doctrine/inflector/zipball/46351b6812b7b6d52b82c3efa5dfb786a198ec88",
                 "reference": "46351b6812b7b6d52b82c3efa5dfb786a198ec88",
-                "shasum": "e067c35d48582c21e6ac2da6ba1a1e131451542e"
+                "shasum": ""
             },
             "require": {
                 "php": "^7.2 || ^8.0"
@@ -544,7 +545,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/doctrine/instantiator/zipball/c6222283fa3f4ac679f8b9ced9a4e23f163e80d0",
                 "reference": "c6222283fa3f4ac679f8b9ced9a4e23f163e80d0",
-                "shasum": "130189d51ca6ed086fe234a62556432c4d1ee89a"
+                "shasum": ""
             },
             "require": {
                 "php": "^8.1"
@@ -614,7 +615,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/doctrine/lexer/zipball/71d305eaa6480d3d3460c7d053d1da7749fa9cca",
                 "reference": "71d305eaa6480d3d3460c7d053d1da7749fa9cca",
-                "shasum": "ecdec7c681f2d37f61d6e16198a7d1f4de188488"
+                "shasum": ""
             },
             "require": {
                 "php": "^8.1"
@@ -679,17 +680,17 @@
         },
         {
             "name": "doctrine/orm",
-            "version": "3.7.6",
+            "version": "3.8.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/doctrine/orm.git",
-                "reference": "4487f850401c0e1f27891cce5897fa90b3055c2a"
+                "reference": "243f25157055d553da52d7c4bbe73c4623dadc61"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/doctrine/orm/zipball/4487f850401c0e1f27891cce5897fa90b3055c2a",
-                "reference": "4487f850401c0e1f27891cce5897fa90b3055c2a",
-                "shasum": "7feb2b0f0b822ea36bc4663778507179823e7871"
+                "url": "https://api.github.com/repos/doctrine/orm/zipball/243f25157055d553da52d7c4bbe73c4623dadc61",
+                "reference": "243f25157055d553da52d7c4bbe73c4623dadc61",
+                "shasum": ""
             },
             "require": {
                 "composer-runtime-api": "^2",
@@ -710,15 +711,17 @@
             },
             "require-dev": {
                 "doctrine/coding-standard": "^14.0",
+                "doctrine/orm-plugin-second-level-cache": "^1.0",
                 "phpbench/phpbench": "^1.0",
                 "phpstan/extension-installer": "^1.4",
-                "phpstan/phpstan": "2.2.14",
+                "phpstan/phpstan": "2.3.5",
                 "phpstan/phpstan-deprecation-rules": "^2",
                 "phpunit/phpunit": "^10.5.0 || ^11.5",
                 "psr/log": "^1 || ^2 || ^3",
                 "symfony/cache": "^5.4 || ^6.2 || ^7.0 || ^8.0"
             },
             "suggest": {
+                "doctrine/orm-plugin-second-level-cache": "Second level cache functionality needs extra package.",
                 "ext-deepclone": "Improves performance when not using native lazy objects (Symfony 8.1+)",
                 "ext-dom": "Provides support for XSD validation for XML mapping files",
                 "symfony/cache": "Provides cache support for Setup Tool with doctrine/cache 2.0"
@@ -763,9 +766,9 @@
             ],
             "support": {
                 "issues": "https://github.com/doctrine/orm/issues",
-                "source": "https://github.com/doctrine/orm/tree/3.7.6"
+                "source": "https://github.com/doctrine/orm/tree/3.8.0"
             },
-            "time": "2026-10-30T12:19:09+00:00"
+            "time": "2026-11-14T11:18:54+00:00"
         },
         {
             "name": "doctrine/persistence",
@@ -779,7 +782,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/doctrine/persistence/zipball/d8293831c5b99449b2f63eb1e1bbdc202118daa6",
                 "reference": "d8293831c5b99449b2f63eb1e1bbdc202118daa6",
-                "shasum": "5b18e894d009a34f72393d740c6e8e613a89be44"
+                "shasum": ""
             },
             "require": {
                 "doctrine/deprecations": "^1",
@@ -940,7 +943,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/php-fig/cache/zipball/aa5030cfa5405eccfdcb1083ce040c2cb8d253bf",
                 "reference": "aa5030cfa5405eccfdcb1083ce040c2cb8d253bf",
-                "shasum": "1e5fc68854d7a1cd97bee8897fdd8e9925b445d3"
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.0.0"
@@ -989,7 +992,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/php-fig/container/zipball/c71ecc56dfe541dbd90c5360474fbc405f8d5963",
                 "reference": "c71ecc56dfe541dbd90c5360474fbc405f8d5963",
-                "shasum": "e3861f26f7c51d93034a3b5467f4b34af91f621c"
+                "shasum": ""
             },
             "require": {
                 "php": ">=7.4.0"
@@ -1092,7 +1095,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
                 "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
-                "shasum": "58298a7eea6f43d6f09618bd32a25ba277bfc094"
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.0.0"
@@ -1213,17 +1216,17 @@
         },
         {
             "name": "smarty/smarty",
-            "version": "v5.8.5",
+            "version": "v5.9.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/smarty-php/smarty.git",
-                "reference": "0ae663525dcbc9e996feb2a867e43bc85f960938"
+                "reference": "d37716def381e7b0450ed1608f24045c18f67eba"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/smarty-php/smarty/zipball/0ae663525dcbc9e996feb2a867e43bc85f960938",
-                "reference": "0ae663525dcbc9e996feb2a867e43bc85f960938",
-                "shasum": "4fbaa5e3af4eaace34f37b8e1176c87517a48d72"
+                "url": "https://api.github.com/repos/smarty-php/smarty/zipball/d37716def381e7b0450ed1608f24045c18f67eba",
+                "reference": "d37716def381e7b0450ed1608f24045c18f67eba",
+                "shasum": ""
             },
             "require": {
                 "php": "^7.2 || ^8.0",
@@ -1277,7 +1280,7 @@
             "support": {
                 "forum": "https://github.com/smarty-php/smarty/discussions",
                 "issues": "https://github.com/smarty-php/smarty/issues",
-                "source": "https://github.com/smarty-php/smarty/tree/v5.8.5"
+                "source": "https://github.com/smarty-php/smarty/tree/v5.9.0"
             },
             "funding": [
                 {
@@ -1285,7 +1288,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-10-04T21:31:42+00:00"
+            "time": "2026-11-16T10:13:43+00:00"
         },
         {
             "name": "symfony/cache",
@@ -1482,7 +1485,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/console/zipball/81957c2440c05c962fe8291f318de6e85f8db330",
                 "reference": "81957c2440c05c962fe8291f318de6e85f8db330",
-                "shasum": "81bdd4f7315abed33184ffe4a7baa70aa065ffa4"
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.2",
@@ -1580,7 +1583,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/deprecation-contracts/zipball/feb1edf4e546af3b85c5caebe8359a20db230ca3",
                 "reference": "feb1edf4e546af3b85c5caebe8359a20db230ca3",
-                "shasum": "8902b048a1d24ea5f2585b422215e8f1073bedab"
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.1"
@@ -1989,7 +1992,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/polyfill-ctype/zipball/141046a8f9477948ff284fa65be2095baafb94f2",
                 "reference": "141046a8f9477948ff284fa65be2095baafb94f2",
-                "shasum": "c8b3a166c2807e3c19429d107df7fc6334b00212"
+                "shasum": ""
             },
             "require": {
                 "php": ">=7.2"
@@ -2072,7 +2075,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/polyfill-intl-grapheme/zipball/5a8f33c87aeecffce24e721b5064fab05f4becf8",
                 "reference": "5a8f33c87aeecffce24e721b5064fab05f4becf8",
-                "shasum": "3dbb9fb03993845c818cc0f0ac5ef1ae98a7d805"
+                "shasum": ""
             },
             "require": {
                 "php": ">=7.2"
@@ -2241,7 +2244,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/polyfill-intl-normalizer/zipball/ebd57ccc7edb93d632e184efbe7693d2517bab3b",
                 "reference": "ebd57ccc7edb93d632e184efbe7693d2517bab3b",
-                "shasum": "91f683790d0834656718d6ecde86e9b6d57f7a11"
+                "shasum": ""
             },
             "require": {
                 "php": ">=7.2"
@@ -2326,7 +2329,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/polyfill-mbstring/zipball/122889ed24dc000165bcbfd77ec412f15cbdfc6a",
                 "reference": "122889ed24dc000165bcbfd77ec412f15cbdfc6a",
-                "shasum": "03f0e7006e6f8b4ee9695639215507d6076f90b2"
+                "shasum": ""
             },
             "require": {
                 "ext-iconv": "*",
@@ -2411,7 +2414,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/polyfill-php84/zipball/22c6548499cbe5c5bb072fc0c42312dff062a015",
                 "reference": "22c6548499cbe5c5bb072fc0c42312dff062a015",
-                "shasum": "b454cca9652ad551b5383b57d37ed22e35451730"
+                "shasum": ""
             },
             "require": {
                 "php": ">=7.2"
@@ -2491,7 +2494,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/polyfill-php86/zipball/8840df45b24f33a49dc419fa18dc0057231ae1d8",
                 "reference": "8840df45b24f33a49dc419fa18dc0057231ae1d8",
-                "shasum": "fbb9b4e42f994b7b2ecfa7749c531db1078f2a7d"
+                "shasum": ""
             },
             "require": {
                 "php": ">=7.2"
@@ -2571,7 +2574,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/service-contracts/zipball/052852a96fd5e5ebdb617dba22031e41a3300fb5",
                 "reference": "052852a96fd5e5ebdb617dba22031e41a3300fb5",
-                "shasum": "76a0d25fc9f21ba64f0f7cabe56f8adff947a7c1"
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.1",
@@ -2658,7 +2661,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/string/zipball/8dff7da3a56638f1d189c5368183294102de4ced",
                 "reference": "8dff7da3a56638f1d189c5368183294102de4ced",
-                "shasum": "2cbf51f007dfce5dd3069c78fc2c42c50df11614"
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.2",
@@ -2749,7 +2752,7 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/symfony/var-exporter/zipball/6c967db30708068f6eaedb6ed37973bd86de2241",
                 "reference": "6c967db30708068f6eaedb6ed37973bd86de2241",
-                "shasum": "468e1d0889e2a4700822adea705e2a6b6be4a472"
+                "shasum": ""
             },
             "require": {
                 "php": ">=8.2",
